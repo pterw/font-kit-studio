@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Font Kit Studio v0.1.0</title>
+<title>Font Kit Studio v0.1.1</title>
 
 <!--
   TYPEKIT / ADOBE FONTS
@@ -314,7 +314,7 @@ footer {
 
 
 /* ================================================================
-   Font Kit Studio v0.1.0 — Composer
+   Font Kit Studio v0.1.1 — Composer
    ================================================================ */
 .mode-nav {
   position: sticky;
@@ -1214,7 +1214,7 @@ const remembered = localStorage.getItem("typekit-specimen-kit");
 if (remembered) kitId.value = remembered;
 
 /* ================================================================
-   Font Kit Studio v0.1.0 — Flow Composer
+   Font Kit Studio v0.1.1 — Flow Composer
    ================================================================ */
 (function initComposer() {
   const TAILWIND_COLORS = {
@@ -1605,30 +1605,37 @@ if (remembered) kitId.value = remembered;
     spacerHeight: 38
   });
 
+  function rowNumber(value, fallback, min, max, integer=false) {
+    const number = value == null || value === "" ? fallback : Number(value);
+    const finite = Number.isFinite(number) ? number : fallback;
+    return Math.max(min, Math.min(max, integer ? Math.round(finite) : finite));
+  }
+
   const makeRowSlot = (overrides={}) => {
-    const children = overrides.children ? overrides.children.slice(0, 4) : [
+    const children = Array.isArray(overrides.children) ? overrides.children.slice(0, 4).map(child => {
+      if (!LEAF_SLOT_TYPES.includes(child?.type)) return hydrateSlot(child, 1);
+      const { children:discardedChildren, ...leaf } = child;
+      return leaf;
+    }) : [
       makeGenericSlot("image"),
       makeTextSlot("Body", "gotham")
     ];
     while (children.length < 2) children.push(makeTextSlot("Custom", "gotham"));
-    const count = Math.max(2, Math.min(4, Number(overrides.childCount) || children.length || 2));
+    const count = rowNumber(overrides.childCount, children.length || 2, 2, 4, true);
     while (children.length < count) children.push(makeTextSlot("Custom", "gotham"));
     children.length = count;
     const ratios = Array.isArray(overrides.ratios) ? overrides.ratios.slice(0, count) : [];
     while (ratios.length < count) ratios.push(ratios.length === 1 ? 2 : 1);
     return {
+      ...overrides,
       id: crypto.randomUUID ? crypto.randomUUID() : `slot-${Date.now()}-${Math.random()}`,
       type: "row",
       role: "Row",
       childCount: count,
-      gap: Math.max(0, Number(overrides.gap ?? 24)),
+      gap: rowNumber(overrides.gap, 24, 0, 96),
       alignItems: ROW_ALIGNMENTS.includes(overrides.alignItems) ? overrides.alignItems : "center",
-      collapseAt: Math.max(240, Number(overrides.collapseAt ?? 680)),
-      ratios: ratios.map(v => Math.max(.25, Number(v) || 1)),
-      children,
-      ...overrides,
-      childCount: count,
-      ratios: ratios.map(v => Math.max(.25, Number(v) || 1)),
+      collapseAt: rowNumber(overrides.collapseAt, 680, 240, 1600),
+      ratios: ratios.map(v => rowNumber(v, 1, .25, 12)),
       children
     };
   };
@@ -1771,7 +1778,7 @@ if (remembered) kitId.value = remembered;
       const rawChildren = Array.isArray(raw.children) ? raw.children.slice(0, 4) : [];
       const children = rawChildren.map(child => hydrateSlot(child, 1)).filter(child => child.type !== "row");
       while (children.length < 2) children.push(makeTextSlot("Custom", "gotham"));
-      const count = Math.max(2, Math.min(4, Number(raw.childCount) || children.length));
+      const count = rowNumber(raw.childCount, children.length, 2, 4, true);
       while (children.length < count) children.push(makeTextSlot("Custom", "gotham"));
       children.length = count;
       const row = makeRowSlot({ ...raw, children, childCount:count });
@@ -1781,7 +1788,8 @@ if (remembered) kitId.value = remembered;
     }
     const type = LEAF_SLOT_TYPES.includes(requested) ? requested : "text";
     const base = type === "text" ? makeTextSlot(raw?.role || "Custom", raw?.family || "gotham") : makeGenericSlot(type);
-    return { ...base, ...(raw || {}), type, id:freshId(), assetDataUrl:type === "image" ? "" : (raw?.assetDataUrl || "") };
+    const { children:discardedChildren, ...leaf } = raw || {};
+    return { ...base, ...leaf, type, id:freshId(), assetDataUrl:type === "image" ? "" : (raw?.assetDataUrl || "") };
   }
 
   function applyCompositionPreset(key) {
@@ -2230,7 +2238,7 @@ if (remembered) kitId.value = remembered;
       childCount?.addEventListener("change", () => {
         const row = selectedSlot();
         if (!row || row.type !== "row") return;
-        const next = Math.max(2, Math.min(4, Number(childCount.value) || 2));
+        const next = rowNumber(childCount.value, 2, 2, 4, true);
         while (row.children.length < next) row.children.push(makeTextSlot("Custom", "gotham"));
         row.children.length = next;
         while (row.ratios.length < next) row.ratios.push(1);
@@ -2241,7 +2249,7 @@ if (remembered) kitId.value = remembered;
       const rowGap = slotInspector.querySelector('[data-bind="rowGap"]');
       rowGap?.addEventListener("input", () => {
         const row = selectedSlot();
-        row.gap = Math.max(0, Number(rowGap.value) || 0);
+        row.gap = rowNumber(rowGap.value, 24, 0, 96);
         updateInspectorOutput(rowGap, "rowGap", row.gap);
         syncRowLayouts();
       });
@@ -2254,7 +2262,7 @@ if (remembered) kitId.value = remembered;
       const collapse = slotInspector.querySelector('[data-bind="rowCollapseAt"]');
       collapse?.addEventListener("input", () => {
         const row = selectedSlot();
-        row.collapseAt = Math.max(240, Number(collapse.value) || 680);
+        row.collapseAt = rowNumber(collapse.value, 680, 240, 1600);
         updateInspectorOutput(collapse, "rowCollapseAt", row.collapseAt);
         syncRowLayouts();
       });
@@ -2262,7 +2270,7 @@ if (remembered) kitId.value = remembered;
         input.addEventListener("input", () => {
           const row = selectedSlot();
           const ratioIndex = Number(input.dataset.rowRatio);
-          row.ratios[ratioIndex] = Math.max(.25, Number(input.value) || 1);
+          row.ratios[ratioIndex] = rowNumber(input.value, 1, .25, 12);
           syncRowLayouts();
         });
       });
