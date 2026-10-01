@@ -2,7 +2,7 @@
 
 ## Current state
 
-Tasks 1–3 complete and reviewed. Next: Task 4. Branch: feat/v0.1.1-responsive-rows. Controller owns this ledger; no implementation writer assigned.
+Tasks 1–4 complete and reviewed. Next: Task 5. Branch: feat/v0.1.1-responsive-rows. Controller owns this ledger; no implementation writer assigned.
 
 ## Recovery
 
@@ -65,3 +65,14 @@ Read this ledger and deviations.md, then git log/status. Completed tasks must no
 - Task 3: complete (commits d0496ad..a03d8ae, review clean). Report and review: docs/implementation/tasks/task-3-report.md and task-3-review.md.
 
 - Task 4: brief prepared; implementation pending dispatch.
+- Task 4 writer: /root/implement_task_2 reused with fresh Task 4 brief after new-agent capacity rejection. Task 2 is complete and must not repeat. Concurrent /root/verification_tooling has disjoint README/requirements/scripts ownership; no Git mutation by tooling worker.
+- Parallel tooling implementation DONE, no Git/app/test mutation. Static-only checks pass from both working directories; duplicate-ID and invalid-JS temp fixtures exit 1. Immutable working-file package created for independent review; commit deferred until app writer safe point.
+- Parallel tooling review: Spec compliant / quality Approved, no blockers, assigned file hashes match immutable package and installed Playwright pin. Tooling commit remains deferred until app writer completes.
+- Task 4 step RED: numeric-role CSS crash, role/property suffix collisions, metadata assetDataUrl leak, malformed slot/background acceptance and delayed FileReader wrong-slot update reproduced in both browsers. Correct PNG fixture decodes in Chromium/Firefox; PNG/SVG/JPEG acceptance behavior initially passes. Candidate-state validation and captured image target fixes underway.
+- Task 4 step GREEN: six focused import/export/image tests pass in Chromium/Firefox. Candidate state validated before publication; rejected imports preserve prior JSON and DOM. Full CSS declaration sets reserved against collisions; session data stripped recursively; async image reads bound to original target. Additional __proto__ role default lookup defect reproduced and fixed; full task checks/report underway.
+- Parallel tooling accepted and committed after independent review at app-writer safe point. App Task 4 completed ae452d6; full 17 tests in both engines, syntax/whitespace clean. Immutable app-only review package created before tooling commit.
+- Task 4 review found Important I4-1: explicit kitIds:[] retains receiving IDs, violating round trip. Fix round 1/5 assigned to original writer. Fix base is 0db4ca9 (only separate reviewed tooling differs from reviewed app head ae452d6; app/test diff empty). No Task 5 execution until scoped re-review clears issue.
+- Task 4 fix round 1/5: writer commit 40ad06d, explicit-empty kit IDs regression RED then GREEN in both browsers; legacy absent-field behavior retained. Targeted tests/syntax/whitespace pass. Scoped re-review pending, no task completion claimed.
+- Task 4 fix round 1/5 closed: I4-1 addressed, no new Critical/Important breakage; reviewer Approved at 40ad06d. Existing Library/full standalone/browser/screenshot acceptance remains Task 5; imported nested/old leaf, images, privacy and exports now covered.
+
+- Task 4: complete (commits 979fa78..40ad06d, review clean). Report and review: docs/implementation/tasks/task-4-report.md and task-4-review.md.
