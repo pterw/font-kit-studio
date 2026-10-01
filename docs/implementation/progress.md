@@ -2,7 +2,7 @@
 
 ## Current state
 
-Tasks 1–1 complete and reviewed. Next: Task 2. Branch: feat/v0.1.1-responsive-rows. Controller owns this ledger; no implementation writer assigned.
+Tasks 1–2 complete and reviewed. Next: Task 3. Branch: feat/v0.1.1-responsive-rows. Controller owns this ledger; no implementation writer assigned.
 
 ## Recovery
 
@@ -44,3 +44,11 @@ Read this ledger and deviations.md, then git log/status. Completed tasks must no
 - Task 1: complete (commits ba881ea..cc9ebd5, review clean). Report and review: docs/implementation/tasks/task-1-report.md and task-1-review.md.
 
 - Task 2: brief prepared; implementation pending dispatch.
+- Task 2: implementation writer /root/implement_task_2 assigned; HTML/tests ownership exclusive. Acceptance includes Chromium/Firefox computed geometry and actual canvas width observer updates.
+- Task 2 step RED: unequal-height spacer geometry regression failed start/center/end in both Chromium and Firefox (6 subtests); inherited stretch passed. Writer will remove forced row-child height and verify weighted tracks, observer updates and collapse boundaries.
+- Task 2 step GREEN: one CSS height declaration removed; alignment geometry passes in both engines. Characterization passes weighted 2-4 tracks, gap, source order and container-only observer boundaries 679/680/681 while nominal width remains 960. Initial harness padding mistake corrected; final task suite/report pending.
+- Version clarification: user confirmed the received HTML is v0.1.1; preserved original tag supplied-v0.1.1, implementation target remains v0.1.1. The internal v0.1.0 title was a mismatch.
+- Task 2 final steps: full suite 8 tests OK (both browser engines), JS syntax/whitespace clean. Implementation commit 0e86c9f. Reviewer /root/review_task_2 checking spec and task quality.
+- Task 2 review Spec compliant / quality Approved, no findings. Unchanged observer source was directly read at baseline (single canvas observer); real container-only resize tests supply behavior evidence. Remaining global Library/assets/exports acceptance is tracked for Tasks 3-5.
+
+- Task 2: complete (commits ab087c0..0e86c9f, review clean). Report and review: docs/implementation/tasks/task-2-report.md and task-2-review.md.
