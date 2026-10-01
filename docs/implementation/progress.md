@@ -42,3 +42,5 @@ Read this ledger and deviations.md, then git log/status. Completed tasks must no
 - Task 1 review: Spec compliant / quality Approved; no blocking findings. Minor M1: oversized finite gap/breakpoint/weight cases deferred to Task 3 tests. Recursive ID lookup source was directly checked by controller (findSlotById/selectedLocation/replaceSelectedSlot); unchanged Library/image acceptance remains assigned to Tasks 3-5, not claimed complete here.
 
 - Task 1: complete (commits ba881ea..cc9ebd5, review clean). Report and review: docs/implementation/tasks/task-1-report.md and task-1-review.md.
+
+- Task 2: brief prepared; implementation pending dispatch.
