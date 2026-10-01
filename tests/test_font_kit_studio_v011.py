@@ -63,6 +63,67 @@ class BrowserCase(unittest.TestCase):
                 gap:parseFloat(getComputedStyle(layout).gap)};
         }''')
 
+    def test_task5_library_controls_and_mode_preservation(self):
+        for engine in ('chromium', 'firefox'):
+            with self.subTest(engine=engine):
+                page, errors = self.page(engine)
+                page.locator('#modeLibrary').click()
+                self.assertTrue(page.locator('#libraryView').is_visible())
+                self.assertFalse(page.locator('#composerView').is_visible())
+                samples = page.locator('.big-sample')
+                self.assertGreater(samples.count(), 0)
+                page.locator('#sampleText').fill('Offline Library acceptance')
+                self.assertTrue(all(text == 'Offline Library acceptance' for text in samples.all_text_contents()))
+                page.locator('#sizeRange').fill('56')
+                page.locator('#sizeRange').dispatch_event('input')
+                self.assertEqual(samples.first.evaluate('el => getComputedStyle(el).fontSize'), '56px')
+                page.locator('#themeToggle').click()
+                self.assertEqual(page.locator('#themeToggle').get_attribute('aria-pressed'), 'true')
+                page.locator('#modeComposer').click()
+                self.assertTrue(page.locator('#composerView').is_visible())
+                page.locator('#compositionPreset').select_option('rowdemo')
+                page.locator('#applyPreset').click()
+                before = self.export(page)
+                page.locator('#modeLibrary').click()
+                self.assertEqual(page.locator('#sampleText').input_value(), 'Offline Library acceptance')
+                page.locator('#modeComposer').click()
+                self.assertEqual(self.export(page), before)
+                self.assertEqual(errors, [])
+
+    def test_task5_offline_layouts_and_dynamic_ids(self):
+        for engine in ('chromium', 'firefox'):
+            with self.subTest(engine=engine):
+                browser = getattr(self.runtime, engine).launch()
+                self.browsers.append(browser)
+                page = browser.new_page()
+                page.route('https://**/*', lambda route: route.abort())
+                page.route('http://**/*', lambda route: route.abort())
+                errors = []
+                page.on('pageerror', lambda error: errors.append(str(error)))
+                page.goto(HTML.as_uri())
+                for width, height in ((1600,1200),(390,844)):
+                    page.set_viewport_size({'width':width,'height':height})
+                    page.locator('#modeLibrary').click()
+                    self.assertGreater(page.locator('.big-sample').count(), 0)
+                    self.assertLessEqual(page.evaluate('document.documentElement.scrollWidth'), width)
+                    page.locator('#modeComposer').click()
+                    page.locator('#compositionPreset').select_option('rowdemo')
+                    page.locator('#applyPreset').click()
+                    page.wait_for_timeout(250)
+                    self.assertLessEqual(page.evaluate('document.documentElement.scrollWidth'), width)
+                    canvas_width = page.locator('#composerCanvas').evaluate('el => el.getBoundingClientRect().width')
+                    collapsed = page.locator('.row-layout').evaluate('el => el.classList.contains("is-collapsed")')
+                    self.assertEqual(collapsed, canvas_width <= 680)
+                    for target in ('#composerCanvas > .flow-slot', '.row-child'):
+                        for index in range(page.locator(target).count()):
+                            page.locator(target).nth(index).click(position={'x':3,'y':3})
+                            duplicates = page.evaluate('''() => {
+                                const ids = [...document.querySelectorAll('[id]')].map(el => el.id);
+                                return ids.filter((id,index) => ids.indexOf(id) !== index);
+                            }''')
+                            self.assertEqual(duplicates, [])
+                self.assertEqual(errors, [])
+
     def test_task4_failed_import_is_transactional(self):
         for engine in ('chromium', 'firefox'):
             with self.subTest(engine=engine):
