@@ -113,6 +113,21 @@ class BrowserCase(unittest.TestCase):
                 self.assertEqual(self.export(page), before)
                 self.assertEqual(errors, [])
 
+    def test_task4_explicit_empty_kits_and_missing_field_compatibility(self):
+        for engine in ('chromium', 'firefox'):
+            with self.subTest(engine=engine):
+                page, errors = self.page(engine)
+                kits = page.locator('#composerKitIds')
+                kits.fill('abc123, def456')
+                legacy = {'version':'0.1.0', 'composition':{'slots':[{'type':'text','text':'legacy'}]}}
+                self.assertIn('Composition imported.', self.import_document(page, legacy))
+                self.assertEqual(kits.input_value(), 'abc123, def456')
+                self.assertEqual(self.export(page)['kitIds'], ['abc123','def456'])
+                self.assertIn('Composition imported.', self.import_document(page, {**legacy,'kitIds':[]}))
+                self.assertEqual(kits.input_value(), '')
+                self.assertEqual(self.export(page)['kitIds'], [])
+                self.assertEqual(errors, [])
+
     def test_task4_css_slug_and_property_suffix_collisions(self):
         for engine in ('chromium', 'firefox'):
             with self.subTest(engine=engine):

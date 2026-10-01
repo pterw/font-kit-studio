@@ -2534,7 +2534,8 @@ if (remembered) kitId.value = remembered;
         // Only publish a fully hydrated candidate; failed validation leaves live state intact.
         Object.assign(state, { canvasWidth:width === "100%" ? width : String(rowNumber(width, 960, 240, 2400)),
           background, slots, selectedId:slots[0].id });
-        if (kitIds.length) composerKitIds.value = kitIds.join(", ");
+        // Legacy documents without kitIds retain the receiving selection; explicit IDs replace it, even when empty.
+        if (Object.hasOwn(data, "kitIds")) composerKitIds.value = kitIds.join(", ");
         familyOptions(canvasBgFamily, state.background.family);
         populateSavedColors(canvasSavedColor, state.background.saved);
         syncCompositionControls();
