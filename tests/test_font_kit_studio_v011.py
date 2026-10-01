@@ -42,6 +42,85 @@ class BrowserCase(unittest.TestCase):
         page.locator('#exportDialog').evaluate('(dialog) => dialog.close()')
         return result
 
+    def row_geometry(self, page):
+        # Wait for the inherited grid transition to finish before measuring tracks.
+        page.wait_for_timeout(220)
+        return page.locator('.row-layout').evaluate('''layout => {
+            const rect = element => {
+                const r = element.getBoundingClientRect();
+                return {x:r.x, y:r.y, width:r.width, height:r.height, bottom:r.bottom};
+            };
+            return {layout:rect(layout), collapsed:layout.classList.contains('is-collapsed'),
+                children:[...layout.children].map(rect),
+                order:[...layout.children].map(child => child.dataset.rowChild),
+                gap:parseFloat(getComputedStyle(layout).gap)};
+        }''')
+
+    def test_unequal_child_alignment_geometry(self):
+        for engine in ('chromium', 'firefox'):
+            with self.subTest(engine=engine):
+                page, errors = self.page(engine)
+                for alignment in ('start', 'center', 'end', 'stretch'):
+                    with self.subTest(alignment=alignment):
+                        self.import_slots(page, [{'type':'row', 'alignItems':alignment,
+                            'children':[{'type':'spacer', 'spacerHeight':40},
+                                        {'type':'spacer', 'spacerHeight':140}]}])
+                        geometry = self.row_geometry(page)
+                        short, tall = geometry['children']
+                        self.assertFalse(geometry['collapsed'])
+                        if alignment == 'stretch':
+                            self.assertAlmostEqual(short['height'], tall['height'], delta=1)
+                        else:
+                            self.assertAlmostEqual(tall['height'] - short['height'], 100, delta=1)
+                            offset = {'start':0, 'center':50, 'end':100}[alignment]
+                            self.assertAlmostEqual(short['y'] - tall['y'], offset, delta=1)
+                self.assertEqual(errors, [])
+
+    def test_weighted_columns_gaps_and_resize_observer_boundaries(self):
+        for engine in ('chromium', 'firefox'):
+            with self.subTest(engine=engine):
+                page, errors = self.page(engine)
+                self.assertEqual(page.locator('#canvasWidth').input_value(), '960')
+                for count in (2, 3, 4):
+                    self.import_slots(page, [{'type':'row', 'childCount':count,
+                        'ratios':list(range(1, count + 1)), 'gap':17, 'collapseAt':680,
+                        'children':[{'type':'spacer', 'spacerHeight':20 + i * 10}
+                                    for i in range(count)]}])
+                    # Change only container width: no window resize or app render event.
+                    # Responsive updates must therefore come from ResizeObserver.
+                    for width in (681, 680, 679, 681):
+                        page.locator('#composerCanvas').evaluate(
+                            '''(canvas, width) => {
+                                const parent = canvas.parentElement;
+                                const style = getComputedStyle(parent);
+                                const edges = ['paddingLeft', 'paddingRight', 'borderLeftWidth', 'borderRightWidth']
+                                    .reduce((sum, key) => sum + parseFloat(style[key]), 0);
+                                parent.style.width = `${width + edges}px`;
+                            }''', width)
+                        page.wait_for_function('''expected => {
+                            const canvas = document.querySelector('#composerCanvas');
+                            return Math.abs(canvas.getBoundingClientRect().width - expected.width) < .1
+                                && canvas.querySelector('.row-layout').classList.contains('is-collapsed') === expected.collapsed;
+                        }''', arg={'width':width, 'collapsed':width <= 680})
+                        geometry = self.row_geometry(page)
+                        children = geometry['children']
+                        self.assertEqual(geometry['order'], [str(i) for i in range(count)])
+                        self.assertAlmostEqual(geometry['gap'], 17, delta=.1)
+                        if width <= 680:
+                            for child in children:
+                                self.assertAlmostEqual(child['width'], geometry['layout']['width'], delta=1)
+                                self.assertAlmostEqual(child['x'], children[0]['x'], delta=1)
+                            for previous, child in zip(children, children[1:]):
+                                self.assertAlmostEqual(child['y'] - previous['bottom'], 17, delta=1)
+                        else:
+                            usable = geometry['layout']['width'] - 17 * (count - 1)
+                            total = sum(range(1, count + 1))
+                            for index, child in enumerate(children):
+                                self.assertAlmostEqual(child['width'], usable * (index + 1) / total, delta=1)
+                            for previous, child in zip(children, children[1:]):
+                                self.assertAlmostEqual(child['x'] - previous['x'] - previous['width'], 17, delta=1)
+                self.assertEqual(errors, [])
+
     def test_valid_row_factory_and_child_selection(self):
         for engine in ('chromium', 'firefox'):
             with self.subTest(engine=engine):
