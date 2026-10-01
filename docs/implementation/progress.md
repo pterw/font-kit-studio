@@ -52,3 +52,5 @@ Read this ledger and deviations.md, then git log/status. Completed tasks must no
 - Task 2 review Spec compliant / quality Approved, no findings. Unchanged observer source was directly read at baseline (single canvas observer); real container-only resize tests supply behavior evidence. Remaining global Library/assets/exports acceptance is tracked for Tasks 3-5.
 
 - Task 2: complete (commits ab087c0..0e86c9f, review clean). Report and review: docs/implementation/tasks/task-2-report.md and task-2-review.md.
+
+- Task 3: brief prepared; implementation pending dispatch.
