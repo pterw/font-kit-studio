@@ -34,3 +34,5 @@ Read this ledger and deviations.md, then git log/status. Completed tasks must no
 - Graph: list_projects, search_graph and check_index_coverage failed with Transport closed. Tier Verify intended, project/generation unknown; all subsequent claims require direct-source or runtime evidence.
 - Chat: supplied ChatGPT conversation URL returned login page; discussion unavailable. No recalled claims invented.
 - Parallel baseline audits: baseline_rows_audit owns row/inspector report; baseline_exports_audit owns persistence report. Both read-only on app/Git.
+
+- Task 1: brief prepared; implementation pending dispatch.
