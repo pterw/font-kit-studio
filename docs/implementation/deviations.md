@@ -8,3 +8,4 @@
 | D004 | Ruling: map historical /mnt/data paths to this repository and supplement structural checks with behavioral tests. | Windows workspace; runtime evidence tests the specification. | Verification tooling differs from historical environment. |
 | D005 | Evidence limitation: graph service Transport closed, no project/generation/coverage available; direct-source fallback. | Actual tool errors. | No indexed structural assurance; source/runtime checks govern. |
 | D006 | Evidence limitation: earlier conversation requires sign-in and could not be read; proceed on the supplied spec and HTML. | Actual URL retrieval. | Unavailable chat decisions may require later reconciliation. |
+- D006 retry: user supplied title Generate Font Specimen HTML. Retried conversation URL in a browser (access challenge) and web retrieval (login page); exact local title lookup returned no match. No prior discussion recovered.

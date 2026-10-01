@@ -2,7 +2,7 @@
 
 ## Current state
 
-Setup complete. Baseline audits in progress. Task 1 pending. Branch: feat/v0.1.1-responsive-rows. Controller owns this ledger and the plan; no implementation writer assigned yet.
+Tasks 1–1 complete and reviewed. Next: Task 2. Branch: feat/v0.1.1-responsive-rows. Controller owns this ledger; no implementation writer assigned.
 
 ## Recovery
 
@@ -36,3 +36,9 @@ Read this ledger and deviations.md, then git log/status. Completed tasks must no
 - Parallel baseline audits: baseline_rows_audit owns row/inspector report; baseline_exports_audit owns persistence report. Both read-only on app/Git.
 
 - Task 1: brief prepared; implementation pending dispatch.
+- Task 1: implementation writer /root/implement_task_1 assigned; real-browser RED checks underway in Chromium and Firefox. HTML/tests ownership exclusive until report and review.
+- Task 1 step: implementer reproduced baseline failures in both browsers (fractional counts, retained hidden descendants, version mismatch); inherited selection/preset checks passed. Initial GREEN passed; separate fractional inspector regression and final scoped checks underway. Exact command/output will be retained in task report.
+- Task 1 steps complete: RED evidence retained; GREEN 6 tests in Chromium/Firefox, inline JS syntax and whitespace checks pass. Implementation commit cc9ebd5. Independent reviewer /root/review_task_1 is checking spec and quality before task completion.
+- Task 1 review: Spec compliant / quality Approved; no blocking findings. Minor M1: oversized finite gap/breakpoint/weight cases deferred to Task 3 tests. Recursive ID lookup source was directly checked by controller (findSlotById/selectedLocation/replaceSelectedSlot); unchanged Library/image acceptance remains assigned to Tasks 3-5, not claimed complete here.
+
+- Task 1: complete (commits ba881ea..cc9ebd5, review clean). Report and review: docs/implementation/tasks/task-1-report.md and task-1-review.md.
