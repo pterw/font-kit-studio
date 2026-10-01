@@ -2,7 +2,7 @@
 
 ## Current state
 
-Tasks 1–2 complete and reviewed. Next: Task 3. Branch: feat/v0.1.1-responsive-rows. Controller owns this ledger; no implementation writer assigned.
+Tasks 1–3 complete and reviewed. Next: Task 4. Branch: feat/v0.1.1-responsive-rows. Controller owns this ledger; no implementation writer assigned.
 
 ## Recovery
 
@@ -54,3 +54,12 @@ Read this ledger and deviations.md, then git log/status. Completed tasks must no
 - Task 2: complete (commits ab087c0..0e86c9f, review clean). Report and review: docs/implementation/tasks/task-2-report.md and task-2-review.md.
 
 - Task 3: brief prepared; implementation pending dispatch.
+- Task 3: /root/implement_task_3 owns HTML/tests/report. Row/leaf interaction checks and deferred M1 upper-bound coverage assigned; import/export defects remain Task 4.
+- Baseline preservation verified freshly: received Downloads HTML and Git supplied-v0.1.1 blob have identical bytes and SHA-256 cae14e847640c71f4e1b528222efe2a21372e73dfcaac0ae20c26d5cf546d949.
+- Task 3 step RED: breakpoint field shows 99999 while model exports 1600 in both engines. Writer is fixing committed numeric field reflection and associating row labels; controller called out preserving multi-digit keyboard entry as a concrete fix risk.
+- Task 3 step GREEN: focused row checks pass in both browsers, including committed value reflection, real keyboard entry (680 and 2.5), upper bounds, leaf controls, child summary/breadcrumb/type restriction and top-level reorder. Full 10-test task suite running; exact evidence pending report.
+- User steering: concurrent subagents permitted when scopes do not overlap. Documentation/verification tooling can run alongside app writers/reviewers; HTML/test writers remain exclusive because tasks share files.
+- Task 3 implementation committed a03d8ae; full 10 tests, both engines, syntax/whitespace pass. Reviewer /root/review_task_3 assigned. Parallel verification tooling brief prepared with separate README/requirements/scripts ownership and no Git mutation.
+- Task 3 review: Spec compliant / quality Approved, no findings. M1 upper-bound tests addressed. Prior Task 2 source/runtime evidence resolves actual-width/observer acceptance; Library and assets remain assigned to final/export tests. Parallel tooling writer /root/verification_tooling assigned only README/requirements/scripts/report; Git mutation reserved to controller.
+
+- Task 3: complete (commits d0496ad..a03d8ae, review clean). Report and review: docs/implementation/tasks/task-3-report.md and task-3-review.md.
