@@ -63,3 +63,5 @@ Read this ledger and deviations.md, then git log/status. Completed tasks must no
 - Task 3 review: Spec compliant / quality Approved, no findings. M1 upper-bound tests addressed. Prior Task 2 source/runtime evidence resolves actual-width/observer acceptance; Library and assets remain assigned to final/export tests. Parallel tooling writer /root/verification_tooling assigned only README/requirements/scripts/report; Git mutation reserved to controller.
 
 - Task 3: complete (commits d0496ad..a03d8ae, review clean). Report and review: docs/implementation/tasks/task-3-report.md and task-3-review.md.
+
+- Task 4: brief prepared; implementation pending dispatch.
