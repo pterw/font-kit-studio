@@ -1,0 +1,18 @@
+{
+  "chat_url": "https://chatgpt.com/c/6aac06f9-0bc4-83e9-8cb9-c3ae15fbcfd2",
+  "chat_access": "2026-09-30: retrieval returned a login page, conversation unavailable; no discussion inferred",
+  "files": [
+    {
+      "source": "C:\\Users\\peter\\Downloads\\font_kit_studio_v0.1.1.html",
+      "sha256": "cae14e847640c71f4e1b528222efe2a21372e73dfcaac0ae20c26d5cf546d949"
+    },
+    {
+      "source": "C:\\Users\\peter\\Downloads\\2026-09-17-font-kit-studio-v0.1.1-responsive-rows-design.md",
+      "sha256": "f8d48f1a23800cf9ac04517575447478b6eff9268333a980a085ac27bc0542a1"
+    },
+    {
+      "source": "C:\\Users\\peter\\Downloads\\2026-09-17-font-kit-studio-v0.1.1-responsive-rows.md",
+      "sha256": "e3365196c271a6b8f387cdf9382b58217e7d279b8fd7b4f5356aebdea07b8090"
+    }
+  ]
+}
