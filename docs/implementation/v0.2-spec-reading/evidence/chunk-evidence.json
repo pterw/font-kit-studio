@@ -1,0 +1,2118 @@
+{
+  "schema_version": 1,
+  "manifest_sha256": "3bac4a5bec6f9a40a2fbcd6ef50c440683fd8ce5098dcb11b409c65ae22bd0bb",
+  "source_sha256": "0f89e2e02ad2c317983c2d34ee05bce782eba64f64b83eadb3b8507d877d5087",
+  "entries": [
+    {
+      "chunk_id": "markdown-000001-faaf83f9d66e",
+      "ordinal": 1,
+      "chunk_sha256": "faaf83f9d66eda014d2eb7aa4855834fcea63a296974b13e2d0be0aa9a07dfa6",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "# Font Kit Studio v0.2.0 — Design Bridge Protocol v1\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 55
+        },
+        {
+          "text": "**Status:** Design freeze candidate  \n",
+          "chunk_byte_start": 55,
+          "chunk_byte_end": 93
+        },
+        {
+          "text": "**Date:** 2026-09-17  \n",
+          "chunk_byte_start": 93,
+          "chunk_byte_end": 116
+        },
+        {
+          "text": "**Scope:** v0.2.0 architecture only — no implementation yet  \n",
+          "chunk_byte_start": 116,
+          "chunk_byte_end": 180
+        },
+        {
+          "text": "**Reference target:** Asteria, used only as the first integration target. The protocol itself is application-agnostic.\n",
+          "chunk_byte_start": 180,
+          "chunk_byte_end": 299
+        },
+        {
+          "text": "---\n",
+          "chunk_byte_start": 299,
+          "chunk_byte_end": 303
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000002-52113cc65beb",
+      "ordinal": 2,
+      "chunk_sha256": "52113cc65beb51082fc7d156435a2be32a323d6edf344b9630f7f1a04cfcde6e",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "## 1. Product Thesis\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 21
+        },
+        {
+          "text": "Font Kit Studio is not a page builder and not a component laboratory.\n",
+          "chunk_byte_start": 21,
+          "chunk_byte_end": 91
+        },
+        {
+          "text": "It is an **instrumented local companion workflow for code-owned applications**.\n",
+          "chunk_byte_start": 91,
+          "chunk_byte_end": 171
+        },
+        {
+          "text": "The running application remains the source of truth for layout, routing, application state, database-backed content, responsive behavior, component composition, CSS/Tailwind output, framework runtime, and final rendering.\n",
+          "chunk_byte_start": 171,
+          "chunk_byte_end": 393
+        },
+        {
+          "text": "Studio does not import the application into a visual-builder-owned rendering model. It does not scrape arbitrary selectors and reconstitute the app as utility-class blobs. Instead, the application deliberately exposes a bounded design API through stable `data-design-*` contracts and a small bridge runtime.\n",
+          "chunk_byte_start": 393,
+          "chunk_byte_end": 701
+        },
+        {
+          "text": "> **Studio does not own the page. The running application owns the page. Studio instruments it.**\n",
+          "chunk_byte_start": 701,
+          "chunk_byte_end": 799
+        },
+        {
+          "text": "This positions Studio between two common extremes:\n",
+          "chunk_byte_start": 799,
+          "chunk_byte_end": 850
+        },
+        {
+          "text": "1. **Code-to-design component workbenches** such as Storybook/Ladle, which isolate components from their real application context.\n",
+          "chunk_byte_start": 850,
+          "chunk_byte_end": 981
+        },
+        {
+          "text": "2. **Visual builders/CMS platforms** such as Plasmic/Builder.io, which introduce their own rendering/content model and deeper SDK ownership.\n",
+          "chunk_byte_start": 981,
+          "chunk_byte_end": 1122
+        },
+        {
+          "text": "Studio keeps the real application live and sovereign while providing an in-context visual editing surface.\n",
+          "chunk_byte_start": 1122,
+          "chunk_byte_end": 1229
+        },
+        {
+          "text": "---\n",
+          "chunk_byte_start": 1229,
+          "chunk_byte_end": 1233
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000003-3d661cf27c64",
+      "ordinal": 3,
+      "chunk_sha256": "3d661cf27c641afe696382fdc1d060ca22b1216b19129882262054579b50bbc2",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "## 2. Core Invariants\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 22
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000004-3277e46c36c6",
+      "ordinal": 4,
+      "chunk_sha256": "3277e46c36c684f1d67d950bf5e310f38d5c744bc2a7758d2f863bbc6276c718",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "### 2.1 Running app is rendering authority\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 43
+        },
+        {
+          "text": "The target application decides whether a requested design change is valid, applies it to its live runtime state, and returns the canonical result.\n",
+          "chunk_byte_start": 43,
+          "chunk_byte_end": 190
+        },
+        {
+          "text": "Studio never assumes that the value it requested is the value the application accepted.\n",
+          "chunk_byte_start": 190,
+          "chunk_byte_end": 278
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000005-27a46285c867",
+      "ordinal": 5,
+      "chunk_sha256": "27a46285c867d085068936f992b843c9b47419a15797e90b32b209b1935b30e5",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "### 2.2 Studio is persistence authority\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 40
+        },
+        {
+          "text": "Studio owns durable design-state persistence.\n",
+          "chunk_byte_start": 40,
+          "chunk_byte_end": 86
+        },
+        {
+          "text": "The target application does **not** independently serialize Studio's design configuration to disk. It may keep live design state in memory for rendering, but Studio writes the acknowledged canonical state to the bound composition file.\n",
+          "chunk_byte_start": 86,
+          "chunk_byte_end": 322
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000006-9c9f65733a80",
+      "ordinal": 6,
+      "chunk_sha256": "9c9f65733a8035c807262a5ae5c4144734d256d85d4ef8532139f397d81fff86",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "### 2.3 Explicit API contracts, never fragile DOM paths\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 56
+        },
+        {
+          "text": "Editable targets are addressed by stable logical identifiers such as:\n",
+          "chunk_byte_start": 56,
+          "chunk_byte_end": 126
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000007-794228bad2e0",
+      "ordinal": 7,
+      "chunk_sha256": "794228bad2e0fbe28dcf92ce05666f8fcaf57441016121e906e3c6def446937b",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "```text\nlanding.hero.title\nlanding.hero.wordmark\nmoments.card.title\nobservatory.sidebar.brand\n```",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 97
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000008-19d0af3c8a00",
+      "ordinal": 8,
+      "chunk_sha256": "19d0af3c8a00ad73607be7b548cc2220f9aa10947b6bb42b3aa9a77c4cfdc5f7",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "These identifiers survive internal DOM rewrapping and component refactors.\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 75
+        },
+        {
+          "text": "Studio must never persist selectors such as:\n",
+          "chunk_byte_start": 75,
+          "chunk_byte_end": 120
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000009-d2515129c303",
+      "ordinal": 9,
+      "chunk_sha256": "d2515129c303d9adf1d31e343d0c334ebdb972383605f59b2930c77810ae175f",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "```text\nbody > main > section:nth-child(2) > div > h1\n```",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 57
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000010-fb1fe90979df",
+      "ordinal": 10,
+      "chunk_sha256": "fb1fe90979df23dd2f59cf6399c74ae1a63aa026c9b4344a4fd822c10c6d47e5",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "### 2.4 Editor chrome never contaminates target markup\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 55
+        },
+        {
+          "text": "Hover outlines, selected-element rings, labels, handles, and editor affordances are rendered in Studio's own overlay layer above the iframe.\n",
+          "chunk_byte_start": 55,
+          "chunk_byte_end": 196
+        },
+        {
+          "text": "The target application reports geometry; it does not receive editor frame markup.\n",
+          "chunk_byte_start": 196,
+          "chunk_byte_end": 278
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000011-ca7289159ca7",
+      "ordinal": 11,
+      "chunk_sha256": "ca7289159ca77244ec74a01aa365c281894aad445db71e2de4327523752c732e",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "### 2.5 Cross-origin isolation is intentional\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 46
+        },
+        {
+          "text": "Studio and the target application may run on separate localhost ports/origins.\n",
+          "chunk_byte_start": 46,
+          "chunk_byte_end": 125
+        },
+        {
+          "text": "Example:\n",
+          "chunk_byte_start": 125,
+          "chunk_byte_end": 134
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000012-3b0ab50340c0",
+      "ordinal": 12,
+      "chunk_sha256": "3b0ab50340c0f8a684ff4d2bd35c84d77dfacbf181761e850590afd6a02ff203",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "```text\nStudio:  http://localhost:4173\nTarget:  http://localhost:3000\n```",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 73
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000013-c95402cb5f01",
+      "ordinal": 13,
+      "chunk_sha256": "c95402cb5f01eb182bd6930e927a547470676671d340224b0858ac7ec1ab749b",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "Communication occurs only through the versioned Design Bridge protocol over `window.postMessage()`.\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 100
+        },
+        {
+          "text": "Studio styles must not leak into the target application and target styles must not leak into Studio.\n",
+          "chunk_byte_start": 100,
+          "chunk_byte_end": 201
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000014-2da604926283",
+      "ordinal": 14,
+      "chunk_sha256": "2da6049262838c1c89d4f338f68f1d99b3dd80d25b1747047871443469f3f25e",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "### 2.6 Live mutation and durable persistence are separate paths\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 65
+        },
+        {
+          "text": "Dragging a slider must update the live target immediately without writing to disk for every intermediate value.\n",
+          "chunk_byte_start": 65,
+          "chunk_byte_end": 177
+        },
+        {
+          "text": "Persistence happens only from canonical acknowledged state, through a debounced/serialized write path.\n",
+          "chunk_byte_start": 177,
+          "chunk_byte_end": 280
+        },
+        {
+          "text": "---\n",
+          "chunk_byte_start": 280,
+          "chunk_byte_end": 284
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000015-6def4078a5d5",
+      "ordinal": 15,
+      "chunk_sha256": "6def4078a5d590616165c22f5bfa09d54d494718e062d504f5a913b6557962ef",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "## 3. High-Level Architecture\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 30
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000016-813e22b9e98c",
+      "ordinal": 16,
+      "chunk_sha256": "813e22b9e98ca5062acce7d5670d76c73dc97f3ab05daac20a7d730c061006a7",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "```text\n┌────────────────────────────────────────────────────────────────────┐\n│                          FONT KIT STUDIO                           │\n│                                                                    │\n│  Toolbar / assets / fonts / palettes / history / inspector         │\n│                                                                    │\n│  ┌──────────────────────────────────────────────────────────────┐  │\n│  │                     Target application iframe               │  │\n│  │                                                              │  │\n│  │    Real app · real state · real data · real components      │  │\n│  │                                                              │  │\n│  └──────────────────────────────────────────────────────────────┘  │\n│             ↑ Studio-owned hover/selection overlay ↑               │\n│                                                                    │\n└────────────────────────────────────────────────────────────────────┘\n                  │                               ▲\n                  │ versioned postMessage         │\n                  ▼                               │\n          ┌────────────────────────────────────────────┐\n          │        Target DesignBridge runtime         │\n          │                                            │\n          │ handshake · registry · hit testing         │\n          │ patches · validation · bounds reporting    │\n          └────────────────────────────────────────────┘\n```",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 2324
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000017-e9a90fd608d1",
+      "ordinal": 17,
+      "chunk_sha256": "e9a90fd608d10309de115fcb069f7fd541ec68585e37476740435bed904b8f5f",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "Studio owns:\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 13
+        },
+        {
+          "text": "- iframe hosting,\n",
+          "chunk_byte_start": 13,
+          "chunk_byte_end": 31
+        },
+        {
+          "text": "- visual overlay rendering,\n",
+          "chunk_byte_start": 31,
+          "chunk_byte_end": 59
+        },
+        {
+          "text": "- inspector UI,\n",
+          "chunk_byte_start": 59,
+          "chunk_byte_end": 75
+        },
+        {
+          "text": "- font/palette/asset tooling,\n",
+          "chunk_byte_start": 75,
+          "chunk_byte_end": 105
+        },
+        {
+          "text": "- composition state,\n",
+          "chunk_byte_start": 105,
+          "chunk_byte_end": 126
+        },
+        {
+          "text": "- history/undo,\n",
+          "chunk_byte_start": 126,
+          "chunk_byte_end": 142
+        },
+        {
+          "text": "- persistence,\n",
+          "chunk_byte_start": 142,
+          "chunk_byte_end": 157
+        },
+        {
+          "text": "- local file binding,\n",
+          "chunk_byte_start": 157,
+          "chunk_byte_end": 179
+        },
+        {
+          "text": "- protocol client.\n",
+          "chunk_byte_start": 179,
+          "chunk_byte_end": 198
+        },
+        {
+          "text": "The target bridge owns:\n",
+          "chunk_byte_start": 198,
+          "chunk_byte_end": 222
+        },
+        {
+          "text": "- protocol handshake,\n",
+          "chunk_byte_start": 222,
+          "chunk_byte_end": 244
+        },
+        {
+          "text": "- editable target registry,\n",
+          "chunk_byte_start": 244,
+          "chunk_byte_end": 272
+        },
+        {
+          "text": "- target discovery,\n",
+          "chunk_byte_start": 272,
+          "chunk_byte_end": 292
+        },
+        {
+          "text": "- hit testing,\n",
+          "chunk_byte_start": 292,
+          "chunk_byte_end": 307
+        },
+        {
+          "text": "- capability reporting,\n",
+          "chunk_byte_start": 307,
+          "chunk_byte_end": 331
+        },
+        {
+          "text": "- patch validation,\n",
+          "chunk_byte_start": 331,
+          "chunk_byte_end": 351
+        },
+        {
+          "text": "- live runtime mutation,\n",
+          "chunk_byte_start": 351,
+          "chunk_byte_end": 376
+        },
+        {
+          "text": "- geometry reporting,\n",
+          "chunk_byte_start": 376,
+          "chunk_byte_end": 398
+        },
+        {
+          "text": "- protocol server behavior.\n",
+          "chunk_byte_start": 398,
+          "chunk_byte_end": 426
+        },
+        {
+          "text": "The bridge does **not** own Studio UI, file pickers, font libraries, colour pickers, undo UI, PNG/SVG asset management, or application business state unrelated to design instrumentation.\n",
+          "chunk_byte_start": 426,
+          "chunk_byte_end": 613
+        },
+        {
+          "text": "---\n",
+          "chunk_byte_start": 613,
+          "chunk_byte_end": 617
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000018-f91627b882bf",
+      "ordinal": 18,
+      "chunk_sha256": "f91627b882bf1844722b2977d38643a156d20635ad9c31fab2f31326e259f026",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "## 4. Framework-Agnostic Target Contract\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 41
+        },
+        {
+          "text": "The bridge may be authored in TypeScript and distributed as compiled ESM, but the runtime contract is DOM + JSON + `postMessage`.\n",
+          "chunk_byte_start": 41,
+          "chunk_byte_end": 171
+        },
+        {
+          "text": "A minimal target requires only stable data attributes:\n",
+          "chunk_byte_start": 171,
+          "chunk_byte_end": 226
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000019-5c6290b7923c",
+      "ordinal": 19,
+      "chunk_sha256": "5c6290b7923cf245c26a04e7ab1a0669d862589b49bcab7afa2e3da24a280b99",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "```html\n<h1\n  data-design-id=\"landing.hero.title\"\n  data-design-role=\"display\"\n>\n  Every life is a night sky.\n</h1>\n```",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 119
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000020-448363cd7a9d",
+      "ordinal": 20,
+      "chunk_sha256": "448363cd7a9d5dca6a3818a0f0eff4d8b000148be052822951742b48d4c3ceb6",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "Frameworks may generate this markup however they like.\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 55
+        },
+        {
+          "text": "Optional framework helpers are sugar, not protocol requirements.\n",
+          "chunk_byte_start": 55,
+          "chunk_byte_end": 120
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000021-ad02c48bbfba",
+      "ordinal": 21,
+      "chunk_sha256": "ad02c48bbfbac4dfa09602c34a2f4e6fc2a6b3e3f827019fdded13de88f1bcc4",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "### 4.1 Target IDs\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 19
+        },
+        {
+          "text": "`data-design-id` values are logical API identifiers.\n",
+          "chunk_byte_start": 19,
+          "chunk_byte_end": 72
+        },
+        {
+          "text": "Requirements:\n",
+          "chunk_byte_start": 72,
+          "chunk_byte_end": 86
+        },
+        {
+          "text": "- unique within the active document,\n",
+          "chunk_byte_start": 86,
+          "chunk_byte_end": 123
+        },
+        {
+          "text": "- stable across internal DOM refactors,\n",
+          "chunk_byte_start": 123,
+          "chunk_byte_end": 163
+        },
+        {
+          "text": "- human-readable,\n",
+          "chunk_byte_start": 163,
+          "chunk_byte_end": 181
+        },
+        {
+          "text": "- dot-separated by convention,\n",
+          "chunk_byte_start": 181,
+          "chunk_byte_end": 212
+        },
+        {
+          "text": "- never auto-generated from DOM position,\n",
+          "chunk_byte_start": 212,
+          "chunk_byte_end": 254
+        },
+        {
+          "text": "- duplicate IDs are a bridge error.\n",
+          "chunk_byte_start": 254,
+          "chunk_byte_end": 290
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000022-741a3b43ec10",
+      "ordinal": 22,
+      "chunk_sha256": "741a3b43ec106ab2584943a1f69f94bafcfd4c3259212e07f230dd39b7ade58b",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "### 4.2 Progressive capability model\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 37
+        },
+        {
+          "text": "A target may work at two levels.\n",
+          "chunk_byte_start": 37,
+          "chunk_byte_end": 70
+        },
+        {
+          "text": "#### Level 1 — attribute-only discovery\n",
+          "chunk_byte_start": 70,
+          "chunk_byte_end": 112
+        },
+        {
+          "text": "The bridge can infer basic editable capabilities from the live element:\n",
+          "chunk_byte_start": 112,
+          "chunk_byte_end": 184
+        },
+        {
+          "text": "- text content,\n",
+          "chunk_byte_start": 184,
+          "chunk_byte_end": 200
+        },
+        {
+          "text": "- computed font family,\n",
+          "chunk_byte_start": 200,
+          "chunk_byte_end": 224
+        },
+        {
+          "text": "- computed font size,\n",
+          "chunk_byte_start": 224,
+          "chunk_byte_end": 246
+        },
+        {
+          "text": "- font weight,\n",
+          "chunk_byte_start": 246,
+          "chunk_byte_end": 261
+        },
+        {
+          "text": "- font style,\n",
+          "chunk_byte_start": 261,
+          "chunk_byte_end": 275
+        },
+        {
+          "text": "- line height,\n",
+          "chunk_byte_start": 275,
+          "chunk_byte_end": 290
+        },
+        {
+          "text": "- letter spacing,\n",
+          "chunk_byte_start": 290,
+          "chunk_byte_end": 308
+        },
+        {
+          "text": "- text alignment,\n",
+          "chunk_byte_start": 308,
+          "chunk_byte_end": 326
+        },
+        {
+          "text": "- text colour,\n",
+          "chunk_byte_start": 326,
+          "chunk_byte_end": 341
+        },
+        {
+          "text": "- element bounds.\n",
+          "chunk_byte_start": 341,
+          "chunk_byte_end": 359
+        },
+        {
+          "text": "#### Level 2 — explicit registration\n",
+          "chunk_byte_start": 359,
+          "chunk_byte_end": 398
+        },
+        {
+          "text": "Applications may register richer schemas:\n",
+          "chunk_byte_start": 398,
+          "chunk_byte_end": 440
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000023-d72f41af3581",
+      "ordinal": 23,
+      "chunk_sha256": "d72f41af35815b0377b14e19c8df53614a2cff1c7a40fe0d120f68d073b33f4d",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "```ts\nbridge.register({\n  id: \"landing.hero.title\",\n  role: \"display\",\n  kind: \"text\",\n  capabilities: {\n    text: true,\n    typography: true,\n    color: true,\n    alignment: true\n  },\n  constraints: {\n    fontWeight: {\n      min: 100,\n      max: 900\n    }\n  }\n});\n```",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 268
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000024-ed7896139234",
+      "ordinal": 24,
+      "chunk_sha256": "ed7896139234ca57f0c7b6b88199efef2e5a213f2c07a178fc2901de59a5aeb1",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "Explicit registration overrides inferred capability metadata.\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 62
+        },
+        {
+          "text": "---\n",
+          "chunk_byte_start": 62,
+          "chunk_byte_end": 66
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000025-b47ff4018c5d",
+      "ordinal": 25,
+      "chunk_sha256": "b47ff4018c5d4fcb4d970996007fb6d87862eccccefc17c21c31ad6666a4820a",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "## 5. Source of Truth and State Flow\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 37
+        },
+        {
+          "text": "The system has two distinct authorities.\n",
+          "chunk_byte_start": 37,
+          "chunk_byte_end": 78
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000026-684ed7845abd",
+      "ordinal": 26,
+      "chunk_sha256": "684ed7845abda3b2408d5413a33b1ed01b86e25bd9c3678254402e672405f93e",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "### 5.1 Target application: rendering authority\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 48
+        },
+        {
+          "text": "The target decides whether a patch is valid, whether a requested value must be normalized, whether a patch is rejected, and what the application actually rendered.\n",
+          "chunk_byte_start": 48,
+          "chunk_byte_end": 212
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000027-a60212a80347",
+      "ordinal": 27,
+      "chunk_sha256": "a60212a803470ebef631fbd1fb040564def60295548e0b623e570e6b38d4fc4f",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "### 5.2 Studio: persistence authority\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 38
+        },
+        {
+          "text": "Studio decides what canonical design state is durable, when acknowledged state is persisted, which local composition file is bound, and how undo/redo history is represented.\n",
+          "chunk_byte_start": 38,
+          "chunk_byte_end": 212
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000028-a3fd36738822",
+      "ordinal": 28,
+      "chunk_sha256": "a3fd36738822306ab5f4a6b19abcfc6e160f0752a0e98cb522bee107cd75a9f7",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "### 5.3 Canonical flow\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 23
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000029-2d044ebce01b",
+      "ordinal": 29,
+      "chunk_sha256": "2d044ebce01b0de40d69e6e2764bf82a5bac250c276b73bb79e570f338f72ecf",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "```text\nStudio inspector action\n        ↓\ndesign:update { requestId, baseRevision, patch }\n        ↓\nTarget DesignBridge\n        ↓\nvalidate / normalize / apply\n        ↓\nTarget runtime design state\n        ↓\nactual target render\n        ↓\ndesign:applied { requestId, revision, canonicalPatch }\n        ↓\nStudio canonical state\n        ↓\ndebounced serialized persistence\n        ↓\ncomposition.json\n```",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 418
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000030-a636f043f2a2",
+      "ordinal": 30,
+      "chunk_sha256": "a636f043f2a2e70381240a453188ea9f4d9fa52c8d4e5c82b94def0236c1f5b9",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "Studio may optimistically show inspector movement, but only `design:applied` state becomes canonical and persistent.\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 117
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000031-946632f41b6c",
+      "ordinal": 31,
+      "chunk_sha256": "946632f41b6ce49529989e8774094d5a9eae46fb5b8e922a42f87e472b4c5197",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "### 5.4 Rejection flow\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 23
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000032-84764162ca50",
+      "ordinal": 32,
+      "chunk_sha256": "84764162ca50626710b4b208e05c329218c4005d85bb24aa67439235a15c3181",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "```text\nStudio\n  ↓ design:update\nTarget\n  ↓ validation fails\nStudio\n  ← design:rejected\n```",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 97
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000033-8596b59069f5",
+      "ordinal": 33,
+      "chunk_sha256": "8596b59069f59c6b643e3d5650cec72f466152aa3069a8aeec88cd6e7b841b53",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "Example:\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 9
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000034-adbd6e926183",
+      "ordinal": 34,
+      "chunk_sha256": "adbd6e9261837623337bc11b5b21812423514b95d00204e1ff363d323b36d80a",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "```json\n{\n  \"type\": \"design:rejected\",\n  \"requestId\": \"req-42\",\n  \"revision\": 17,\n  \"reason\": \"unsupported-value\",\n  \"detail\": {\n    \"property\": \"fontWeight\",\n    \"requested\": 550,\n    \"allowed\": [400, 500, 600]\n  }\n}\n```",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 221
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000035-bc4f14be1c4a",
+      "ordinal": 35,
+      "chunk_sha256": "bc4f14be1c4a68e597a0d30d9a65b68601e8448d6fda84ed1a9987ff0e066761",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "Studio restores or normalizes the inspector to the target's authoritative state.\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 81
+        },
+        {
+          "text": "---\n",
+          "chunk_byte_start": 81,
+          "chunk_byte_end": 85
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000036-96ebd3dff80c",
+      "ordinal": 36,
+      "chunk_sha256": "96ebd3dff80ca8399ae3d9a680099fec66faded2c0bcf829148ae4b39a09bb0b",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "## 6. Revision Model\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 21
+        },
+        {
+          "text": "Protocol v1 is single-editor and local-first.\n",
+          "chunk_byte_start": 21,
+          "chunk_byte_end": 67
+        },
+        {
+          "text": "It does **not** require CRDTs, multiplayer reconciliation, vector clocks, or distributed conflict resolution.\n",
+          "chunk_byte_start": 67,
+          "chunk_byte_end": 177
+        },
+        {
+          "text": "Every acknowledged runtime design state carries a monotonically increasing integer revision.\n",
+          "chunk_byte_start": 177,
+          "chunk_byte_end": 270
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000037-bca8671e5517",
+      "ordinal": 37,
+      "chunk_sha256": "bca8671e551732a66ccfa1dbb0c3a9959d3ba57df582cd2022d510dd94f90f6d",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "```text\ncurrent revision: 41\n\nStudio sends:\nbaseRevision: 41\n\nTarget applies patch:\nnew revision: 42\n\nTarget acknowledges:\nrevision: 42\n\nStudio persists:\nrevision: 42\n```",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 170
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000038-028ed7a2b2e9",
+      "ordinal": 38,
+      "chunk_sha256": "028ed7a2b2e9d780e716f71917f458679f8e1c4a7f365b814376a86de61b665d",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "If Studio sends an outdated mutation:\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 38
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000039-e273c0050481",
+      "ordinal": 39,
+      "chunk_sha256": "e273c005048199c97b6e0dd27e8eca7c6abed90f5ca3cc043d527b7b0a484b02",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "```text\nbaseRevision: 39\ntargetRevision: 42\n```",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 47
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000040-cb5c732d9c0c",
+      "ordinal": 40,
+      "chunk_sha256": "cb5c732d9c0ceae5a59306cf9335e7adf9d2d339c4ba8bf2dc97d09cddc87e18",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "the target returns `design:conflict`.\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 38
+        },
+        {
+          "text": "Each mutation includes:\n",
+          "chunk_byte_start": 38,
+          "chunk_byte_end": 62
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000041-4bf382a3c044",
+      "ordinal": 41,
+      "chunk_sha256": "4bf382a3c044438c581eaac066ca3b65cfe5a7e89b9419a034c5855dd0f8380c",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "```ts\ninterface DesignMutationMeta {\n  requestId: string;\n  baseRevision: number;\n}\n```",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 87
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000042-f52d711103d5",
+      "ordinal": 42,
+      "chunk_sha256": "f52d711103d50a437830c6fbcd04fb4bab49a0f82f6d26d1c791c6e8488dd090",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "---\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 4
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000043-e1a487c7f846",
+      "ordinal": 43,
+      "chunk_sha256": "e1a487c7f8460b58e8ce6f5e5adcc94b0a0fee228f2eba37fe405da2fa3d53ce",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "## 7. Protocol v1 Handshake\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 28
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000044-8912308af361",
+      "ordinal": 44,
+      "chunk_sha256": "8912308af3613bed8c2ba279cb607917cc064a59c6127d407bd9cd0b8d8ea641",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "### 7.1 Initial sequence\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 25
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000045-66e66fd2731b",
+      "ordinal": 45,
+      "chunk_sha256": "66e66fd2731bd26ffc9eb54448a3f6af9012dd6b31f192efac9e67045b7070a3",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "```text\nSTUDIO                            TARGET\n  │                                 │\n  │ iframe loads                    │\n  │────────────────────────────────>│\n  │                                 │\n  │       design:bridge-ready       │\n  │<────────────────────────────────│\n  │                                 │\n  │ design:hello                    │\n  │ protocolVersion                 │\n  │ sessionId                       │\n  │────────────────────────────────>│\n  │                                 │\n  │       design:ready              │\n  │       capabilities              │\n  │       revision                  │\n  │       tokens                    │\n  │       targets                   │\n  │       viewport                  │\n  │<────────────────────────────────│\n```",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 1106
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000046-a7250af19791",
+      "ordinal": 46,
+      "chunk_sha256": "a7250af1979171d693cf8f2116dc63cafe96030d6b0d02fa0e8a266a81493ef7",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "### 7.2 `design:bridge-ready`\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 30
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000047-11322771cc6d",
+      "ordinal": 47,
+      "chunk_sha256": "11322771cc6d22ee7a740792ed78ea0de92333ba54d8698412b1e2ce013a7fbc",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "```ts\ninterface DesignBridgeReady {\n  type: \"design:bridge-ready\";\n  protocolVersion: 1;\n}\n```",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 94
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000048-ec689ac1e357",
+      "ordinal": 48,
+      "chunk_sha256": "ec689ac1e357e7a5b48c6ee4b5f1eedcde75334056ed10c56a292bc222f2d13c",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "### 7.3 `design:hello`\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 23
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000049-45c2b0e0e8b0",
+      "ordinal": 49,
+      "chunk_sha256": "45c2b0e0e8b074221a3284ff9e3989992a3da5e6426388e6969b7b228c875a76",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "```ts\ninterface DesignHello {\n  type: \"design:hello\";\n  protocolVersion: 1;\n  sessionId: string;\n}\n```",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 102
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000050-3cfd5cc2a31b",
+      "ordinal": 50,
+      "chunk_sha256": "3cfd5cc2a31b03961d0c6642b8118780605443b5df43a84f584cd2631a32481d",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "### 7.4 `design:ready`\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 23
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000051-222650bfa24b",
+      "ordinal": 51,
+      "chunk_sha256": "222650bfa24b78a8eb9ce1a8e45b4c9b5636661068b48b16a0b3fae46b8bdd33",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "```ts\ninterface DesignReady {\n  type: \"design:ready\";\n  protocolVersion: 1;\n  sessionId: string;\n  revision: number;\n\n  capabilities: {\n    inspect: boolean;\n    patch: boolean;\n    assets: boolean;\n    typography: boolean;\n    tokens: boolean;\n  };\n\n  viewport: {\n    width: number;\n    height: number;\n  };\n\n  tokens: DesignTokenManifest;\n  targets: DesignTargetManifest[];\n}\n```",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 381
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000052-b4808d67aa28",
+      "ordinal": 52,
+      "chunk_sha256": "b4808d67aa28f2e9d0407c525e9616875fbb88c0b8e201a43c82fdce4a954b9c",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "Studio must not expose target controls until `design:ready` succeeds.\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 70
+        },
+        {
+          "text": "---\n",
+          "chunk_byte_start": 70,
+          "chunk_byte_end": 74
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000053-36aef865c12a",
+      "ordinal": 53,
+      "chunk_sha256": "36aef865c12aac5520b64259cce5e34f2a9428e3909ccefbcc12e28c00249418",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "## 8. Target Manifest\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 22
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000054-c5dd6fc33bb0",
+      "ordinal": 54,
+      "chunk_sha256": "c5dd6fc33bb019174aa364f21a112ae1c157783351e4083539b0e8d9938a9607",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "```ts\ninterface DesignTargetManifest {\n  id: string;\n  role?: string;\n  kind: \"text\" | \"image\" | \"svg\" | \"container\" | \"component\";\n\n  editable: {\n    text?: boolean;\n    typography?: boolean;\n    color?: boolean;\n    alignment?: boolean;\n    spacing?: boolean;\n    asset?: boolean;\n    visibility?: boolean;\n  };\n\n  constraints?: DesignTargetConstraints;\n}\n```",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 361
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000055-8596b59069f5",
+      "ordinal": 55,
+      "chunk_sha256": "8596b59069f59c6b643e3d5650cec72f466152aa3069a8aeec88cd6e7b841b53",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "Example:\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 9
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000056-aa01182d4691",
+      "ordinal": 56,
+      "chunk_sha256": "aa01182d4691debf5f250f1be5cf1c9c35491baefae360b9b86b532252016110",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "```json\n{\n  \"id\": \"landing.hero.title\",\n  \"role\": \"display\",\n  \"kind\": \"text\",\n  \"editable\": {\n    \"text\": true,\n    \"typography\": true,\n    \"color\": true,\n    \"alignment\": true\n  },\n  \"constraints\": {\n    \"fontFamilies\": [\n      \"daith-vf\",\n      \"ella-roman\",\n      \"orpheuspro\"\n    ]\n  }\n}\n```",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 296
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000057-b5775fb7a3ab",
+      "ordinal": 57,
+      "chunk_sha256": "b5775fb7a3ab7c1f11476afd809155101e95266269595675e91b55183c9882dd",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "The manifest is a permission/capability contract, not just metadata.\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 69
+        },
+        {
+          "text": "Studio must not present controls that the target has not exposed.\n",
+          "chunk_byte_start": 69,
+          "chunk_byte_end": 135
+        },
+        {
+          "text": "---\n",
+          "chunk_byte_start": 135,
+          "chunk_byte_end": 139
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000058-0c0937c2be4a",
+      "ordinal": 58,
+      "chunk_sha256": "0c0937c2be4a9f8df81ebbb3778cd13887910b77787d05afdb379942b6cac50e",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "## 9. Live Update Messages\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 27
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000059-8543de163715",
+      "ordinal": 59,
+      "chunk_sha256": "8543de163715ad98c8b96d175b760a834e1d4a55a504bb4502f19c43e9c73808",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "### 9.1 `design:update`\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 24
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000060-943721b46713",
+      "ordinal": 60,
+      "chunk_sha256": "943721b467135daad299eb99f8944236d14bb7eb9c9986b6d1fae11c69deadba",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "```ts\ninterface DesignUpdate {\n  type: \"design:update\";\n  requestId: string;\n  baseRevision: number;\n  targetId: string;\n  patch: Record<string, unknown>;\n}\n```",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 160
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000061-d7f43c675a5c",
+      "ordinal": 61,
+      "chunk_sha256": "d7f43c675a5c911e6a4cf5e7bd694f2a55887a888382ecd0965f5a8657f46449",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "### 9.2 `design:applied`\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 25
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000062-7ff92dac0553",
+      "ordinal": 62,
+      "chunk_sha256": "7ff92dac05530fe67c092023bd48e27437dc36315f646d50552ff02b80cba4ca",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "```ts\ninterface DesignApplied {\n  type: \"design:applied\";\n  requestId: string;\n  revision: number;\n  targetId: string;\n  canonicalPatch: Record<string, unknown>;\n}\n```",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 167
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000063-439098c7ef98",
+      "ordinal": 63,
+      "chunk_sha256": "439098c7ef98ed62d19f7874f953548dc2b2744361c33d15ce479a34a493708a",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "If Studio requests weight 550 and the target canonicalizes to 500, Studio persists 500.\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 88
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000064-dba96d8ef680",
+      "ordinal": 64,
+      "chunk_sha256": "dba96d8ef680d17df38e479741da2e65b85b280209140dde0380c3a24f101e7c",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "### 9.3 `design:rejected`\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 26
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000065-4e23d8f05040",
+      "ordinal": 65,
+      "chunk_sha256": "4e23d8f05040849f0dee2a3c6f77223d4c7e943176815a81d347b2acb9a338e4",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "```ts\ninterface DesignRejected {\n  type: \"design:rejected\";\n  requestId: string;\n  revision: number;\n  targetId?: string;\n  reason:\n    | \"unsupported-property\"\n    | \"unsupported-value\"\n    | \"unknown-target\"\n    | \"revision-conflict\"\n    | \"invalid-message\";\n  detail?: Record<string, unknown>;\n}\n```",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 302
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000066-f52d711103d5",
+      "ordinal": 66,
+      "chunk_sha256": "f52d711103d50a437830c6fbcd04fb4bab49a0f82f6d26d1c791c6e8488dd090",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "---\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 4
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000067-dcd8b2e2a97f",
+      "ordinal": 67,
+      "chunk_sha256": "dcd8b2e2a97f0d1549f9a464dbd9c6a747c497d9db27d8183ffba728309964fe",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "## 10. Hover, Selection, and Overlay Geometry\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 46
+        },
+        {
+          "text": "Because Studio and the target are intentionally cross-origin, Studio cannot use `document.elementFromPoint()` inside the iframe DOM.\n",
+          "chunk_byte_start": 46,
+          "chunk_byte_end": 179
+        },
+        {
+          "text": "Hit testing belongs to the target bridge.\n",
+          "chunk_byte_start": 179,
+          "chunk_byte_end": 221
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000068-61b1db53d0cf",
+      "ordinal": 68,
+      "chunk_sha256": "61b1db53d0cf9be1ab1f111da092f15a3dd0b1ca6e7edc31dd824a65abadca17",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "### 10.1 Target-side hover flow\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 32
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000069-cb5f6b4c7eeb",
+      "ordinal": 69,
+      "chunk_sha256": "cb5f6b4c7eeb8f1ba0b3ee69d463ee08085f4b2d4179746cef4545183ce5d510",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "```text\npointermove in target\n        ↓\nrequestAnimationFrame throttle\n        ↓\ndocument.elementFromPoint(x, y)\n        ↓\nclosest(\"[data-design-id]\")\n        ↓\ntarget changed?\n   ┌────┴────┐\n   no       yes\n   │         ↓\n stop   getBoundingClientRect()\n             ↓\n        design:hover\n```",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 330
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000070-85109ac9ffad",
+      "ordinal": 70,
+      "chunk_sha256": "85109ac9ffadd8935fed3075bda3bcbf2bdc959d89ada83010e82d9925c4ffab",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "The bridge should avoid emitting repeated hover messages while the logical target ID is unchanged.\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 99
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000071-675eddd8cc61",
+      "ordinal": 71,
+      "chunk_sha256": "675eddd8cc61c2bae412f3f8ce7af8afd73f6ffd655a8ee40c26aaf3494fbde5",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "### 10.2 `design:hover`\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 24
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000072-d0202aa86604",
+      "ordinal": 72,
+      "chunk_sha256": "d0202aa866049b1bd01e3c1f6c2d1ca6d2865fcc00752ef58f18e572cec100bf",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "```ts\ninterface DesignHover {\n  type: \"design:hover\";\n  targetId: string | null;\n  rect?: {\n    x: number;\n    y: number;\n    width: number;\n    height: number;\n  };\n}\n```",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 171
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000073-ed14bc38644e",
+      "ordinal": 73,
+      "chunk_sha256": "ed14bc38644e4c5bfa6a82cf2506975a4479b46cdfedb1e1f732d6fe57db757d",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "### 10.3 Coordinate translation\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 32
+        },
+        {
+          "text": "Studio reads the iframe's own geometry:\n",
+          "chunk_byte_start": 32,
+          "chunk_byte_end": 72
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000074-2f3b3a37a6d1",
+      "ordinal": 74,
+      "chunk_sha256": "2f3b3a37a6d186574cc1e43f4770fe5c602d911e91537d0d86aed9d3261c115a",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "```js\nconst frameRect = iframe.getBoundingClientRect();\n```",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 59
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000075-932a24c824b1",
+      "ordinal": 75,
+      "chunk_sha256": "932a24c824b1f8455e4c9f060f4ee4d24d4e9bfb634c72f79edd087e94c594c5",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "and calculates:\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 16
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000076-9fc3c7514ddb",
+      "ordinal": 76,
+      "chunk_sha256": "9fc3c7514ddb7cbdc1e15a6f15db136f7d07127cb890bc0d4921eb377f14c3ab",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "```text\noverlayLeft = frameRect.left + targetRect.x\noverlayTop  = frameRect.top  + targetRect.y\n```",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 99
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000077-129bf808531e",
+      "ordinal": 77,
+      "chunk_sha256": "129bf808531ea446091f14e48d006fddbee97e1a3e8f2261850c5bc3899532da",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "Selection borders and hover outlines are then drawn entirely in Studio's layer.\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 80
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000078-fd6fe1a27cff",
+      "ordinal": 78,
+      "chunk_sha256": "fd6fe1a27cff781dbe9a4aad16ebce4c7ade26b226e4be4462791da6d6c2a093",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "### 10.4 Selection\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 19
+        },
+        {
+          "text": "Selection is explicit and sticky.\n",
+          "chunk_byte_start": 19,
+          "chunk_byte_end": 53
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000079-74e18932c539",
+      "ordinal": 79,
+      "chunk_sha256": "74e18932c5396fa3f52f5ff5056a61bc0b4f6fccc6fe5e3445eab439d94ca297",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "```ts\ninterface DesignSelected {\n  type: \"design:selected\";\n  targetId: string;\n  rect: {\n    x: number;\n    y: number;\n    width: number;\n    height: number;\n  };\n}\n```",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 169
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000080-1670843844ab",
+      "ordinal": 80,
+      "chunk_sha256": "1670843844abcfba9acb8a0dd76f5667eecb81d450385352e6b64deb6d149c00",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "### 10.5 Selected-target bounds updates\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 40
+        },
+        {
+          "text": "The target updates selected-target geometry when layout changes through `ResizeObserver`, target scroll, iframe viewport resize, and relevant application reflow.\n",
+          "chunk_byte_start": 40,
+          "chunk_byte_end": 202
+        },
+        {
+          "text": "A `MutationObserver` may be added only if required; it is not mandatory for Protocol v1.\n",
+          "chunk_byte_start": 202,
+          "chunk_byte_end": 291
+        },
+        {
+          "text": "---\n",
+          "chunk_byte_start": 291,
+          "chunk_byte_end": 295
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000081-85abadbdfebe",
+      "ordinal": 81,
+      "chunk_sha256": "85abadbdfebeb5902825d0fa872d8149f4695ecc81c2c649e832b92b440320bc",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "## 11. Token Manifest\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 22
+        },
+        {
+          "text": "Protocol v1 allows applications to advertise existing design tokens rather than forcing Studio to reverse-engineer arbitrary utility classes.\n",
+          "chunk_byte_start": 22,
+          "chunk_byte_end": 164
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000082-d684abd0b3b2",
+      "ordinal": 82,
+      "chunk_sha256": "d684abd0b3b29034099c8e1a6bf0b00b45c11632fad9271c460e6b6df4b07dba",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "```ts\ninterface DesignTokenManifest {\n  colors?: Record<string, string>;\n  fonts?: Record<string, {\n    family: string;\n    fallback?: string;\n  }>;\n  spacing?: Record<string, string>;\n  radii?: Record<string, string>;\n  shadows?: Record<string, string>;\n  custom?: Record<string, unknown>;\n}\n```",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 296
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000083-2bb5b22895b8",
+      "ordinal": 83,
+      "chunk_sha256": "2bb5b22895b87dc0d6673a6e4248dbb1f9799e9eded8141d11d79a7d0ccfefbf",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "Studio may supplement target-provided tokens with independent libraries such as Tailwind colour palettes, Adobe kit families, and custom user palettes.\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 152
+        },
+        {
+          "text": "The target's token manifest remains authoritative for application-native tokens.\n",
+          "chunk_byte_start": 152,
+          "chunk_byte_end": 233
+        },
+        {
+          "text": "---\n",
+          "chunk_byte_start": 233,
+          "chunk_byte_end": 237
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000084-1151269c10d7",
+      "ordinal": 84,
+      "chunk_sha256": "1151269c10d70d150b82e0a322d51cf18a2c6815c7688113650f1201a9d2bb66",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "## 12. Tailwind Boundary\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 25
+        },
+        {
+          "text": "Studio does not become the Tailwind compiler for the target application.\n",
+          "chunk_byte_start": 25,
+          "chunk_byte_end": 98
+        },
+        {
+          "text": "The target application continues using its real build pipeline.\n",
+          "chunk_byte_start": 98,
+          "chunk_byte_end": 162
+        },
+        {
+          "text": "Preferred:\n",
+          "chunk_byte_start": 162,
+          "chunk_byte_end": 173
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000085-41ad729cce59",
+      "ordinal": 85,
+      "chunk_sha256": "41ad729cce590b6bbd589aec51265d148ccc996029768f1c9fb7719db16b061d",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "```text\n--font-display = \"ella-roman\"\n--color-luminous = #e6c88d\nhero.title.align = center\n```",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 94
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000086-449ea02513ea",
+      "ordinal": 86,
+      "chunk_sha256": "449ea02513eaa37fa90fadcce5395539c0ab3e709fee02b79c218ae9e860376f",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "Avoid making the protocol depend on generated utility strings such as:\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 71
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000087-24390ab9e253",
+      "ordinal": 87,
+      "chunk_sha256": "24390ab9e253208c0e62a66a2c2aa1920120209538a63ad73156ade784986330",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "```text\ntracking-[0.247829em] text-[#f0c831]\n```",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 48
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000088-259af4ae43ac",
+      "ordinal": 88,
+      "chunk_sha256": "259af4ae43ace459ce3344639ebebf94b72955bdc15ddb63ee4869eb7bf18afe",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "If a target chooses to map semantic patches into Tailwind classes internally, that is the target adapter's responsibility.\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 123
+        },
+        {
+          "text": "---\n",
+          "chunk_byte_start": 123,
+          "chunk_byte_end": 127
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000089-eb596bd6854d",
+      "ordinal": 89,
+      "chunk_sha256": "eb596bd6854d40c1f61dd44fb45d7db87ce21056daeb64493a33a1c32431db2f",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "## 13. Local Persistence and File Binding\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 42
+        },
+        {
+          "text": "Local file binding is a Studio concern, not part of the target bridge protocol.\n",
+          "chunk_byte_start": 42,
+          "chunk_byte_end": 122
+        },
+        {
+          "text": "Conceptual flow:\n",
+          "chunk_byte_start": 122,
+          "chunk_byte_end": 139
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000090-79239b4f8563",
+      "ordinal": 90,
+      "chunk_sha256": "79239b4f8563f29a99fde9ea81fbff1e5a87090533998701b67db5fa4103f181",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "```text\nBind composition.json\n        ↓\nStudio receives FileSystemFileHandle\n        ↓\nStudio loads canonical composition\n        ↓\nlive edits occur through target bridge\n        ↓\nacknowledged Studio state changes\n        ↓\ndebounced serialized write\n        ↓\ncomposition.json updated\n```",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 302
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000091-8f9bdcb42827",
+      "ordinal": 91,
+      "chunk_sha256": "8f9bdcb428271139ee71ebecf889d94806309c912427e4bea1a62da77cf6e21e",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "Persistence must debounce rapid changes, serialize writes, never overlap `createWritable()` sessions, write only acknowledged canonical state, expose dirty/saving/saved/error state, preserve the latest acknowledged revision, and recover from parse/read errors without silently replacing the file.\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 297
+        },
+        {
+          "text": "File System Access API support is not assumed across all browsers. Protocol v1 remains usable without direct file handles through explicit import/export. This browser limitation must not leak into the Design Bridge protocol.\n",
+          "chunk_byte_start": 297,
+          "chunk_byte_end": 522
+        },
+        {
+          "text": "---\n",
+          "chunk_byte_start": 522,
+          "chunk_byte_end": 526
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000092-589a989b193d",
+      "ordinal": 92,
+      "chunk_sha256": "589a989b193d21c874c6f9044f98893c284d6b91bb77c30f8ad3344dd1d5e4bd",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "## 14. Local Recovery\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 22
+        },
+        {
+          "text": "Minimum recovery model:\n",
+          "chunk_byte_start": 22,
+          "chunk_byte_end": 46
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000093-a0cf723e3cb8",
+      "ordinal": 93,
+      "chunk_sha256": "a0cf723e3cb8740f81c5b77412dd5ef2b72e00ebde6b762ec176afc2d320fc8c",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "```text\ncanonical state\ndirty state\nlast acknowledged revision\nlast persisted revision\nsave in progress\nsave error\n```",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 118
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000094-6f167d4239a4",
+      "ordinal": 94,
+      "chunk_sha256": "6f167d4239a46b7b949d1815a099d8b38f8efa45355eb6102716234069995e6e",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "If revision 53 arrives while revision 52 is being written, Studio queues 53 and writes it only after the current write closes.\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 127
+        },
+        {
+          "text": "No concurrent writable streams to the same bound file.\n",
+          "chunk_byte_start": 127,
+          "chunk_byte_end": 182
+        },
+        {
+          "text": "---\n",
+          "chunk_byte_start": 182,
+          "chunk_byte_end": 186
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000095-1b68ef241510",
+      "ordinal": 95,
+      "chunk_sha256": "1b68ef241510b705d3cd62a0bfc54f05e4c3fbf4b7639f4c40e6a27fc1fa1487",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "## 15. Origin and Session Validation\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 37
+        },
+        {
+          "text": "Every protocol message must be validated against expected iframe window, expected origin, protocol version, current session ID, recognized message type, and valid message schema.\n",
+          "chunk_byte_start": 37,
+          "chunk_byte_end": 216
+        },
+        {
+          "text": "Studio must not accept a message merely because `event.data.type` resembles a bridge message.\n",
+          "chunk_byte_start": 216,
+          "chunk_byte_end": 310
+        },
+        {
+          "text": "The target likewise accepts Studio control messages only from its configured allowed origin and active session.\n",
+          "chunk_byte_start": 310,
+          "chunk_byte_end": 422
+        },
+        {
+          "text": "Origin validation is part of the bridge contract, not optional hardening.\n",
+          "chunk_byte_start": 422,
+          "chunk_byte_end": 496
+        },
+        {
+          "text": "---\n",
+          "chunk_byte_start": 496,
+          "chunk_byte_end": 500
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000096-5a663e37fa84",
+      "ordinal": 96,
+      "chunk_sha256": "5a663e37fa845c8c413a88c753a0a94532159662e8c32891b1e9e751b927c93a",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "## 16. Disconnect / Reconnect Semantics\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 40
+        },
+        {
+          "text": "Studio must handle target reloads and development HMR.\n",
+          "chunk_byte_start": 40,
+          "chunk_byte_end": 95
+        },
+        {
+          "text": "On target bridge restart:\n",
+          "chunk_byte_start": 95,
+          "chunk_byte_end": 121
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000097-72d52169731d",
+      "ordinal": 97,
+      "chunk_sha256": "72d52169731d807db2bb2f868577f2fc6453a2d126b7b2f49569edc581ecd581",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "```text\ntarget emits design:bridge-ready\nStudio starts a fresh handshake\ntarget emits design:ready\n```",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 102
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000098-94fbdb188045",
+      "ordinal": 98,
+      "chunk_sha256": "94fbdb1880455056dc6d43129353220383c3cf6423dfa13ff8e7bfabbdf8b75d",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "The new `design:ready` snapshot replaces Studio's assumptions about live target state.\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 87
+        },
+        {
+          "text": "If Studio has unsaved canonical state that differs from the reloaded target, Studio must not silently overwrite either side.\n",
+          "chunk_byte_start": 87,
+          "chunk_byte_end": 212
+        },
+        {
+          "text": "Protocol v1 surfaces a reconnect state and requires one explicit resolution path:\n",
+          "chunk_byte_start": 212,
+          "chunk_byte_end": 294
+        },
+        {
+          "text": "- reapply Studio canonical state to target, or\n",
+          "chunk_byte_start": 294,
+          "chunk_byte_end": 341
+        },
+        {
+          "text": "- accept target state as canonical.\n",
+          "chunk_byte_start": 341,
+          "chunk_byte_end": 377
+        },
+        {
+          "text": "Automatic conflict policy is deferred.\n",
+          "chunk_byte_start": 377,
+          "chunk_byte_end": 416
+        },
+        {
+          "text": "---\n",
+          "chunk_byte_start": 416,
+          "chunk_byte_end": 420
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000099-0e08c632e54b",
+      "ordinal": 99,
+      "chunk_sha256": "0e08c632e54b99f39f239ca14fc7e0443960e343cfc4c075fc9ec631b05a72c0",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "## 17. First Reference Integration: Asteria\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 44
+        },
+        {
+          "text": "Asteria is the first consumer and proving ground, not the protocol's identity.\n",
+          "chunk_byte_start": 44,
+          "chunk_byte_end": 123
+        },
+        {
+          "text": "Initial candidate IDs:\n",
+          "chunk_byte_start": 123,
+          "chunk_byte_end": 146
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000100-4ef619afb74c",
+      "ordinal": 100,
+      "chunk_sha256": "4ef619afb74c226cfebce7d8aa832d3803487e9e6188584d3b5da70dfcae4894",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "```text\nlanding.hero.wordmark\nlanding.hero.title\nlanding.hero.lead\nlanding.hero.accent\n\nmoments.page.title\nmoments.card.title\nmoments.card.prose\nmoments.card.metadata\n\nobservatory.sidebar.brand\n```",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 197
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000101-ddb92941aa27",
+      "ordinal": 101,
+      "chunk_sha256": "ddb92941aa27217e366906499f8744dbd640bda20be9be5ba5d90f9c645a905f",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "Initial target-provided tokens may map existing Asteria design variables such as:\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 82
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000102-d77c946d87a3",
+      "ordinal": 102,
+      "chunk_sha256": "d77c946d87a3d936492b2de48e03656ad75cd306506941e538e09b8da00262fd",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "```text\n--font-display\n--font-page-title\n--font-card-title\n--font-moment-prose\n--font-metadata\n--font-ui-chrome\n\n--color-void\n--color-starlight\n--color-luminous\n```",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 164
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000103-47dbb3979f6e",
+      "ordinal": 103,
+      "chunk_sha256": "47dbb3979f6e6e180f77b928aba5abb6415ef4f18df303df8620ef3285599648",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "The Asteria adapter must remain small enough that replacing Asteria with another target does not require Studio changes.\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 121
+        },
+        {
+          "text": "---\n",
+          "chunk_byte_start": 121,
+          "chunk_byte_end": 125
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "chunk_id": "markdown-000104-a0b50122f7fc",
+      "ordinal": 104,
+      "chunk_sha256": "a0b50122f7fcab156294fbe0dc49cd92c68545f0e479a45a839eb1f69b0e914d",
+      "outcome": "evidence",
+      "assertions": [
+        {
+          "text": "## 18. Product Boundary\n",
+          "chunk_byte_start": 0,
+          "chunk_byte_end": 24
+        },
+        {
+          "text": "Studio is **not** a page builder, CMS, component-isolation workshop, DOM scraper, arbitrary CSS DevTools replacement, framework-specific React editor, or source-code rewrite engine.\n",
+          "chunk_byte_start": 24,
+          "chunk_byte_end": 206
+        },
+        {
+          "text": "Studio **is**:\n",
+          "chunk_byte_start": 206,
+          "chunk_byte_end": 221
+        },
+        {
+          "text": "> An in-context visual workbench for code-owned interfaces.\n",
+          "chunk_byte_start": 221,
+          "chunk_byte_end": 281
+        },
+        {
+          "text": "Or, more technically:\n",
+          "chunk_byte_start": 281,
+          "chunk_byte_end": 303
+        },
+        {
+          "text": "> Live design instrumentation for running applications.\n",
+          "chunk_byte_start": 303,
+          "chunk_byte_end": 359
+        },
+        {
+          "text": "---\n",
+          "chunk_byte_start": 359,
+          "chunk_byte_end": 363
+        }
+      ],
+      "constraints": []
+    }
+  ]
+}

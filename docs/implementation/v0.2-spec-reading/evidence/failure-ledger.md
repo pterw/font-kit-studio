@@ -1,0 +1,2 @@
+# Observed boundaries
+Manifest display exceeded output budget; bounded content reads recovered complete visibility. Python display failed with UnicodeEncodeError under cp1252; UTF-8 display recovered without source transformation. Diagnosis was made from exact errors before retry, but recording was retrospective; no claim that these display attempts were successful. No required unresolved extraction or evidence node remains.

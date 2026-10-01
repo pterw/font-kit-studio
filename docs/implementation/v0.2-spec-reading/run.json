@@ -1,0 +1,706 @@
+{
+  "runtime_profile": "standalone",
+  "source": {
+    "path": "C:\\Users\\peter\\Downloads\\font-kit-studio-v0.2.0-design-bridge-protocol-v1.md",
+    "uri": "file:///C:/Users/peter/Downloads/font-kit-studio-v0.2.0-design-bridge-protocol-v1.md",
+    "format": "markdown",
+    "sha256": "0f89e2e02ad2c317983c2d34ee05bce782eba64f64b83eadb3b8507d877d5087",
+    "size_bytes": 22543,
+    "local_path": "C:\\Users\\peter\\Downloads\\font-kit-studio-v0.2.0-design-bridge-protocol-v1.md",
+    "authority": "primary",
+    "identity_verified": true
+  },
+  "fidelity": {
+    "preserved": true,
+    "substitutions": []
+  },
+  "preflight": {
+    "skill_read": true,
+    "required_references_read": true,
+    "helper_help_read": true,
+    "runtime_profile_resolved": true,
+    "traversal_plan_ready": true
+  },
+  "plan": {
+    "path": "plan.md",
+    "nodes": [
+      "acquire",
+      "extract",
+      "traverse",
+      "requirements",
+      "verify"
+    ]
+  },
+  "chunking": {
+    "manifest": "evidence/chunk-manifest.json",
+    "manifest_sha256": "3bac4a5bec6f9a40a2fbcd6ef50c440683fd8ce5098dcb11b409c65ae22bd0bb",
+    "evidence_ledger": "evidence/chunk-evidence.json",
+    "traversal_report": "deliverables/TRAVERSAL_REPORT.md"
+  },
+  "deliverable": {
+    "requested": "Complete protocol requirements and dependency map",
+    "provided": true,
+    "paths": [
+      "deliverables/REQUIREMENTS.md"
+    ],
+    "traversal_report": "deliverables/TRAVERSAL_REPORT.md"
+  },
+  "qa": {
+    "required": [
+      "markdown-structure"
+    ],
+    "passed": [
+      "markdown-structure"
+    ]
+  },
+  "evidence": {
+    "plan_status": "plan.md",
+    "skill_preflight": "evidence/skill-preflight.md",
+    "source_manifest": "evidence/source-manifest.md",
+    "chunk_ledger": "evidence/chunk-evidence.json",
+    "failure_ledger": "evidence/failure-ledger.md",
+    "verification_log": "evidence/verification-log.txt",
+    "format_qa": "evidence/format-qa.md",
+    "traversal_report": "deliverables/TRAVERSAL_REPORT.md"
+  },
+  "events": [
+    {
+      "type": "plan_written"
+    },
+    {
+      "type": "execution_started"
+    },
+    {
+      "type": "node_passed",
+      "node": "acquire"
+    },
+    {
+      "type": "node_passed",
+      "node": "extract"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000001-faaf83f9d66e",
+      "ordinal": 1,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000002-52113cc65beb",
+      "ordinal": 2,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000003-3d661cf27c64",
+      "ordinal": 3,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000004-3277e46c36c6",
+      "ordinal": 4,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000005-27a46285c867",
+      "ordinal": 5,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000006-9c9f65733a80",
+      "ordinal": 6,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000007-794228bad2e0",
+      "ordinal": 7,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000008-19d0af3c8a00",
+      "ordinal": 8,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000009-d2515129c303",
+      "ordinal": 9,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000010-fb1fe90979df",
+      "ordinal": 10,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000011-ca7289159ca7",
+      "ordinal": 11,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000012-3b0ab50340c0",
+      "ordinal": 12,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000013-c95402cb5f01",
+      "ordinal": 13,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000014-2da604926283",
+      "ordinal": 14,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000015-6def4078a5d5",
+      "ordinal": 15,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000016-813e22b9e98c",
+      "ordinal": 16,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000017-e9a90fd608d1",
+      "ordinal": 17,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000018-f91627b882bf",
+      "ordinal": 18,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000019-5c6290b7923c",
+      "ordinal": 19,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000020-448363cd7a9d",
+      "ordinal": 20,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000021-ad02c48bbfba",
+      "ordinal": 21,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000022-741a3b43ec10",
+      "ordinal": 22,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000023-d72f41af3581",
+      "ordinal": 23,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000024-ed7896139234",
+      "ordinal": 24,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000025-b47ff4018c5d",
+      "ordinal": 25,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000026-684ed7845abd",
+      "ordinal": 26,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000027-a60212a80347",
+      "ordinal": 27,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000028-a3fd36738822",
+      "ordinal": 28,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000029-2d044ebce01b",
+      "ordinal": 29,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000030-a636f043f2a2",
+      "ordinal": 30,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000031-946632f41b6c",
+      "ordinal": 31,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000032-84764162ca50",
+      "ordinal": 32,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000033-8596b59069f5",
+      "ordinal": 33,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000034-adbd6e926183",
+      "ordinal": 34,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000035-bc4f14be1c4a",
+      "ordinal": 35,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000036-96ebd3dff80c",
+      "ordinal": 36,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000037-bca8671e5517",
+      "ordinal": 37,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000038-028ed7a2b2e9",
+      "ordinal": 38,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000039-e273c0050481",
+      "ordinal": 39,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000040-cb5c732d9c0c",
+      "ordinal": 40,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000041-4bf382a3c044",
+      "ordinal": 41,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000042-f52d711103d5",
+      "ordinal": 42,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000043-e1a487c7f846",
+      "ordinal": 43,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000044-8912308af361",
+      "ordinal": 44,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000045-66e66fd2731b",
+      "ordinal": 45,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000046-a7250af19791",
+      "ordinal": 46,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000047-11322771cc6d",
+      "ordinal": 47,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000048-ec689ac1e357",
+      "ordinal": 48,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000049-45c2b0e0e8b0",
+      "ordinal": 49,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000050-3cfd5cc2a31b",
+      "ordinal": 50,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000051-222650bfa24b",
+      "ordinal": 51,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000052-b4808d67aa28",
+      "ordinal": 52,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000053-36aef865c12a",
+      "ordinal": 53,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000054-c5dd6fc33bb0",
+      "ordinal": 54,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000055-8596b59069f5",
+      "ordinal": 55,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000056-aa01182d4691",
+      "ordinal": 56,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000057-b5775fb7a3ab",
+      "ordinal": 57,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000058-0c0937c2be4a",
+      "ordinal": 58,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000059-8543de163715",
+      "ordinal": 59,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000060-943721b46713",
+      "ordinal": 60,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000061-d7f43c675a5c",
+      "ordinal": 61,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000062-7ff92dac0553",
+      "ordinal": 62,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000063-439098c7ef98",
+      "ordinal": 63,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000064-dba96d8ef680",
+      "ordinal": 64,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000065-4e23d8f05040",
+      "ordinal": 65,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000066-f52d711103d5",
+      "ordinal": 66,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000067-dcd8b2e2a97f",
+      "ordinal": 67,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000068-61b1db53d0cf",
+      "ordinal": 68,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000069-cb5f6b4c7eeb",
+      "ordinal": 69,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000070-85109ac9ffad",
+      "ordinal": 70,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000071-675eddd8cc61",
+      "ordinal": 71,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000072-d0202aa86604",
+      "ordinal": 72,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000073-ed14bc38644e",
+      "ordinal": 73,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000074-2f3b3a37a6d1",
+      "ordinal": 74,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000075-932a24c824b1",
+      "ordinal": 75,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000076-9fc3c7514ddb",
+      "ordinal": 76,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000077-129bf808531e",
+      "ordinal": 77,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000078-fd6fe1a27cff",
+      "ordinal": 78,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000079-74e18932c539",
+      "ordinal": 79,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000080-1670843844ab",
+      "ordinal": 80,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000081-85abadbdfebe",
+      "ordinal": 81,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000082-d684abd0b3b2",
+      "ordinal": 82,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000083-2bb5b22895b8",
+      "ordinal": 83,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000084-1151269c10d7",
+      "ordinal": 84,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000085-41ad729cce59",
+      "ordinal": 85,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000086-449ea02513ea",
+      "ordinal": 86,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000087-24390ab9e253",
+      "ordinal": 87,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000088-259af4ae43ac",
+      "ordinal": 88,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000089-eb596bd6854d",
+      "ordinal": 89,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000090-79239b4f8563",
+      "ordinal": 90,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000091-8f9bdcb42827",
+      "ordinal": 91,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000092-589a989b193d",
+      "ordinal": 92,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000093-a0cf723e3cb8",
+      "ordinal": 93,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000094-6f167d4239a4",
+      "ordinal": 94,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000095-1b68ef241510",
+      "ordinal": 95,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000096-5a663e37fa84",
+      "ordinal": 96,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000097-72d52169731d",
+      "ordinal": 97,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000098-94fbdb188045",
+      "ordinal": 98,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000099-0e08c632e54b",
+      "ordinal": 99,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000100-4ef619afb74c",
+      "ordinal": 100,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000101-ddb92941aa27",
+      "ordinal": 101,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000102-d77c946d87a3",
+      "ordinal": 102,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000103-47dbb3979f6e",
+      "ordinal": 103,
+      "node": "traverse"
+    },
+    {
+      "type": "chunk_verified",
+      "chunk_id": "markdown-000104-a0b50122f7fc",
+      "ordinal": 104,
+      "node": "traverse"
+    }
+  ]
+}

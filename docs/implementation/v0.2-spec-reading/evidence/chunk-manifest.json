@@ -1,0 +1,3264 @@
+{
+  "schema_version": 1,
+  "source": {
+    "path": "C:\\Users\\peter\\Downloads\\font-kit-studio-v0.2.0-design-bridge-protocol-v1.md",
+    "uri": "file:///C:/Users/peter/Downloads/font-kit-studio-v0.2.0-design-bridge-protocol-v1.md",
+    "format": "markdown",
+    "sha256": "0f89e2e02ad2c317983c2d34ee05bce782eba64f64b83eadb3b8507d877d5087",
+    "size_bytes": 22543
+  },
+  "chunking": {
+    "strategy": "markdown-heading-ast-blocks",
+    "max_bytes": 12000,
+    "chunk_count": 107
+  },
+  "extracted_text_bytes": 22296,
+  "extracted_text_sha256": "98fe00bc072e6e6ab57f9e4cd0d45564cf5a346ab5af5184281f32681b0eacbf",
+  "chunks": [
+    {
+      "id": "markdown-000001-faaf83f9d66e",
+      "ordinal": 1,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 1,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1"
+        ]
+      },
+      "text_byte_start": 0,
+      "text_byte_end": 303,
+      "content_sha256": "faaf83f9d66eda014d2eb7aa4855834fcea63a296974b13e2d0be0aa9a07dfa6",
+      "content": "# Font Kit Studio v0.2.0 — Design Bridge Protocol v1\n**Status:** Design freeze candidate  \n**Date:** 2026-09-17  \n**Scope:** v0.2.0 architecture only — no implementation yet  \n**Reference target:** Asteria, used only as the first integration target. The protocol itself is application-agnostic.\n---\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000002-52113cc65beb",
+      "ordinal": 2,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 2,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "1. Product Thesis"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "1. Product Thesis"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "1. Product Thesis"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "1. Product Thesis"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "1. Product Thesis"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "1. Product Thesis"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "1. Product Thesis"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "1. Product Thesis"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "1. Product Thesis"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "1. Product Thesis"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "1. Product Thesis"
+        ]
+      },
+      "text_byte_start": 303,
+      "text_byte_end": 1536,
+      "content_sha256": "52113cc65beb51082fc7d156435a2be32a323d6edf344b9630f7f1a04cfcde6e",
+      "content": "## 1. Product Thesis\nFont Kit Studio is not a page builder and not a component laboratory.\nIt is an **instrumented local companion workflow for code-owned applications**.\nThe running application remains the source of truth for layout, routing, application state, database-backed content, responsive behavior, component composition, CSS/Tailwind output, framework runtime, and final rendering.\nStudio does not import the application into a visual-builder-owned rendering model. It does not scrape arbitrary selectors and reconstitute the app as utility-class blobs. Instead, the application deliberately exposes a bounded design API through stable `data-design-*` contracts and a small bridge runtime.\n> **Studio does not own the page. The running application owns the page. Studio instruments it.**\nThis positions Studio between two common extremes:\n1. **Code-to-design component workbenches** such as Storybook/Ladle, which isolate components from their real application context.\n2. **Visual builders/CMS platforms** such as Plasmic/Builder.io, which introduce their own rendering/content model and deeper SDK ownership.\nStudio keeps the real application live and sovereign while providing an in-context visual editing surface.\n---\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000003-3d661cf27c64",
+      "ordinal": 3,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 2,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "2. Core Invariants"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "2. Core Invariants"
+        ]
+      },
+      "text_byte_start": 1536,
+      "text_byte_end": 1558,
+      "content_sha256": "3d661cf27c641afe696382fdc1d060ca22b1216b19129882262054579b50bbc2",
+      "content": "## 2. Core Invariants\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000004-3277e46c36c6",
+      "ordinal": 4,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 3,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "2. Core Invariants",
+              "2.1 Running app is rendering authority"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "2. Core Invariants",
+              "2.1 Running app is rendering authority"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "2. Core Invariants",
+              "2.1 Running app is rendering authority"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "2. Core Invariants",
+          "2.1 Running app is rendering authority"
+        ]
+      },
+      "text_byte_start": 1558,
+      "text_byte_end": 1836,
+      "content_sha256": "3277e46c36c684f1d67d950bf5e310f38d5c744bc2a7758d2f863bbc6276c718",
+      "content": "### 2.1 Running app is rendering authority\nThe target application decides whether a requested design change is valid, applies it to its live runtime state, and returns the canonical result.\nStudio never assumes that the value it requested is the value the application accepted.\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000005-27a46285c867",
+      "ordinal": 5,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 3,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "2. Core Invariants",
+              "2.2 Studio is persistence authority"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "2. Core Invariants",
+              "2.2 Studio is persistence authority"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "2. Core Invariants",
+              "2.2 Studio is persistence authority"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "2. Core Invariants",
+          "2.2 Studio is persistence authority"
+        ]
+      },
+      "text_byte_start": 1836,
+      "text_byte_end": 2158,
+      "content_sha256": "27a46285c867d085068936f992b843c9b47419a15797e90b32b209b1935b30e5",
+      "content": "### 2.2 Studio is persistence authority\nStudio owns durable design-state persistence.\nThe target application does **not** independently serialize Studio's design configuration to disk. It may keep live design state in memory for rendering, but Studio writes the acknowledged canonical state to the bound composition file.\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000006-9c9f65733a80",
+      "ordinal": 6,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 3,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "2. Core Invariants",
+              "2.3 Explicit API contracts, never fragile DOM paths"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "2. Core Invariants",
+              "2.3 Explicit API contracts, never fragile DOM paths"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "2. Core Invariants",
+          "2.3 Explicit API contracts, never fragile DOM paths"
+        ]
+      },
+      "text_byte_start": 2158,
+      "text_byte_end": 2284,
+      "content_sha256": "9c9f65733a8035c807262a5ae5c4144734d256d85d4ef8532139f397d81fff86",
+      "content": "### 2.3 Explicit API contracts, never fragile DOM paths\nEditable targets are addressed by stable logical identifiers such as:\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000007-794228bad2e0",
+      "ordinal": 7,
+      "locator": {
+        "kind": "fenced_code",
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "2. Core Invariants",
+          "2.3 Explicit API contracts, never fragile DOM paths"
+        ],
+        "atomic_kind": "fenced_code"
+      },
+      "text_byte_start": 2284,
+      "text_byte_end": 2381,
+      "content_sha256": "794228bad2e0fbe28dcf92ce05666f8fcaf57441016121e906e3c6def446937b",
+      "content": "```text\nlanding.hero.title\nlanding.hero.wordmark\nmoments.card.title\nobservatory.sidebar.brand\n```",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000008-19d0af3c8a00",
+      "ordinal": 8,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "2. Core Invariants",
+              "2.3 Explicit API contracts, never fragile DOM paths"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "2. Core Invariants",
+              "2.3 Explicit API contracts, never fragile DOM paths"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "2. Core Invariants",
+          "2.3 Explicit API contracts, never fragile DOM paths"
+        ]
+      },
+      "text_byte_start": 2381,
+      "text_byte_end": 2501,
+      "content_sha256": "19d0af3c8a00ad73607be7b548cc2220f9aa10947b6bb42b3aa9a77c4cfdc5f7",
+      "content": "These identifiers survive internal DOM rewrapping and component refactors.\nStudio must never persist selectors such as:\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000009-d2515129c303",
+      "ordinal": 9,
+      "locator": {
+        "kind": "fenced_code",
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "2. Core Invariants",
+          "2.3 Explicit API contracts, never fragile DOM paths"
+        ],
+        "atomic_kind": "fenced_code"
+      },
+      "text_byte_start": 2501,
+      "text_byte_end": 2558,
+      "content_sha256": "d2515129c303d9adf1d31e343d0c334ebdb972383605f59b2930c77810ae175f",
+      "content": "```text\nbody > main > section:nth-child(2) > div > h1\n```",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000010-fb1fe90979df",
+      "ordinal": 10,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 3,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "2. Core Invariants",
+              "2.4 Editor chrome never contaminates target markup"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "2. Core Invariants",
+              "2.4 Editor chrome never contaminates target markup"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "2. Core Invariants",
+              "2.4 Editor chrome never contaminates target markup"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "2. Core Invariants",
+          "2.4 Editor chrome never contaminates target markup"
+        ]
+      },
+      "text_byte_start": 2558,
+      "text_byte_end": 2836,
+      "content_sha256": "fb1fe90979df23dd2f59cf6399c74ae1a63aa026c9b4344a4fd822c10c6d47e5",
+      "content": "### 2.4 Editor chrome never contaminates target markup\nHover outlines, selected-element rings, labels, handles, and editor affordances are rendered in Studio's own overlay layer above the iframe.\nThe target application reports geometry; it does not receive editor frame markup.\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000011-ca7289159ca7",
+      "ordinal": 11,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 3,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "2. Core Invariants",
+              "2.5 Cross-origin isolation is intentional"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "2. Core Invariants",
+              "2.5 Cross-origin isolation is intentional"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "2. Core Invariants",
+              "2.5 Cross-origin isolation is intentional"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "2. Core Invariants",
+          "2.5 Cross-origin isolation is intentional"
+        ]
+      },
+      "text_byte_start": 2836,
+      "text_byte_end": 2970,
+      "content_sha256": "ca7289159ca77244ec74a01aa365c281894aad445db71e2de4327523752c732e",
+      "content": "### 2.5 Cross-origin isolation is intentional\nStudio and the target application may run on separate localhost ports/origins.\nExample:\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000012-3b0ab50340c0",
+      "ordinal": 12,
+      "locator": {
+        "kind": "fenced_code",
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "2. Core Invariants",
+          "2.5 Cross-origin isolation is intentional"
+        ],
+        "atomic_kind": "fenced_code"
+      },
+      "text_byte_start": 2970,
+      "text_byte_end": 3043,
+      "content_sha256": "3b0ab50340c0f8a684ff4d2bd35c84d77dfacbf181761e850590afd6a02ff203",
+      "content": "```text\nStudio:  http://localhost:4173\nTarget:  http://localhost:3000\n```",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000013-c95402cb5f01",
+      "ordinal": 13,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "2. Core Invariants",
+              "2.5 Cross-origin isolation is intentional"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "2. Core Invariants",
+              "2.5 Cross-origin isolation is intentional"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "2. Core Invariants",
+          "2.5 Cross-origin isolation is intentional"
+        ]
+      },
+      "text_byte_start": 3043,
+      "text_byte_end": 3244,
+      "content_sha256": "c95402cb5f01eb182bd6930e927a547470676671d340224b0858ac7ec1ab749b",
+      "content": "Communication occurs only through the versioned Design Bridge protocol over `window.postMessage()`.\nStudio styles must not leak into the target application and target styles must not leak into Studio.\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000014-2da604926283",
+      "ordinal": 14,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 3,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "2. Core Invariants",
+              "2.6 Live mutation and durable persistence are separate paths"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "2. Core Invariants",
+              "2.6 Live mutation and durable persistence are separate paths"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "2. Core Invariants",
+              "2.6 Live mutation and durable persistence are separate paths"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "2. Core Invariants",
+              "2.6 Live mutation and durable persistence are separate paths"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "2. Core Invariants",
+          "2.6 Live mutation and durable persistence are separate paths"
+        ]
+      },
+      "text_byte_start": 3244,
+      "text_byte_end": 3528,
+      "content_sha256": "2da6049262838c1c89d4f338f68f1d99b3dd80d25b1747047871443469f3f25e",
+      "content": "### 2.6 Live mutation and durable persistence are separate paths\nDragging a slider must update the live target immediately without writing to disk for every intermediate value.\nPersistence happens only from canonical acknowledged state, through a debounced/serialized write path.\n---\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000015-6def4078a5d5",
+      "ordinal": 15,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 2,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "3. High-Level Architecture"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "3. High-Level Architecture"
+        ]
+      },
+      "text_byte_start": 3528,
+      "text_byte_end": 3558,
+      "content_sha256": "6def4078a5d590616165c22f5bfa09d54d494718e062d504f5a913b6557962ef",
+      "content": "## 3. High-Level Architecture\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000016-813e22b9e98c",
+      "ordinal": 16,
+      "locator": {
+        "kind": "fenced_code",
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "3. High-Level Architecture"
+        ],
+        "atomic_kind": "fenced_code"
+      },
+      "text_byte_start": 3558,
+      "text_byte_end": 5882,
+      "content_sha256": "813e22b9e98ca5062acce7d5670d76c73dc97f3ab05daac20a7d730c061006a7",
+      "content": "```text\n┌────────────────────────────────────────────────────────────────────┐\n│                          FONT KIT STUDIO                           │\n│                                                                    │\n│  Toolbar / assets / fonts / palettes / history / inspector         │\n│                                                                    │\n│  ┌──────────────────────────────────────────────────────────────┐  │\n│  │                     Target application iframe               │  │\n│  │                                                              │  │\n│  │    Real app · real state · real data · real components      │  │\n│  │                                                              │  │\n│  └──────────────────────────────────────────────────────────────┘  │\n│             ↑ Studio-owned hover/selection overlay ↑               │\n│                                                                    │\n└────────────────────────────────────────────────────────────────────┘\n                  │                               ▲\n                  │ versioned postMessage         │\n                  ▼                               │\n          ┌────────────────────────────────────────────┐\n          │        Target DesignBridge runtime         │\n          │                                            │\n          │ handshake · registry · hit testing         │\n          │ patches · validation · bounds reporting    │\n          └────────────────────────────────────────────┘\n```",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000017-e9a90fd608d1",
+      "ordinal": 17,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "3. High-Level Architecture"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "3. High-Level Architecture"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "3. High-Level Architecture"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "3. High-Level Architecture"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "3. High-Level Architecture"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "3. High-Level Architecture"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "3. High-Level Architecture"
+        ]
+      },
+      "text_byte_start": 5882,
+      "text_byte_end": 6499,
+      "content_sha256": "e9a90fd608d10309de115fcb069f7fd541ec68585e37476740435bed904b8f5f",
+      "content": "Studio owns:\n- iframe hosting,\n- visual overlay rendering,\n- inspector UI,\n- font/palette/asset tooling,\n- composition state,\n- history/undo,\n- persistence,\n- local file binding,\n- protocol client.\nThe target bridge owns:\n- protocol handshake,\n- editable target registry,\n- target discovery,\n- hit testing,\n- capability reporting,\n- patch validation,\n- live runtime mutation,\n- geometry reporting,\n- protocol server behavior.\nThe bridge does **not** own Studio UI, file pickers, font libraries, colour pickers, undo UI, PNG/SVG asset management, or application business state unrelated to design instrumentation.\n---\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000018-f91627b882bf",
+      "ordinal": 18,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 2,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "4. Framework-Agnostic Target Contract"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "4. Framework-Agnostic Target Contract"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "4. Framework-Agnostic Target Contract"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "4. Framework-Agnostic Target Contract"
+        ]
+      },
+      "text_byte_start": 6499,
+      "text_byte_end": 6725,
+      "content_sha256": "f91627b882bf1844722b2977d38643a156d20635ad9c31fab2f31326e259f026",
+      "content": "## 4. Framework-Agnostic Target Contract\nThe bridge may be authored in TypeScript and distributed as compiled ESM, but the runtime contract is DOM + JSON + `postMessage`.\nA minimal target requires only stable data attributes:\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000019-5c6290b7923c",
+      "ordinal": 19,
+      "locator": {
+        "kind": "fenced_code",
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "4. Framework-Agnostic Target Contract"
+        ],
+        "atomic_kind": "fenced_code"
+      },
+      "text_byte_start": 6725,
+      "text_byte_end": 6844,
+      "content_sha256": "5c6290b7923cf245c26a04e7ab1a0669d862589b49bcab7afa2e3da24a280b99",
+      "content": "```html\n<h1\n  data-design-id=\"landing.hero.title\"\n  data-design-role=\"display\"\n>\n  Every life is a night sky.\n</h1>\n```",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000020-448363cd7a9d",
+      "ordinal": 20,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "4. Framework-Agnostic Target Contract"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "4. Framework-Agnostic Target Contract"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "4. Framework-Agnostic Target Contract"
+        ]
+      },
+      "text_byte_start": 6844,
+      "text_byte_end": 6964,
+      "content_sha256": "448363cd7a9d5dca6a3818a0f0eff4d8b000148be052822951742b48d4c3ceb6",
+      "content": "Frameworks may generate this markup however they like.\nOptional framework helpers are sugar, not protocol requirements.\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000021-ad02c48bbfba",
+      "ordinal": 21,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 3,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "4. Framework-Agnostic Target Contract",
+              "4.1 Target IDs"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "4. Framework-Agnostic Target Contract",
+              "4.1 Target IDs"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "4. Framework-Agnostic Target Contract",
+              "4.1 Target IDs"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "4. Framework-Agnostic Target Contract",
+              "4.1 Target IDs"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "4. Framework-Agnostic Target Contract",
+          "4.1 Target IDs"
+        ]
+      },
+      "text_byte_start": 6964,
+      "text_byte_end": 7254,
+      "content_sha256": "ad02c48bbfbac4dfa09602c34a2f4e6fc2a6b3e3f827019fdded13de88f1bcc4",
+      "content": "### 4.1 Target IDs\n`data-design-id` values are logical API identifiers.\nRequirements:\n- unique within the active document,\n- stable across internal DOM refactors,\n- human-readable,\n- dot-separated by convention,\n- never auto-generated from DOM position,\n- duplicate IDs are a bridge error.\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000022-741a3b43ec10",
+      "ordinal": 22,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 3,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "4. Framework-Agnostic Target Contract",
+              "4.2 Progressive capability model"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "4. Framework-Agnostic Target Contract",
+              "4.2 Progressive capability model"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "4. Framework-Agnostic Target Contract",
+              "4.2 Progressive capability model"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "4. Framework-Agnostic Target Contract",
+              "4.2 Progressive capability model"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "4. Framework-Agnostic Target Contract",
+              "4.2 Progressive capability model"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "4. Framework-Agnostic Target Contract",
+              "4.2 Progressive capability model"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "4. Framework-Agnostic Target Contract",
+              "4.2 Progressive capability model"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "4. Framework-Agnostic Target Contract",
+          "4.2 Progressive capability model"
+        ]
+      },
+      "text_byte_start": 7254,
+      "text_byte_end": 7694,
+      "content_sha256": "741a3b43ec106ab2584943a1f69f94bafcfd4c3259212e07f230dd39b7ade58b",
+      "content": "### 4.2 Progressive capability model\nA target may work at two levels.\n#### Level 1 — attribute-only discovery\nThe bridge can infer basic editable capabilities from the live element:\n- text content,\n- computed font family,\n- computed font size,\n- font weight,\n- font style,\n- line height,\n- letter spacing,\n- text alignment,\n- text colour,\n- element bounds.\n#### Level 2 — explicit registration\nApplications may register richer schemas:\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000023-d72f41af3581",
+      "ordinal": 23,
+      "locator": {
+        "kind": "fenced_code",
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "4. Framework-Agnostic Target Contract",
+          "4.2 Progressive capability model"
+        ],
+        "atomic_kind": "fenced_code"
+      },
+      "text_byte_start": 7694,
+      "text_byte_end": 7962,
+      "content_sha256": "d72f41af35815b0377b14e19c8df53614a2cff1c7a40fe0d120f68d073b33f4d",
+      "content": "```ts\nbridge.register({\n  id: \"landing.hero.title\",\n  role: \"display\",\n  kind: \"text\",\n  capabilities: {\n    text: true,\n    typography: true,\n    color: true,\n    alignment: true\n  },\n  constraints: {\n    fontWeight: {\n      min: 100,\n      max: 900\n    }\n  }\n});\n```",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000024-ed7896139234",
+      "ordinal": 24,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "4. Framework-Agnostic Target Contract",
+              "4.2 Progressive capability model"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "4. Framework-Agnostic Target Contract",
+              "4.2 Progressive capability model"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "4. Framework-Agnostic Target Contract",
+          "4.2 Progressive capability model"
+        ]
+      },
+      "text_byte_start": 7962,
+      "text_byte_end": 8028,
+      "content_sha256": "ed7896139234ca57f0c7b6b88199efef2e5a213f2c07a178fc2901de59a5aeb1",
+      "content": "Explicit registration overrides inferred capability metadata.\n---\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000025-b47ff4018c5d",
+      "ordinal": 25,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 2,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "5. Source of Truth and State Flow"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "5. Source of Truth and State Flow"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "5. Source of Truth and State Flow"
+        ]
+      },
+      "text_byte_start": 8028,
+      "text_byte_end": 8106,
+      "content_sha256": "b47ff4018c5d4fcb4d970996007fb6d87862eccccefc17c21c31ad6666a4820a",
+      "content": "## 5. Source of Truth and State Flow\nThe system has two distinct authorities.\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000026-684ed7845abd",
+      "ordinal": 26,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 3,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "5. Source of Truth and State Flow",
+              "5.1 Target application: rendering authority"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "5. Source of Truth and State Flow",
+              "5.1 Target application: rendering authority"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "5. Source of Truth and State Flow",
+          "5.1 Target application: rendering authority"
+        ]
+      },
+      "text_byte_start": 8106,
+      "text_byte_end": 8318,
+      "content_sha256": "684ed7845abda3b2408d5413a33b1ed01b86e25bd9c3678254402e672405f93e",
+      "content": "### 5.1 Target application: rendering authority\nThe target decides whether a patch is valid, whether a requested value must be normalized, whether a patch is rejected, and what the application actually rendered.\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000027-a60212a80347",
+      "ordinal": 27,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 3,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "5. Source of Truth and State Flow",
+              "5.2 Studio: persistence authority"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "5. Source of Truth and State Flow",
+              "5.2 Studio: persistence authority"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "5. Source of Truth and State Flow",
+          "5.2 Studio: persistence authority"
+        ]
+      },
+      "text_byte_start": 8318,
+      "text_byte_end": 8530,
+      "content_sha256": "a60212a803470ebef631fbd1fb040564def60295548e0b623e570e6b38d4fc4f",
+      "content": "### 5.2 Studio: persistence authority\nStudio decides what canonical design state is durable, when acknowledged state is persisted, which local composition file is bound, and how undo/redo history is represented.\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000028-a3fd36738822",
+      "ordinal": 28,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 3,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "5. Source of Truth and State Flow",
+              "5.3 Canonical flow"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "5. Source of Truth and State Flow",
+          "5.3 Canonical flow"
+        ]
+      },
+      "text_byte_start": 8530,
+      "text_byte_end": 8553,
+      "content_sha256": "a3fd36738822306ab5f4a6b19abcfc6e160f0752a0e98cb522bee107cd75a9f7",
+      "content": "### 5.3 Canonical flow\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000029-2d044ebce01b",
+      "ordinal": 29,
+      "locator": {
+        "kind": "fenced_code",
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "5. Source of Truth and State Flow",
+          "5.3 Canonical flow"
+        ],
+        "atomic_kind": "fenced_code"
+      },
+      "text_byte_start": 8553,
+      "text_byte_end": 8971,
+      "content_sha256": "2d044ebce01b0de40d69e6e2764bf82a5bac250c276b73bb79e570f338f72ecf",
+      "content": "```text\nStudio inspector action\n        ↓\ndesign:update { requestId, baseRevision, patch }\n        ↓\nTarget DesignBridge\n        ↓\nvalidate / normalize / apply\n        ↓\nTarget runtime design state\n        ↓\nactual target render\n        ↓\ndesign:applied { requestId, revision, canonicalPatch }\n        ↓\nStudio canonical state\n        ↓\ndebounced serialized persistence\n        ↓\ncomposition.json\n```",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000030-a636f043f2a2",
+      "ordinal": 30,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "5. Source of Truth and State Flow",
+              "5.3 Canonical flow"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "5. Source of Truth and State Flow",
+          "5.3 Canonical flow"
+        ]
+      },
+      "text_byte_start": 8971,
+      "text_byte_end": 9088,
+      "content_sha256": "a636f043f2a2e70381240a453188ea9f4d9fa52c8d4e5c82b94def0236c1f5b9",
+      "content": "Studio may optimistically show inspector movement, but only `design:applied` state becomes canonical and persistent.\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000031-946632f41b6c",
+      "ordinal": 31,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 3,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "5. Source of Truth and State Flow",
+              "5.4 Rejection flow"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "5. Source of Truth and State Flow",
+          "5.4 Rejection flow"
+        ]
+      },
+      "text_byte_start": 9088,
+      "text_byte_end": 9111,
+      "content_sha256": "946632f41b6ce49529989e8774094d5a9eae46fb5b8e922a42f87e472b4c5197",
+      "content": "### 5.4 Rejection flow\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000032-84764162ca50",
+      "ordinal": 32,
+      "locator": {
+        "kind": "fenced_code",
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "5. Source of Truth and State Flow",
+          "5.4 Rejection flow"
+        ],
+        "atomic_kind": "fenced_code"
+      },
+      "text_byte_start": 9111,
+      "text_byte_end": 9208,
+      "content_sha256": "84764162ca50626710b4b208e05c329218c4005d85bb24aa67439235a15c3181",
+      "content": "```text\nStudio\n  ↓ design:update\nTarget\n  ↓ validation fails\nStudio\n  ← design:rejected\n```",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000033-8596b59069f5",
+      "ordinal": 33,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "5. Source of Truth and State Flow",
+              "5.4 Rejection flow"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "5. Source of Truth and State Flow",
+          "5.4 Rejection flow"
+        ]
+      },
+      "text_byte_start": 9208,
+      "text_byte_end": 9217,
+      "content_sha256": "8596b59069f59c6b643e3d5650cec72f466152aa3069a8aeec88cd6e7b841b53",
+      "content": "Example:\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000034-adbd6e926183",
+      "ordinal": 34,
+      "locator": {
+        "kind": "fenced_code",
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "5. Source of Truth and State Flow",
+          "5.4 Rejection flow"
+        ],
+        "atomic_kind": "fenced_code"
+      },
+      "text_byte_start": 9217,
+      "text_byte_end": 9438,
+      "content_sha256": "adbd6e9261837623337bc11b5b21812423514b95d00204e1ff363d323b36d80a",
+      "content": "```json\n{\n  \"type\": \"design:rejected\",\n  \"requestId\": \"req-42\",\n  \"revision\": 17,\n  \"reason\": \"unsupported-value\",\n  \"detail\": {\n    \"property\": \"fontWeight\",\n    \"requested\": 550,\n    \"allowed\": [400, 500, 600]\n  }\n}\n```",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000035-bc4f14be1c4a",
+      "ordinal": 35,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "5. Source of Truth and State Flow",
+              "5.4 Rejection flow"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "5. Source of Truth and State Flow",
+              "5.4 Rejection flow"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "5. Source of Truth and State Flow",
+          "5.4 Rejection flow"
+        ]
+      },
+      "text_byte_start": 9438,
+      "text_byte_end": 9523,
+      "content_sha256": "bc4f14be1c4a68e597a0d30d9a65b68601e8448d6fda84ed1a9987ff0e066761",
+      "content": "Studio restores or normalizes the inspector to the target's authoritative state.\n---\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000036-96ebd3dff80c",
+      "ordinal": 36,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 2,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "6. Revision Model"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "6. Revision Model"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "6. Revision Model"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "6. Revision Model"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "6. Revision Model"
+        ]
+      },
+      "text_byte_start": 9523,
+      "text_byte_end": 9793,
+      "content_sha256": "96ebd3dff80ca8399ae3d9a680099fec66faded2c0bcf829148ae4b39a09bb0b",
+      "content": "## 6. Revision Model\nProtocol v1 is single-editor and local-first.\nIt does **not** require CRDTs, multiplayer reconciliation, vector clocks, or distributed conflict resolution.\nEvery acknowledged runtime design state carries a monotonically increasing integer revision.\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000037-bca8671e5517",
+      "ordinal": 37,
+      "locator": {
+        "kind": "fenced_code",
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "6. Revision Model"
+        ],
+        "atomic_kind": "fenced_code"
+      },
+      "text_byte_start": 9793,
+      "text_byte_end": 9963,
+      "content_sha256": "bca8671e551732a66ccfa1dbb0c3a9959d3ba57df582cd2022d510dd94f90f6d",
+      "content": "```text\ncurrent revision: 41\n\nStudio sends:\nbaseRevision: 41\n\nTarget applies patch:\nnew revision: 42\n\nTarget acknowledges:\nrevision: 42\n\nStudio persists:\nrevision: 42\n```",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000038-028ed7a2b2e9",
+      "ordinal": 38,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "6. Revision Model"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "6. Revision Model"
+        ]
+      },
+      "text_byte_start": 9963,
+      "text_byte_end": 10001,
+      "content_sha256": "028ed7a2b2e9d780e716f71917f458679f8e1c4a7f365b814376a86de61b665d",
+      "content": "If Studio sends an outdated mutation:\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000039-e273c0050481",
+      "ordinal": 39,
+      "locator": {
+        "kind": "fenced_code",
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "6. Revision Model"
+        ],
+        "atomic_kind": "fenced_code"
+      },
+      "text_byte_start": 10001,
+      "text_byte_end": 10048,
+      "content_sha256": "e273c005048199c97b6e0dd27e8eca7c6abed90f5ca3cc043d527b7b0a484b02",
+      "content": "```text\nbaseRevision: 39\ntargetRevision: 42\n```",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000040-cb5c732d9c0c",
+      "ordinal": 40,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "6. Revision Model"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "6. Revision Model"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "6. Revision Model"
+        ]
+      },
+      "text_byte_start": 10048,
+      "text_byte_end": 10110,
+      "content_sha256": "cb5c732d9c0ceae5a59306cf9335e7adf9d2d339c4ba8bf2dc97d09cddc87e18",
+      "content": "the target returns `design:conflict`.\nEach mutation includes:\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000041-4bf382a3c044",
+      "ordinal": 41,
+      "locator": {
+        "kind": "fenced_code",
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "6. Revision Model"
+        ],
+        "atomic_kind": "fenced_code"
+      },
+      "text_byte_start": 10110,
+      "text_byte_end": 10197,
+      "content_sha256": "4bf382a3c044438c581eaac066ca3b65cfe5a7e89b9419a034c5855dd0f8380c",
+      "content": "```ts\ninterface DesignMutationMeta {\n  requestId: string;\n  baseRevision: number;\n}\n```",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000042-f52d711103d5",
+      "ordinal": 42,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "6. Revision Model"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "6. Revision Model"
+        ]
+      },
+      "text_byte_start": 10197,
+      "text_byte_end": 10201,
+      "content_sha256": "f52d711103d50a437830c6fbcd04fb4bab49a0f82f6d26d1c791c6e8488dd090",
+      "content": "---\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000043-e1a487c7f846",
+      "ordinal": 43,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 2,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "7. Protocol v1 Handshake"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "7. Protocol v1 Handshake"
+        ]
+      },
+      "text_byte_start": 10201,
+      "text_byte_end": 10229,
+      "content_sha256": "e1a487c7f8460b58e8ce6f5e5adcc94b0a0fee228f2eba37fe405da2fa3d53ce",
+      "content": "## 7. Protocol v1 Handshake\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000044-8912308af361",
+      "ordinal": 44,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 3,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "7. Protocol v1 Handshake",
+              "7.1 Initial sequence"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "7. Protocol v1 Handshake",
+          "7.1 Initial sequence"
+        ]
+      },
+      "text_byte_start": 10229,
+      "text_byte_end": 10254,
+      "content_sha256": "8912308af3613bed8c2ba279cb607917cc064a59c6127d407bd9cd0b8d8ea641",
+      "content": "### 7.1 Initial sequence\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000045-66e66fd2731b",
+      "ordinal": 45,
+      "locator": {
+        "kind": "fenced_code",
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "7. Protocol v1 Handshake",
+          "7.1 Initial sequence"
+        ],
+        "atomic_kind": "fenced_code"
+      },
+      "text_byte_start": 10254,
+      "text_byte_end": 11360,
+      "content_sha256": "66e66fd2731bd26ffc9eb54448a3f6af9012dd6b31f192efac9e67045b7070a3",
+      "content": "```text\nSTUDIO                            TARGET\n  │                                 │\n  │ iframe loads                    │\n  │────────────────────────────────>│\n  │                                 │\n  │       design:bridge-ready       │\n  │<────────────────────────────────│\n  │                                 │\n  │ design:hello                    │\n  │ protocolVersion                 │\n  │ sessionId                       │\n  │────────────────────────────────>│\n  │                                 │\n  │       design:ready              │\n  │       capabilities              │\n  │       revision                  │\n  │       tokens                    │\n  │       targets                   │\n  │       viewport                  │\n  │<────────────────────────────────│\n```",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000046-a7250af19791",
+      "ordinal": 46,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 3,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "7. Protocol v1 Handshake",
+              "7.2 `design:bridge-ready`"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "7. Protocol v1 Handshake",
+          "7.2 `design:bridge-ready`"
+        ]
+      },
+      "text_byte_start": 11360,
+      "text_byte_end": 11390,
+      "content_sha256": "a7250af1979171d693cf8f2116dc63cafe96030d6b0d02fa0e8a266a81493ef7",
+      "content": "### 7.2 `design:bridge-ready`\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000047-11322771cc6d",
+      "ordinal": 47,
+      "locator": {
+        "kind": "fenced_code",
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "7. Protocol v1 Handshake",
+          "7.2 `design:bridge-ready`"
+        ],
+        "atomic_kind": "fenced_code"
+      },
+      "text_byte_start": 11390,
+      "text_byte_end": 11484,
+      "content_sha256": "11322771cc6d22ee7a740792ed78ea0de92333ba54d8698412b1e2ce013a7fbc",
+      "content": "```ts\ninterface DesignBridgeReady {\n  type: \"design:bridge-ready\";\n  protocolVersion: 1;\n}\n```",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000048-ec689ac1e357",
+      "ordinal": 48,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 3,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "7. Protocol v1 Handshake",
+              "7.3 `design:hello`"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "7. Protocol v1 Handshake",
+          "7.3 `design:hello`"
+        ]
+      },
+      "text_byte_start": 11484,
+      "text_byte_end": 11507,
+      "content_sha256": "ec689ac1e357e7a5b48c6ee4b5f1eedcde75334056ed10c56a292bc222f2d13c",
+      "content": "### 7.3 `design:hello`\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000049-45c2b0e0e8b0",
+      "ordinal": 49,
+      "locator": {
+        "kind": "fenced_code",
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "7. Protocol v1 Handshake",
+          "7.3 `design:hello`"
+        ],
+        "atomic_kind": "fenced_code"
+      },
+      "text_byte_start": 11507,
+      "text_byte_end": 11609,
+      "content_sha256": "45c2b0e0e8b074221a3284ff9e3989992a3da5e6426388e6969b7b228c875a76",
+      "content": "```ts\ninterface DesignHello {\n  type: \"design:hello\";\n  protocolVersion: 1;\n  sessionId: string;\n}\n```",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000050-3cfd5cc2a31b",
+      "ordinal": 50,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 3,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "7. Protocol v1 Handshake",
+              "7.4 `design:ready`"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "7. Protocol v1 Handshake",
+          "7.4 `design:ready`"
+        ]
+      },
+      "text_byte_start": 11609,
+      "text_byte_end": 11632,
+      "content_sha256": "3cfd5cc2a31b03961d0c6642b8118780605443b5df43a84f584cd2631a32481d",
+      "content": "### 7.4 `design:ready`\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000051-222650bfa24b",
+      "ordinal": 51,
+      "locator": {
+        "kind": "fenced_code",
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "7. Protocol v1 Handshake",
+          "7.4 `design:ready`"
+        ],
+        "atomic_kind": "fenced_code"
+      },
+      "text_byte_start": 11632,
+      "text_byte_end": 12013,
+      "content_sha256": "222650bfa24b78a8eb9ce1a8e45b4c9b5636661068b48b16a0b3fae46b8bdd33",
+      "content": "```ts\ninterface DesignReady {\n  type: \"design:ready\";\n  protocolVersion: 1;\n  sessionId: string;\n  revision: number;\n\n  capabilities: {\n    inspect: boolean;\n    patch: boolean;\n    assets: boolean;\n    typography: boolean;\n    tokens: boolean;\n  };\n\n  viewport: {\n    width: number;\n    height: number;\n  };\n\n  tokens: DesignTokenManifest;\n  targets: DesignTargetManifest[];\n}\n```",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000052-b4808d67aa28",
+      "ordinal": 52,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "7. Protocol v1 Handshake",
+              "7.4 `design:ready`"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "7. Protocol v1 Handshake",
+              "7.4 `design:ready`"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "7. Protocol v1 Handshake",
+          "7.4 `design:ready`"
+        ]
+      },
+      "text_byte_start": 12013,
+      "text_byte_end": 12087,
+      "content_sha256": "b4808d67aa28f2e9d0407c525e9616875fbb88c0b8e201a43c82fdce4a954b9c",
+      "content": "Studio must not expose target controls until `design:ready` succeeds.\n---\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000053-36aef865c12a",
+      "ordinal": 53,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 2,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "8. Target Manifest"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "8. Target Manifest"
+        ]
+      },
+      "text_byte_start": 12087,
+      "text_byte_end": 12109,
+      "content_sha256": "36aef865c12aac5520b64259cce5e34f2a9428e3909ccefbcc12e28c00249418",
+      "content": "## 8. Target Manifest\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000054-c5dd6fc33bb0",
+      "ordinal": 54,
+      "locator": {
+        "kind": "fenced_code",
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "8. Target Manifest"
+        ],
+        "atomic_kind": "fenced_code"
+      },
+      "text_byte_start": 12109,
+      "text_byte_end": 12470,
+      "content_sha256": "c5dd6fc33bb019174aa364f21a112ae1c157783351e4083539b0e8d9938a9607",
+      "content": "```ts\ninterface DesignTargetManifest {\n  id: string;\n  role?: string;\n  kind: \"text\" | \"image\" | \"svg\" | \"container\" | \"component\";\n\n  editable: {\n    text?: boolean;\n    typography?: boolean;\n    color?: boolean;\n    alignment?: boolean;\n    spacing?: boolean;\n    asset?: boolean;\n    visibility?: boolean;\n  };\n\n  constraints?: DesignTargetConstraints;\n}\n```",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000055-8596b59069f5",
+      "ordinal": 55,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "8. Target Manifest"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "8. Target Manifest"
+        ]
+      },
+      "text_byte_start": 12470,
+      "text_byte_end": 12479,
+      "content_sha256": "8596b59069f59c6b643e3d5650cec72f466152aa3069a8aeec88cd6e7b841b53",
+      "content": "Example:\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000056-aa01182d4691",
+      "ordinal": 56,
+      "locator": {
+        "kind": "fenced_code",
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "8. Target Manifest"
+        ],
+        "atomic_kind": "fenced_code"
+      },
+      "text_byte_start": 12479,
+      "text_byte_end": 12775,
+      "content_sha256": "aa01182d4691debf5f250f1be5cf1c9c35491baefae360b9b86b532252016110",
+      "content": "```json\n{\n  \"id\": \"landing.hero.title\",\n  \"role\": \"display\",\n  \"kind\": \"text\",\n  \"editable\": {\n    \"text\": true,\n    \"typography\": true,\n    \"color\": true,\n    \"alignment\": true\n  },\n  \"constraints\": {\n    \"fontFamilies\": [\n      \"daith-vf\",\n      \"ella-roman\",\n      \"orpheuspro\"\n    ]\n  }\n}\n```",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000057-b5775fb7a3ab",
+      "ordinal": 57,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "8. Target Manifest"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "8. Target Manifest"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "8. Target Manifest"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "8. Target Manifest"
+        ]
+      },
+      "text_byte_start": 12775,
+      "text_byte_end": 12914,
+      "content_sha256": "b5775fb7a3ab7c1f11476afd809155101e95266269595675e91b55183c9882dd",
+      "content": "The manifest is a permission/capability contract, not just metadata.\nStudio must not present controls that the target has not exposed.\n---\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000058-0c0937c2be4a",
+      "ordinal": 58,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 2,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "9. Live Update Messages"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "9. Live Update Messages"
+        ]
+      },
+      "text_byte_start": 12914,
+      "text_byte_end": 12941,
+      "content_sha256": "0c0937c2be4a9f8df81ebbb3778cd13887910b77787d05afdb379942b6cac50e",
+      "content": "## 9. Live Update Messages\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000059-8543de163715",
+      "ordinal": 59,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 3,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "9. Live Update Messages",
+              "9.1 `design:update`"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "9. Live Update Messages",
+          "9.1 `design:update`"
+        ]
+      },
+      "text_byte_start": 12941,
+      "text_byte_end": 12965,
+      "content_sha256": "8543de163715ad98c8b96d175b760a834e1d4a55a504bb4502f19c43e9c73808",
+      "content": "### 9.1 `design:update`\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000060-943721b46713",
+      "ordinal": 60,
+      "locator": {
+        "kind": "fenced_code",
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "9. Live Update Messages",
+          "9.1 `design:update`"
+        ],
+        "atomic_kind": "fenced_code"
+      },
+      "text_byte_start": 12965,
+      "text_byte_end": 13125,
+      "content_sha256": "943721b467135daad299eb99f8944236d14bb7eb9c9986b6d1fae11c69deadba",
+      "content": "```ts\ninterface DesignUpdate {\n  type: \"design:update\";\n  requestId: string;\n  baseRevision: number;\n  targetId: string;\n  patch: Record<string, unknown>;\n}\n```",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000061-d7f43c675a5c",
+      "ordinal": 61,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 3,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "9. Live Update Messages",
+              "9.2 `design:applied`"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "9. Live Update Messages",
+          "9.2 `design:applied`"
+        ]
+      },
+      "text_byte_start": 13125,
+      "text_byte_end": 13150,
+      "content_sha256": "d7f43c675a5c911e6a4cf5e7bd694f2a55887a888382ecd0965f5a8657f46449",
+      "content": "### 9.2 `design:applied`\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000062-7ff92dac0553",
+      "ordinal": 62,
+      "locator": {
+        "kind": "fenced_code",
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "9. Live Update Messages",
+          "9.2 `design:applied`"
+        ],
+        "atomic_kind": "fenced_code"
+      },
+      "text_byte_start": 13150,
+      "text_byte_end": 13317,
+      "content_sha256": "7ff92dac05530fe67c092023bd48e27437dc36315f646d50552ff02b80cba4ca",
+      "content": "```ts\ninterface DesignApplied {\n  type: \"design:applied\";\n  requestId: string;\n  revision: number;\n  targetId: string;\n  canonicalPatch: Record<string, unknown>;\n}\n```",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000063-439098c7ef98",
+      "ordinal": 63,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "9. Live Update Messages",
+              "9.2 `design:applied`"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "9. Live Update Messages",
+          "9.2 `design:applied`"
+        ]
+      },
+      "text_byte_start": 13317,
+      "text_byte_end": 13405,
+      "content_sha256": "439098c7ef98ed62d19f7874f953548dc2b2744361c33d15ce479a34a493708a",
+      "content": "If Studio requests weight 550 and the target canonicalizes to 500, Studio persists 500.\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000064-dba96d8ef680",
+      "ordinal": 64,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 3,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "9. Live Update Messages",
+              "9.3 `design:rejected`"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "9. Live Update Messages",
+          "9.3 `design:rejected`"
+        ]
+      },
+      "text_byte_start": 13405,
+      "text_byte_end": 13431,
+      "content_sha256": "dba96d8ef680d17df38e479741da2e65b85b280209140dde0380c3a24f101e7c",
+      "content": "### 9.3 `design:rejected`\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000065-4e23d8f05040",
+      "ordinal": 65,
+      "locator": {
+        "kind": "fenced_code",
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "9. Live Update Messages",
+          "9.3 `design:rejected`"
+        ],
+        "atomic_kind": "fenced_code"
+      },
+      "text_byte_start": 13431,
+      "text_byte_end": 13733,
+      "content_sha256": "4e23d8f05040849f0dee2a3c6f77223d4c7e943176815a81d347b2acb9a338e4",
+      "content": "```ts\ninterface DesignRejected {\n  type: \"design:rejected\";\n  requestId: string;\n  revision: number;\n  targetId?: string;\n  reason:\n    | \"unsupported-property\"\n    | \"unsupported-value\"\n    | \"unknown-target\"\n    | \"revision-conflict\"\n    | \"invalid-message\";\n  detail?: Record<string, unknown>;\n}\n```",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000066-f52d711103d5",
+      "ordinal": 66,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "9. Live Update Messages",
+              "9.3 `design:rejected`"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "9. Live Update Messages",
+          "9.3 `design:rejected`"
+        ]
+      },
+      "text_byte_start": 13733,
+      "text_byte_end": 13737,
+      "content_sha256": "f52d711103d50a437830c6fbcd04fb4bab49a0f82f6d26d1c791c6e8488dd090",
+      "content": "---\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000067-dcd8b2e2a97f",
+      "ordinal": 67,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 2,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "10. Hover, Selection, and Overlay Geometry"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "10. Hover, Selection, and Overlay Geometry"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "10. Hover, Selection, and Overlay Geometry"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "10. Hover, Selection, and Overlay Geometry"
+        ]
+      },
+      "text_byte_start": 13737,
+      "text_byte_end": 13958,
+      "content_sha256": "dcd8b2e2a97f0d1549f9a464dbd9c6a747c497d9db27d8183ffba728309964fe",
+      "content": "## 10. Hover, Selection, and Overlay Geometry\nBecause Studio and the target are intentionally cross-origin, Studio cannot use `document.elementFromPoint()` inside the iframe DOM.\nHit testing belongs to the target bridge.\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000068-61b1db53d0cf",
+      "ordinal": 68,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 3,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "10. Hover, Selection, and Overlay Geometry",
+              "10.1 Target-side hover flow"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "10. Hover, Selection, and Overlay Geometry",
+          "10.1 Target-side hover flow"
+        ]
+      },
+      "text_byte_start": 13958,
+      "text_byte_end": 13990,
+      "content_sha256": "61b1db53d0cf9be1ab1f111da092f15a3dd0b1ca6e7edc31dd824a65abadca17",
+      "content": "### 10.1 Target-side hover flow\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000069-cb5f6b4c7eeb",
+      "ordinal": 69,
+      "locator": {
+        "kind": "fenced_code",
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "10. Hover, Selection, and Overlay Geometry",
+          "10.1 Target-side hover flow"
+        ],
+        "atomic_kind": "fenced_code"
+      },
+      "text_byte_start": 13990,
+      "text_byte_end": 14320,
+      "content_sha256": "cb5f6b4c7eeb8f1ba0b3ee69d463ee08085f4b2d4179746cef4545183ce5d510",
+      "content": "```text\npointermove in target\n        ↓\nrequestAnimationFrame throttle\n        ↓\ndocument.elementFromPoint(x, y)\n        ↓\nclosest(\"[data-design-id]\")\n        ↓\ntarget changed?\n   ┌────┴────┐\n   no       yes\n   │         ↓\n stop   getBoundingClientRect()\n             ↓\n        design:hover\n```",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000070-85109ac9ffad",
+      "ordinal": 70,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "10. Hover, Selection, and Overlay Geometry",
+              "10.1 Target-side hover flow"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "10. Hover, Selection, and Overlay Geometry",
+          "10.1 Target-side hover flow"
+        ]
+      },
+      "text_byte_start": 14320,
+      "text_byte_end": 14419,
+      "content_sha256": "85109ac9ffadd8935fed3075bda3bcbf2bdc959d89ada83010e82d9925c4ffab",
+      "content": "The bridge should avoid emitting repeated hover messages while the logical target ID is unchanged.\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000071-675eddd8cc61",
+      "ordinal": 71,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 3,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "10. Hover, Selection, and Overlay Geometry",
+              "10.2 `design:hover`"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "10. Hover, Selection, and Overlay Geometry",
+          "10.2 `design:hover`"
+        ]
+      },
+      "text_byte_start": 14419,
+      "text_byte_end": 14443,
+      "content_sha256": "675eddd8cc61c2bae412f3f8ce7af8afd73f6ffd655a8ee40c26aaf3494fbde5",
+      "content": "### 10.2 `design:hover`\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000072-d0202aa86604",
+      "ordinal": 72,
+      "locator": {
+        "kind": "fenced_code",
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "10. Hover, Selection, and Overlay Geometry",
+          "10.2 `design:hover`"
+        ],
+        "atomic_kind": "fenced_code"
+      },
+      "text_byte_start": 14443,
+      "text_byte_end": 14614,
+      "content_sha256": "d0202aa866049b1bd01e3c1f6c2d1ca6d2865fcc00752ef58f18e572cec100bf",
+      "content": "```ts\ninterface DesignHover {\n  type: \"design:hover\";\n  targetId: string | null;\n  rect?: {\n    x: number;\n    y: number;\n    width: number;\n    height: number;\n  };\n}\n```",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000073-ed14bc38644e",
+      "ordinal": 73,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 3,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "10. Hover, Selection, and Overlay Geometry",
+              "10.3 Coordinate translation"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "10. Hover, Selection, and Overlay Geometry",
+              "10.3 Coordinate translation"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "10. Hover, Selection, and Overlay Geometry",
+          "10.3 Coordinate translation"
+        ]
+      },
+      "text_byte_start": 14614,
+      "text_byte_end": 14686,
+      "content_sha256": "ed14bc38644e4c5bfa6a82cf2506975a4479b46cdfedb1e1f732d6fe57db757d",
+      "content": "### 10.3 Coordinate translation\nStudio reads the iframe's own geometry:\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000074-2f3b3a37a6d1",
+      "ordinal": 74,
+      "locator": {
+        "kind": "fenced_code",
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "10. Hover, Selection, and Overlay Geometry",
+          "10.3 Coordinate translation"
+        ],
+        "atomic_kind": "fenced_code"
+      },
+      "text_byte_start": 14686,
+      "text_byte_end": 14745,
+      "content_sha256": "2f3b3a37a6d186574cc1e43f4770fe5c602d911e91537d0d86aed9d3261c115a",
+      "content": "```js\nconst frameRect = iframe.getBoundingClientRect();\n```",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000075-932a24c824b1",
+      "ordinal": 75,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "10. Hover, Selection, and Overlay Geometry",
+              "10.3 Coordinate translation"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "10. Hover, Selection, and Overlay Geometry",
+          "10.3 Coordinate translation"
+        ]
+      },
+      "text_byte_start": 14745,
+      "text_byte_end": 14761,
+      "content_sha256": "932a24c824b1f8455e4c9f060f4ee4d24d4e9bfb634c72f79edd087e94c594c5",
+      "content": "and calculates:\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000076-9fc3c7514ddb",
+      "ordinal": 76,
+      "locator": {
+        "kind": "fenced_code",
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "10. Hover, Selection, and Overlay Geometry",
+          "10.3 Coordinate translation"
+        ],
+        "atomic_kind": "fenced_code"
+      },
+      "text_byte_start": 14761,
+      "text_byte_end": 14860,
+      "content_sha256": "9fc3c7514ddb7cbdc1e15a6f15db136f7d07127cb890bc0d4921eb377f14c3ab",
+      "content": "```text\noverlayLeft = frameRect.left + targetRect.x\noverlayTop  = frameRect.top  + targetRect.y\n```",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000077-129bf808531e",
+      "ordinal": 77,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "10. Hover, Selection, and Overlay Geometry",
+              "10.3 Coordinate translation"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "10. Hover, Selection, and Overlay Geometry",
+          "10.3 Coordinate translation"
+        ]
+      },
+      "text_byte_start": 14860,
+      "text_byte_end": 14940,
+      "content_sha256": "129bf808531ea446091f14e48d006fddbee97e1a3e8f2261850c5bc3899532da",
+      "content": "Selection borders and hover outlines are then drawn entirely in Studio's layer.\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000078-fd6fe1a27cff",
+      "ordinal": 78,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 3,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "10. Hover, Selection, and Overlay Geometry",
+              "10.4 Selection"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "10. Hover, Selection, and Overlay Geometry",
+              "10.4 Selection"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "10. Hover, Selection, and Overlay Geometry",
+          "10.4 Selection"
+        ]
+      },
+      "text_byte_start": 14940,
+      "text_byte_end": 14993,
+      "content_sha256": "fd6fe1a27cff781dbe9a4aad16ebce4c7ade26b226e4be4462791da6d6c2a093",
+      "content": "### 10.4 Selection\nSelection is explicit and sticky.\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000079-74e18932c539",
+      "ordinal": 79,
+      "locator": {
+        "kind": "fenced_code",
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "10. Hover, Selection, and Overlay Geometry",
+          "10.4 Selection"
+        ],
+        "atomic_kind": "fenced_code"
+      },
+      "text_byte_start": 14993,
+      "text_byte_end": 15162,
+      "content_sha256": "74e18932c5396fa3f52f5ff5056a61bc0b4f6fccc6fe5e3445eab439d94ca297",
+      "content": "```ts\ninterface DesignSelected {\n  type: \"design:selected\";\n  targetId: string;\n  rect: {\n    x: number;\n    y: number;\n    width: number;\n    height: number;\n  };\n}\n```",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000080-1670843844ab",
+      "ordinal": 80,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 3,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "10. Hover, Selection, and Overlay Geometry",
+              "10.5 Selected-target bounds updates"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "10. Hover, Selection, and Overlay Geometry",
+              "10.5 Selected-target bounds updates"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "10. Hover, Selection, and Overlay Geometry",
+              "10.5 Selected-target bounds updates"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "10. Hover, Selection, and Overlay Geometry",
+              "10.5 Selected-target bounds updates"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "10. Hover, Selection, and Overlay Geometry",
+          "10.5 Selected-target bounds updates"
+        ]
+      },
+      "text_byte_start": 15162,
+      "text_byte_end": 15457,
+      "content_sha256": "1670843844abcfba9acb8a0dd76f5667eecb81d450385352e6b64deb6d149c00",
+      "content": "### 10.5 Selected-target bounds updates\nThe target updates selected-target geometry when layout changes through `ResizeObserver`, target scroll, iframe viewport resize, and relevant application reflow.\nA `MutationObserver` may be added only if required; it is not mandatory for Protocol v1.\n---\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000081-85abadbdfebe",
+      "ordinal": 81,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 2,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "11. Token Manifest"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "11. Token Manifest"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "11. Token Manifest"
+        ]
+      },
+      "text_byte_start": 15457,
+      "text_byte_end": 15621,
+      "content_sha256": "85abadbdfebeb5902825d0fa872d8149f4695ecc81c2c649e832b92b440320bc",
+      "content": "## 11. Token Manifest\nProtocol v1 allows applications to advertise existing design tokens rather than forcing Studio to reverse-engineer arbitrary utility classes.\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000082-d684abd0b3b2",
+      "ordinal": 82,
+      "locator": {
+        "kind": "fenced_code",
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "11. Token Manifest"
+        ],
+        "atomic_kind": "fenced_code"
+      },
+      "text_byte_start": 15621,
+      "text_byte_end": 15917,
+      "content_sha256": "d684abd0b3b29034099c8e1a6bf0b00b45c11632fad9271c460e6b6df4b07dba",
+      "content": "```ts\ninterface DesignTokenManifest {\n  colors?: Record<string, string>;\n  fonts?: Record<string, {\n    family: string;\n    fallback?: string;\n  }>;\n  spacing?: Record<string, string>;\n  radii?: Record<string, string>;\n  shadows?: Record<string, string>;\n  custom?: Record<string, unknown>;\n}\n```",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000083-2bb5b22895b8",
+      "ordinal": 83,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "11. Token Manifest"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "11. Token Manifest"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "11. Token Manifest"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "11. Token Manifest"
+        ]
+      },
+      "text_byte_start": 15917,
+      "text_byte_end": 16154,
+      "content_sha256": "2bb5b22895b87dc0d6673a6e4248dbb1f9799e9eded8141d11d79a7d0ccfefbf",
+      "content": "Studio may supplement target-provided tokens with independent libraries such as Tailwind colour palettes, Adobe kit families, and custom user palettes.\nThe target's token manifest remains authoritative for application-native tokens.\n---\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000084-1151269c10d7",
+      "ordinal": 84,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 2,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "12. Tailwind Boundary"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "12. Tailwind Boundary"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "12. Tailwind Boundary"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "12. Tailwind Boundary"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "12. Tailwind Boundary"
+        ]
+      },
+      "text_byte_start": 16154,
+      "text_byte_end": 16327,
+      "content_sha256": "1151269c10d70d150b82e0a322d51cf18a2c6815c7688113650f1201a9d2bb66",
+      "content": "## 12. Tailwind Boundary\nStudio does not become the Tailwind compiler for the target application.\nThe target application continues using its real build pipeline.\nPreferred:\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000085-41ad729cce59",
+      "ordinal": 85,
+      "locator": {
+        "kind": "fenced_code",
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "12. Tailwind Boundary"
+        ],
+        "atomic_kind": "fenced_code"
+      },
+      "text_byte_start": 16327,
+      "text_byte_end": 16421,
+      "content_sha256": "41ad729cce590b6bbd589aec51265d148ccc996029768f1c9fb7719db16b061d",
+      "content": "```text\n--font-display = \"ella-roman\"\n--color-luminous = #e6c88d\nhero.title.align = center\n```",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000086-449ea02513ea",
+      "ordinal": 86,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "12. Tailwind Boundary"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "12. Tailwind Boundary"
+        ]
+      },
+      "text_byte_start": 16421,
+      "text_byte_end": 16492,
+      "content_sha256": "449ea02513eaa37fa90fadcce5395539c0ab3e709fee02b79c218ae9e860376f",
+      "content": "Avoid making the protocol depend on generated utility strings such as:\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000087-24390ab9e253",
+      "ordinal": 87,
+      "locator": {
+        "kind": "fenced_code",
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "12. Tailwind Boundary"
+        ],
+        "atomic_kind": "fenced_code"
+      },
+      "text_byte_start": 16492,
+      "text_byte_end": 16540,
+      "content_sha256": "24390ab9e253208c0e62a66a2c2aa1920120209538a63ad73156ade784986330",
+      "content": "```text\ntracking-[0.247829em] text-[#f0c831]\n```",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000088-259af4ae43ac",
+      "ordinal": 88,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "12. Tailwind Boundary"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "12. Tailwind Boundary"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "12. Tailwind Boundary"
+        ]
+      },
+      "text_byte_start": 16540,
+      "text_byte_end": 16667,
+      "content_sha256": "259af4ae43ace459ce3344639ebebf94b72955bdc15ddb63ee4869eb7bf18afe",
+      "content": "If a target chooses to map semantic patches into Tailwind classes internally, that is the target adapter's responsibility.\n---\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000089-eb596bd6854d",
+      "ordinal": 89,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 2,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "13. Local Persistence and File Binding"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "13. Local Persistence and File Binding"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "13. Local Persistence and File Binding"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "13. Local Persistence and File Binding"
+        ]
+      },
+      "text_byte_start": 16667,
+      "text_byte_end": 16806,
+      "content_sha256": "eb596bd6854d40c1f61dd44fb45d7db87ce21056daeb64493a33a1c32431db2f",
+      "content": "## 13. Local Persistence and File Binding\nLocal file binding is a Studio concern, not part of the target bridge protocol.\nConceptual flow:\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000090-79239b4f8563",
+      "ordinal": 90,
+      "locator": {
+        "kind": "fenced_code",
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "13. Local Persistence and File Binding"
+        ],
+        "atomic_kind": "fenced_code"
+      },
+      "text_byte_start": 16806,
+      "text_byte_end": 17108,
+      "content_sha256": "79239b4f8563f29a99fde9ea81fbff1e5a87090533998701b67db5fa4103f181",
+      "content": "```text\nBind composition.json\n        ↓\nStudio receives FileSystemFileHandle\n        ↓\nStudio loads canonical composition\n        ↓\nlive edits occur through target bridge\n        ↓\nacknowledged Studio state changes\n        ↓\ndebounced serialized write\n        ↓\ncomposition.json updated\n```",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000091-8f9bdcb42827",
+      "ordinal": 91,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "13. Local Persistence and File Binding"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "13. Local Persistence and File Binding"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "13. Local Persistence and File Binding"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "13. Local Persistence and File Binding"
+        ]
+      },
+      "text_byte_start": 17108,
+      "text_byte_end": 17634,
+      "content_sha256": "8f9bdcb428271139ee71ebecf889d94806309c912427e4bea1a62da77cf6e21e",
+      "content": "Persistence must debounce rapid changes, serialize writes, never overlap `createWritable()` sessions, write only acknowledged canonical state, expose dirty/saving/saved/error state, preserve the latest acknowledged revision, and recover from parse/read errors without silently replacing the file.\nFile System Access API support is not assumed across all browsers. Protocol v1 remains usable without direct file handles through explicit import/export. This browser limitation must not leak into the Design Bridge protocol.\n---\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000092-589a989b193d",
+      "ordinal": 92,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 2,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "14. Local Recovery"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "14. Local Recovery"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "14. Local Recovery"
+        ]
+      },
+      "text_byte_start": 17634,
+      "text_byte_end": 17680,
+      "content_sha256": "589a989b193d21c874c6f9044f98893c284d6b91bb77c30f8ad3344dd1d5e4bd",
+      "content": "## 14. Local Recovery\nMinimum recovery model:\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000093-a0cf723e3cb8",
+      "ordinal": 93,
+      "locator": {
+        "kind": "fenced_code",
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "14. Local Recovery"
+        ],
+        "atomic_kind": "fenced_code"
+      },
+      "text_byte_start": 17680,
+      "text_byte_end": 17798,
+      "content_sha256": "a0cf723e3cb8740f81c5b77412dd5ef2b72e00ebde6b762ec176afc2d320fc8c",
+      "content": "```text\ncanonical state\ndirty state\nlast acknowledged revision\nlast persisted revision\nsave in progress\nsave error\n```",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000094-6f167d4239a4",
+      "ordinal": 94,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "14. Local Recovery"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "14. Local Recovery"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "14. Local Recovery"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "14. Local Recovery"
+        ]
+      },
+      "text_byte_start": 17798,
+      "text_byte_end": 17984,
+      "content_sha256": "6f167d4239a46b7b949d1815a099d8b38f8efa45355eb6102716234069995e6e",
+      "content": "If revision 53 arrives while revision 52 is being written, Studio queues 53 and writes it only after the current write closes.\nNo concurrent writable streams to the same bound file.\n---\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000095-1b68ef241510",
+      "ordinal": 95,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 2,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "15. Origin and Session Validation"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "15. Origin and Session Validation"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "15. Origin and Session Validation"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "15. Origin and Session Validation"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "15. Origin and Session Validation"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "15. Origin and Session Validation"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "15. Origin and Session Validation"
+        ]
+      },
+      "text_byte_start": 17984,
+      "text_byte_end": 18484,
+      "content_sha256": "1b68ef241510b705d3cd62a0bfc54f05e4c3fbf4b7639f4c40e6a27fc1fa1487",
+      "content": "## 15. Origin and Session Validation\nEvery protocol message must be validated against expected iframe window, expected origin, protocol version, current session ID, recognized message type, and valid message schema.\nStudio must not accept a message merely because `event.data.type` resembles a bridge message.\nThe target likewise accepts Studio control messages only from its configured allowed origin and active session.\nOrigin validation is part of the bridge contract, not optional hardening.\n---\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000096-5a663e37fa84",
+      "ordinal": 96,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 2,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "16. Disconnect / Reconnect Semantics"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "16. Disconnect / Reconnect Semantics"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "16. Disconnect / Reconnect Semantics"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "16. Disconnect / Reconnect Semantics"
+        ]
+      },
+      "text_byte_start": 18484,
+      "text_byte_end": 18605,
+      "content_sha256": "5a663e37fa845c8c413a88c753a0a94532159662e8c32891b1e9e751b927c93a",
+      "content": "## 16. Disconnect / Reconnect Semantics\nStudio must handle target reloads and development HMR.\nOn target bridge restart:\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000097-72d52169731d",
+      "ordinal": 97,
+      "locator": {
+        "kind": "fenced_code",
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "16. Disconnect / Reconnect Semantics"
+        ],
+        "atomic_kind": "fenced_code"
+      },
+      "text_byte_start": 18605,
+      "text_byte_end": 18707,
+      "content_sha256": "72d52169731d807db2bb2f868577f2fc6453a2d126b7b2f49569edc581ecd581",
+      "content": "```text\ntarget emits design:bridge-ready\nStudio starts a fresh handshake\ntarget emits design:ready\n```",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000098-94fbdb188045",
+      "ordinal": 98,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "16. Disconnect / Reconnect Semantics"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "16. Disconnect / Reconnect Semantics"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "16. Disconnect / Reconnect Semantics"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "16. Disconnect / Reconnect Semantics"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "16. Disconnect / Reconnect Semantics"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "16. Disconnect / Reconnect Semantics"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "16. Disconnect / Reconnect Semantics"
+        ]
+      },
+      "text_byte_start": 18707,
+      "text_byte_end": 19127,
+      "content_sha256": "94fbdb1880455056dc6d43129353220383c3cf6423dfa13ff8e7bfabbdf8b75d",
+      "content": "The new `design:ready` snapshot replaces Studio's assumptions about live target state.\nIf Studio has unsaved canonical state that differs from the reloaded target, Studio must not silently overwrite either side.\nProtocol v1 surfaces a reconnect state and requires one explicit resolution path:\n- reapply Studio canonical state to target, or\n- accept target state as canonical.\nAutomatic conflict policy is deferred.\n---\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000099-0e08c632e54b",
+      "ordinal": 99,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 2,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "17. First Reference Integration: Asteria"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "17. First Reference Integration: Asteria"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "17. First Reference Integration: Asteria"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "17. First Reference Integration: Asteria"
+        ]
+      },
+      "text_byte_start": 19127,
+      "text_byte_end": 19273,
+      "content_sha256": "0e08c632e54b99f39f239ca14fc7e0443960e343cfc4c075fc9ec631b05a72c0",
+      "content": "## 17. First Reference Integration: Asteria\nAsteria is the first consumer and proving ground, not the protocol's identity.\nInitial candidate IDs:\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000100-4ef619afb74c",
+      "ordinal": 100,
+      "locator": {
+        "kind": "fenced_code",
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "17. First Reference Integration: Asteria"
+        ],
+        "atomic_kind": "fenced_code"
+      },
+      "text_byte_start": 19273,
+      "text_byte_end": 19470,
+      "content_sha256": "4ef619afb74c226cfebce7d8aa832d3803487e9e6188584d3b5da70dfcae4894",
+      "content": "```text\nlanding.hero.wordmark\nlanding.hero.title\nlanding.hero.lead\nlanding.hero.accent\n\nmoments.page.title\nmoments.card.title\nmoments.card.prose\nmoments.card.metadata\n\nobservatory.sidebar.brand\n```",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000101-ddb92941aa27",
+      "ordinal": 101,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "17. First Reference Integration: Asteria"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "17. First Reference Integration: Asteria"
+        ]
+      },
+      "text_byte_start": 19470,
+      "text_byte_end": 19552,
+      "content_sha256": "ddb92941aa27217e366906499f8744dbd640bda20be9be5ba5d90f9c645a905f",
+      "content": "Initial target-provided tokens may map existing Asteria design variables such as:\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000102-d77c946d87a3",
+      "ordinal": 102,
+      "locator": {
+        "kind": "fenced_code",
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "17. First Reference Integration: Asteria"
+        ],
+        "atomic_kind": "fenced_code"
+      },
+      "text_byte_start": 19552,
+      "text_byte_end": 19716,
+      "content_sha256": "d77c946d87a3d936492b2de48e03656ad75cd306506941e538e09b8da00262fd",
+      "content": "```text\n--font-display\n--font-page-title\n--font-card-title\n--font-moment-prose\n--font-metadata\n--font-ui-chrome\n\n--color-void\n--color-starlight\n--color-luminous\n```",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000103-47dbb3979f6e",
+      "ordinal": 103,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "17. First Reference Integration: Asteria"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "17. First Reference Integration: Asteria"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "17. First Reference Integration: Asteria"
+        ]
+      },
+      "text_byte_start": 19716,
+      "text_byte_end": 19841,
+      "content_sha256": "47dbb3979f6e6e180f77b928aba5abb6415ef4f18df303df8620ef3285599648",
+      "content": "The Asteria adapter must remain small enough that replacing Asteria with another target does not require Studio changes.\n---\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000104-a0b50122f7fc",
+      "ordinal": 104,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 2,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "18. Product Boundary"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "18. Product Boundary"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "18. Product Boundary"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "18. Product Boundary"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "18. Product Boundary"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "18. Product Boundary"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "18. Product Boundary"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "18. Product Boundary"
+        ]
+      },
+      "text_byte_start": 19841,
+      "text_byte_end": 20204,
+      "content_sha256": "a0b50122f7fcab156294fbe0dc49cd92c68545f0e479a45a839eb1f69b0e914d",
+      "content": "## 18. Product Boundary\nStudio is **not** a page builder, CMS, component-isolation workshop, DOM scraper, arbitrary CSS DevTools replacement, framework-specific React editor, or source-code rewrite engine.\nStudio **is**:\n> An in-context visual workbench for code-owned interfaces.\nOr, more technically:\n> Live design instrumentation for running applications.\n---\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000105-98bb3000988a",
+      "ordinal": 105,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 2,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "19. v0.2.0 Scope"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "19. v0.2.0 Scope"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "19. v0.2.0 Scope"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "19. v0.2.0 Scope"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "19. v0.2.0 Scope"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "19. v0.2.0 Scope"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "19. v0.2.0 Scope"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "19. v0.2.0 Scope"
+        ]
+      },
+      "text_byte_start": 20204,
+      "text_byte_end": 21217,
+      "content_sha256": "98bb3000988a62dafd7100a3e46b66178d627c020fb891ed831c0e6a9bd9f550",
+      "content": "## 19. v0.2.0 Scope\nv0.2.0 should prove the bridge architecture, not attempt the final product.\nRequired:\n1. Studio iframe host for a local target application.\n2. `DesignBridge` target runtime.\n3. Protocol v1 handshake.\n4. Stable `data-design-id` discovery.\n5. Initial target manifest.\n6. Hover hit testing in target.\n7. Studio-owned hover/selection overlay.\n8. Target selection.\n9. Typography/color/alignment patching for text targets.\n10. Revisioned update → applied/rejected cycle.\n11. Target-origin validation.\n12. Canonical Studio state.\n13. JSON composition import/export.\n14. Asteria as first adapter/proving target.\nExplicitly deferred:\n- arbitrary localhost pages without bridge integration,\n- arbitrary DOM mutation,\n- nested visual layout builder,\n- drag-to-reposition artboard mode,\n- source-code rewriting,\n- multi-user editing,\n- CRDTs,\n- full asset filesystem management,\n- editable SVG internals,\n- generic framework component-property editors,\n- production deployment of the editor bridge.\n---\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000106-891474396801",
+      "ordinal": 106,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 2,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "20. Design Decisions Already Frozen"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "20. Design Decisions Already Frozen"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "20. Design Decisions Already Frozen"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "20. Design Decisions Already Frozen"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "20. Design Decisions Already Frozen"
+        ]
+      },
+      "text_byte_start": 21217,
+      "text_byte_end": 21999,
+      "content_sha256": "891474396801bec2f13653dbd97d76331b6c9c6e7ae1c67f100d61a60843625a",
+      "content": "## 20. Design Decisions Already Frozen\nThe following should not be reopened during v0.2.0 implementation without a concrete blocker:\n- explicit bridge integration first,\n- iframe + `postMessage`,\n- target app remains rendering authority,\n- Studio remains persistence authority,\n- stable `data-design-id` logical paths,\n- cross-origin separation is intentional,\n- overlays render in Studio, not target markup,\n- target performs hit testing,\n- live mutation precedes disk persistence,\n- revisioned mutations,\n- acknowledged canonical state is what gets saved,\n- protocol is framework-agnostic,\n- TypeScript implementation is allowed but not required by consumers,\n- no requirement that Studio own the target's Tailwind build,\n- Asteria is the first adapter, not the architecture.\n---\n",
+      "oversize_atomic": false
+    },
+    {
+      "id": "markdown-000107-74e2d862d0f7",
+      "ordinal": 107,
+      "locator": {
+        "blocks": [
+          {
+            "kind": "heading",
+            "level": 2,
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "21. Implementation Gate"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "21. Implementation Gate"
+            ]
+          },
+          {
+            "kind": "text",
+            "heading_path": [
+              "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+              "21. Implementation Gate"
+            ]
+          }
+        ],
+        "heading_path": [
+          "Font Kit Studio v0.2.0 — Design Bridge Protocol v1",
+          "21. Implementation Gate"
+        ]
+      },
+      "text_byte_start": 21999,
+      "text_byte_end": 22296,
+      "content_sha256": "74e2d862d0f72f3efcbb984e606e1e4da039399fb249c6706886189842dc7fd7",
+      "content": "## 21. Implementation Gate\nNo v0.2.0 implementation begins until this design is reviewed and accepted.\nThe next step after approval is a Superpowers implementation plan that decomposes the architecture into independently testable tasks, with Protocol v1 tests treated as the first-class contract.\n",
+      "oversize_atomic": false
+    }
+  ]
+}

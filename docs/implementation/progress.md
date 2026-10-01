@@ -2,7 +2,7 @@
 
 ## Current state
 
-Tasks 1–4 complete and reviewed. Next: Task 5. Branch: feat/v0.1.1-responsive-rows. Controller owns this ledger; no implementation writer assigned.
+Tasks 1–5 complete and reviewed. Final whole-branch review pending. Branch: feat/v0.1.1-responsive-rows.
 
 ## Recovery
 
@@ -78,3 +78,6 @@ Read this ledger and deviations.md, then git log/status. Completed tasks must no
 - Task 4: complete (commits 979fa78..40ad06d, review clean). Report and review: docs/implementation/tasks/task-4-report.md and task-4-review.md.
 
 - Task 5: brief prepared; implementation pending dispatch.
+- Task 5 writer /root/implement_task_5 assigned final verification/tests/evidence/screenshots. Reviewed verifier reused, Library and dynamic-ID acceptance added if missing. Full default verification after source/tests stop changing; final whole-branch review pending.
+
+- Task 5: complete (commits 95987ae..068b7c1, review clean). Report and review: docs/implementation/tasks/task-5-report.md and task-5-review.md.
