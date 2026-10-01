@@ -76,3 +76,5 @@ Read this ledger and deviations.md, then git log/status. Completed tasks must no
 - Task 4 fix round 1/5 closed: I4-1 addressed, no new Critical/Important breakage; reviewer Approved at 40ad06d. Existing Library/full standalone/browser/screenshot acceptance remains Task 5; imported nested/old leaf, images, privacy and exports now covered.
 
 - Task 4: complete (commits 979fa78..40ad06d, review clean). Report and review: docs/implementation/tasks/task-4-report.md and task-4-review.md.
+
+- Task 5: brief prepared; implementation pending dispatch.
