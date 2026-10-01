@@ -1553,7 +1553,7 @@ if (remembered) kitId.value = remembered;
   const byFamily = family => fonts.find(f => f.family === family) || fonts[0];
 
   const makeTextSlot = (role="Body", family="gotham", overrides={}) => {
-    const def = ROLE_DEFAULTS[role] || ROLE_DEFAULTS.Custom;
+    const def = Object.hasOwn(ROLE_DEFAULTS, role) ? ROLE_DEFAULTS[role] : ROLE_DEFAULTS.Custom;
     const font = byFamily(family);
     const first = font.styles[0];
     const vars = {};
@@ -1772,8 +1772,15 @@ if (remembered) kitId.value = remembered;
   function freshId() { return crypto.randomUUID ? crypto.randomUUID() : `slot-${Date.now()}-${Math.random()}`; }
 
   function hydrateSlot(raw, depth=0) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+      throw new Error("Each slot must be an object; check composition.slots and row children.");
+    }
+    raw = stripSessionAssets(raw);
     const requested = String(raw?.type || "text");
     if (requested === "row" && depth === 0) {
+      if (raw.children !== undefined && !Array.isArray(raw.children)) {
+        throw new Error("Row slot children must be an array.");
+      }
       const rawChildren = Array.isArray(raw.children) ? raw.children.slice(0, 4) : [];
       const children = rawChildren.map(child => hydrateSlot(child, 1)).filter(child => child.type !== "row");
       while (children.length < 2) children.push(makeTextSlot("Custom", "gotham"));
@@ -1786,9 +1793,41 @@ if (remembered) kitId.value = remembered;
       return row;
     }
     const type = LEAF_SLOT_TYPES.includes(requested) ? requested : "text";
-    const base = type === "text" ? makeTextSlot(raw?.role || "Custom", raw?.family || "gotham") : makeGenericSlot(type);
+    const role = typeof raw.role === "string" && raw.role.trim() ? raw.role : "Custom";
+    const base = type === "text" ? makeTextSlot(role, typeof raw.family === "string" ? raw.family : "gotham") : makeGenericSlot(type);
     const { children:discardedChildren, ...leaf } = raw || {};
-    return { ...base, ...leaf, type, id:freshId(), assetDataUrl:type === "image" ? "" : (raw?.assetDataUrl || "") };
+    const slot = { ...base, ...leaf, type, id:freshId(), assetDataUrl:"" };
+    // Imported known fields must keep the same scalar shapes as editable leaves.
+    Object.keys(base).forEach(key => {
+      if (typeof base[key] === "string" && typeof slot[key] !== "string") slot[key] = base[key];
+      if (typeof base[key] === "number") slot[key] = rowNumber(slot[key], base[key], -Number.MAX_VALUE, Number.MAX_VALUE);
+    });
+    if (type === "text") {
+      slot.role = role;
+      slot.family = byFamily(slot.family).family;
+      slot.element = ELEMENTS.includes(slot.element) ? slot.element : base.element;
+      slot.transform = TRANSFORMS.includes(slot.transform) ? slot.transform : base.transform;
+      slot.fontStyle = ["normal", "italic", "oblique"].includes(slot.fontStyle) ? slot.fontStyle : base.fontStyle;
+      slot.size = rowNumber(slot.size, base.size, 8, 86);
+      slot.lineHeight = rowNumber(slot.lineHeight, base.lineHeight, .7, 3);
+      slot.tracking = rowNumber(slot.tracking, base.tracking, -.2, 1);
+      slot.weight = rowNumber(slot.weight, base.weight, 1, 1000);
+      slot.styleIndex = rowNumber(slot.styleIndex, base.styleIndex, 0, byFamily(slot.family).styles.length - 1, true);
+      const variables = raw.variables && typeof raw.variables === "object" && !Array.isArray(raw.variables) ? raw.variables : base.variables;
+      slot.variables = Object.fromEntries(Object.entries(variables).filter(([axis, value]) =>
+        /^[a-zA-Z0-9]{4}$/.test(axis) && typeof value === "number" && Number.isFinite(value)));
+    }
+    slot.align = ALIGNMENTS.includes(slot.align) ? slot.align : base.align;
+    slot.colorSource = ["custom", "tailwind", "saved"].includes(slot.colorSource) ? slot.colorSource : base.colorSource;
+    slot.colorHex = CSS.supports("color", slot.colorHex) ? slot.colorHex : base.colorHex;
+    if (type !== "text") {
+      slot.imageWidth = rowNumber(slot.imageWidth, base.imageWidth, 16, 800);
+      slot.opacity = rowNumber(slot.opacity, base.opacity, .05, 1);
+      slot.ruleWidth = rowNumber(slot.ruleWidth, base.ruleWidth, 1, 100);
+      slot.ruleThickness = rowNumber(slot.ruleThickness, base.ruleThickness, 1, 20);
+      slot.spacerHeight = rowNumber(slot.spacerHeight, base.spacerHeight, 4, 240);
+    }
+    return slot;
   }
 
   function applyCompositionPreset(key) {
@@ -2351,9 +2390,11 @@ if (remembered) kitId.value = remembered;
           assetFile.value = "";
           return;
         }
+        const target = selectedSlot();
         const reader = new FileReader();
         reader.onload = () => {
-          const current = selectedSlot();
+          const current = findSlotById(target.id)?.slot;
+          if (current !== target || current.type !== "image") return;
           current.imageName = file.name;
           current.assetDataUrl = String(reader.result || "");
           renderComposer();
@@ -2401,15 +2442,14 @@ if (remembered) kitId.value = remembered;
   canvasSavedColor.addEventListener("change", () => { state.background.saved = canvasSavedColor.value; updateCanvasBackground(); });
 
   function stripSessionAssets(slot) {
-    const clean = clone(slot);
-    if (clean.type === "image") clean.assetDataUrl = "";
-    if (clean.type === "row") clean.children = slot.children.map(stripSessionAssets);
-    return clean;
+    if (Array.isArray(slot)) return slot.map(stripSessionAssets);
+    if (!slot || typeof slot !== "object") return slot;
+    return Object.fromEntries(Object.entries(slot).map(([key, value]) =>
+      [key, key === "assetDataUrl" ? "" : stripSessionAssets(value)]));
   }
 
   function serializableState() {
-    const clean = clone(state);
-    clean.slots = state.slots.map(stripSessionAssets);
+    const clean = stripSessionAssets(state);
     return { version:"0.1.1", app:"Font Kit Studio", kitIds:normalizeKitIds(composerKitIds.value), composition:clean };
   }
 
@@ -2427,7 +2467,7 @@ if (remembered) kitId.value = remembered;
   }
 
   function cssTokenName(slot, index) {
-    const base = slot.role ? slot.role.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") : `slot-${index+1}`;
+    const base = typeof slot.role === "string" ? slot.role.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") : `slot-${index+1}`;
     return base || `slot-${index+1}`;
   }
 
@@ -2442,14 +2482,17 @@ if (remembered) kitId.value = remembered;
 
   function exportCompositionCss() {
     const lines = [":root {"];
-    const usedNames = new Map();
+    const usedNames = new Set();
     walkLeafSlots(state.slots).forEach((slot, index) => {
       if (slot.type !== "text") return;
       const font = byFamily(slot.family);
       const baseName = cssTokenName(slot, index);
-      const seen = (usedNames.get(baseName) || 0) + 1;
-      usedNames.set(baseName, seen);
-      const name = seen === 1 ? baseName : `${baseName}-${seen}`;
+      const properties = name => ["", "-size", "-weight", "-style", "-tracking", "-line-height"]
+        .map(suffix => `--font-${name}${suffix}`).concat(`--color-${name}`);
+      let name = baseName;
+      let suffix = 2;
+      while (properties(name).some(property => usedNames.has(property))) name = `${baseName}-${suffix++}`;
+      properties(name).forEach(property => usedNames.add(property));
       lines.push(`  --font-${name}: ${cssStack(font)};`);
       lines.push(`  --font-${name}-size: ${slot.size}px; /* ${formatSize(slot.size).replace(/^.*\(/, "").replace(/\)$/, "")} */`);
       lines.push(`  --font-${name}-weight: ${slot.weight};`);
@@ -2474,14 +2517,24 @@ if (remembered) kitId.value = remembered;
     reader.onload = () => {
       try {
         const data = JSON.parse(String(reader.result || "{}"));
-        if (!data.composition || !Array.isArray(data.composition.slots)) throw new Error("Missing composition.slots");
+        if (!data || !data.composition || !Array.isArray(data.composition.slots)) throw new Error("Missing composition.slots array.");
         const incoming = data.composition;
-        state.canvasWidth = incoming.canvasWidth || "960";
-        state.background = incoming.background || clone(COMPOSITION_PRESETS.blank.background);
-        state.slots = incoming.slots.slice(0,8).map(raw => hydrateSlot(raw, 0));
-        if (!state.slots.length) state.slots = [makeTextSlot("Custom", "gotham")];
-        state.selectedId = state.slots[0].id;
-        if (Array.isArray(data.kitIds) && data.kitIds.length) composerKitIds.value = data.kitIds.join(", ");
+        if (incoming.background !== undefined && (!incoming.background || typeof incoming.background !== "object" || Array.isArray(incoming.background))) {
+          throw new Error("Composition background must be an object.");
+        }
+        const background = { ...COMPOSITION_PRESETS.blank.background, ...stripSessionAssets(incoming.background || {}) };
+        const defaults = COMPOSITION_PRESETS.blank.background;
+        Object.keys(defaults).forEach(key => { if (typeof background[key] !== "string") background[key] = defaults[key]; });
+        if (!["custom", "tailwind", "saved"].includes(background.source)) background.source = defaults.source;
+        if (!CSS.supports("color", background.hex)) background.hex = defaults.hex;
+        const slots = incoming.slots.slice(0,8).map(raw => hydrateSlot(raw, 0));
+        if (!slots.length) slots.push(makeTextSlot("Custom", "gotham"));
+        const width = String(incoming.canvasWidth || "960");
+        const kitIds = Array.isArray(data.kitIds) ? normalizeKitIds(data.kitIds.filter(id => typeof id === "string").join(", ")) : [];
+        // Only publish a fully hydrated candidate; failed validation leaves live state intact.
+        Object.assign(state, { canvasWidth:width === "100%" ? width : String(rowNumber(width, 960, 240, 2400)),
+          background, slots, selectedId:slots[0].id });
+        if (kitIds.length) composerKitIds.value = kitIds.join(", ");
         familyOptions(canvasBgFamily, state.background.family);
         populateSavedColors(canvasSavedColor, state.background.saved);
         syncCompositionControls();

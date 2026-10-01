@@ -1,5 +1,8 @@
 import json
+import re
+import struct
 import unittest
+import zlib
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
@@ -28,13 +31,17 @@ class BrowserCase(unittest.TestCase):
         return page, errors
 
     def import_slots(self, page, slots):
+        status = self.import_document(page, {'version': '0.1.1', 'composition': {'slots': slots}})
+        self.assertIn('Composition imported.', status)
+
+    def import_document(self, page, data):
         page.locator('#composerStatus').evaluate('(status) => status.textContent = ""')
         page.locator('#importJsonFile').set_input_files({
             'name': 'composition.json', 'mimeType': 'application/json',
-            'buffer': json.dumps({'version': '0.1.1', 'composition': {'slots': slots}}).encode(),
+            'buffer': json.dumps(data).encode(),
         })
         page.wait_for_function("/import/i.test(document.querySelector('#composerStatus').textContent)")
-        self.assertIn('Composition imported.', page.locator('#composerStatus').inner_text())
+        return page.locator('#composerStatus').inner_text()
 
     def export(self, page):
         page.locator('#exportJson').click()
@@ -55,6 +62,163 @@ class BrowserCase(unittest.TestCase):
                 order:[...layout.children].map(child => child.dataset.rowChild),
                 gap:parseFloat(getComputedStyle(layout).gap)};
         }''')
+
+    def test_task4_failed_import_is_transactional(self):
+        for engine in ('chromium', 'firefox'):
+            with self.subTest(engine=engine):
+                page, errors = self.page(engine)
+                before = self.export(page)
+                before_canvas = page.locator('#composerCanvas').inner_html()
+                for malformed in ([None], [42], [[]], [{'type':'row', 'children':{}}],
+                                  [{'type':'row', 'children':[{'type':'text'}, None]}]):
+                    status = self.import_document(page, {'composition': {'canvasWidth':'640',
+                        'background':{'source':'custom', 'hex':'#ffffff'}, 'slots':malformed}})
+                    self.assertTrue(status.startswith('Import failed:'), status)
+                    self.assertIn('slot', status.lower())
+                    self.assertEqual(self.export(page), before)
+                    self.assertEqual(page.locator('#composerCanvas').inner_html(), before_canvas)
+                # A malformed background previously throws after live state assignments.
+                status = self.import_document(page, {'composition': {'canvasWidth':'640',
+                    'background':42, 'slots':[{'type':'text', 'text':'replacement'}]}})
+                self.assertTrue(status.startswith('Import failed:'), status)
+                self.assertEqual(self.export(page), before)
+                self.assertEqual(errors, [])
+
+    def test_task4_css_roles_are_valid_and_collision_free(self):
+        for engine in ('chromium', 'firefox'):
+            with self.subTest(engine=engine):
+                page, errors = self.page(engine)
+                self.import_slots(page, [{'type':'row', 'childCount':4, 'children':[
+                    {'type':'text', 'role':12}, {'type':'text', 'role':'Body'},
+                    {'type':'text', 'role':'Body'}, {'type':'text', 'role':'Body-2'}]},
+                    {'type':'text', 'role':'Body-size'}])
+                page.locator('#exportCss').click()
+                self.assertEqual(errors, [], 'CSS export must not throw for accepted roles')
+                self.assertTrue(page.locator('#exportDialog').evaluate('dialog => dialog.open'))
+                css = page.locator('#exportDialogText').input_value()
+                declarations = re.findall(r'^\s*(--[a-z0-9-]+):', css, re.M)
+                self.assertEqual(len(declarations), len(set(declarations)), css)
+                families = re.findall(r'^\s*--font-[a-z0-9-]+: [^;]*,', css, re.M)
+                self.assertEqual(len(families), 5, css)
+                self.assertIn('--row-1-columns:', css)
+
+    def test_task4_failed_background_import_preserves_state(self):
+        for engine in ('chromium', 'firefox'):
+            with self.subTest(engine=engine):
+                page, errors = self.page(engine)
+                before = self.export(page)
+                status = self.import_document(page, {'composition': {'canvasWidth':'640',
+                    'background':42, 'slots':[{'type':'text', 'text':'replacement'}]}})
+                self.assertTrue(status.startswith('Import failed:'), status)
+                self.assertEqual(self.export(page), before)
+                self.assertEqual(errors, [])
+
+    def test_task4_css_slug_and_property_suffix_collisions(self):
+        for engine in ('chromium', 'firefox'):
+            with self.subTest(engine=engine):
+                page, errors = self.page(engine)
+                self.import_slots(page, [{'type':'row', 'childCount':4, 'children':[
+                    {'type':'text', 'role':role} for role in ('Body','Body','Body-2','Body-size')]}])
+                page.locator('#exportCss').click()
+                css = page.locator('#exportDialogText').input_value()
+                declarations = re.findall(r'^\s*(--[a-z0-9-]+):', css, re.M)
+                self.assertEqual(len(declarations),len(set(declarations)),css)
+                self.assertEqual(errors, [])
+
+    def test_task4_known_leaf_fields_have_safe_shapes(self):
+        for engine in ('chromium', 'firefox'):
+            with self.subTest(engine=engine):
+                page, errors = self.page(engine)
+                self.import_slots(page, [{'type':'row', 'children':[
+                    {'type':'text', 'role':'__proto__'},
+                    {'type':'text', 'role':{}, 'size':'bad', 'variables':[{'wght':500}],
+                     'text':{}, 'fontStyle':'italic; --bad: red', 'element':'script'}]}])
+                for child in self.export(page)['composition']['slots'][0]['children']:
+                    self.assertIsInstance(child['role'], str)
+                    self.assertIsInstance(child['text'], str)
+                    self.assertIsInstance(child['size'], (int,float))
+                    self.assertIsInstance(child['variables'],dict)
+                    self.assertIn(child['fontStyle'], ('normal','italic','oblique'))
+                    self.assertNotEqual(child['element'],'script')
+                page.locator('#exportCss').click()
+                self.assertNotIn('--bad:',page.locator('#exportDialogText').input_value())
+                self.assertEqual(errors, [])
+
+    def test_task4_recursive_asset_privacy_and_old_json_round_trip(self):
+        for engine in ('chromium', 'firefox'):
+            with self.subTest(engine=engine):
+                page, errors = self.page(engine)
+                old = {'version':'0.1.0', 'composition': {'slots':[
+                    {'type':'text', 'role':'Body', 'text':'legacy', 'size':31},
+                    {'type':'image', 'imageName':'logo.svg', 'imageWidth':123, 'assetDataUrl':'SECRET',
+                     'metadata':{'owner':'retained', 'nested':[{'assetDataUrl':'HIDDEN'}]}}]}}
+                self.assertIn('Composition imported.', self.import_document(page, old))
+                exported = self.export(page)
+                self.assertEqual(exported['version'], '0.1.1')
+                self.assertEqual(exported['composition']['slots'][0]['text'], 'legacy')
+                self.assertEqual(exported['composition']['slots'][0]['size'], 31)
+                image = exported['composition']['slots'][1]
+                self.assertEqual((image['imageName'], image['imageWidth']), ('logo.svg',123))
+                self.assertEqual(image['metadata']['owner'], 'retained')
+                self.assertNotIn('SECRET', json.dumps(exported))
+                self.assertNotIn('HIDDEN', json.dumps(exported))
+                self.import_slots(page, [{'type':'row', 'gap':33, 'ratios':[2,3], 'children':[
+                    {'type':'image', 'imageName':'nested.png', 'assetDataUrl':'NESTED',
+                     'extra':{'assetDataUrl':'DEEP'}}, {'type':'text', 'role':'Accent', 'text':'inside'}]}])
+                first = self.export(page)
+                self.assertNotIn('NESTED', json.dumps(first))
+                self.assertNotIn('DEEP', json.dumps(first))
+                self.assertIn('Composition imported.', self.import_document(page, first))
+                second = self.export(page)
+                def without_ids(value):
+                    if isinstance(value, dict):
+                        return {k:without_ids(v) for k,v in value.items() if k not in ('id','selectedId')}
+                    if isinstance(value, list):
+                        return [without_ids(v) for v in value]
+                    return value
+                self.assertEqual(without_ids(first), without_ids(second))
+                self.assertEqual(errors, [])
+
+    def test_task4_image_upload_decode_rejection_and_selection_race(self):
+        def chunk(kind, data):
+            return struct.pack('!I', len(data)) + kind + data + struct.pack('!I', zlib.crc32(kind + data))
+        png = (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR',struct.pack('!2I5B',1,1,8,6,0,0,0))
+               + chunk(b'IDAT',zlib.compress(b'\x00\xff\x00\x00\xff')) + chunk(b'IEND',b''))
+        svg = b'<svg xmlns="http://www.w3.org/2000/svg" width="3" height="2"><rect width="3" height="2" fill="red"/></svg>'
+        for engine in ('chromium', 'firefox'):
+            with self.subTest(engine=engine):
+                page, errors = self.page(engine)
+                self.import_slots(page, [{'type':'row', 'children':[{'type':'image'}, {'type':'text', 'text':'safe'}]}])
+                page.locator('.row-child').first.click()
+                for name, mime, buffer, dimensions in (
+                    ('pixel.png','image/png',png,(1,1)), ('logo.svg','image/svg+xml',svg,(3,2))):
+                    page.locator('#assetFile').set_input_files({'name':name,'mimeType':mime,'buffer':buffer})
+                    page.wait_for_function('''name => document.querySelector('#composerStatus').textContent.includes(`${name} loaded`)''', arg=name)
+                    image = page.locator('.row-child img')
+                    image.evaluate('image => image.decode()')
+                    self.assertEqual(image.evaluate('image => [image.naturalWidth,image.naturalHeight]'), list(dimensions))
+                    data = self.export(page)['composition']['slots'][0]['children'][0]
+                    self.assertEqual(data['imageName'], name)
+                    self.assertEqual(data['assetDataUrl'], '')
+                page.locator('#assetFile').set_input_files({'name':'photo.jpg','mimeType':'image/jpeg','buffer':png})
+                self.assertIn('Asset rejected:', page.locator('#composerStatus').inner_text())
+                self.assertEqual(page.locator('.row-child img').get_attribute('alt'), 'logo.svg')
+                # Hold an actual FileReader until selection changes, then release it.
+                page.evaluate('''() => { const NativeReader = FileReader;
+                    window.FileReader = class extends NativeReader {
+                        readAsDataURL(file) { document.addEventListener('test-release-asset-read',
+                            () => super.readAsDataURL(file), {once:true}); }
+                    }; }''')
+                page.locator('#assetFile').set_input_files({'name':'delayed.png','mimeType':'image/png','buffer':png})
+                page.locator('.row-child').nth(1).click()
+                page.evaluate("document.dispatchEvent(new Event('test-release-asset-read'))")
+                page.wait_for_function("document.querySelector('#composerStatus').textContent.includes('delayed.png loaded')")
+                children = self.export(page)['composition']['slots'][0]['children']
+                self.assertEqual(children[0]['imageName'], 'delayed.png')
+                self.assertNotIn('imageName', children[1])
+                self.assertEqual(children[1]['text'], 'safe')
+                page.locator('.row-child img').evaluate('image => image.decode()')
+                self.assertEqual(errors, [])
 
     def test_row_inspector_normalized_values_and_labels(self):
         for engine in ('chromium', 'firefox'):
