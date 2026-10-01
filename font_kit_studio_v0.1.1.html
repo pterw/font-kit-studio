@@ -2166,11 +2166,11 @@ if (remembered) kitId.value = remembered;
 
     if (slot.type === "row") {
       body += `
-        <div class="inspector-field"><label>Children</label><input data-bind="rowChildCount" type="number" min="2" max="4" step="1" value="${slot.children.length}"></div>
-        <div class="inspector-field"><div class="value-line"><label>Gap</label><output>${slot.gap}px</output></div><input data-bind="rowGap" type="range" min="0" max="96" step="1" value="${slot.gap}"></div>
-        <div class="inspector-field"><label>Align items</label><select data-bind="rowAlignItems">${optionsHtml(ROW_ALIGNMENTS, slot.alignItems)}</select></div>
-        <div class="inspector-field"><div class="value-line"><label>Collapse at</label><output>${slot.collapseAt}px</output></div><input data-bind="rowCollapseAt" type="number" min="240" max="1600" step="10" value="${slot.collapseAt}"></div>
-        <div class="inspector-field full"><span class="inspector-label">Column weights</span><div class="inspector-grid">${slot.children.map((child, childIndex) => `<div class="inspector-field"><label>Child ${childIndex + 1}</label><input data-row-ratio="${childIndex}" type="number" min="0.25" max="12" step="0.25" value="${slot.ratios[childIndex] ?? 1}"></div>`).join("")}</div></div>
+        <div class="inspector-field"><label for="rowChildCount">Children</label><input id="rowChildCount" data-bind="rowChildCount" type="number" min="2" max="4" step="1" value="${slot.children.length}"></div>
+        <div class="inspector-field"><div class="value-line"><label for="rowGap">Gap</label><output>${slot.gap}px</output></div><input id="rowGap" data-bind="rowGap" type="range" min="0" max="96" step="1" value="${slot.gap}"></div>
+        <div class="inspector-field"><label for="rowAlignItems">Align items</label><select id="rowAlignItems" data-bind="rowAlignItems">${optionsHtml(ROW_ALIGNMENTS, slot.alignItems)}</select></div>
+        <div class="inspector-field"><div class="value-line"><label for="rowCollapseAt">Collapse at</label><output>${slot.collapseAt}px</output></div><input id="rowCollapseAt" data-bind="rowCollapseAt" type="number" min="240" max="1600" step="10" value="${slot.collapseAt}"></div>
+        <div class="inspector-field full"><span class="inspector-label">Column weights</span><div class="inspector-grid">${slot.children.map((child, childIndex) => `<div class="inspector-field"><label for="rowRatio${childIndex}">Child ${childIndex + 1}</label><input id="rowRatio${childIndex}" data-row-ratio="${childIndex}" type="number" min="0.25" max="12" step="0.25" value="${slot.ratios[childIndex] ?? 1}"></div>`).join("")}</div></div>
         <div class="inspector-field full"><span class="inspector-label">Children</span><div class="row-child-list">${slot.children.map((child, childIndex) => `<button type="button" class="row-child-jump" data-select-child="${escapeAttr(child.id)}"><span>${childIndex + 1}. ${escapeAttr(child.type === "text" ? child.role : child.type[0].toUpperCase()+child.type.slice(1))}</span><small>${escapeAttr(child.type)}</small></button>`).join("")}</div><p class="inspector-note">Children are ordinary leaf slots. Select one to edit it. Rows cannot contain rows in v0.1.1.</p></div>`;
     } else if (slot.type === "text") {
       const font = byFamily(slot.family);
@@ -2249,6 +2249,7 @@ if (remembered) kitId.value = remembered;
       rowGap?.addEventListener("input", () => {
         const row = selectedSlot();
         row.gap = rowNumber(rowGap.value, 24, 0, 96);
+        rowGap.value = row.gap;
         updateInspectorOutput(rowGap, "rowGap", row.gap);
         syncRowLayouts();
       });
@@ -2265,12 +2266,18 @@ if (remembered) kitId.value = remembered;
         updateInspectorOutput(collapse, "rowCollapseAt", row.collapseAt);
         syncRowLayouts();
       });
+      collapse?.addEventListener("change", () => {
+        collapse.value = selectedSlot().collapseAt;
+      });
       slotInspector.querySelectorAll('[data-row-ratio]').forEach(input => {
         input.addEventListener("input", () => {
           const row = selectedSlot();
           const ratioIndex = Number(input.dataset.rowRatio);
           row.ratios[ratioIndex] = rowNumber(input.value, 1, .25, 12);
           syncRowLayouts();
+        });
+        input.addEventListener("change", () => {
+          input.value = selectedSlot().ratios[Number(input.dataset.rowRatio)];
         });
       });
       slotInspector.querySelectorAll('[data-select-child]').forEach(button => {

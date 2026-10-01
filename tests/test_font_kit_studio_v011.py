@@ -56,6 +56,81 @@ class BrowserCase(unittest.TestCase):
                 gap:parseFloat(getComputedStyle(layout).gap)};
         }''')
 
+    def test_row_inspector_normalized_values_and_labels(self):
+        for engine in ('chromium', 'firefox'):
+            with self.subTest(engine=engine):
+                page, errors = self.page(engine)
+                self.import_slots(page, [{'type':'row', 'gap':99999, 'collapseAt':99999,
+                    'ratios':[99999, -99999]}])
+                row = self.export(page)['composition']['slots'][0]
+                self.assertEqual((row['gap'], row['collapseAt'], row['ratios']), (96, 1600, [12, .25]))
+                for selector, event, cases, key in (
+                    ('[data-bind="rowChildCount"]', 'change', [('1',2), ('5',4), ('2.5',3), ('',2)], 'childCount'),
+                    ('[data-bind="rowCollapseAt"]', 'input', [('99999',1600), ('1',240), ('',680)], 'collapseAt'),
+                    ('[data-row-ratio="0"]', 'input', [('99999',12), ('0',.25), ('',1)], 'ratios'),
+                ):
+                    for value, expected in cases:
+                        control = page.locator(selector)
+                        control.fill(value)
+                        control.dispatch_event(event)
+                        control.dispatch_event("change")
+                        row = self.export(page)['composition']['slots'][0]
+                        actual = row[key][0] if key == 'ratios' else row[key]
+                        self.assertEqual(actual, expected)
+                        self.assertEqual(page.locator(selector).input_value(), str(expected))
+                breakpoint = page.locator('[data-bind="rowCollapseAt"]')
+                breakpoint.fill('')
+                breakpoint.press_sequentially('680')
+                self.assertEqual(breakpoint.input_value(), '680')
+                breakpoint.press('Tab')
+                self.assertEqual(breakpoint.input_value(), '680')
+                weight = page.locator('[data-row-ratio="0"]')
+                weight.fill('')
+                weight.press_sequentially('2.5')
+                weight.press('Tab')
+                self.assertEqual(weight.input_value(), '2.5')
+                for selector in ('[data-bind="rowChildCount"]', '[data-bind="rowGap"]',
+                                 '[data-bind="rowAlignItems"]', '[data-bind="rowCollapseAt"]', '[data-row-ratio="0"]'):
+                    self.assertTrue(page.locator(selector).evaluate('el => el.labels.length > 0'))
+                self.assertEqual(errors, [])
+
+    def test_row_controls_and_leaf_inspectors(self):
+        for engine in ('chromium', 'firefox'):
+            with self.subTest(engine=engine):
+                page, errors = self.page(engine)
+                self.import_slots(page, [{'type':'row', 'childCount':4, 'children':[
+                    {'type':'text', 'text':'before'}, {'type':'image'}, {'type':'rule'}, {'type':'spacer'}]},
+                    {'type':'text', 'text':'outside'}])
+                for alignment in ('start','center','end','stretch'):
+                    page.locator('[data-bind="rowAlignItems"]').select_option(alignment)
+                    self.assertEqual(self.export(page)['composition']['slots'][0]['alignItems'], alignment)
+                    self.assertEqual(page.locator('.row-layout').evaluate('el => getComputedStyle(el).alignItems'), alignment)
+                gap = page.locator('[data-bind="rowGap"]')
+                gap.fill('37')
+                gap.dispatch_event('input')
+                self.assertEqual(self.export(page)['composition']['slots'][0]['gap'], 37)
+                self.assertAlmostEqual(self.row_geometry(page)['gap'],37,delta=.1)
+                for index, selector, value, key, expected in (
+                    (0,'[data-bind="text"]','edited','text','edited'),
+                    (1,'[data-bind="imageWidth"]','123','imageWidth',123),
+                    (2,'[data-bind="ruleThickness"]','7','ruleThickness',7),
+                    (3,'[data-bind="spacerHeight"]','88','spacerHeight',88),
+                ):
+                    page.locator('.row-child-jump').nth(index).click()
+                    self.assertIn(f'ROW 1 · CHILD {index+1}/4',page.locator('.inspector-index').inner_text())
+                    self.assertEqual(page.locator('[data-bind="type"] option[value="row"]').count(),0)
+                    self.assertEqual(page.locator('.row-child .slot-movers').count(),0)
+                    control=page.locator(selector)
+                    control.fill(value)
+                    control.dispatch_event('input')
+                    self.assertEqual(self.export(page)['composition']['slots'][0]['children'][index][key], expected)
+                    page.locator('#composerCanvas > .flow-slot').first.click(position={'x':3,'y':3})
+                page.locator('#composerCanvas > .flow-slot').first.locator('.slot-movers button').nth(1).click()
+                slots=self.export(page)['composition']['slots']
+                self.assertEqual([s['type'] for s in slots], ['text','row'])
+                self.assertEqual(slots[1]['children'][0]['text'],'edited')
+                self.assertEqual(errors, [])
+
     def test_unequal_child_alignment_geometry(self):
         for engine in ('chromium', 'firefox'):
             with self.subTest(engine=engine):
