@@ -107,6 +107,8 @@ jobs:
       # Last on purpose: the full suite is the slowest step (several minutes
       # per engine).
       - name: Run tests (Chromium and Firefox)
+        # Run even when the frontend gate fails, so one run reports both.
+        if: ${{ !cancelled() }}
         env:
           FKS_ENGINES: chromium,firefox
         run: python -m unittest discover -s tests -v
