@@ -767,8 +767,9 @@ footer {
       <div class="c-field span-2">
         <label for="kitPreset">Kit preset</label>
         <select id="kitPreset">
-          <option value="asteria">Asteria</option>
+          <option value="typekit" selected>Adobe Typekit (cqu4tvx)</option>
           <option value="custom">Custom / manual</option>
+          <option value="asteria">Asteria</option>
         </select>
       </div>
       <div class="c-field span-4">
@@ -781,9 +782,9 @@ footer {
       <div class="c-field span-3">
         <label for="compositionPreset">Composition preset</label>
         <select id="compositionPreset">
-          <option value="asteria">Asteria — Sculptural</option>
+          <option value="rowdemo" selected>Editorial — Image + Body Row</option>
           <option value="blank">Blank — Editorial 5</option>
-          <option value="rowdemo">Editorial — Image + Body Row</option>
+          <option value="asteria">Asteria — Sculptural</option>
         </select>
       </div>
       <div class="c-field span-1">
@@ -832,7 +833,7 @@ footer {
         <button id="btnSyncToApp" class="btn primary" type="button" style="font-weight: 600;">⚡ Sync to Live App</button>
         <input id="importJsonFile" type="file" accept="application/json,.json" hidden>
       </div>
-      <div id="composerStatus" class="composer-status">Asteria preset ready. Load the kit if the fonts are not already active.</div>
+      <div id="composerStatus" class="composer-status">Editorial — Image + Body Row preset ready. Load the kit if the fonts are not already active.</div>
     </section>
 
     <div class="composer-shell">
@@ -1586,12 +1587,13 @@ if (remembered) kitId.value = remembered;
   };
 
   const KIT_PRESETS = {
+    typekit: ["cqu4tvx"],
     asteria: ["cqu4tvx"],
     custom: []
   };
 
   const ROLE_DEFAULTS = {
-    Wordmark: { element:"div", text:"ASTERIA", size:24, lineHeight:1, tracking:.32, align:"center", transform:"uppercase" },
+    Wordmark: { element:"div", text:"BRAND", size:24, lineHeight:1, tracking:.32, align:"center", transform:"uppercase" },
     Display: { element:"div", text:"Every life is a night sky.", size:72, lineHeight:.95, tracking:-.03, align:"left", transform:"none" },
     H1: { element:"h1", text:"Every life is a night sky.", size:64, lineHeight:.98, tracking:-.025, align:"left", transform:"none" },
     H2: { element:"h2", text:"Things worth remembering", size:38, lineHeight:1.04, tracking:-.015, align:"left", transform:"none" },
@@ -1750,7 +1752,7 @@ if (remembered) kitId.value = remembered;
   const state = {
     selectedId: null,
     canvasWidth: "960",
-    background: { source:"custom", hex:"#030409", family:"slate", shade:"950", saved:"Asteria Void" },
+    background: { source:"custom", hex:"#f5f1e8", family:"stone", shade:"100", saved:"Asteria Starlight" },
     slots: []
   };
 
@@ -1895,7 +1897,7 @@ if (remembered) kitId.value = remembered;
   }
 
   function applyCompositionPreset(key) {
-    const preset = COMPOSITION_PRESETS[key] || COMPOSITION_PRESETS.asteria;
+    const preset = COMPOSITION_PRESETS[key] || COMPOSITION_PRESETS.rowdemo;
     state.canvasWidth = preset.width;
     state.background = clone(preset.background);
     state.slots = preset.slots.map(slot => hydrateSlot(slot, 0));
@@ -3044,9 +3046,13 @@ if (remembered) kitId.value = remembered;
   if (rememberedComposerKits) {
     composerKitIds.value = rememberedComposerKits;
     kitPreset.value = "custom";
+  } else {
+    composerKitIds.value = "cqu4tvx";
+    kitPreset.value = "typekit";
   }
 
-  applyCompositionPreset("asteria");
+  applyCompositionPreset("rowdemo");
+  if (compositionPreset) compositionPreset.value = "rowdemo";
 })();
 
 </script>
