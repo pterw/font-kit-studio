@@ -17,7 +17,7 @@ State: current as of this write-up. Nothing is committed. Chromium only; Firefox
 | `scripts/dev/_frontend_gate_theme.py` | Theme contrast. |
 | `scripts/dev/_frontend_gate_assets.py` | Logo paint. |
 | `scripts/dev/check_commit_messages.py` | Mechanical commit-message check (stdlib only). |
-| `tests/test_frontend_gate_{report,helpers,runner}.py`, `tests/test_commit_messages.py` | 135 fast unit tests, no browser. |
+| `tests/test_frontend_gate_{report,helpers,runner}.py`, `tests/test_commit_messages.py` | 169 fast unit tests, no browser. |
 | `.github/workflows/quality-gate.yml` | CI. |
 | `font_kit_studio_v0.1.1.html` | Contrast tokens, silent-until-asked font loading and its hints (CSS, font-loading JS and markup only). |
 | `tests/test_studio_live.py` | Free-font tests rewritten or added for the new behaviour. |
@@ -31,8 +31,8 @@ Structure, principles and helpers come from the sibling project's gate (runtime,
 - **One browser context per check, profile and engine.** Touch emulation belongs to a context, and preferences or routes cannot leak between checks.
 - **Deterministic network.** Every request leaves through one router. The two served origins pass; everything else is aborted and logged. Only the free-fonts check lets Google Fonts hosts through, and `--offline` closes even that.
 - **Bounded waits.** Waits poll every 50 ms rather than on animation frames, because a frame scrolled out of view stops delivering them (the phone profile's live edit hung on this). The only fixed wait is a short "nothing more arrives" pause.
-- **Enforcement in one place.** An enforced check's failures are `FAIL`. A report-only check's failures become `REPORT`. A check that raises is always a `FAIL`. Exit 0 needs no `FAIL` and every planned run finished; `REPORT` and `SKIP` never change it. Missing Playwright, a missing browser or an unknown engine exit 1 before any check, with the exact install command.
-- **Flags.** `--headed`, `--offline`, `--engines`, and `--artifacts` (screenshots of failing runs, default `work/frontend-gate/`, cleared at the start of each run).
+- **Enforcement in one place.** An enforced check's failures are `FAIL`. A report-only check's failures become `REPORT`. A check that raises is always a `FAIL` on a blocking run. On an advisory run (see Desktop-first policy) every `FAIL` is relabelled `ADVISORY`. Exit 0 needs no `FAIL` and every planned run finished; `REPORT`, `SKIP` and `ADVISORY` never change it. Missing Playwright, a missing browser, an unknown engine or a bad `--enforce` value exit 1 before any check, with the exact install command where one applies.
+- **Flags.** `--headed`, `--offline`, `--engines`, `--enforce` (see Desktop-first policy), and `--artifacts` (screenshots of failing runs, default `work/frontend-gate/`, cleared at the start of each run).
 
 ## Check catalogue
 
@@ -63,7 +63,7 @@ Profiles: `desktop` 1280x720, `mobile` 390x844 touch, `wide touch` 1280x800 touc
 
 `permissions: contents: read`, no secrets, a `concurrency` group that cancels an older run of the same ref, a 30-minute timeout, `workflow_dispatch`.
 
-Step order, cheapest first: full-history checkout with tags (provenance needs the `supplied-v0.1.1` tag), Python 3.11 with pip cache, Node 22, install dependencies, `verify.py --static-only`, `node --check fontkit-bridge.js`, commit-message check, install Chromium and Firefox with `--with-deps`, **the frontend gate** (about 25 s per engine), then the unit suite on both engines (several minutes), then a screenshot upload on failure. The commit check uses `origin/$BASE_REF..HEAD` on pull requests, the pushed range on pushes (falling back to the last commit when the old tip no longer exists), and `--base origin/main` on manual runs.
+Step order, cheapest first: full-history checkout with tags (provenance needs the `supplied-v0.1.1` tag), Python 3.11 with pip cache, Node 22, install dependencies, `verify.py --static-only`, `node --check fontkit-bridge.js`, commit-message check, install Chromium and Firefox with `--with-deps`, the frontend gate on both engines (about 25 s per engine; only Chromium at desktop can fail it), the Chromium unit suite (blocking), the Firefox unit suite (separate step, `continue-on-error`, named as advisory), then a screenshot upload. The suites run even when the gate failed. The commit check uses `origin/$BASE_REF..HEAD` on pull requests, the pushed range on pushes (falling back to the last commit when the old tip no longer exists), and `--base origin/main` on manual runs.
 
 Validation: `yaml.safe_load` parses it, and `actionlint` 1.7.12 (installed with pip into a scratch directory) reports nothing. A deliberately broken workflow was rejected by the same linter. The workflow itself has not run.
 
@@ -95,10 +95,11 @@ Two scoped tokens were added so v0.1.1 surfaces keep their `--muted`:
 
 | Command | Result |
 |---|---|
-| `frontend_gate.py --engines chromium --offline` | exit 0: `15 of 15 planned runs finished: 14 passed, 0 failed, 1 skipped; 140 REPORT lines, 1 SKIP lines, 0 FAIL lines` |
-| `frontend_gate.py --engines chromium` (online) | exit 1: 14 passed, 1 failed, 0 skipped, 140 REPORT lines. The one failure is `free fonts load`, a sandbox network limit (below). |
-| `python3 -m unittest discover -s tests -v` | `Ran 342 tests in 319.548s` `OK` (Chromium) |
-| the four gate and commit-check test files alone | `Ran 135 tests in 0.960s` `OK` |
+| `frontend_gate.py --engines chromium --offline` | exit 0: `15 of 15 planned runs finished. Blocking: 7 runs, 6 passed, 0 failed, 1 skipped. Advisory: 8 runs, 0 ADVISORY lines. 140 REPORT lines, 1 SKIP lines, 0 FAIL lines` |
+| the same with `--enforce all` | exit 0: `Blocking: 15 runs, 14 passed, 0 failed, 1 skipped` |
+| `frontend_gate.py --engines chromium` (online) | exit 1 before the desktop-first change: the one failure is `free fonts load` at desktop on Chromium, a blocking run, so it still fails. Not re-run for this change. |
+| `python3 -m unittest discover -s tests -v` | `Ran 342 tests in 319.548s` `OK` (Chromium); last full run, before the desktop-first change, which touches no app or browser-suite file. |
+| the four gate and commit-check test files alone | `Ran 169 tests` `OK` (148 in the three gate files, 21 in the commit-check file) |
 | `scripts/verify.py --static-only` | 5 PASS |
 | `node --check fontkit-bridge.js` | rc 0 |
 | `check_commit_messages.py --range origin/main..HEAD` | `OK: 35 commits checked` |
@@ -127,3 +128,16 @@ Mutation checks against scratch copies showed the gate catches a removed `[hidde
 - Workflow: gate before the unit suite, the slowest-step comment corrected, a concurrency group, manual runs check `origin/main..HEAD`.
 - Free-fonts check: bounded retry (two extra attempts, backoff 1 s and 3 s), still enforced, message names TLS-intercepting proxies.
 - README: preset wording is "switch the Kit preset to Free Google Fonts"; tests added for the preset path and for blocked storage.
+
+## Desktop-first policy
+
+Font Kit Studio is a desktop-first tool, so the gate only blocks on what designers use most: Chromium at the desktop profile (and the Chromium test suite in CI). Firefox and the phone and wide-touch profiles still run in full and still print their findings, but those findings are advisory.
+
+- **Gate.** `--enforce chromium:desktop` is the default. `--enforce all`, or a list such as `chromium:desktop,firefox:desktop`, makes more runs blocking for a strict local run, and `--enforce none` makes the whole gate advisory on purpose. An unknown engine or profile is an error, so a typo cannot quietly make everything advisory.
+- **Nothing to block on is an error.** If the policy leaves no blocking run among the selected engines (for example `--engines chromium --enforce firefox:desktop`), the gate prints an error and exits 1 before launching anything, unless the policy is `none`.
+- **Optional engines.** An engine with no blocking runs under the active policy (Firefox by default) is optional. If it cannot launch, the gate prints `[frontend_gate] ADVISORY engine [<engine>]: could not launch: <reason>`, skips that engine's runs, counts them in the summary as not run (`15 of 30 planned runs finished, 15 not run (engine unavailable)`), and carries on, so a missing Firefox no longer fails the gate. A launch failure of an engine that has blocking runs is still an error with exit 1. Here, with Firefox absent, `--engines chromium,firefox` exits 0 with that line, and `--enforce all` exits 1.
+- **Lines.** A `FAIL` on an advisory run prints as `[frontend_gate] ADVISORY <check> [<profile>, <engine>]: <detail>`. A check that raises, or a profile that cannot open, on an advisory run is also `ADVISORY`. Advisory runs with findings print no `PASS` line. Failing and advisory runs both leave a screenshot.
+- **Summary.** It still shows runs finished against runs planned, and counts blocking passed, failed and skipped separately from advisory runs and `ADVISORY` lines, then `REPORT`, `SKIP` and `FAIL` lines. A shortfall in planned runs still fails the gate, because a check that stopped running is not advisory.
+- **Workflow.** The frontend gate runs on both engines under the default policy, so it needs no `continue-on-error`. The Chromium suite blocks. The Firefox suite is its own step marked `continue-on-error`, so it is visible and never fails the build. Both suites still run when the gate fails.
+- **Evidence.** Against a scratch copy with a phone-only overflow, the default policy printed `ADVISORY` lines and exited 0, and `--enforce all` printed the same findings as `FAIL` and exited 1.
+- **Cost.** A Firefox-only or phone-only regression can merge unnoticed unless someone reads the advisory lines and the Firefox step.

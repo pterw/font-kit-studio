@@ -59,12 +59,16 @@ from scripts.dev._frontend_gate_network import (  # noqa: E402
     check_network_isolation,
 )
 from scripts.dev._frontend_gate_report import (  # noqa: E402
+    ADVISORY,
     FAIL,
     PASSED,
+    EnforcementPolicy,
+    PolicyError,
     PREFIX,
     SKIP,
     Finding,
     Tally,
+    apply_policy,
     artifact_name,
     describe_exception,
     exit_code,
@@ -142,6 +146,24 @@ def planned_runs(engines: Sequence[str], checks: Sequence[Check] = CHECKS) -> in
     return len(engines) * sum(len(check.profiles) for check in checks)
 
 
+def engine_has_blocking(policy: EnforcementPolicy, engine: str, checks: Sequence[Check] = CHECKS) -> bool:
+    """True when the policy blocks on at least one planned run of this engine.
+
+    An engine with no blocking runs is optional: if it cannot launch, that is
+    something to read (an ADVISORY line), not a reason to fail the gate.
+    """
+    return any(policy.blocking(engine, profile) for check in checks for profile in check.profiles)
+
+
+def describe_policy(policy: EnforcementPolicy) -> str:
+    """The active policy in words, for the opening line of a run."""
+    if policy.everything:
+        return "all runs"
+    if policy.advisory_only:
+        return "none (advisory only)"
+    return ", ".join(sorted(f"{engine}:{profile}" for engine, profile in policy.pairs))
+
+
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     """Parse the developer-facing options."""
     parser = argparse.ArgumentParser(
@@ -165,6 +187,13 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         type=Path,
         default=DEFAULT_ARTIFACTS_DIR,
         help="folder for screenshots of failing runs (default: work/frontend-gate)",
+    )
+    parser.add_argument(
+        "--enforce",
+        default=EnforcementPolicy.DEFAULT,
+        help="which runs can fail the gate: 'all', 'none', or a comma list of engine:profile "
+        "(default: chromium:desktop; every other run prints ADVISORY lines and never fails). "
+        "'none' makes the whole gate advisory on purpose",
     )
     return parser.parse_args(argv)
 
@@ -204,12 +233,15 @@ def run_one(
     served: ServedApp,
     offline: bool,
     artifacts: Path,
+    blocking: bool = True,
 ) -> list[Finding]:
     """Run one check at one profile in a fresh browser context; return its findings.
 
     A fresh context per run keeps checks independent and matches touch
     emulation to the profile. A check that raises is reported as a FAIL and
-    the run continues, so one fault never hides the rest of the gate.
+    the run continues, so one fault never hides the rest of the gate. On an
+    advisory run (`blocking=False`) every FAIL, a raised check included, is
+    relabelled ADVISORY: it prints, it is counted, it cannot fail the gate.
     """
     if check.needs_network and offline:
         detail = "skipped by --offline: this check needs fonts.googleapis.com"
@@ -219,7 +251,7 @@ def run_one(
         context, page, network, errors = new_run_context(browser, profile, served, allowed)
     except Exception as error:  # noqa: BLE001 - same rule as a check fault
         detail = f"the profile could not be opened: {describe_exception(error)}"
-        return [Finding(FAIL, check.name, profile, engine, detail)]
+        return apply_policy([Finding(FAIL, check.name, profile, engine, detail)], blocking)
     try:
         gate_context = GateContext(
             page=page,
@@ -240,7 +272,8 @@ def run_one(
             # A crash is never downgraded: the gate could not see, which is
             # not a finding about the app, and hiding it would hide a rotted check.
             findings = [Finding(FAIL, check.name, profile, engine, describe_exception(error))]
-        if any(finding.kind == FAIL for finding in findings):
+        findings = apply_policy(findings, blocking)
+        if any(finding.kind in (FAIL, ADVISORY) for finding in findings):
             _save_screenshot(page, artifacts, artifact_name(check.name, profile, engine))
         return findings
     finally:
@@ -254,23 +287,36 @@ def run_checks(
     artifacts: Path,
     emit: Callable[[str], None] = print,
     checks: Sequence[Check] = CHECKS,
+    policy: EnforcementPolicy | None = None,
+    unavailable: dict[str, str] | None = None,
 ) -> Tally:
     """Run every check at every profile it claims, on every engine, printing as it goes.
 
     Findings print the moment their run finishes, so a long run shows progress
     and a hang shows where it stopped. Every finished run is recorded in the
     tally, which is what the summary and the exit code are computed from.
+    `policy` says which runs can fail the gate (default: desktop-first).
+    `unavailable` maps an engine that could not launch (and has no blocking
+    runs) to the reason: each prints one ADVISORY line, and its planned runs
+    are counted as not run, so the accounting stays honest.
     """
-    tally = Tally(planned=planned_runs(list(browsers), checks))
+    policy = policy or EnforcementPolicy.parse(EnforcementPolicy.DEFAULT)
+    unavailable = unavailable or {}
+    tally = Tally(planned=planned_runs([*browsers, *unavailable], checks))
+    for engine, reason in unavailable.items():
+        emit(f"{PREFIX} ADVISORY engine [{engine}]: could not launch: {reason}")
+        tally.record_not_run(planned_runs([engine], checks), reason)
     for engine, browser in browsers.items():
         for check in checks:
             for profile in check.profiles:
-                findings = run_one(check, profile, engine, browser, served, offline, artifacts)
+                blocking = policy.blocking(engine, profile)
+                findings = run_one(check, profile, engine, browser, served, offline, artifacts, blocking)
                 for finding in findings:
                     emit(format_finding(finding))
-                if run_status(findings) == PASSED:
+                # A run with an ADVISORY line did not pass cleanly; no PASS line for it.
+                if run_status(findings) == PASSED and not any(f.kind == ADVISORY for f in findings):
                     emit(f"{PREFIX} PASS {check.name} [{profile}, {engine}]")
-                tally.record(findings)
+                tally.record(findings, blocking)
     return tally
 
 
@@ -279,6 +325,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     try:
         engines = resolve_engines(args.engines)
+        policy = EnforcementPolicy.parse(args.enforce)
+        if not policy.advisory_only and not any(engine_has_blocking(policy, e) for e in engines):
+            raise PolicyError(
+                f"no blocking runs: --enforce {args.enforce} selects nothing in --engines "
+                f"{','.join(engines)}, so the gate could never fail; pick an engine that is selected, "
+                f"or pass --enforce none for a deliberately advisory-only run"
+            )
         sync_playwright = load_playwright()
         with ExitStack() as stack:
             playwright = stack.enter_context(sync_playwright())
@@ -286,15 +339,28 @@ def main(argv: Sequence[str] | None = None) -> int:
             # missing browser fails in a second with an install command, not
             # halfway through a run.
             browsers = {}
+            unavailable = {}
             for engine in engines:
-                browser = launch_browser(playwright, engine, headless=not args.headed)
+                try:
+                    browser = launch_browser(playwright, engine, headless=not args.headed)
+                except GateError as error:
+                    # An engine the policy never blocks on is optional: say so and carry on.
+                    if engine_has_blocking(policy, engine):
+                        raise
+                    unavailable[engine] = str(error)
+                    continue
                 stack.callback(browser.close)
                 browsers[engine] = browser
             served = stack.enter_context(serve_app())
             clear_screenshots(args.artifacts)
-            print(f"{PREFIX} engines: {', '.join(engines)}; planned runs: {planned_runs(engines)}")
-            tally = run_checks(browsers, served, args.offline, args.artifacts)
-    except GateError as error:
+            print(
+                f"{PREFIX} engines: {', '.join(engines)}; planned runs: {planned_runs(engines)}; "
+                f"blocking: {describe_policy(policy)}"
+            )
+            tally = run_checks(
+                browsers, served, args.offline, args.artifacts, policy=policy, unavailable=unavailable
+            )
+    except (GateError, PolicyError) as error:
         print(f"{PREFIX} ERROR: {error}", file=sys.stderr)
         return 1
     print(summary_line(tally))

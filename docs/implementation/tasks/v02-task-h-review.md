@@ -113,3 +113,31 @@ Re-run (Chromium only): offline gate exit 0 (15 of 15 runs, 14 passed, 1 skipped
 No Critical or Important issues remain from the first review.
 
 **Verdict (changes after second review):** Approved with fixes (the three Minor items above; none block commit).
+
+## Desktop-first policy review
+
+Re-run (Chromium only): gate unit tests (report, helpers, runner, commit messages) `Ran 159 tests ... OK`; offline gate, default policy: exit 0, `15 of 15 planned runs finished. Blocking: 7 runs, 6 passed, 0 failed, 1 skipped. Advisory: 8 runs, 0 ADVISORY lines`; offline gate with `--enforce all`: exit 0, `Blocking: 15 runs`; `verify.py --static-only` PASS; workflow parses as YAML and `actionlint` reports nothing (rc 0). No server process left behind. Firefox was not run.
+
+### Verified
+
+- **Blocking set.** Default is Chromium at the desktop profile only (printed in the first line as `blocking: chromium:desktop`). `--enforce all` and comma lists work (`chromium:desktop,chromium:wide touch` gave 10 blocking, 5 advisory runs; profile names with a space are handled).
+- **Bad values.** `bogus`, `chromium:tablet`, `firefox` (no profile), a list containing `safari:desktop`, and an empty value all exit 1 before any check with a message naming the valid engines and profiles.
+- **Advisory behaviour, by mutation in a scratch copy.**
+  - Phone-only defects (forced overflow plus a hidden size field at 390 px): default policy printed `ADVISORY` lines for the overflow and for the three runs that raised a timeout, saved screenshots, and exited 0; with `--enforce all` the same findings were `FAIL` and the exit code was 1. Raising checks and unopenable profiles go through the same relabelling.
+  - A desktop-only defect (overflow only at 1000 px and wider): the desktop Chromium run printed `FAIL` and the gate exited 1 by default, while the wide-touch run of the same defect was `ADVISORY`. So a real defect on the blocking run still fails.
+  - A planned-run shortfall still exits 1, and an advisory-only tally exits 0 (checked directly against the exit rule).
+- **Workflow.** The gate step runs both engines under the default policy with no `continue-on-error`; the Chromium suite step blocks; the Firefox suite is a separate step named "Run tests (Firefox, advisory - never fails the build)" with `continue-on-error: true`; both suites and the screenshot upload run under `!cancelled()`, so one run reports everything. Firefox is still installed, and the upload now also covers advisory runs (screenshots exist for them). `cancel-in-progress` is limited to pull requests, which closes the earlier concurrency note.
+- **Docs.** README (blocking and advisory paragraph, CI paragraph, Firefox status), CONTRIBUTING, the `AGENTS.md` Gates note and rule 8 state the same policy: only Chromium at desktop blocks; Firefox and phone or touch profiles are advisory; `--enforce all` is the strict mode. No process narration, and the earlier internal-register pointer in CONTRIBUTING is gone. The report's Desktop-first section matches the code (summary format, `ADVISORY` lines, no `PASS` line for an advisory run with findings).
+
+### Issues
+
+Critical and Important: none.
+
+Minor:
+
+1. **A missing or broken Firefox still fails CI.** `scripts/dev/frontend_gate.py` `main()` launches every requested engine up front and any launch failure is a prerequisite error (exit 1, verified with `--engines chromium,firefox` where Firefox is absent), before the blocking Chromium runs even start. The workflow installs Firefox, so this is unlikely, but it contradicts "Firefox never fails CI". Fix: for an engine with no blocking run, report the launch failure as an `ADVISORY` line, run the remaining engines, and exclude that engine from the planned-run count (stating so in the summary); keep it an error when the engine has a blocking run.
+2. **`--enforce` can name only runs that are not being run.** `--engines chromium --enforce firefox:desktop` is accepted and prints a green summary with `Blocking: 0 runs`. Fix: error when no planned run is blocking, in the same place as the other bad-value checks.
+3. Wording: the docs say phone and wide-touch layouts are advisory, which is true of the gate, but the Chromium test suite blocks and still contains its own 390 px assertions (D029 says they stay). Add "the gate's phone profiles" or one clause saying the suite's existing 390 px tests still block, so nobody reads it as "mobile layout is not tested".
+4. Rule 8 in `docs/agents/global-rules.md` no longer lists "mobile 390px layout" among the strict tests; if the suite's 390 px tests are meant to stay a requirement, keep that phrase.
+
+**Verdict (desktop-first policy):** Approved with fixes (Minor items 1 to 4 only; none block commit).

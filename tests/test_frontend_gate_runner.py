@@ -18,7 +18,9 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from scripts.dev import frontend_gate as gate  # noqa: E402
 from scripts.dev import _frontend_gate_runtime as runtime  # noqa: E402
-from scripts.dev._frontend_gate_report import FAIL, REPORT, SKIP, Finding, Tally  # noqa: E402
+from scripts.dev._frontend_gate_report import (  # noqa: E402
+    ADVISORY, FAIL, REPORT, SKIP, EnforcementPolicy, Finding, Tally,
+)
 from scripts.dev._frontend_gate_shared import (  # noqa: E402
     DESKTOP, MOBILE, TOUCH_WIDE, VIEWPORTS, NetworkLog, Outcome,
 )
@@ -49,12 +51,18 @@ class ArgumentTests(unittest.TestCase):
         self.assertFalse(args.headed)
         self.assertFalse(args.offline)
         self.assertIsNone(args.engines)
+        self.assertEqual(args.enforce, 'chromium:desktop')
 
     def test_flags(self):
         args = gate.parse_args(['--headed', '--offline', '--engines', 'chromium'])
         self.assertTrue(args.headed)
         self.assertTrue(args.offline)
         self.assertEqual(args.engines, 'chromium')
+
+    def test_enforce_flag(self):
+        self.assertEqual(gate.parse_args(['--enforce', 'all']).enforce, 'all')
+        self.assertEqual(gate.parse_args(['--enforce', 'chromium:desktop,firefox:desktop']).enforce,
+                         'chromium:desktop,firefox:desktop')
 
     def test_an_unknown_flag_exits_with_argparse_status_two(self):
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as raised:
@@ -146,12 +154,13 @@ class CheckTableTests(unittest.TestCase):
         self.assertEqual(VIEWPORTS[MOBILE]['viewport']['width'], 390)
 
 
-def run_one(check, offline=False, opener=None, artifacts=None):
+def run_one(check, offline=False, opener=None, artifacts=None, blocking=True):
     """Run one check through the real runner with a fake context factory."""
     context, page = FakeContext(), FakePage()
     opener = opener or mock.Mock(return_value=(context, page, NetworkLog(), []))
     with mock.patch.object(gate, 'new_run_context', opener):
-        findings = gate.run_one(check, MOBILE, 'chromium', object(), SERVED, offline, artifacts or Path('/nonexistent'))
+        findings = gate.run_one(check, MOBILE, 'chromium', object(), SERVED, offline, artifacts or Path('/nonexistent'),
+                                blocking=blocking)
     return findings, context, page, opener
 
 
@@ -225,6 +234,81 @@ class RunOneTests(unittest.TestCase):
         self.assertEqual(ctx.demo_url, 'http://localhost:2222/demo/')
 
 
+class AdvisoryRunTests(unittest.TestCase):
+    def test_an_advisory_run_prints_its_failure_as_advisory_and_keeps_the_screenshot(self):
+        with tempfile.TemporaryDirectory() as folder:
+            findings, _, page, _ = run_one(gate.Check('c', lambda ctx: Outcome(failures=['bad']), (MOBILE,)),
+                                           artifacts=Path(folder), blocking=False)
+        self.assertEqual(findings, [Finding(ADVISORY, 'c', MOBILE, 'chromium', 'bad')])
+        self.assertEqual(len(page.shots), 1, 'the picture of an advisory failure is still useful')
+
+    def test_a_check_that_raises_on_an_advisory_run_is_advisory_too(self):
+        def explode(ctx):
+            raise KeyError('landing.hero.title')
+        with tempfile.TemporaryDirectory() as folder:
+            findings, context, _, _ = run_one(gate.Check('c', explode, (MOBILE,)), artifacts=Path(folder), blocking=False)
+        self.assertEqual([f.kind for f in findings], [ADVISORY])
+        self.assertIn('raised KeyError', findings[0].detail)
+        self.assertTrue(context.closed)
+
+    def test_a_profile_that_cannot_open_is_advisory_on_an_advisory_run(self):
+        opener = mock.Mock(side_effect=RuntimeError('has_touch unsupported'))
+        findings, _, _, _ = run_one(gate.Check('c', lambda ctx: Outcome(), (MOBILE,)), opener=opener, blocking=False)
+        self.assertEqual([f.kind for f in findings], [ADVISORY])
+
+    def test_reports_and_skips_are_unchanged_on_an_advisory_run(self):
+        check = gate.Check('c', lambda ctx: Outcome(reports=['r'], skips=['s']), (MOBILE,))
+        findings, _, _, _ = run_one(check, blocking=False)
+        self.assertEqual([f.kind for f in findings], [REPORT, SKIP])
+
+
+class PolicyRunTests(unittest.TestCase):
+    """The default policy at the runner level: only chromium at desktop can fail the gate."""
+
+    def run_matrix(self, policy, failing=((('chromium', DESKTOP)),)):
+        def fails_where_asked(ctx):
+            return Outcome(failures=['bad']) if (ctx.engine, ctx.profile) in failing else Outcome()
+        checks = (gate.Check('c', fails_where_asked, (DESKTOP, MOBILE, TOUCH_WIDE)),)
+        lines = []
+        with tempfile.TemporaryDirectory() as folder, mock.patch.object(
+                gate, 'new_run_context', lambda *a, **k: (FakeContext(), FakePage(), NetworkLog(), [])):
+            tally = gate.run_checks({'chromium': object(), 'firefox': object()}, SERVED, False, Path(folder),
+                                    emit=lines.append, checks=checks, policy=EnforcementPolicy.parse(policy))
+        return tally, lines
+
+    def test_a_firefox_or_phone_failure_is_advisory_and_exits_zero_under_the_default(self):
+        tally, lines = self.run_matrix('chromium:desktop', failing=(
+            ('firefox', DESKTOP), ('firefox', MOBILE), ('chromium', MOBILE), ('chromium', TOUCH_WIDE)))
+        self.assertEqual(gate.exit_code(tally), 0)
+        self.assertEqual(sum(1 for line in lines if ' ADVISORY ' in line), 4)
+        self.assertFalse(any(' FAIL ' in line for line in lines))
+        self.assertEqual(tally.planned, 6, 'every run still happens and is counted')
+        self.assertEqual(len(tally.statuses), 6)
+
+    def test_a_chromium_desktop_failure_blocks_under_the_default(self):
+        tally, lines = self.run_matrix('chromium:desktop', failing=(('chromium', DESKTOP),))
+        self.assertEqual(gate.exit_code(tally), 1)
+        self.assertIn('[frontend_gate] FAIL c [desktop, chromium]: bad', lines)
+
+    def test_all_makes_the_same_firefox_failure_block(self):
+        tally, lines = self.run_matrix('all', failing=(('firefox', MOBILE),))
+        self.assertEqual(gate.exit_code(tally), 1)
+        self.assertIn('[frontend_gate] FAIL c [mobile, firefox]: bad', lines)
+
+    def test_an_advisory_run_with_findings_prints_no_pass_line(self):
+        _, lines = self.run_matrix('chromium:desktop', failing=(('firefox', MOBILE),))
+        self.assertIn('[frontend_gate] ADVISORY c [mobile, firefox]: bad', lines)
+        self.assertNotIn('[frontend_gate] PASS c [mobile, firefox]', lines)
+        self.assertIn('[frontend_gate] PASS c [desktop, firefox]', lines)
+
+    def test_the_summary_separates_blocking_from_advisory(self):
+        tally, _ = self.run_matrix('chromium:desktop', failing=(('firefox', DESKTOP), ('chromium', MOBILE)))
+        self.assertEqual(
+            gate.summary_line(tally),
+            '[frontend_gate] SUMMARY OK: 6 of 6 planned runs finished. Blocking: 1 runs, 1 passed, 0 failed, '
+            '0 skipped. Advisory: 5 runs, 2 ADVISORY lines. 0 REPORT lines, 0 SKIP lines, 0 FAIL lines')
+
+
 class RunChecksTests(unittest.TestCase):
     def test_the_tally_counts_every_planned_run_and_prints_findings_and_pass_lines(self):
         checks = (
@@ -236,7 +320,7 @@ class RunChecksTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder, mock.patch.object(
                 gate, 'new_run_context', lambda *a, **k: (FakeContext(), FakePage(), NetworkLog(), [])):
             tally = gate.run_checks({'chromium': object(), 'firefox': object()}, SERVED, False, Path(folder),
-                                    emit=lines.append, checks=checks)
+                                    emit=lines.append, checks=checks, policy=EnforcementPolicy.parse('all'))
         self.assertEqual(tally.planned, 8)
         self.assertEqual((tally.passed, tally.failed, tally.skipped), (6, 2, 0))
         self.assertIn('[frontend_gate] FAIL bad [desktop, firefox]: broken', lines)
@@ -250,7 +334,7 @@ class RunChecksTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder, mock.patch.object(
                 gate, 'new_run_context', lambda *a, **k: (FakeContext(), FakePage(), NetworkLog(), [])):
             tally = gate.run_checks({'chromium': 1, 'firefox': 2}, SERVED, False, Path(folder), emit=lambda line: None,
-                                    checks=checks)
+                                    checks=checks, policy=EnforcementPolicy.parse('all'))
         self.assertEqual(calls, [('chromium', DESKTOP), ('chromium', MOBILE), ('firefox', DESKTOP), ('firefox', MOBILE)])
         self.assertEqual(gate.exit_code(tally), 0)
 
@@ -266,6 +350,29 @@ class ScreenshotFolderTests(unittest.TestCase):
 
     def test_a_missing_folder_is_not_an_error(self):
         gate.clear_screenshots(Path('/nonexistent/frontend-gate'))
+
+
+class EngineAvailabilityTests(unittest.TestCase):
+    def test_an_engine_has_blocking_runs_only_when_the_policy_selects_one_of_its_runs(self):
+        default = EnforcementPolicy.parse('chromium:desktop')
+        self.assertTrue(gate.engine_has_blocking(default, 'chromium'))
+        self.assertFalse(gate.engine_has_blocking(default, 'firefox'))
+        self.assertTrue(gate.engine_has_blocking(EnforcementPolicy.parse('all'), 'firefox'))
+        self.assertTrue(gate.engine_has_blocking(EnforcementPolicy.parse('firefox:wide touch'), 'firefox'))
+        self.assertFalse(gate.engine_has_blocking(EnforcementPolicy.parse('none'), 'chromium'))
+
+    def test_an_unavailable_engine_is_one_advisory_line_and_its_runs_are_counted_as_not_run(self):
+        lines = []
+        checks = (gate.Check('c', lambda ctx: Outcome(), (DESKTOP, MOBILE)),)
+        with tempfile.TemporaryDirectory() as folder, mock.patch.object(
+                gate, 'new_run_context', lambda *a, **k: (FakeContext(), FakePage(), NetworkLog(), [])):
+            tally = gate.run_checks({'chromium': object()}, SERVED, False, Path(folder), emit=lines.append,
+                                    checks=checks, unavailable={'firefox': 'firefox is not installed'})
+        self.assertEqual(tally.planned, 4)
+        self.assertEqual((len(tally.statuses), tally.not_run), (2, 2))
+        self.assertIn('[frontend_gate] ADVISORY engine [firefox]: could not launch: firefox is not installed', lines)
+        self.assertEqual(gate.exit_code(tally), 0)
+        self.assertIn('2 of 4 planned runs finished, 2 not run', gate.summary_line(tally))
 
 
 class MainTests(unittest.TestCase):
@@ -301,6 +408,86 @@ class MainTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn('chromium is not available to Playwright. Run: python -m playwright install', err)
         served.assert_not_called()
+
+    def launch_only(self, working):
+        """A launch_browser fake that works for `working` engines and raises GateError for the rest."""
+        def launch(playwright, engine, headless=True):
+            if engine not in working:
+                raise runtime.GateError(f'{engine} is not available to Playwright. Run: {runtime.SETUP_COMMAND}')
+            return mock.Mock()
+        return launch
+
+    def run_main(self, argv, working, tally_planned=None):
+        seen = {}
+        scratch = tempfile.TemporaryDirectory()
+        self.addCleanup(scratch.cleanup)
+
+        def spy(browsers, served, offline, artifacts, policy=None, unavailable=None, **kwargs):
+            seen['browsers'], seen['unavailable'] = list(browsers), dict(unavailable or {})
+            tally = Tally(planned=0)
+            return tally
+
+        code, out, err = self.main([*argv, '--artifacts', scratch.name],
+                                   load_playwright=lambda: (lambda: contextlib.nullcontext(object())),
+                                   launch_browser=self.launch_only(working),
+                                   serve_app=lambda: contextlib.nullcontext(SERVED), run_checks=spy)
+        return code, out, err, seen
+
+    def test_a_missing_firefox_is_advisory_under_the_default_policy_and_chromium_still_runs(self):
+        code, out, err, seen = self.run_main(['--engines', 'chromium,firefox'], working={'chromium'})
+        self.assertEqual(code, 0, err)
+        self.assertEqual(seen['browsers'], ['chromium'])
+        self.assertEqual(list(seen['unavailable']), ['firefox'])
+        self.assertIn('firefox is not available', seen['unavailable']['firefox'])
+        self.assertEqual(err, '')
+
+    def test_a_missing_chromium_still_fails_because_it_has_blocking_runs(self):
+        code, _, err, seen = self.run_main(['--engines', 'chromium,firefox'], working={'firefox'})
+        self.assertEqual(code, 1)
+        self.assertIn('[frontend_gate] ERROR: chromium is not available', err)
+        self.assertNotIn('browsers', seen, 'nothing ran')
+
+    def test_a_missing_firefox_blocks_when_the_policy_enforces_it(self):
+        code, _, err, _ = self.run_main(['--engines', 'chromium,firefox', '--enforce', 'all'], working={'chromium'})
+        self.assertEqual(code, 1)
+        self.assertIn('firefox is not available', err)
+
+    def test_a_policy_with_no_blocking_run_among_the_selected_engines_is_an_error(self):
+        code, _, err, seen = self.run_main(['--engines', 'chromium', '--enforce', 'firefox:desktop'],
+                                           working={'chromium'})
+        self.assertEqual(code, 1)
+        self.assertIn('[frontend_gate] ERROR: no blocking runs', err)
+        self.assertIn('--enforce none', err)
+        self.assertNotIn('browsers', seen, 'it fails before launching anything')
+
+    def test_none_deliberately_makes_the_whole_gate_advisory(self):
+        code, _, err, seen = self.run_main(['--engines', 'chromium', '--enforce', 'none'], working={'chromium'})
+        self.assertEqual((code, err), (0, ''))
+        self.assertEqual(seen['browsers'], ['chromium'])
+
+    def test_a_bad_enforce_value_exits_one_with_a_clear_error(self):
+        code, _, err = self.main(['--engines', 'chromium', '--enforce', 'chromium:tablet'])
+        self.assertEqual(code, 1)
+        self.assertIn('[frontend_gate] ERROR:', err)
+
+    def test_the_enforce_flag_reaches_the_runner_and_defaults_to_desktop_first(self):
+        seen = []
+
+        def spy(browsers, served, offline, artifacts, policy=None, **kwargs):
+            seen.append(policy)
+            return Tally(planned=0)
+
+        for argv, wanted in ((['--engines', 'chromium', '--offline'], ('chromium', 'mobile', False)),
+                              (['--engines', 'chromium', '--offline', '--enforce', 'all'], ('chromium', 'mobile', True))):
+            scratch = tempfile.TemporaryDirectory()
+            self.addCleanup(scratch.cleanup)
+            self.main([*argv, '--artifacts', scratch.name],
+                      load_playwright=lambda: (lambda: contextlib.nullcontext(object())),
+                      launch_browser=lambda playwright, engine, headless=True: mock.Mock(),
+                      serve_app=lambda: contextlib.nullcontext(SERVED), run_checks=spy)
+            engine, profile, blocking = wanted
+            self.assertEqual(seen[-1].blocking(engine, profile), blocking)
+            self.assertTrue(seen[-1].blocking('chromium', 'desktop'))
 
     def test_a_clean_run_prints_the_summary_and_exits_zero(self):
         code, out = self.run_with(Tally(planned=0))

@@ -110,7 +110,9 @@ python scripts/dev/check_commit_messages.py --range origin/main..HEAD   # no AI 
 ```
 
 CI (`.github/workflows/quality-gate.yml`) runs all of these on every pull
-request, in Chromium and Firefox. Run them before pushing.
+request. The Chromium suite and the gate's desktop Chromium runs block;
+Firefox and the gate's phone and wide-touch profiles are advisory (D029). Run them before pushing, and read
+advisory findings even though they do not fail the build.
 
 Record the test count and engines in the ledger entry. A gate you did not run
 is reported as not run. Release-point evidence goes in

@@ -131,8 +131,9 @@ def check_message(message: str) -> list[str]:
     reasons = []
     for line in message.splitlines():
         session = SESSION_TRAILER.match(line)
+        session_name = session.group(1).replace("-", " ") if session else ""
         if session and (
-            URL.search(session.group(2)) or SESSION_ID.search(session.group(2)) or AI_TOOL.search(session.group(1).replace("-", " "))
+            URL.search(session.group(2)) or SESSION_ID.search(session.group(2)) or AI_TOOL.search(session_name)
         ):
             reasons.append(f"session identifier in trailer: {line.strip()}")
             continue

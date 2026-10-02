@@ -115,7 +115,11 @@ credentials and kit IDs.
   controls and import/export compatibility. Composer rows hold 2-4 leaf slots;
   nested rows and JPEG assets stay out of scope.
 - Keep runtime code flat and predictable; put rigour into tests (real browsers,
-  real cross-origin frames, mobile 390px layout) rather than defensive layers.
+  real cross-origin frames) rather than defensive layers.
+- The product is desktop-first: in the frontend gate, desktop Chromium
+  blocks; other engines and phone or touch layouts are reported as advisory
+  (D029). The Chromium test suite still blocks, including the Composer's
+  existing 390px mobile-layout tests.
 
 *Checked by:* `scripts/verify.py`; layout tests; review.
 

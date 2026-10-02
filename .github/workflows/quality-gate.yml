@@ -92,31 +92,46 @@ jobs:
 
       # Browsers are the expensive part, so they come after every cheaper
       # gate. --with-deps installs the system libraries Chromium and Firefox
-      # need on a bare runner. Both engines, because Firefox has never run
-      # these suites anywhere else (see README "Firefox status").
+      # need on a bare runner. Both are installed: Chromium blocks, Firefox is
+      # advisory but still worth seeing (see README "Firefox status").
       - name: Install Playwright browsers
         run: python -m playwright install --with-deps chromium firefox
 
-      # The gate takes seconds per engine and covers layout, contrast, privacy
-      # and the live edit flow, so it runs before the multi-minute test suite:
-      # a visual or privacy regression is reported in about two minutes, not
-      # ten. It needs no secrets and starts its own server on loopback ports.
-      - name: Run frontend gate
+      # Font Kit Studio is desktop-first (README "Frontend gate"): only
+      # Chromium at the desktop profile can fail the gate. The same command
+      # also runs Firefox and the phone and wide-touch profiles; under the
+      # default `--enforce chromium:desktop` their findings print as ADVISORY
+      # lines and can never change the exit code, so this step needs no
+      # continue-on-error. It takes seconds per engine and covers layout,
+      # contrast, privacy and the live edit flow, so it runs before the
+      # multi-minute suite. It needs no secrets and starts its own server on
+      # loopback ports.
+      - name: Run frontend gate (Chromium desktop blocks; the rest is advisory)
         run: python scripts/dev/frontend_gate.py --engines chromium,firefox
 
-      # Last on purpose: the full suite is the slowest step (several minutes
+      # Blocking: the full suite on Chromium. Runs even when the gate failed,
+      # so one run reports both. The slowest steps come last (several minutes
       # per engine).
-      - name: Run tests (Chromium and Firefox)
-        # Run even when the frontend gate fails, so one run reports both.
+      - name: Run tests (Chromium, blocking)
         if: ${{ !cancelled() }}
         env:
-          FKS_ENGINES: chromium,firefox
+          FKS_ENGINES: chromium
         run: python -m unittest discover -s tests -v
 
-      # The gate saves a screenshot of every failing run here (work/ is
-      # git-ignored scratch). Nothing is uploaded when the run is green.
+      # Advisory: the same suite on Firefox. continue-on-error keeps a
+      # Firefox-only failure from failing the job, and the step's own failure
+      # mark and log stay visible so it can be read.
+      - name: Run tests (Firefox, advisory - never fails the build)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        env:
+          FKS_ENGINES: firefox
+        run: python -m unittest discover -s tests -v
+
+      # The gate saves a screenshot of every failing or advisory run here
+      # (work/ is git-ignored scratch). Nothing is uploaded when there are none.
       - name: Upload gate screenshots
-        if: failure()
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: frontend-gate-screenshots

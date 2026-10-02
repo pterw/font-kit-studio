@@ -552,6 +552,7 @@ python scripts/dev/frontend_gate.py                         # chromium + firefox
 python scripts/dev/frontend_gate.py --engines chromium      # one engine
 python scripts/dev/frontend_gate.py --offline               # skip the one check that needs the network
 python scripts/dev/frontend_gate.py --headed                # watch it run
+python scripts/dev/frontend_gate.py --enforce all           # strict: every engine and profile can fail
 # a container with a browser already installed:
 FKS_ENGINES=chromium FKS_CHROMIUM_EXECUTABLE=/path/to/chromium python scripts/dev/frontend_gate.py
 ```
@@ -562,7 +563,10 @@ Every finding is one line that names its check, profile and engine:
 [frontend_gate] FAIL <check> [<profile>, <engine>]: <detail>
 [frontend_gate] REPORT <check> [<profile>, <engine>]: <detail>
 [frontend_gate] SKIP <check> [<profile>, <engine>]: <reason>
+[frontend_gate] ADVISORY <check> [<profile>, <engine>]: <detail>
 ```
+
+**Blocking and advisory.** Font Kit Studio is a desktop-first tool, so only Chromium at the desktop profile blocks: a `FAIL` there fails the gate. Every other run (Firefox, and the phone and wide-touch profiles) still runs and still prints what it finds, as `ADVISORY` lines that never change the exit code. The summary counts blocking and advisory results separately. `--enforce chromium:desktop` is the default; `--enforce all` (or a list such as `chromium:desktop,firefox:desktop`) makes more runs blocking, and `--enforce none` makes the whole gate advisory on purpose. A policy that leaves no blocking run among the selected engines is an error, so a typo cannot make the gate pass by checking nothing. If an engine with no blocking runs (Firefox by default) is not installed, the gate prints one `ADVISORY engine` line, counts its runs as not run, and carries on. In CI the Chromium gate and Chromium test suite block, and the Firefox suite runs in its own non-blocking step.
 
 `FAIL` changes the exit code. `REPORT` is advisory and never does. `SKIP` says a check could not run. The last line, `SUMMARY`, counts runs passed, failed and skipped against the number planned, plus the REPORT and SKIP lines, so a check that silently stops running shows as a smaller number. A check that raises is a `FAIL`, not a crash. A failing run saves a screenshot under `work/frontend-gate/`.
 
@@ -581,9 +585,9 @@ A Google Fonts request on first load is a `FAIL`: Studio is silent until the use
 
 **Commit messages.** `python scripts/dev/check_commit_messages.py [--range origin/main..HEAD]` (stdlib only) fails on a `*-Session:` trailer with a URL or `session_<id>`, a `Co-authored-by` trailer for an AI assistant (judged by vendor email domain or exact assistant name, so people named Claude or Devin are fine), or a "Generated with/by" banner that names an AI tool. The rule is explained in [CONTRIBUTING.md](CONTRIBUTING.md); CI runs the check on every push, pull request and manual run.
 
-**CI.** `.github/workflows/quality-gate.yml` runs on pushes to `main`, on pull requests and on manual dispatch, with read-only permissions and no secrets. Cheapest first: `scripts/verify.py --static-only`, `node --check fontkit-bridge.js` (Node 22), the commit-message check, then it installs Chromium and Firefox, runs the full unit suite with `FKS_ENGINES=chromium,firefox`, and runs the frontend gate on both engines. It uploads gate screenshots when a run fails. It checks out full history and tags, because provenance compares against the `supplied-v0.1.1` tag.
+**CI.** `.github/workflows/quality-gate.yml` runs on pushes to `main`, on pull requests and on manual dispatch, with read-only permissions and no secrets. Cheapest first: `scripts/verify.py --static-only`, `node --check fontkit-bridge.js` (Node 22), the commit-message check, then it installs Chromium and Firefox and runs the frontend gate on both engines (only Chromium at desktop can fail it), the Chromium test suite (`FKS_ENGINES=chromium`, blocking) and the Firefox test suite (`FKS_ENGINES=firefox`, in a separate step marked `continue-on-error`, so it is visible but never fails the build). It uploads gate screenshots when there are any. It checks out full history and tags, because provenance compares against the `supplied-v0.1.1` tag.
 
-**Firefox status.** The tests run on Chromium and Firefox when both are installed. Firefox was **not installed** in the environment where v0.2.0 was built, so the v0.2.0 tests ran on Chromium only. Treat Firefox as unverified for the live preview, arrange and pop-out features until the Quality Gate workflow has run green on both engines.
+**Firefox status.** The tests run on Chromium and Firefox when both are installed. Firefox was **not installed** in the environment where v0.2.0 was built, so the v0.2.0 tests ran on Chromium only. Treat Firefox as unverified for the live preview, arrange and pop-out features until the Firefox steps of the Quality Gate workflow have run clean; they are advisory and do not block merging.
 
 Known gaps:
 

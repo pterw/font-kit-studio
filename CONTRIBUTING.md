@@ -6,7 +6,7 @@ Thanks for helping. This page covers what you need to open a good pull request.
 
 ```bash
 python -m pip install -r requirements-dev.txt
-python -m playwright install chromium firefox
+python -m playwright install chromium firefox   # Firefox is optional (advisory)
 python scripts/serve.py          # Studio and the demo app on localhost
 ```
 
@@ -21,7 +21,11 @@ python scripts/dev/frontend_gate.py       # layout, contrast, privacy and live-e
 python scripts/dev/check_commit_messages.py --range origin/main..HEAD
 ```
 
-CI runs the same checks on every pull request.
+CI runs the same checks on every pull request. Font Kit Studio is a desktop
+tool, so the Chromium test suite and the desktop Chromium gate block a merge.
+Firefox, and the gate's phone and touch layouts, are checked too and
+reported as advisory. (The Chromium suite keeps a few 390px layout tests
+for the Composer, and those still block.)
 
 ## Design constraints
 
