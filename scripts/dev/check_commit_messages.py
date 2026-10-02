@@ -64,8 +64,11 @@ AI_NAMES = (
 )
 
 #: An assistant's name followed by a model or product word, e.g. "Claude Sonnet 5.5".
+#: A version number matches on its first digit; a word must not run on into
+#: more letters, so "Claude Proctor" and "Gemini Haikuson" are people, not "pro"
+#: and "haiku", while a glued digit ("Claude Opus4.1") still counts.
 AI_MODEL_NAME = re.compile(
-    r"^(claude|gemini|gpt|chatgpt)[ -]+(\d|opus|sonnet|haiku|code|pro|flash|ultra|turbo)", re.IGNORECASE
+    r"^(claude|gemini|gpt|chatgpt)[ -]+(?:\d|(?:opus|sonnet|haiku|code|pro|flash|ultra|turbo)(?![a-z]))", re.IGNORECASE
 )
 
 #: Tools a "Generated with/by" banner may name, matched as whole words so

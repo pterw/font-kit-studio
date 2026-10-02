@@ -130,6 +130,19 @@ class ThemeContrastJudgeTests(unittest.TestCase):
         faded = sample(color='rgb(0, 0, 0)', opacity=0.4)
         self.assertEqual(len(theme.judge_samples('x', [faded])[0]), 1, 'black at 40% opacity is mid grey on white')
 
+    def test_text_colour_alpha_is_judged_as_faded(self):
+        # Characterisation: unlike the logo paint judge, the text path already folds the
+        # colour's own alpha in, alone and together with an ancestor's opacity.
+        for colour, opacity in (('rgba(0, 0, 0, 0.1)', 1), ('rgba(0, 0, 0, 0.5)', 0.2)):
+            with self.subTest(colour=colour, opacity=opacity):
+                faded = sample(color=colour, opacity=opacity)
+                ratio, shown, _ = theme.sample_ratio(faded)
+                self.assertLess(ratio, 1.5)
+                self.assertGreater(shown[0], 200)
+                self.assertEqual(len(theme.judge_samples('x', [faded])[0]), 1)
+        solid = sample(color='rgba(0, 0, 0, 0.9)')
+        self.assertEqual(theme.judge_samples('x', [solid])[0], [])
+
     def test_a_translucent_surface_is_judged_against_the_blend(self):
         # Grey text over a 92%-opaque page tint reads against the blend.
         ratio, _, background = theme.sample_ratio(
@@ -326,6 +339,18 @@ class LogoStaticTests(unittest.TestCase):
             with self.subTest(fragment=fragment):
                 self.assertTrue(self.failures(CLEAN_SVG.replace('</svg>', f'{fragment}</svg>')))
 
+    def test_external_references_are_refused_whatever_their_case(self):
+        # CSS and URL syntax are case-insensitive, so the scan has to be too.
+        cases = ('<style>@IMPORT "HTTPS://evil.example/logo.css";</style>',
+                 '<style>@Import url(Https://evil.example/logo.css);</style>',
+                 '<path fill="URL(HTTPS://evil.example/paint.svg)" d="M0 0"/>',
+                 '<path fill="Url( \'hTTp://evil.example/paint.svg#g\' )" d="M0 0"/>',
+                 '<path data-x="HTTPS://evil.example/x" d="M0 0"/>',
+                 '<path HREF="HTTPS://evil.example/a.svg" d="M0 0"/>')
+        for fragment in cases:
+            with self.subTest(fragment=fragment):
+                self.assertTrue(self.failures(CLEAN_SVG.replace('</svg>', f'{fragment}</svg>')), fragment)
+
     def test_an_internal_fragment_reference_is_allowed(self):
         self.assertEqual(self.failures(CLEAN_SVG.replace('</svg>', '<path fill="url(#m)" d="M0 0"/></svg>')), [])
 
@@ -358,6 +383,24 @@ class LogoPaintJudgeTests(unittest.TestCase):
     def test_translucent_paint_is_judged_after_compositing(self):
         faint = [{'kind': 'stroke', 'colour': 'rgb(0, 0, 0)', 'alpha': 0.1, 'count': 1}]
         self.assertEqual(len(assets.inline_paint_failures('l.svg', 'rgb(255, 255, 255)', faint)), 1)
+
+    def test_a_translucent_colour_is_judged_by_its_own_alpha_too(self):
+        # rgba(0, 0, 0, 0.1) on white paints about 1.25:1, not the 21:1 of opaque black.
+        page = 'rgb(255, 255, 255)'
+        for colour, alpha in (('rgba(0, 0, 0, 0.1)', 1), ('rgba(0, 0, 0, 0.5)', 0.2), ('rgba(0, 0, 0, 0.1)', 0.1)):
+            with self.subTest(colour=colour, alpha=alpha):
+                paint = [{'kind': 'fill', 'colour': colour, 'alpha': alpha, 'count': 2}]
+                lines = assets.inline_paint_failures('l.svg', page, paint)
+                self.assertEqual(len(lines), 1)
+                self.assertIn(colour, lines[0])
+        faint = assets.inline_paint_failures(
+            'l.svg', page, [{'kind': 'fill', 'colour': 'rgba(0, 0, 0, 0.1)', 'alpha': 1, 'count': 1}])
+        self.assertIn('1.2', faint[0], 'the ratio reported is the composited one')
+
+    def test_a_translucent_colour_that_still_reaches_the_bar_passes(self):
+        paint = [{'kind': 'stroke', 'colour': 'rgba(0, 0, 0, 0.8)', 'alpha': 1, 'count': 1},
+                 {'kind': 'fill', 'colour': 'rgba(0, 0, 0, 0.8)', 'alpha': 0.9, 'count': 1}]
+        self.assertEqual(assets.inline_paint_failures('l.svg', 'rgb(255, 255, 255)', paint), [])
 
     def test_a_blank_render_fails_instead_of_passing_vacuously(self):
         self.assertIn('blank', assets.image_paint_failures('l.svg', 'rgb(255, 255, 255)',

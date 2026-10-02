@@ -60,7 +60,17 @@ class ForbiddenFormTests(unittest.TestCase):
                         'Co-authored-by: claude <someone@example.com>',
                         ' Co-authored-by:   Claude Code   <x@example.com>',
                         'Co-authored-by: Claude Opus 4.1 <x@example.com>',
-                        'Co-authored-by: Gemini <x@example.com>'):
+                        'Co-authored-by: Gemini <x@example.com>',
+                        'Co-authored-by: Claude 3.5 Sonnet <x@example.com>',
+                        'Co-authored-by: Claude Sonnet <x@example.com>',
+                        'Co-authored-by: Claude Opus4.1 <x@example.com>',
+                        'Co-authored-by: Claude Sonnet4 <x@example.com>',
+                        'Co-authored-by: Claude-Opus-4 <x@example.com>',
+                        'Co-authored-by: Claude Haiku 4.5 <x@example.com>',
+                        'Co-authored-by: Gemini 2.5 Pro <x@example.com>',
+                        'Co-authored-by: Gemini Flash <x@example.com>',
+                        'Co-authored-by: GPT-4o <x@example.com>',
+                        'Co-authored-by: ChatGPT Turbo <x@example.com>'):
             with self.subTest(trailer=trailer):
                 reasons = self.reasons(trailer)
                 self.assertEqual(len(reasons), 1)
@@ -103,6 +113,16 @@ class AllowedFormTests(unittest.TestCase):
                         'Co-authored-by: Sam Ng <sam@codexlabs.io>',
                         'Co-authored-by: Gemini Rivera <gem@example.com>',
                         'Co-authored-by: Ana Copilotti <ana@example.com>',
+                        # A model word that is only the start of a surname is a person.
+                        'Co-authored-by: Claude Proctor <human@example.org>',
+                        'Co-authored-by: Claude Opusville <human@example.org>',
+                        'Co-authored-by: Gemini Haikuson <human@example.org>',
+                        'Co-authored-by: Claude Sonnenberg <human@example.org>',
+                        'Co-authored-by: Claude Codey <human@example.org>',
+                        'Co-authored-by: Claude Codeyville <human@example.org>',
+                        'Co-authored-by: Gemini Flashman <human@example.org>',
+                        'Co-authored-by: GPT Ultrasound <human@example.org>',
+                        'Co-authored-by: Claude Turbotville <human@example.org>',
                         'Co-authored-by: Lee <lee@notanthropic.com>',
                         'Co-authored-by: Lee <lee@openai.com.example.org>'):
             with self.subTest(trailer=trailer):
@@ -129,6 +149,8 @@ class AllowedFormTests(unittest.TestCase):
         self.assertTrue(check.is_ai_identity('Someone', 'noreply@Anthropic.com'))
         self.assertFalse(check.is_ai_identity('Ada Lovelace', 'ada@example.com'))
         self.assertFalse(check.is_ai_identity('Claude Monet', 'cmonet@example.org'))
+        self.assertFalse(check.is_ai_identity('Claude Proctor', 'human@example.org'))
+        self.assertTrue(check.is_ai_identity('Claude Opus 4.1', 'human@example.org'))
 
 
 def git(repo, *args, message=None):

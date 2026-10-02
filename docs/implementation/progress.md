@@ -40,3 +40,8 @@ Every implementation task was independently reviewed. Final suite on Chromium: 2
 - Final whole-branch review: `final-review-v0.2.md`, "Ready with notes".
 - Gate evidence: `verification-v0.2.md` (static checks, provenance, 201 tests, bridge syntax check, Studio and demo smoke at 1440x900 and 390x844).
 - Code-review handoff: `handoff-code-review-v0.2.md`.
+
+- **Review fixes (PR #1).** External review findings, each reproduced with a failing test first and independently reviewed:
+  - Studio and bridge state: synced CSS keeps rules for auto-discovered targets whose selectors use `>` and escaped class names, with a linear-time selector check that hostile targets cannot stall. Reapply removes target-only composition tokens (a `null` token value now removes an override) and reports success only when the target matches Studio. Every timed-out request stays tracked until its late reply, and a late rejection is shown to the user.
+  - Tooling: the dev server no longer follows symlinks out of the repository or to hidden files. The logo check's CSS/URL scans are case-insensitive and its contrast judgement honours a colour's own alpha. The commit check no longer flags human names such as "Claude Proctor" while still catching model names. An empty or unknown `FKS_ENGINES` is an error.
+  - 406 tests (Chromium); records in `tasks/v02-review-fixes-*.md`.

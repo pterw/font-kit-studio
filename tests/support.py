@@ -1,7 +1,9 @@
 """Shared Playwright test harness (development only).
 
 Environment:
-  FKS_ENGINES                comma list of engines to run (default: chromium,firefox)
+  FKS_ENGINES                comma list of engines to run: chromium, firefox, webkit
+                             (default: chromium,firefox). An empty or unknown list is an
+                             error at import: a loop over no engines passes without a browser.
   FKS_CHROMIUM_EXECUTABLE    optional explicit Chromium binary
   FKS_FIREFOX_EXECUTABLE     optional explicit Firefox binary
 """
@@ -13,7 +15,22 @@ from urllib.parse import urlsplit, unquote
 
 REPO = Path(__file__).resolve().parents[1]
 HTML = REPO / 'font_kit_studio_v0.1.1.html'
-ENGINES = tuple(e.strip() for e in os.environ.get('FKS_ENGINES', 'chromium,firefox').split(',') if e.strip())
+KNOWN_ENGINES = ('chromium', 'firefox', 'webkit')
+
+
+def parse_engines(value):
+    names = tuple(name.strip().lower() for name in value.split(',') if name.strip())
+    if not names:
+        raise RuntimeError(f'FKS_ENGINES selects no browser engine (got {value!r}); '
+                           f'use a comma list of {", ".join(KNOWN_ENGINES)} or unset it')
+    unknown = [name for name in names if name not in KNOWN_ENGINES]
+    if unknown:
+        raise RuntimeError(f'FKS_ENGINES has an unknown engine: {", ".join(unknown)}; '
+                           f'allowed: {", ".join(KNOWN_ENGINES)}')
+    return names
+
+
+ENGINES = parse_engines(os.environ.get('FKS_ENGINES', 'chromium,firefox'))
 
 
 def launch(runtime, engine, **options):

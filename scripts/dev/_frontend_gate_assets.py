@@ -129,7 +129,8 @@ def logo_static_failures(name: str, svg_text: str) -> list[str]:
     Pure, so the real files are checked in the fast unittest suite as well as
     by the gate. Attribute checks run on the parsed tree; the `url(` scan
     runs on every attribute and `<style>` body, since a paint server or
-    filter pointing off-document is as external as an href.
+    filter pointing off-document is as external as an href. CSS keywords and
+    URL schemes are case-insensitive, so every scan here is too.
     """
     try:
         root = ElementTree.fromstring(svg_text)
@@ -140,7 +141,7 @@ def logo_static_failures(name: str, svg_text: str) -> list[str]:
         tag = element.tag.rsplit("}", 1)[-1].lower() if isinstance(element.tag, str) else ""
         if tag in FORBIDDEN_ELEMENTS:
             failures.append(f"{name} contains a <{tag}> element")
-        if tag == "style" and "@import" in (element.text or ""):
+        if tag == "style" and re.search(r"@import", element.text or "", re.IGNORECASE):
             failures.append(f"{name} imports a stylesheet")
         values = [(key.rsplit("}", 1)[-1], value) for key, value in element.attrib.items()]
         if tag == "style" and element.text:
@@ -148,11 +149,11 @@ def logo_static_failures(name: str, svg_text: str) -> list[str]:
         for key, value in values:
             if key.lower() == "href" and not value.startswith("#"):
                 failures.append(f"{name} has an external reference: {key}={value!r}")
-            for reference in re.findall(r"url\(\s*['\"]?([^)'\"]*)", value):
+            for reference in re.findall(r"url\(\s*['\"]?([^)'\"]*)", value, re.IGNORECASE):
                 if not reference.startswith("#"):
                     failures.append(f"{name} has an external reference: url({reference})")
-            for address in re.findall(r"https?://[^\s'\"<>)]+", value):
-                if address not in SVG_NAMESPACES:
+            for address in re.findall(r"https?://[^\s'\"<>)]+", value, re.IGNORECASE):
+                if address.lower() not in SVG_NAMESPACES:
                     failures.append(f"{name} mentions an absolute address: {address}")
     return failures
 
@@ -167,15 +168,17 @@ def inline_paint_failures(name: str, background: str, paints: list[dict]) -> lis
 
     Each `paints` entry is {kind, colour, alpha, count}. A translucent paint
     is composited over the background first: contrast is judged on the colour
-    a visitor sees, never on the declared channels.
+    a visitor sees, never on the declared channels. "Translucent" has two
+    sources, the colour's own alpha (`rgba()`) and the measured opacity
+    (`alpha`: element, fill and stroke opacity), and they multiply.
     """
     if not paints:
         return [f"{name} (inline) paints no fill or stroke at all"]
     page = _rgb(background)
     failures = []
     for paint in paints:
-        red, green, blue, _ = _parse_rgb_string(paint["colour"])
-        seen = _composite_over((red, green, blue, paint["alpha"]), page)
+        red, green, blue, own_alpha = _parse_rgb_string(paint["colour"])
+        seen = _composite_over((red, green, blue, own_alpha * paint["alpha"]), page)
         ratio = _contrast_ratio(seen, page)
         if ratio < LOGO_MIN_CONTRAST:
             failures.append(
