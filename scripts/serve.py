@@ -31,6 +31,7 @@ REPO = Path(__file__).resolve().parents[1]
 STUDIO_HTML = "font_kit_studio_v0.1.1.html"
 MAX_BYTES = 1024 * 1024
 ENDPOINTS = "/__fontkit/"
+INDEX_NAMES = ("index.html", "index.htm")  # what SimpleHTTPRequestHandler serves for a directory
 
 
 class Config:
@@ -82,6 +83,22 @@ class Handler(SimpleHTTPRequestHandler):
             return None
         return "/" + "/".join(parts)
 
+    def real_path_servable(self):
+        """True when the file this request would serve is inside the repository and not hidden.
+
+        clean_path() only judges the URL, but the inherited handler follows file system
+        links, so a link inside the repository can reach an outside or hidden file. Judge the
+        resolved path instead: the one the handler would open, including the index file it
+        picks for a directory.
+        """
+        served = Path(self.translate_path(self.path))
+        if not repo_servable(served):
+            return False
+        if served.is_dir():
+            index = next((served / name for name in INDEX_NAMES if (served / name).is_file()), None)
+            return index is None or repo_servable(index)  # no index: list_directory answers 404
+        return True
+
     def send_bytes(self, status, body, content_type):
         self.send_response(status)
         self.send_header("Content-Type", content_type)
@@ -124,6 +141,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_error(HTTPStatus.NOT_FOUND)
         if path == "/":
             return self.redirect(self.config.studio_path if self.studio else "/demo/")
+        if not self.real_path_servable():
+            return self.send_error(HTTPStatus.NOT_FOUND)
         if path == "/" + self.config.overrides_rel and not self.config.overrides.is_file():
             return self.send_bytes(200, b"", "text/css; charset=utf-8")
         return super().do_HEAD() if self.command == "HEAD" else super().do_GET()
@@ -166,6 +185,15 @@ class Handler(SimpleHTTPRequestHandler):
     def list_directory(self, path):
         self.send_error(HTTPStatus.NOT_FOUND)
         return None
+
+
+def repo_servable(path):
+    """True when `path`, with every link followed, is inside the repository with no hidden part."""
+    try:
+        rel = path.resolve().relative_to(REPO)
+    except (OSError, RuntimeError, ValueError):  # outside the repo, a link loop, a NUL byte
+        return False
+    return not any(part.startswith(".") for part in rel.parts)
 
 
 def write_atomic(config, body):

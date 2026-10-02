@@ -297,6 +297,93 @@ class PreviewServerTest(unittest.TestCase):
         self.assertFalse(s.overrides.exists())
 
 
+class PreviewServerSymlinkTest(unittest.TestCase):
+    """A link inside the repository must not carry a request to a file the URL check would refuse.
+
+    clean_path() judges the URL, but the file system follows links: the served file is the
+    resolved one, so that is the path that has to stay inside the repository and not be hidden.
+    """
+
+    SECRET = b'private contents that must never be served\n'
+
+    @classmethod
+    def setUpClass(cls):
+        cls.server = Server()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.close()
+
+    def setUp(self):
+        # Links live in a directory of their own inside the repository (the server's scratch
+        # directory, under the git-ignored work/), the targets outside it or hidden.
+        outside = tempfile.TemporaryDirectory(prefix='preview-outside-')
+        self.addCleanup(outside.cleanup)
+        self.outside = Path(outside.name)
+        (self.outside / 'secret.txt').write_bytes(self.SECRET)
+        (self.outside / 'index.html').write_bytes(self.SECRET)
+        self.links = Path(tempfile.mkdtemp(prefix='links-', dir=self.server.scratch))
+        self.addCleanup(shutil.rmtree, self.links, ignore_errors=True)
+        self.url = '/' + self.links.relative_to(REPO).as_posix()
+        self.hidden = self.links / '.private'
+        self.hidden.mkdir()
+        (self.hidden / 'secret.txt').write_bytes(self.SECRET)
+        (self.hidden / 'index.html').write_bytes(self.SECRET)
+
+    def assert_refused(self, path):
+        for port in (self.server.studio, self.server.target):
+            for method in ('GET', 'HEAD'):
+                status, headers, body = request(port, method, self.url + path)
+                self.assertEqual(status, 404, (port, method, path))
+                self.assertNotIn(self.SECRET, body, (port, method, path))
+                self.assertEqual(headers.get('cache-control'), 'no-store')
+
+    def test_a_file_symlink_to_outside_the_repo_is_refused(self):
+        (self.links / 'outside.txt').symlink_to(self.outside / 'secret.txt')
+        self.assert_refused('/outside.txt')
+
+    def test_a_directory_symlink_to_outside_the_repo_is_refused(self):
+        (self.links / 'outdir').symlink_to(self.outside, target_is_directory=True)
+        self.assert_refused('/outdir/secret.txt')
+
+    def test_an_alias_of_a_hidden_file_is_refused(self):
+        (self.links / 'alias.txt').symlink_to(self.hidden / 'secret.txt')
+        (self.links / 'aliasdir').symlink_to(self.hidden, target_is_directory=True)
+        self.assert_refused('/alias.txt')
+        self.assert_refused('/aliasdir/secret.txt')
+        self.assert_refused('/aliasdir/')
+
+    def test_an_index_html_symlink_in_a_directory_is_refused(self):
+        for name, target in (('out', self.outside / 'index.html'), ('hid', self.hidden / 'index.html')):
+            (self.links / name).mkdir()
+            (self.links / name / 'index.html').symlink_to(target)
+            self.assert_refused(f'/{name}/')
+
+    def test_a_symlinked_overrides_file_is_not_read_through(self):
+        s = self.server
+        s.overrides.symlink_to(self.outside / 'secret.txt')
+        try:
+            for port in (s.studio, s.target):
+                status, _, body = request(port, 'GET', '/' + s.rel)
+                self.assertEqual(status, 404, port)
+                self.assertNotIn(self.SECRET, body)
+        finally:
+            s.overrides.unlink()
+
+    def test_ordinary_files_and_links_that_stay_inside_are_still_served(self):
+        (self.links / 'plain.txt').write_bytes(b'plain\n')
+        (self.links / 'site').mkdir()
+        (self.links / 'site' / 'index.html').write_bytes(b'<p>site</p>\n')
+        (self.links / 'inner.txt').symlink_to(self.links / 'plain.txt')
+        for port in (self.server.studio, self.server.target):
+            for path, expected in (('/plain.txt', b'plain\n'), ('/site/', b'<p>site</p>\n'),
+                                   ('/inner.txt', b'plain\n')):
+                status, _, body = request(port, 'GET', self.url + path)
+                self.assertEqual((status, body), (200, expected), (port, path))
+            status, _, body = request(port, 'GET', self.url + '/missing.txt')
+            self.assertEqual(status, 404)
+
+
 class PreviewServerLifecycleTest(unittest.TestCase):
     def test_no_sync_rejects_writes(self):
         server = Server('--no-sync')
