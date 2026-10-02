@@ -2698,6 +2698,7 @@ if (remembered) kitId.value = remembered;
       const slotPayloads = state.slots.map((slot, index) => {
         const payload = {
           id: slot.id,
+          targetId: slot.targetId,
           index,
           role: slot.role,
           type: slot.type
@@ -2900,8 +2901,14 @@ if (remembered) kitId.value = remembered;
         if (data.name) {
           matched.role = data.name;
         }
+        if (data.computed && data.computed.fontSize) {
+          const parsed = Math.round(parseFloat(data.computed.fontSize));
+          if (parsed > 8 && parsed < 200) {
+            matched.size = parsed;
+          }
+        }
         renderComposer();
-        setBridgeStatus(`Selected: ${data.name || data.role}`, true);
+        setBridgeStatus(`Selected: ${data.name || data.role} (${matched.size}px)`, true);
       }
     }
   });

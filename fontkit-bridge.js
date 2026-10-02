@@ -508,7 +508,13 @@
       const role = (slot.role || '').toLowerCase();
       const type = slot.type || 'text';
 
-      // 1. Direct ID match
+      // 1. Direct targetId match (most specific for live selected elements)
+      if (slot.targetId) {
+        const directTarget = this.findTarget(slot.targetId);
+        if (directTarget && directTarget.element) return directTarget.element;
+      }
+
+      // 2. Direct ID match
       if (slot.id && this.targets.has(slot.id)) {
         return this.targets.get(slot.id).element;
       }
@@ -599,14 +605,19 @@
           }
         }
 
-        if (slot.fontFamily) el.style.fontFamily = slot.fontFamily;
-        if (slot.size) el.style.fontSize = `${slot.size}px`;
-        if (slot.weight) el.style.fontWeight = slot.weight;
-        if (slot.lineHeight) el.style.lineHeight = slot.lineHeight;
-        if (slot.tracking !== undefined) el.style.letterSpacing = `${slot.tracking / 1000}em`;
-        if (slot.colorHex) el.style.color = slot.colorHex;
-        if (slot.align) el.style.textAlign = slot.align;
-        if (slot.transform) el.style.textTransform = slot.transform;
+        if (slot.fontFamily) el.style.setProperty('font-family', slot.fontFamily, 'important');
+        if (slot.size) el.style.setProperty('font-size', `${slot.size}px`, 'important');
+        if (slot.weight) el.style.setProperty('font-weight', String(slot.weight), 'important');
+        if (slot.lineHeight) el.style.setProperty('line-height', String(slot.lineHeight), 'important');
+        if (slot.tracking !== undefined) el.style.setProperty('letter-spacing', `${slot.tracking / 1000}em`, 'important');
+        if (slot.colorHex) el.style.setProperty('color', slot.colorHex, 'important');
+        if (slot.align) el.style.setProperty('text-align', slot.align, 'important');
+        if (slot.transform) el.style.setProperty('text-transform', slot.transform, 'important');
+
+        // Dynamically update active selection HUD bounds if this element is selected
+        if (this.currentSelectedElement === el) {
+          this.showActiveSelection(el, slot.role || 'Element');
+        }
       }
 
       // C. Spacer Height
@@ -791,7 +802,9 @@
       const role = target.getAttribute('data-design-role') || 'generic';
       const name = target.getAttribute('data-design-name') || role;
       const currentText = target.textContent.trim();
+      const comp = window.getComputedStyle(target);
 
+      this.currentSelectedElement = target;
       this.showActiveSelection(target, name);
 
       const msg = {
@@ -799,7 +812,17 @@
         targetId,
         role,
         name,
-        currentText
+        currentText,
+        computed: {
+          fontSize: comp.fontSize,
+          fontFamily: comp.fontFamily,
+          fontWeight: comp.fontWeight,
+          lineHeight: comp.lineHeight,
+          color: comp.color,
+          letterSpacing: comp.letterSpacing,
+          textAlign: comp.textAlign,
+          textTransform: comp.textTransform
+        }
       };
 
       if (window.parent && window.parent !== window) {
