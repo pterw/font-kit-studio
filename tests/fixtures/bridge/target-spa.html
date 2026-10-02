@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bridge test target (SPA re-render)</title>
+<!--
+  A tiny SPA: render() replaces the whole #app subtree, like a framework
+  re-render or an HMR update. Used by tests/test_bridge_runtime.py.
+-->
+</head>
+<body>
+<div id="app"></div>
+<script>
+  window.renders = 0;
+  window.render = (label = 'Title v1') => {
+    window.renders += 1;
+    document.getElementById('app').innerHTML =
+      '<h1 data-design-id="spa.title" class="t">' + label + '</h1><p data-design-id="spa.body">Body copy</p>'
+      + '<h2 class="auto-heading">Auto heading</h2>';
+  };
+  window.render();
+  // Opt-in ping-pong: an app that re-renders whenever anything changes a style.
+  new MutationObserver(() => { if (window.pingPong) window.render(); })
+    .observe(document.getElementById('app'), { attributes: true, subtree: true, attributeFilter: ['style'] });
+  // Opt-in: an app that re-renders on ANY attribute mutation in the page.
+  new MutationObserver(() => { if (window.anyAttr) window.render(); })
+    .observe(document.body, { attributes: true, subtree: true });
+  // Counts MutationObserver batches that touch styles.
+  window.styleBatches = 0;
+  new MutationObserver(() => { window.styleBatches += 1; })
+    .observe(document.getElementById('app'), { attributes: true, subtree: true, attributeFilter: ['style'] });
+</script>
+<script src="/fontkit-bridge.js"></script>
+</body>
+</html>

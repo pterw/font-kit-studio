@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bridge test target (arrangement)</title>
+<!--
+  Small fixtures for design:move: a button group (flex), a card grid (grid),
+  a plain block container, a form with a custom segmented control (radios plus
+  labels with `for`), and fake framework-managed subtrees (React/Vue/Svelte/other).
+  Used by tests/test_bridge_runtime.py.
+-->
+<style>
+  body { margin: 0; font: 16px/1.4 Arial, sans-serif; }
+  .btn-group { display: flex; gap: 8px; padding: 8px; }
+  #card-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 8px; }
+  .plain { padding: 8px; }
+  .react-root { display: flex; gap: 8px; padding: 8px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="btn-group" data-design-id="arr.group" role="group" aria-label="Actions">
+    <button type="button" data-design-id="arr.btn.a">Alpha</button>
+    <button type="button" data-design-id="arr.btn.b">Beta</button>
+    <button type="button" data-design-id="arr.btn.c">Gamma</button>
+  </div>
+
+  <section id="card-grid">
+    <article class="card" data-design-id="arr.card.1"><h3>Card one</h3></article>
+    <article class="card" data-design-id="arr.card.2"><h3>Card two</h3></article>
+    <article class="card"><h3>Card three</h3></article>
+    <article class="card" data-design-id="arr.card.4"><h3>Card four</h3></article>
+  </section>
+
+  <div class="plain" data-design-order-container="true" data-design-id="arr.plain">
+    <p data-design-id="arr.p.1">Plain one</p>
+    <p data-design-id="arr.p.2">Plain two</p>
+    <script type="text/plain" id="inline-data">ignored</script>
+    <p data-design-id="arr.p.3">Plain three</p>
+  </div>
+
+  <form id="signup" data-design-id="arr.form" onsubmit="return false">
+    <fieldset class="seg" data-design-id="arr.seg">
+      <input type="radio" name="plan" id="plan-a" value="a" checked><label for="plan-a" data-design-id="arr.seg.a">Monthly</label>
+      <input type="radio" name="plan" id="plan-b" value="b"><label for="plan-b" data-design-id="arr.seg.b">Yearly</label>
+      <input type="radio" name="plan" id="plan-c" value="c"><label for="plan-c" data-design-id="arr.seg.c">Lifetime</label>
+    </fieldset>
+    <input type="email" name="email" data-design-id="arr.email" aria-labelledby="email-label">
+    <label class="chip"><input type="checkbox" name="remember" data-design-id="arr.remember"> Remember me</label>
+    <button type="submit" data-design-id="arr.submit">Join</button>
+  </form>
+
+  <div id="outside" data-design-order-container="true" data-design-id="arr.outside">
+    <button type="button" data-design-id="arr.outside.btn">Outside button</button>
+    <span id="email-label" data-design-id="arr.outside.label">Email</span>
+    <img data-design-id="arr.img" alt="Pixel" width="4" height="4" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=">
+  </div>
+
+  <p data-design-id="arr.para"><span data-design-id="arr.para.a">Inline one</span><em data-design-id="arr.para.b">Inline two</em></p>
+  <a href="#x" data-design-id="arr.link"><span data-design-id="arr.link.a">Link text</span></a>
+
+  <div class="react-root" data-design-id="arr.react">
+    <span data-design-id="arr.react.a">React A</span>
+    <span data-design-id="arr.react.b">React B</span>
+    <span data-design-id="arr.react.c">React C</span>
+  </div>
+  <div data-design-id="arr.vue"><i data-design-id="arr.vue.a">Vue A</i><i data-design-id="arr.vue.b">Vue B</i></div>
+  <div data-design-id="arr.svelte"><i data-design-id="arr.svelte.a">Svelte A</i><i data-design-id="arr.svelte.b">Svelte B</i></div>
+  <div data-design-id="arr.ng" ng-version="17.0.0"><i data-design-id="arr.ng.a">Ng A</i><i data-design-id="arr.ng.b">Ng B</i></div>
+</main>
+<script>
+  // Fake framework markers, exactly as the real libraries leave them on DOM nodes.
+  const mark = (selector, key, value) => { document.querySelector(selector)[key] = value; };
+  mark('.react-root', '__reactFiber$test', {});
+  mark('[data-design-id="arr.vue"]', '__vue__', {});
+  mark('[data-design-id="arr.svelte"]', '__svelte_meta', {});
+
+  // An app that breaks when it sees the bridge touch the DOM (for design:warning tests).
+  window.__throwMode = null;
+  new MutationObserver(() => {
+    if (window.__throwMode === 'error') throw new Error('app exploded after the change');
+    if (window.__throwMode === 'reject') Promise.reject(new Error('async app failure'));
+    if (window.__throwMode === 'long') throw new Error('x'.repeat(1000));
+  }).observe(document.body, { attributes: true, childList: true, subtree: true, attributeFilter: ['style'] });
+</script>
+<script src="/fontkit-bridge.js"></script>
+</body>
+</html>

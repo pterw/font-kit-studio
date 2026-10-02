@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bridge test host (Studio side)</title>
+<style>
+  body { margin: 0; font: 14px/1.4 system-ui, sans-serif; }
+  iframe { display: block; width: 1000px; height: 600px; border: 0; }
+  #evil { width: 200px; height: 80px; }
+</style>
+</head>
+<body>
+<!--
+  Studio-side test host for tests/test_bridge_runtime.py.
+  Served at a fake origin (http://studio.test, or http://evil.test for the
+  hostile-parent case). The target page is loaded cross-origin from ?target=.
+  Tests drive the helpers below through page.evaluate().
+-->
+<iframe id="target" title="target"></iframe>
+<script>
+  const frame = document.getElementById('target');
+
+  // Every message this window receives, in arrival order.
+  window.log = [];
+  window.sessionId = null;
+  window.revision = 0;
+
+  window.addEventListener('message', (event) => {
+    const data = event.data;
+    window.log.push({ origin: event.origin, fromTarget: event.source === frame.contentWindow, data });
+    if (event.source === frame.contentWindow && data && typeof data.revision === 'number') {
+      window.revision = data.revision;
+    }
+  });
+
+  // Post a raw message to the target frame.
+  window.send = (msg) => frame.contentWindow.postMessage(msg, '*');
+
+  // Resolve with the first logged message at index >= start that satisfies pred.
+  window.waitFor = (pred, start = 0, timeout = 3000) => new Promise((resolve, reject) => {
+    const began = performance.now();
+    (function poll() {
+      for (let i = start; i < window.log.length; i += 1) {
+        if (pred(window.log[i].data, window.log[i])) return resolve(window.log[i].data);
+      }
+      if (performance.now() - began > timeout) return reject(new Error('waitFor timed out'));
+      setTimeout(poll, 10);
+    })();
+  });
+
+  // Messages of one type received from the target, optionally from index start.
+  window.messages = (type, start = 0) => window.log.slice(start)
+    .filter((entry) => entry.fromTarget && entry.data && entry.data.type === type)
+    .map((entry) => entry.data);
+
+  window.hello = async (sessionId = 's1') => {
+    const start = window.log.length;
+    window.sessionId = sessionId;
+    window.send({ type: 'design:hello', protocolVersion: 1, sessionId });
+    return window.waitFor((d) => d && d.type === 'design:ready' && d.sessionId === sessionId, start)
+      .catch(() => ({ type: 'timeout', sessionId }));
+  };
+
+  // Send a request-style control message (update/reset/restore-text) with the
+  // current session and revision filled in, and resolve with the reply.
+  let counter = 0;
+  window.request = async (msg) => {
+    const start = window.log.length;
+    const full = {
+      protocolVersion: 1,
+      sessionId: window.sessionId,
+      requestId: `r${++counter}`,
+      baseRevision: window.revision,
+      ...msg,
+    };
+    window.send(full);
+    return window.waitFor((d) => d && (d.type === 'design:applied' || d.type === 'design:rejected')
+      && d.requestId === full.requestId, start)
+      .catch(() => ({ type: 'timeout', requestId: full.requestId }));
+  };
+
+  // Send a control message with the session filled in (no reply expected).
+  window.control = (msg) => window.send({ protocolVersion: 1, sessionId: window.sessionId, ...msg });
+
+  // Pop-out: the target opened with window.open, so the bridge sees us as window.opener.
+  window.popup = null;
+  window.openPopup = (url) => {
+    const start = window.log.length;
+    window.popup = window.open(url, 'fks-popup');
+    return window.waitFor((d) => d && d.type === 'design:bridge-ready', start).then(() => true);
+  };
+  window.popupSession = null;
+  window.popupHello = (sessionId = 'p1') => {
+    const start = window.log.length;
+    window.popupSession = sessionId;
+    window.popup.postMessage({ type: 'design:hello', protocolVersion: 1, sessionId }, '*');
+    return window.waitFor((d) => d && d.type === 'design:ready' && d.sessionId === sessionId, start)
+      .catch(() => ({ type: 'timeout', sessionId }));
+  };
+
+  // Control message to the pop-out with the pop-out session filled in.
+  window.popupControl = (msg) => window.popup.postMessage(
+    { protocolVersion: 1, sessionId: window.popupSession, ...msg }, '*');
+
+  window.addEvil = (url) => new Promise((resolve) => {
+    const evil = document.createElement('iframe');
+    evil.id = 'evil';
+    evil.title = 'evil';
+    evil.onload = () => resolve();
+    evil.src = url;
+    document.body.appendChild(evil);
+  });
+
+  const params = new URLSearchParams(location.search);
+  if (params.get('target')) frame.src = params.get('target');
+</script>
+</body>
+</html>

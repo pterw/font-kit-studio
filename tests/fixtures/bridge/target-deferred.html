@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bridge test target (deferred scripts)</title>
+<!--
+  Both scripts are deferred: the bridge auto-initialises first (readyState is
+  "interactive"), then the page constructs its own restricted instance. The
+  constructor must replace the still-unconnected auto instance (carry-over R1).
+  Used by tests/test_bridge_runtime.py.
+-->
+<script defer src="/fontkit-bridge.js"></script>
+<script defer src="/tests/fixtures/bridge/construct-restricted.js"></script>
+</head>
+<body>
+<main>
+  <h1 data-design-id="deferred.title">Deferred target</h1>
+</main>
+</body>
+</html>

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bridge test target (script loaded twice)</title>
+<!--
+  The bridge script is loaded twice, as an HMR or double-include would do.
+  Used by tests/test_bridge_runtime.py.
+-->
+</head>
+<body>
+<main>
+  <h1 data-design-id="twice.title">Loaded twice</h1>
+</main>
+<script src="/fontkit-bridge.js"></script>
+<script>window.__firstClass = window.FontKitBridge;</script>
+<script src="/fontkit-bridge.js?second=1"></script>
+<script>
+  window.__loadedAgain = new Promise((resolve) => {
+    // A third load after the page finished loading (a late HMR re-execution).
+    window.addEventListener('load', () => {
+      const script = document.createElement('script');
+      script.src = '/fontkit-bridge.js?third=1';
+      script.onload = resolve;
+      document.body.appendChild(script);
+    });
+  });
+</script>
+</body>
+</html>

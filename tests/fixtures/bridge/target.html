@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bridge test target</title>
+<!--
+  Target app fixture for tests/test_bridge_runtime.py. Served from the repo root
+  at http://target.test so /fontkit-bridge.js resolves to the real bridge.
+  Mixes author targets (data-design-id) with plain semantic elements that the
+  bridge auto-discovers.
+-->
+<style>
+  :root { --font-display: Georgia, serif; --font-sans: Arial, sans-serif; --brand-ink: #111111; }
+  body { margin: 0; font-family: var(--font-sans); color: var(--brand-ink); }
+  header { display: flex; gap: 16px; padding: 8px 16px; }
+  h1 { font-family: var(--font-display); font-size: 40px; font-weight: 400; margin: 0 16px; }
+  .lead { font-size: 18px; margin: 8px 16px; }
+  .btn { display: inline-block; margin: 8px 16px; padding: 6px 12px; }
+  .cards { display: flex; gap: 16px; padding: 0 16px; }
+  .spacer { height: 1500px; }
+</style>
+</head>
+<body>
+<header id="top">
+  <a class="brand" data-design-id="landing.brand.wordmark" data-design-role="wordmark" href="#brand">Asteria</a>
+  <nav><a class="nav-link" href="#features">Features</a></nav>
+</header>
+<main>
+  <h1 data-design-id="landing.hero.title" data-design-role="display" data-design-name="Hero title" style="color: rgb(10, 20, 30); margin-top: 8px">Make type sing</h1>
+  <p class="lead" data-design-id="landing.hero.lead">Lead copy <strong>bold</strong> tail</p>
+  <a class="btn" data-design-id="landing.hero.cta" href="#clicked">Get started</a>
+  <span data-design-id="landing.stat.badge" data-design-weights="400 600 800">42 fonts</span>
+  <button id="counter" type="button" onclick="this.dataset.count = String((Number(this.dataset.count) || 0) + 1)">Count</button>
+  <section class="cards">
+    <article class="card"><h3>Card one</h3><p>Card body one</p></article>
+    <article class="card"><h3>Card two</h3><p>Card body two</p></article>
+  </section>
+  <svg data-design-id="landing.mark" width="40" height="40" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="18" fill="currentColor"></circle></svg>
+  <p data-design-id='quote"back\slash'>Escaped id</p>
+  <img data-design-id="landing.photo" alt="Photo" width="20" height="20" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==">
+  <div class="slot" data-design-id="landing.slot"></div>
+  <div class="spacer"></div>
+  <p id="footer-note">Footer note</p>
+</main>
+<script src="/fontkit-bridge.js"></script>
+</body>
+</html>

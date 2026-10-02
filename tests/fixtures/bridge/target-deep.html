@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bridge test target (deep, repetitive DOM)</title>
+<!--
+  Two identical deep branches without ids: a short auto selector path would match
+  both (carry-over M8). Used by tests/test_bridge_runtime.py.
+-->
+</head>
+<body>
+<main>
+  <div class="wrap"><div><div><div><div><div><p>Deep copy</p></div></div></div></div></div></div>
+  <div class="wrap"><div><div><div><div><div><p>Deep copy</p></div></div></div></div></div></div>
+  <div class="wrap"><div><div><div><div><div><p>Deep copy</p><p>Second deep copy</p></div></div></div></div></div></div>
+</main>
+<script src="/fontkit-bridge.js"></script>
+</body>
+</html>
