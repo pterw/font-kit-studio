@@ -705,18 +705,19 @@ footer {
   <div class="wrap">
     <section class="composer-toolbar" aria-label="Composer setup">
       <!-- Target Application Connector (Design Bridge Protocol v1) -->
-      <div class="c-field span-6" style="grid-column: 1 / -1; padding: 10px 14px; background: color-mix(in srgb, var(--accent) 8%, var(--panel)); border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line)); border-radius: 8px; margin-bottom: 6px;">
-        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
-          <div style="display: flex; align-items: center; gap: 8px;">
+      <div id="targetAppBridgeBar" class="c-field span-6" style="grid-column: 1 / -1; min-width: 0; max-width: 100%; box-sizing: border-box; padding: 8px 12px; background: color-mix(in srgb, var(--accent) 8%, var(--panel)); border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line)); border-radius: 8px; margin-bottom: 6px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; min-width: 0; max-width: 100%;">
+          <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
             <span style="font-weight: 750; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--accent);">Target Application Bridge</span>
             <span id="bridgeStatusBadge" style="font-size: 10px; padding: 2px 7px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); font-family: monospace;">Ready</span>
           </div>
-          <div style="display: flex; align-items: center; gap: 8px; flex: 1; max-width: 620px;">
-            <input id="targetAppUrl" type="text" value="http://localhost:8000/" placeholder="Target URL e.g. http://localhost:8000/" style="padding: 6px 10px; font-size: 12px; font-family: monospace;" />
-            <button id="btnConnectTarget" class="btn" type="button" style="padding: 6px 12px; font-size: 12px; font-weight: 600;">Connect Target</button>
-            <div class="segmented" style="display: inline-flex;">
-              <button id="viewSpecimenCanvas" class="active" type="button" style="padding: 6px 10px; font-size: 11px;">Specimen</button>
-              <button id="viewTargetApp" type="button" style="padding: 6px 10px; font-size: 11px;">Target App</button>
+          <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 6px; flex: 1 1 240px; min-width: 0; max-width: 100%;">
+            <input id="targetAppUrl" type="text" value="http://localhost:8000/" placeholder="Target URL e.g. http://localhost:8000/" style="padding: 6px 8px; font-size: 12px; font-family: monospace; min-width: 100px; flex: 1 1 100px; max-width: 100%; box-sizing: border-box;" />
+            <button id="btnConnectTarget" class="btn" type="button" style="padding: 6px 10px; font-size: 11px; font-weight: 600;">Connect Target</button>
+            <button id="btnRestoreOriginalText" class="btn" type="button" style="padding: 6px 8px; font-size: 11px;" title="Restore original text in live web app">↻ Restore Page Text</button>
+            <div class="segmented" style="display: inline-flex; flex-shrink: 0;">
+              <button id="viewSpecimenCanvas" class="active" type="button" style="padding: 6px 8px; font-size: 11px;">Specimen</button>
+              <button id="viewTargetApp" type="button" style="padding: 6px 8px; font-size: 11px;">Target App</button>
             </div>
           </div>
         </div>
@@ -2100,6 +2101,10 @@ if (remembered) kitId.value = remembered;
     if (target < 0 || target >= state.slots.length) return;
     [state.slots[index], state.slots[target]] = [state.slots[target], state.slots[index]];
     renderComposer();
+    if (typeof broadcastLiveState === "function") {
+      broadcastLiveState(true);
+      highlightSlotInTarget(state.slots[target].id, target, state.slots[target].role);
+    }
   }
 
   function renderCanvas() {
@@ -2386,7 +2391,17 @@ if (remembered) kitId.value = remembered;
       bindSimpleInput('[data-bind="lineHeight"]', "input", Number);
       bindSimpleInput('[data-bind="tracking"]', "input", Number);
       bindSimpleInput('[data-bind="transform"]', "change");
-      bindSimpleInput('[data-bind="text"]', "input");
+          const textInputEl = slotInspector.querySelector('[data-bind="text"]');
+    if (textInputEl) {
+      textInputEl.addEventListener("input", () => {
+        const slot = selectedSlot();
+        if (slot) {
+          slot.text = textInputEl.value;
+          slot.textTouched = true; // Mark as explicitly edited by user
+          renderCanvas();
+        }
+      });
+    }
       slotInspector.querySelectorAll('[data-axis]').forEach(range => {
         range.addEventListener("input", () => {
           const current = selectedSlot();
@@ -2421,6 +2436,10 @@ if (remembered) kitId.value = remembered;
           current.assetDataUrl = String(reader.result || "");
           renderComposer();
           composerStatus.textContent = `${file.name} loaded for this session.`;
+          if (typeof broadcastLiveState === "function") {
+            broadcastLiveState(true);
+            highlightSlotInTarget(current.id, 0, current.role || "Image");
+          }
         };
         reader.readAsDataURL(file);
       });
@@ -2588,50 +2607,8 @@ if (remembered) kitId.value = remembered;
   });
 
   
-  function syncToLiveApp() {
-    const tokens = {};
-    state.slots.forEach(slot => {
-      if (slot.type !== "text") return;
-      const font = byFamily(slot.family);
-      const stack = cssStack(font);
-      const r = (slot.role || "").toLowerCase();
-      if (r.includes("title") || r.includes("display") || r.includes("hero")) {
-        tokens["--font-display"] = stack;
-      } else if (r.includes("lead") || r.includes("body") || r.includes("deck")) {
-        tokens["--font-sans"] = stack;
-      } else if (r.includes("editorial") || r.includes("quote") || r.includes("narrative") || r.includes("serif")) {
-        tokens["--font-serif"] = stack;
-      } else if (r.includes("mono") || r.includes("data") || r.includes("caption") || r.includes("code")) {
-        tokens["--font-mono"] = stack;
-      }
-    });
-
-    if (!tokens["--font-display"] && state.slots[0]) tokens["--font-display"] = cssStack(byFamily(state.slots[0].family));
-    if (!tokens["--font-sans"] && state.slots[1]) tokens["--font-sans"] = cssStack(byFamily(state.slots[1].family));
-    if (!tokens["--font-serif"] && state.slots[2]) tokens["--font-serif"] = cssStack(byFamily(state.slots[2].family));
-    if (!tokens["--font-mono"] && state.slots[3]) tokens["--font-mono"] = cssStack(byFamily(state.slots[3].family));
-
-    const message = {
-      type: "design:update",
-      requestId: `req-${Date.now()}`,
-      baseRevision: targetRevision,
-      patch: { tokens }
-    };
-
-    sendDesignMessage(message);
-
-    const syncBtn = document.getElementById("btnSyncToApp");
-    if (syncBtn) {
-      syncBtn.textContent = "✓ Synced!";
-      setTimeout(() => { syncBtn.textContent = "⚡ Sync to Live App"; }, 1500);
-    }
-  }
-
-  const syncBtnEl = document.getElementById("btnSyncToApp");
-  if (syncBtnEl) syncBtnEl.addEventListener("click", syncToLiveApp);
-
   // ==========================================
-  // Design Bridge Protocol v1 Client Logic
+  // Design Bridge Protocol v1 Live Visual Editor Runtime
   // ==========================================
   const targetAppUrlInput = document.getElementById("targetAppUrl");
   const btnConnectTarget = document.getElementById("btnConnectTarget");
@@ -2641,9 +2618,11 @@ if (remembered) kitId.value = remembered;
   const targetAppContainerEl = document.getElementById("targetAppContainer");
   const targetAppFrameEl = document.getElementById("targetAppFrame");
   const bridgeStatusBadge = document.getElementById("bridgeStatusBadge");
+  const syncBtnEl = document.getElementById("btnSyncToApp");
 
   let connectedTargetWindow = null;
   let targetRevision = 1;
+  let liveSyncDebounceTimer = null;
 
   function setBridgeStatus(text, isConnected = true) {
     if (bridgeStatusBadge) {
@@ -2653,33 +2632,191 @@ if (remembered) kitId.value = remembered;
     }
   }
 
+  function sendDesignMessage(msg) {
+    if (connectedTargetWindow) {
+      try { connectedTargetWindow.postMessage(msg, "*"); } catch(e){}
+    }
+    
+  // Anti-recursion guard: If Studio itself is embedded inside an iframe (Modality B),
+  // hide the recursive Target Bridge connector bar and target iframe container.
+  if (window.self !== window.top) {
+    const bridgeBar = document.getElementById("targetAppBridgeBar");
+    if (bridgeBar) bridgeBar.style.display = "none";
+    if (targetAppContainerEl) targetAppContainerEl.style.display = "none";
+    if (viewTargetBtn) viewTargetBtn.style.display = "none";
+    if (viewSpecimenBtn) viewSpecimenBtn.style.display = "none";
+  }
+
+  if (window.parent && window.parent !== window) {
+      try { window.parent.postMessage(msg, "*"); } catch(e){}
+    }
+    if (window.opener) {
+      try { window.opener.postMessage(msg, "*"); } catch(e){}
+    }
+  }
+
+  function highlightSlotInTarget(slotId, slotIndex, role) {
+    sendDesignMessage({
+      type: "design:highlight",
+      targetId: slotId,
+      slotIndex: slotIndex ?? 0,
+      role: role || "Slot"
+    });
+  }
+
+  function broadcastLiveState(immediate = false) {
+    if (liveSyncDebounceTimer) {
+      clearTimeout(liveSyncDebounceTimer);
+      liveSyncDebounceTimer = null;
+    }
+
+    const runSync = () => {
+      // 1. Compute CSS font stacks
+      const tokens = {};
+      state.slots.forEach(slot => {
+        if (slot.type !== "text") return;
+        const font = byFamily(slot.family);
+        const stack = cssStack(font);
+        const r = (slot.role || "").toLowerCase();
+        if (r.includes("title") || r.includes("display") || r.includes("hero")) {
+          tokens["--font-display"] = stack;
+        } else if (r.includes("lead") || r.includes("body") || r.includes("deck")) {
+          tokens["--font-sans"] = stack;
+        } else if (r.includes("editorial") || r.includes("quote") || r.includes("narrative") || r.includes("serif")) {
+          tokens["--font-serif"] = stack;
+        } else if (r.includes("mono") || r.includes("data") || r.includes("caption") || r.includes("code")) {
+          tokens["--font-mono"] = stack;
+        }
+      });
+
+      if (!tokens["--font-display"] && state.slots[0]) tokens["--font-display"] = cssStack(byFamily(state.slots[0].family));
+      if (!tokens["--font-sans"] && state.slots[1]) tokens["--font-sans"] = cssStack(byFamily(state.slots[1].family));
+      if (!tokens["--font-serif"] && state.slots[2]) tokens["--font-serif"] = cssStack(byFamily(state.slots[2].family));
+      if (!tokens["--font-mono"] && state.slots[3]) tokens["--font-mono"] = cssStack(byFamily(state.slots[3].family));
+
+      // 2. Structured Slots Payload for live content, typography, and SVG/PNG assets
+      const slotPayloads = state.slots.map((slot, index) => {
+        const payload = {
+          id: slot.id,
+          index,
+          role: slot.role,
+          type: slot.type
+        };
+
+        if (slot.type === "text") {
+          const font = byFamily(slot.family);
+          payload.fontFamily = cssStack(font);
+          payload.familyRaw = slot.family;
+          payload.weight = slot.weight;
+          payload.size = slot.size;
+          payload.lineHeight = slot.lineHeight;
+          payload.tracking = slot.tracking;
+          payload.align = slot.align;
+          payload.colorHex = resolvedColor(slot);
+          payload.transform = slot.transform;
+          payload.text = slot.text;
+          payload.textTouched = Boolean(slot.textTouched);
+        } else if (slot.type === "image") {
+          payload.imageName = slot.imageName;
+          payload.assetDataUrl = slot.assetDataUrl;
+          payload.imageWidth = slot.imageWidth;
+          payload.opacity = slot.opacity;
+        } else if (slot.type === "rule") {
+          payload.ruleWidth = slot.ruleWidth;
+          payload.ruleThickness = slot.ruleThickness;
+          payload.colorHex = resolvedColor(slot);
+        } else if (slot.type === "spacer") {
+          payload.spacerHeight = slot.spacerHeight;
+        } else if (slot.type === "row") {
+          payload.children = (slot.children || []).map(child => ({
+            id: child.id,
+            role: child.role,
+            type: child.type,
+            fontFamily: child.family ? cssStack(byFamily(child.family)) : undefined,
+            text: child.text,
+            assetDataUrl: child.assetDataUrl,
+            imageWidth: child.imageWidth
+          }));
+        }
+
+        return payload;
+      });
+
+      // 3. Dispatch Live Design Update
+      sendDesignMessage({
+        type: "design:update",
+        requestId: `req-${Date.now()}`,
+        baseRevision: targetRevision,
+        patch: {
+          tokens,
+          slots: slotPayloads,
+          layout: {
+            order: slotPayloads.map(s => ({ id: s.id, role: s.role, index: s.index })),
+            canvasWidth: state.canvasWidth,
+            backgroundHex: state.background?.hex
+          }
+        }
+      });
+    };
+
+    if (immediate) {
+      runSync();
+    } else {
+      liveSyncDebounceTimer = setTimeout(runSync, 20);
+    }
+  }
+
+  function syncToLiveApp() {
+    broadcastLiveState(true);
+    const loc = selectedLocation();
+    if (loc && loc.slot) {
+      highlightSlotInTarget(loc.slot.id, loc.index, loc.slot.role);
+    }
+    if (syncBtnEl) {
+      syncBtnEl.textContent = "✓ Synced!";
+      setTimeout(() => { syncBtnEl.textContent = "⚡ Sync to Live App"; }, 1400);
+    }
+  }
+
+  if (syncBtnEl) syncBtnEl.addEventListener("click", syncToLiveApp);
+
   function connectTargetApp(url) {
     if (!targetAppFrameEl) return;
-    targetAppFrameEl.src = url || targetAppUrlInput.value || "http://localhost:8000/";
+    const targetUrl = url || targetAppUrlInput.value || "http://localhost:8000/";
+
+    // Anti-recursion guard: Never embed Font Kit Studio inside itself
+    if (/font_kit_studio|font-kit-studio/i.test(targetUrl) || targetUrl.replace(/\/$/, "") === window.location.href.replace(/\/$/, "")) {
+      setBridgeStatus("Recursion Blocked", false);
+      console.warn("[FontKitStudio] Blocked recursive self-embedding:", targetUrl);
+      if (targetAppUrlInput) targetAppUrlInput.value = "http://localhost:8000/";
+      return;
+    }
+
+    targetAppFrameEl.src = targetUrl;
     setBridgeStatus("Connecting…", true);
 
     targetAppFrameEl.onload = () => {
       connectedTargetWindow = targetAppFrameEl.contentWindow;
-      // Send handshake design:hello
       setTimeout(() => {
         sendDesignMessage({
           type: "design:hello",
           protocolVersion: 1,
           sessionId: "fks-" + Date.now()
         });
-      }, 300);
+      }, 250);
     };
   }
 
-  function sendDesignMessage(msg) {
-    // 1. Send to hosted target iframe if active
-    if (connectedTargetWindow) {
-      try { connectedTargetWindow.postMessage(msg, "*"); } catch(e){}
-    }
-    // 2. Send to parent window if Studio is embedded
-    if (window.parent && window.parent !== window) {
-      try { window.parent.postMessage(msg, "*"); } catch(e){}
-    }
+  
+  const btnRestoreOriginalText = document.getElementById("btnRestoreOriginalText");
+  if (btnRestoreOriginalText) {
+    btnRestoreOriginalText.addEventListener("click", () => {
+      state.slots.forEach(slot => { slot.textTouched = false; });
+      sendDesignMessage({ type: "design:restore-text" });
+      setBridgeStatus("Original Text Restored", true);
+      btnRestoreOriginalText.textContent = "✓ Restored!";
+      setTimeout(() => { btnRestoreOriginalText.textContent = "↻ Restore Page Text"; }, 1500);
+    });
   }
 
   if (btnConnectTarget) {
@@ -2703,6 +2840,8 @@ if (remembered) kitId.value = remembered;
     if (targetAppContainerEl) targetAppContainerEl.style.display = "block";
     if (!targetAppFrameEl.src || targetAppFrameEl.src === "about:blank") {
       connectTargetApp(targetAppUrlInput.value);
+    } else {
+      broadcastLiveState(true);
     }
   }
 
@@ -2723,11 +2862,78 @@ if (remembered) kitId.value = remembered;
     } else if (data.type === "design:ready") {
       const targetCount = data.targets ? data.targets.length : 0;
       setBridgeStatus(`Connected (${targetCount} targets)`, true);
+      broadcastLiveState(true);
     } else if (data.type === "design:applied") {
       targetRevision = data.revision;
-      setBridgeStatus(`Synced (rev ${targetRevision})`, true);
+      setBridgeStatus(`Live Synced (rev ${targetRevision})`, true);
+    } else if (data.type === "design:select-slot") {
+      // Target webapp clicked an element -> select corresponding slot in composer
+      const targetId = data.targetId;
+      const roleLower = (data.role || "").toLowerCase();
+      const idLower = (data.targetId || "").toLowerCase();
+
+      let matched = state.slots.find(s => s.targetId === targetId || s.id === targetId);
+      if (!matched) {
+        // Map by semantic role
+        matched = state.slots.find(s => {
+          const sr = (s.role || "").toLowerCase();
+          if (idLower.includes("title") || roleLower.includes("display")) return sr === "h1" || sr === "title" || sr === "hero";
+          if (idLower.includes("tagline") || roleLower.includes("editorial")) return sr === "accent" || sr === "editorial" || sr === "tagline";
+          if (idLower.includes("wordmark") || roleLower.includes("brand")) return sr === "wordmark";
+          if (idLower.includes("deck") || roleLower.includes("body")) return sr === "body";
+          if (idLower.includes("mark") || idLower.includes("graphic") || roleLower.includes("image")) return sr === "image";
+          if (idLower.includes("stat") || idLower.includes("badge") || roleLower.includes("metric")) return sr === "metadata";
+          return false;
+        });
+      }
+
+      if (!matched && state.slots.length > 0) {
+        matched = state.slots[0];
+      }
+
+      if (matched) {
+        matched.targetId = targetId;
+        state.selectedId = matched.id;
+        if (!matched.textTouched && data.currentText) {
+          matched.text = data.currentText;
+        }
+        if (data.name) {
+          matched.role = data.name;
+        }
+        renderComposer();
+        setBridgeStatus(`Selected: ${data.name || data.role}`, true);
+      }
     }
   });
+
+  // Streaming live hook into renderCanvas for real-time live typing and slider adjustments
+  const originalRenderCanvas = renderCanvas;
+  renderCanvas = function() {
+    originalRenderCanvas();
+    if (typeof broadcastLiveState === "function") {
+      broadcastLiveState(false);
+    }
+  };
+
+  // Streaming live hook into applyCompositionPreset
+  const originalApplyCompositionPreset = applyCompositionPreset;
+  applyCompositionPreset = function(name) {
+    originalApplyCompositionPreset(name);
+    if (typeof broadcastLiveState === "function") {
+      broadcastLiveState(true);
+    }
+  };
+
+  
+  // Anti-recursion guard: If Studio itself is embedded inside an iframe (Modality B),
+  // hide the recursive Target Bridge connector bar and target iframe container.
+  if (window.self !== window.top) {
+    const bridgeBar = document.getElementById("targetAppBridgeBar");
+    if (bridgeBar) bridgeBar.style.display = "none";
+    if (targetAppContainerEl) targetAppContainerEl.style.display = "none";
+    if (viewTargetBtn) viewTargetBtn.style.display = "none";
+    if (viewSpecimenBtn) viewSpecimenBtn.style.display = "none";
+  }
 
   if (window.parent && window.parent !== window) {
     window.parent.postMessage({ type: "design:hello", protocolVersion: 1, sessionId: "fks-" + Date.now() }, "*");

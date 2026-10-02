@@ -848,3 +848,80 @@ The following should not be reopened during v0.2.0 implementation without a conc
 No v0.2.0 implementation begins until this design is reviewed and accepted.
 
 The next step after approval is a Superpowers implementation plan that decomposes the architecture into independently testable tasks, with Protocol v1 tests treated as the first-class contract.
+
+---
+
+## 8. Live Wireframe Movement & Layout Reordering Protocol
+
+To enable Font Kit Studio Composer to serve as an active visual wireframe editor for live pages, the Design Bridge Protocol supports dynamic element reordering without breaking application state or component encapsulation.
+
+### 8.1 Wireframe Container Contract
+Target applications specify reorderable flow containers using the `data-design-order-container="true"` attribute:
+```html
+<main id="main-content-flow" data-design-order-container="true">
+  <section data-design-id="landing.hero" data-design-role="hero">...</section>
+  <section data-design-id="apoe.status.card" data-design-role="section">...</section>
+  <section data-design-id="section.qc" data-design-role="metrics">...</section>
+</main>
+```
+
+### 8.2 Movement Dispatch
+When a composer slot is moved up or down (`moveSlot(index, delta)`), Studio broadcasts `design:update` with the ordered slot manifest:
+```json
+{
+  "type": "design:update",
+  "requestId": "req-1727839482000",
+  "baseRevision": 1,
+  "patch": {
+    "layout": {
+      "order": [
+        { "id": "s1", "role": "Hero", "index": 0 },
+        { "id": "s2", "role": "Section", "index": 1 },
+        { "id": "s3", "role": "Metrics", "index": 2 }
+      ]
+    },
+    "slots": [ ... ]
+  }
+}
+```
+
+### 8.3 Target DOM & CSS Execution
+`FontKitBridge` resolves matching target elements and applies dual-layer ordering:
+1. **CSS Order (`element.style.order = index`)**: Instant visual layout reordering for Flexbox and CSS Grid containers.
+2. **Smooth Transition Flow**: Attaches `transition: transform 0.3s cubic-bezier(0.2, 0.9, 0.3, 1), opacity 0.2s ease` to sibling children, ensuring live movement glides smoothly.
+3. **Event Notification**: Dispatches `window.dispatchEvent(new CustomEvent('design:order-changed', { detail: { order } }))`.
+
+---
+
+## 9. PNG and SVG Asset Placement Protocol
+
+Composer image slots support live drag-and-drop or file upload of PNG and SVG assets, streaming them directly into target application brand marks, hero illustrations, badges, and icon elements.
+
+### 9.1 Image Slot Payload
+```json
+{
+  "id": "slot-img-1",
+  "type": "image",
+  "role": "Brand Mark",
+  "imageName": "brand-logo.svg",
+  "assetDataUrl": "data:image/svg+xml;base64,...",
+  "imageWidth": 220,
+  "opacity": 0.95
+}
+```
+
+### 9.2 Target Placement Rules
+- **Direct `<img>` Targets**: Updates `src`, `style.width`, and `style.opacity`.
+- **Inline `<svg>` Targets**: Replaces with parsed vector nodes if an SVG string is provided.
+- **Container / Icon Targets (`<div>`, `<figure>`)**: Automatically mounts or updates an internal `<img class="fontkit-placed-asset">`, scaling cleanly while preserving container flexbox/grid layout and clearing default emoji placeholders.
+
+---
+
+## 10. Live Visual Editor & Bidirectional Selection HUD
+
+Studio and target applications operate in a continuous, two-way synchronized loop:
+
+1. **Streaming Sync (60fps Debounced)**: Text inputs, font choices, weights, tracking, line heights, colors, and asset sizes synchronize in real time (20ms debounce) as the user interacts with the Composer.
+2. **Interactive Highlight HUD**: When a slot is clicked or modified in Studio, `FontKitBridge` projects a non-intrusive floating selection box (`#fontkit-bridge-overlay`) over the corresponding DOM element with a label badge:
+   `⚡ Live Edit: [Role] (#Index)`.
+3. **Click-to-Select in Target**: Clicking any element annotated with `data-design-id` or `data-design-role` in the target web app dispatches `design:select-slot`, instructing Studio to immediately highlight that slot and focus its inspector.
