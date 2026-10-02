@@ -1,13 +1,15 @@
 import json
 import re
 import struct
+import sys
 import unittest
 import zlib
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-HTML = Path(__file__).resolve().parents[1] / 'font_kit_studio_v0.1.1.html'
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from support import ENGINES, HTML, launch  # noqa: E402
 
 
 class BrowserCase(unittest.TestCase):
@@ -21,7 +23,7 @@ class BrowserCase(unittest.TestCase):
         self.runtime.stop()
 
     def page(self, engine):
-        browser = getattr(self.runtime, engine).launch()
+        browser = launch(self.runtime, engine)
         self.browsers.append(browser)
         page = browser.new_page(viewport={'width': 1600, 'height': 1200})
         errors = []
@@ -64,7 +66,7 @@ class BrowserCase(unittest.TestCase):
         }''')
 
     def test_task5_library_controls_and_mode_preservation(self):
-        for engine in ('chromium', 'firefox'):
+        for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, errors = self.page(engine)
                 page.locator('#modeLibrary').click()
@@ -91,9 +93,9 @@ class BrowserCase(unittest.TestCase):
                 self.assertEqual(errors, [])
 
     def test_task5_offline_layouts_and_dynamic_ids(self):
-        for engine in ('chromium', 'firefox'):
+        for engine in ENGINES:
             with self.subTest(engine=engine):
-                browser = getattr(self.runtime, engine).launch()
+                browser = launch(self.runtime, engine)
                 self.browsers.append(browser)
                 page = browser.new_page()
                 page.route('https://**/*', lambda route: route.abort())
@@ -125,7 +127,7 @@ class BrowserCase(unittest.TestCase):
                 self.assertEqual(errors, [])
 
     def test_task4_failed_import_is_transactional(self):
-        for engine in ('chromium', 'firefox'):
+        for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, errors = self.page(engine)
                 before = self.export(page)
@@ -146,7 +148,7 @@ class BrowserCase(unittest.TestCase):
                 self.assertEqual(errors, [])
 
     def test_task4_css_roles_are_valid_and_collision_free(self):
-        for engine in ('chromium', 'firefox'):
+        for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, errors = self.page(engine)
                 self.import_slots(page, [{'type':'row', 'childCount':4, 'children':[
@@ -164,7 +166,7 @@ class BrowserCase(unittest.TestCase):
                 self.assertIn('--row-1-columns:', css)
 
     def test_task4_failed_background_import_preserves_state(self):
-        for engine in ('chromium', 'firefox'):
+        for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, errors = self.page(engine)
                 before = self.export(page)
@@ -175,7 +177,7 @@ class BrowserCase(unittest.TestCase):
                 self.assertEqual(errors, [])
 
     def test_task4_explicit_empty_kits_and_missing_field_compatibility(self):
-        for engine in ('chromium', 'firefox'):
+        for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, errors = self.page(engine)
                 kits = page.locator('#composerKitIds')
@@ -190,7 +192,7 @@ class BrowserCase(unittest.TestCase):
                 self.assertEqual(errors, [])
 
     def test_task4_css_slug_and_property_suffix_collisions(self):
-        for engine in ('chromium', 'firefox'):
+        for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, errors = self.page(engine)
                 self.import_slots(page, [{'type':'row', 'childCount':4, 'children':[
@@ -202,7 +204,7 @@ class BrowserCase(unittest.TestCase):
                 self.assertEqual(errors, [])
 
     def test_task4_known_leaf_fields_have_safe_shapes(self):
-        for engine in ('chromium', 'firefox'):
+        for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, errors = self.page(engine)
                 self.import_slots(page, [{'type':'row', 'children':[
@@ -221,7 +223,7 @@ class BrowserCase(unittest.TestCase):
                 self.assertEqual(errors, [])
 
     def test_task4_recursive_asset_privacy_and_old_json_round_trip(self):
-        for engine in ('chromium', 'firefox'):
+        for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, errors = self.page(engine)
                 old = {'version':'0.1.0', 'composition': {'slots':[
@@ -261,7 +263,7 @@ class BrowserCase(unittest.TestCase):
         png = (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR',struct.pack('!2I5B',1,1,8,6,0,0,0))
                + chunk(b'IDAT',zlib.compress(b'\x00\xff\x00\x00\xff')) + chunk(b'IEND',b''))
         svg = b'<svg xmlns="http://www.w3.org/2000/svg" width="3" height="2"><rect width="3" height="2" fill="red"/></svg>'
-        for engine in ('chromium', 'firefox'):
+        for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, errors = self.page(engine)
                 self.import_slots(page, [{'type':'row', 'children':[{'type':'image'}, {'type':'text', 'text':'safe'}]}])
@@ -297,7 +299,7 @@ class BrowserCase(unittest.TestCase):
                 self.assertEqual(errors, [])
 
     def test_row_inspector_normalized_values_and_labels(self):
-        for engine in ('chromium', 'firefox'):
+        for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, errors = self.page(engine)
                 self.import_slots(page, [{'type':'row', 'gap':99999, 'collapseAt':99999,
@@ -335,7 +337,7 @@ class BrowserCase(unittest.TestCase):
                 self.assertEqual(errors, [])
 
     def test_row_controls_and_leaf_inspectors(self):
-        for engine in ('chromium', 'firefox'):
+        for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, errors = self.page(engine)
                 self.import_slots(page, [{'type':'row', 'childCount':4, 'children':[
@@ -372,7 +374,7 @@ class BrowserCase(unittest.TestCase):
                 self.assertEqual(errors, [])
 
     def test_unequal_child_alignment_geometry(self):
-        for engine in ('chromium', 'firefox'):
+        for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, errors = self.page(engine)
                 for alignment in ('start', 'center', 'end', 'stretch'):
@@ -392,7 +394,7 @@ class BrowserCase(unittest.TestCase):
                 self.assertEqual(errors, [])
 
     def test_weighted_columns_gaps_and_resize_observer_boundaries(self):
-        for engine in ('chromium', 'firefox'):
+        for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, errors = self.page(engine)
                 self.assertEqual(page.locator('#canvasWidth').input_value(), '960')
@@ -437,7 +439,7 @@ class BrowserCase(unittest.TestCase):
                 self.assertEqual(errors, [])
 
     def test_valid_row_factory_and_child_selection(self):
-        for engine in ('chromium', 'firefox'):
+        for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, errors = self.page(engine)
                 page.locator('#compositionPreset').select_option('rowdemo')
@@ -452,7 +454,7 @@ class BrowserCase(unittest.TestCase):
                 self.assertEqual(errors, [])
 
     def test_fractional_inspector_count_without_import(self):
-        for engine in ('chromium', 'firefox'):
+        for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, errors = self.page(engine)
                 self.import_slots(page, [{'type': 'row', 'childCount': 2}])
@@ -466,7 +468,7 @@ class BrowserCase(unittest.TestCase):
                 self.assertEqual(errors, [])
 
     def test_fractional_child_counts(self):
-        for engine in ('chromium', 'firefox'):
+        for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, errors = self.page(engine)
                 self.import_slots(page, [{'type': 'row', 'childCount': 2.5}])
@@ -482,7 +484,7 @@ class BrowserCase(unittest.TestCase):
                 self.assertEqual(errors, [])
 
     def test_malformed_row_values_are_normalized(self):
-        for engine in ('chromium', 'firefox'):
+        for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, errors = self.page(engine)
                 self.import_slots(page, [{'type': 'row', 'childCount': 'Infinity', 'gap': -99,
@@ -496,7 +498,7 @@ class BrowserCase(unittest.TestCase):
                 self.assertEqual(errors, [])
 
     def test_nested_rows_drop_hidden_descendants_and_preserve_leaf_fields(self):
-        for engine in ('chromium', 'firefox'):
+        for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, errors = self.page(engine)
                 leaves = [
