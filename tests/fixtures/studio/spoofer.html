@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Spoofer</title></head>
+<body>
+<script>
+// Test fixture: posts arbitrary protocol-shaped messages to its parent (Studio) from a foreign origin.
+window.spoof = function (message) { parent.postMessage(message, "*"); return true; };
+// Opened as a window by Studio: the opener is Studio.
+window.spoofOpener = function (message) { if (window.opener) { window.opener.postMessage(message, "*"); return true; } return false; };
+</script>
+</body>
+</html>
