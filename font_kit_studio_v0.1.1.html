@@ -628,6 +628,40 @@ footer {
   .mode-nav-inner { overflow-x: auto; }
 }
 
+
+/* Theater Fullscreen & Viewport Styles */
+.composer-shell.is-theater-fullscreen {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 999999 !important;
+  background: var(--bg, #090a0f) !important;
+  padding: 10px !important;
+  box-sizing: border-box !important;
+  display: grid !important;
+  grid-template-columns: 1fr 340px !important;
+  gap: 12px !important;
+}
+.composer-shell.is-theater-fullscreen .canvas-stage {
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: 0 !important;
+}
+.composer-shell.is-theater-fullscreen #targetAppContainer {
+  height: 100% !important;
+  flex: 1 1 auto !important;
+  margin: 0 auto !important;
+  border-radius: 6px !important;
+  overflow: hidden !important;
+  transition: max-width 0.2s ease !important;
+}
+.composer-shell.is-theater-fullscreen .inspector {
+  max-height: calc(100vh - 20px) !important;
+  overflow-y: auto !important;
+}
+
 </style>
 </head>
 
@@ -718,6 +752,13 @@ footer {
             <div class="segmented" style="display: inline-flex; flex-shrink: 0;">
               <button id="viewSpecimenCanvas" class="active" type="button" style="padding: 6px 8px; font-size: 11px;">Specimen</button>
               <button id="viewTargetApp" type="button" style="padding: 6px 8px; font-size: 11px;">Target App</button>
+            </div>
+            <div id="deviceViewportBar" style="display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;">
+              <button id="btnDeviceDesktop" class="btn" type="button" style="padding: 5px 8px; font-size: 10px;" title="Desktop (1440px)">🖥️ 1440</button>
+              <button id="btnDeviceLaptop" class="btn" type="button" style="padding: 5px 8px; font-size: 10px;" title="Laptop (1024px)">💻 1024</button>
+              <button id="btnDeviceMobile" class="btn" type="button" style="padding: 5px 8px; font-size: 10px;" title="Mobile (390px)">📱 390</button>
+              <button id="btnDeviceFluid" class="btn active" type="button" style="padding: 5px 8px; font-size: 10px;" title="Fluid (100%)">⛶ Fluid</button>
+              <button id="btnToggleFullscreen" class="btn primary" type="button" style="padding: 5px 9px; font-size: 11px; font-weight: 700;" title="Toggle Fullscreen Theater Mode">⛶ Fullscreen</button>
             </div>
           </div>
         </div>
@@ -2819,6 +2860,59 @@ if (remembered) kitId.value = remembered;
       setTimeout(() => { btnRestoreOriginalText.textContent = "↻ Restore Page Text"; }, 1500);
     });
   }
+
+  
+  // Device Viewport & Theater Fullscreen Controller
+  const composerShellEl = document.querySelector(".composer-shell");
+  const btnToggleFullscreen = document.getElementById("btnToggleFullscreen");
+  const btnDeviceDesktop = document.getElementById("btnDeviceDesktop");
+  const btnDeviceLaptop = document.getElementById("btnDeviceLaptop");
+  const btnDeviceMobile = document.getElementById("btnDeviceMobile");
+  const btnDeviceFluid = document.getElementById("btnDeviceFluid");
+  const allDeviceBtns = [btnDeviceDesktop, btnDeviceLaptop, btnDeviceMobile, btnDeviceFluid].filter(Boolean);
+
+  function setDeviceWidth(width, activeBtn) {
+    allDeviceBtns.forEach(btn => btn.classList.remove("active"));
+    if (activeBtn) activeBtn.classList.add("active");
+    if (targetAppContainerEl) {
+      if (width === "100%") {
+        targetAppContainerEl.style.maxWidth = "100%";
+        targetAppContainerEl.style.width = "100%";
+      } else {
+        targetAppContainerEl.style.maxWidth = width;
+        targetAppContainerEl.style.width = width;
+      }
+    }
+  }
+
+  if (btnDeviceDesktop) btnDeviceDesktop.addEventListener("click", () => setDeviceWidth("1440px", btnDeviceDesktop));
+  if (btnDeviceLaptop) btnDeviceLaptop.addEventListener("click", () => setDeviceWidth("1024px", btnDeviceLaptop));
+  if (btnDeviceMobile) btnDeviceMobile.addEventListener("click", () => setDeviceWidth("390px", btnDeviceMobile));
+  if (btnDeviceFluid) btnDeviceFluid.addEventListener("click", () => setDeviceWidth("100%", btnDeviceFluid));
+
+  function toggleFullscreenTheater() {
+    if (!composerShellEl) return;
+    const isFull = composerShellEl.classList.toggle("is-theater-fullscreen");
+    if (btnToggleFullscreen) {
+      btnToggleFullscreen.textContent = isFull ? "✕ Exit (Esc)" : "⛶ Fullscreen";
+    }
+    if (isFull) {
+      switchToTargetView();
+      if (targetAppContainerEl) targetAppContainerEl.style.height = "100%";
+    } else {
+      if (targetAppContainerEl) targetAppContainerEl.style.height = "720px";
+    }
+  }
+
+  if (btnToggleFullscreen) {
+    btnToggleFullscreen.addEventListener("click", toggleFullscreenTheater);
+  }
+
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && composerShellEl?.classList.contains("is-theater-fullscreen")) {
+      toggleFullscreenTheater();
+    }
+  });
 
   if (btnConnectTarget) {
     btnConnectTarget.addEventListener("click", () => {

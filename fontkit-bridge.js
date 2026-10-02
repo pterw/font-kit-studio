@@ -205,33 +205,121 @@
       }
     }
 
-    discoverTargets() {
-      const elements = document.querySelectorAll('[data-design-id], [data-design-role]');
-      elements.forEach((el) => {
-        const id = el.getAttribute('data-design-id') || el.id || `design-el-${Math.random().toString(36).slice(2, 7)}`;
-        const role = el.getAttribute('data-design-role') || 'generic';
-        const name = el.getAttribute('data-design-name') || id;
-        const isImage = el.tagName.toLowerCase() === 'img' || el.tagName.toLowerCase() === 'svg' || role === 'image' || id.includes('mark') || id.includes('graphic') || id.includes('image');
-        const computed = window.getComputedStyle(el);
+    registerElementTarget(el, customId, customRole, customName) {
+      if (!el || el.nodeType !== 1) return;
+      const id = customId || el.getAttribute('data-design-id') || el.id || `design-el-${Math.random().toString(36).slice(2, 7)}`;
+      const role = customRole || el.getAttribute('data-design-role') || this.inferRoleFromElement(el);
+      const name = customName || el.getAttribute('data-design-name') || this.generateFriendlyName(el, role);
+      const isImage = el.tagName.toLowerCase() === 'img' || el.tagName.toLowerCase() === 'svg' || role === 'image' || id.includes('mark') || id.includes('graphic') || id.includes('image');
+      const computed = window.getComputedStyle(el);
 
-        this.targets.set(id, {
-          id,
-          role,
-          name,
-          kind: isImage ? 'image' : 'text',
-          element: el,
-          initialText: el.textContent.trim(),
-          initialHTML: el.innerHTML,
-          computed: {
-            fontFamily: computed.fontFamily,
-            fontSize: computed.fontSize,
-            fontWeight: computed.fontWeight,
-            color: computed.color,
-            letterSpacing: computed.letterSpacing,
-            lineHeight: computed.lineHeight
-          }
-        });
+      this.targets.set(id, {
+        id,
+        role,
+        name,
+        kind: isImage ? 'image' : 'text',
+        element: el,
+        initialText: el.textContent.trim(),
+        initialHTML: el.innerHTML,
+        computed: {
+          fontFamily: computed.fontFamily,
+          fontSize: computed.fontSize,
+          fontWeight: computed.fontWeight,
+          color: computed.color,
+          letterSpacing: computed.letterSpacing,
+          lineHeight: computed.lineHeight
+        }
       });
+    }
+
+    inferRoleFromElement(el) {
+      const tag = el.tagName.toLowerCase();
+      const cls = (el.className || '').toString().toLowerCase();
+      const id = (el.id || '').toLowerCase();
+
+      if (tag === 'img' || tag === 'svg' || tag === 'picture' || cls.includes('logo') || cls.includes('mark') || cls.includes('icon') || id.includes('logo')) {
+        return 'image';
+      }
+      if (cls.includes('wordmark') || cls.includes('brand') || id.includes('brand')) {
+        return 'wordmark';
+      }
+      if (tag === 'h1' || cls.includes('hero-title') || cls.includes('display')) {
+        return 'display';
+      }
+      if (tag === 'h2' || cls.includes('title') || cls.includes('heading')) {
+        return 'title';
+      }
+      if (tag === 'h3' || tag === 'h4') {
+        return 'subhead';
+      }
+      if (cls.includes('tagline') || cls.includes('deck') || cls.includes('lead') || cls.includes('editorial') || cls.includes('narrative')) {
+        return 'editorial';
+      }
+      if (cls.includes('badge') || cls.includes('chip') || cls.includes('pill') || cls.includes('tag')) {
+        return 'badge';
+      }
+      if (cls.includes('stat') || cls.includes('metric') || cls.includes('kpi') || cls.includes('counter')) {
+        return 'stat';
+      }
+      if (tag === 'button' || cls.includes('btn')) {
+        return 'button';
+      }
+      if (tag === 'p') {
+        return 'body';
+      }
+      return 'generic';
+    }
+
+    generateFriendlyName(el, role, idx = 0) {
+      const text = (el.textContent || '').trim();
+      const tag = el.tagName.toUpperCase();
+      if (text.length > 0 && text.length <= 25) {
+        return `${tag}: "${text}"`;
+      }
+      if (text.length > 25) {
+        return `${tag}: "${text.slice(0, 22)}…"`;
+      }
+      if (el.getAttribute('alt')) {
+        return `Image: ${el.getAttribute('alt')}`;
+      }
+      return `${role.toUpperCase()} (${tag})`;
+    }
+
+    discoverTargets() {
+      // 1. Explicit data-design-id elements (highest authority)
+      const explicit = document.querySelectorAll('[data-design-id], [data-design-role]');
+      explicit.forEach((el) => {
+        this.registerElementTarget(el);
+      });
+
+      // 2. Zero-Hook Auto-Discovery: Instrument all semantic elements without requiring manual markup
+      if (this.options.autoDiscoverSemantic !== false) {
+        const semanticSelectors = [
+          'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+          'header p', 'main p', 'article p', 'section p',
+          'header a', 'nav a', 'button', '.btn',
+          'img', 'svg', 'picture',
+          '[class*="title"]', '[class*="heading"]', '[class*="brand"]', '[class*="wordmark"]', '[class*="badge"]', '[class*="stat"]'
+        ];
+
+        try {
+          const autoEls = document.querySelectorAll(semanticSelectors.join(', '));
+          autoEls.forEach((el, idx) => {
+            if (el.closest('#fontkit-bridge-overlay, #fontkit-bridge-hover, script, style, noscript')) return;
+            if (el.hasAttribute('data-design-id')) return; // already explicitly registered
+
+            const role = this.inferRoleFromElement(el);
+            const friendlyName = this.generateFriendlyName(el, role, idx);
+            const autoId = `auto:${el.tagName.toLowerCase()}:${role}:${idx}`;
+
+            el.setAttribute('data-design-id', autoId);
+            el.setAttribute('data-design-role', role);
+            el.setAttribute('data-design-name', friendlyName);
+
+            this.registerElementTarget(el, autoId, role, friendlyName);
+          });
+        } catch (e) {}
+      }
     }
 
     getTargetManifest() {
