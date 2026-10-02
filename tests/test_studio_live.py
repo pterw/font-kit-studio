@@ -2336,5 +2336,288 @@ class StudioRecursionGuardTests(LiveCase):
                 self.assertEqual(errors, [])
 
 
+class StudioReviewFixTests(LiveCase):
+    """Review fixes for the state boundary: selectors, composition tokens, late replies."""
+
+    def edit_size(self, page, frame, size):
+        """Type a font size into the inspector and wait for the target's acknowledgement."""
+        before = frame.evaluate('window.fake.revision')
+        self.set_value(page, '#liveFontSize', size)
+        self.wait_badge(page, rf'^Live · rev {before + 1}$')
+
+    # -- 1. selectors with the child combinator -----------------------------
+    ACCEPTED_SELECTORS = [
+        'main:nth-of-type(1) > section.hero:nth-of-type(2) > h2:nth-of-type(1)',
+        'body > div.wrap:nth-of-type(1) > h2.sm\\:text-lg:nth-of-type(3)',
+        '#cards > article.card:nth-of-type(2)',
+        '[data-design-id="a\\"b"] > p:nth-of-type(1)',
+        '.w-1\\/2:nth-of-type(1) > span:nth-of-type(1)',
+        '.\\[\\&\\>\\*\\]\\:p-4:nth-of-type(1) > p:nth-of-type(2)',
+        '.a\\;b\\{c\\}d\\<e\\\\f:nth-of-type(1)',
+        '.\\31 0 > b.a\\31  > i',
+    ]
+    REJECTED_SELECTORS = [
+        'main > h2 { color: red } h3',
+        'main > h2; color: red',
+        'main > h2 } body { display: none',
+        'main > h2 <script>',
+        'main > h2\\',
+        'main > h2\\{',
+        'main > url(https://evil.example/a)',
+        'main > h2 /* x */',
+        '[data-design-id="a;b"] > p',
+        '> main',
+        'main >',
+        'main >> h2',
+    ]
+
+    def test_auto_target_selectors_with_the_child_combinator_reach_the_css_and_the_synced_file(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors = self.open(engine, sync=True)
+                self.wait_connected(page)
+                frame = self.frame(page)
+                page.wait_for_function('() => !document.querySelector("#liveCodeSync").disabled')
+                self.select(page, frame, 'auto.h2.1')
+                size = 40
+                for selector in self.ACCEPTED_SELECTORS:
+                    with self.subTest(selector=selector):
+                        size += 1
+                        frame.evaluate('([id, value]) => window.fake.setSelector(id, value)', ['auto.h2.1', selector])
+                        self.edit_size(page, frame, size)
+                        css = self.code(page, 'Css')
+                        self.assertIn(f'\n{selector} {{\n  font-size: {size}px !important;\n}}', css)
+                        self.assertNotIn('skipped', css)
+                        self.assertIn('auto-discovered — add data-design-id for a stable selector', css)
+                page.locator('#liveCodeSync').click()
+                page.wait_for_function('() => /Saved/.test(document.querySelector("#liveCodeStatus").textContent)')
+                self.assertIn(f'{self.ACCEPTED_SELECTORS[-1]} {{\n  font-size: {size}px !important;', self.puts[-1]['body'])
+                self.assertEqual(errors, [])
+
+    def test_hostile_selectors_are_skipped_not_written(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors = self.open(engine)
+                self.wait_connected(page)
+                frame = self.frame(page)
+                self.select(page, frame, 'auto.h2.1')
+                size = 40
+                for selector in self.REJECTED_SELECTORS:
+                    with self.subTest(selector=selector):
+                        size += 1
+                        frame.evaluate('([id, value]) => window.fake.setSelector(id, value)', ['auto.h2.1', selector])
+                        self.edit_size(page, frame, size)
+                        css = self.code(page, 'Css')
+                        self.assertIn('skipped: the target reported no safe selector', css)
+                        self.assertNotIn(f'font-size: {size}px', css)
+                        for hostile in ('{ color: red }', '<script>', 'evil.example', '/* x */', 'display: none'):
+                            self.assertNotIn(hostile, css)
+                self.assertEqual(errors, [])
+
+    # Adversarial runs of escapes: a grammar that can match the same text two ways takes exponential time on these.
+    ADVERSARIAL = [
+        '.' + '\\aaaaaa' * 11 + '{',
+        '.' + '\\aaaaaa' * 70 + '{',
+        '.' + 'a' * 10 + '\\ab' * 150 + '{',
+        '.' + '\\a' * 250 + ';',
+        'a' + ' > a\\1' * 90 + '\\',
+        '.' + 'a' * 495 + '{',
+    ]
+
+    def test_adversarial_escape_runs_do_not_freeze_studio_and_are_skipped(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors = self.open(engine)
+                self.wait_connected(page)
+                frame = self.frame(page)
+                self.select(page, frame, 'auto.h2.1')
+                size = 40
+                for selector in self.ADVERSARIAL:
+                    with self.subTest(selector=selector[:30], length=len(selector)):
+                        size += 1
+                        frame.evaluate('([id, value]) => window.fake.setSelector(id, value)', ['auto.h2.1', selector])
+                        started = time.time()
+                        self.edit_size(page, frame, size)
+                        css = self.code(page, 'Css')
+                        page.evaluate('1 + 1')
+                        self.assertLess(time.time() - started, 3, 'the page stayed responsive')
+                        self.assertIn('skipped: the target reported no safe selector', css)
+                        self.assertNotIn(f'font-size: {size}px', css)
+                self.assertEqual(errors, [])
+
+    def test_the_selector_check_itself_is_fast_on_500_character_inputs(self):
+        """Runs the shipped regexes (read from the page source) on adversarial and valid text."""
+        source = HTML.read_text(encoding='utf-8')
+        start = source.index('  const UNSAFE_CSS_TEXT')
+        end = source.index(': UNSAFE_CSS_TEXT.test(text);', start) + len(': UNSAFE_CSS_TEXT.test(text);')
+        code = source[start:end] + '\nreturn unsafeCssText;'
+        inputs = self.ADVERSARIAL + ['.' + '\\31 ' * 120 + 'a', 'a' + ' > a:nth-of-type(1)' * 25,
+                                     '.' + 'a\\;' * 160, '[data-design-id="' + 'x\\"' * 120 + '"]']
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                browser = launch(self.runtime, engine)
+                self.browsers.append(browser)
+                page = browser.new_page()
+                timings = page.evaluate("""([code, inputs]) => {
+                    const check = new Function(code)();
+                    return inputs.map(text => { const t = performance.now(); const unsafe = check(text, { selector: true });
+                        return [text.length, performance.now() - t, unsafe]; });
+                }""", [code, inputs])
+                for length, elapsed, _ in timings:
+                    self.assertLess(elapsed, 50, f'{length} characters took {elapsed:.1f} ms')
+                self.assertEqual([unsafe for _, _, unsafe in timings[:len(self.ADVERSARIAL)]], [True] * len(self.ADVERSARIAL))
+                self.assertEqual([unsafe for _, _, unsafe in timings[len(self.ADVERSARIAL):]], [False] * 4,
+                                 'long but well-formed selectors are still accepted')
+
+    # -- 2. composition tokens that exist only on the target -----------------
+    LEFT_ON_TARGET = {'--font-display': '"Fraunces", serif', '--font-sans': '"Inter", sans-serif'}
+
+    def saved_state_then_target_with_other_tokens(self, page, frame, saved_tokens=None, overrides=None):
+        """Studio saves `saved_tokens`; the target (re-announced, not reloaded) holds tokens Studio does not save."""
+        live = {'target': FAKE, 'revision': 0, 'overrides': overrides if overrides is not None else {'hero.title': {'fontSize': 50}}}
+        if saved_tokens:
+            live['tokens'] = saved_tokens
+        self.assertIn('Composition imported.', self.import_document(page, {**self.export(page), 'live': live}))
+        banner = page.locator('#liveReconnectBanner')
+        banner.wait_for(state='visible')
+        frame.evaluate('(values) => window.fake.setTokens(values)', self.LEFT_ON_TARGET)
+        frame.evaluate('window.fake.reannounce()')
+        page.wait_for_function('() => /the live target has \\d+ targets? changed and 2 composition tokens/.test('
+                               'document.querySelector("#liveReconnectText").textContent)')
+        self.assertEqual(self.updates(frame), [], 'reconnecting never applies anything by itself')
+        return banner
+
+    def test_reapply_removes_target_only_tokens_and_reports_success_only_when_they_are_gone(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors = self.open(engine)
+                self.wait_connected(page)
+                frame = self.frame(page)
+                banner = self.saved_state_then_target_with_other_tokens(page, frame)
+                self.assertNotIn('tokens', self.export(page)['live'])
+                page.locator('#liveReapply').click()
+                banner.wait_for(state='hidden')
+                self.assertEqual(frame.evaluate('window.fake.ledger().tokens'), {},
+                                 'the target keeps no token Studio does not save')
+                for name in self.LEFT_ON_TARGET:
+                    self.assertEqual(frame.evaluate('(n) => document.documentElement.style.getPropertyValue(n)', name), '')
+                composition = [u for u in self.updates(frame) if 'targetId' not in u]
+                self.assertEqual(composition[-1]['patch'], {'tokens': {name: None for name in self.LEFT_ON_TARGET}})
+                self.assertEqual(frame.evaluate('window.fake.styleOf("hero.title").fontSize'), '50px')
+                self.assertNotIn('tokens', self.export(page)['live'])
+                self.assertNotIn(':root {', self.code(page, 'Css'))
+                self.assertEqual(errors, [])
+
+    def test_reapply_mixes_saved_tokens_with_null_for_target_only_ones(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors = self.open(engine)
+                self.wait_connected(page)
+                frame = self.frame(page)
+                keep = {'--font-display': '"Crimson Pro", serif'}
+                banner = self.saved_state_then_target_with_other_tokens(page, frame, saved_tokens=keep, overrides={})
+                page.locator('#liveReapply').click()
+                banner.wait_for(state='hidden')
+                self.assertEqual(frame.evaluate('window.fake.ledger().tokens'), keep)
+                patch = [u for u in self.updates(frame) if 'targetId' not in u][-1]['patch']
+                self.assertEqual(patch, {'tokens': {'--font-display': '"Crimson Pro", serif', '--font-sans': None}})
+                self.assertEqual(self.export(page)['live']['tokens'], keep)
+                self.assertEqual(errors, [])
+
+    def test_reapply_does_not_report_success_while_the_target_keeps_a_token(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors = self.open(engine)
+                self.wait_connected(page)
+                frame = self.frame(page)
+                banner = self.saved_state_then_target_with_other_tokens(page, frame)
+                frame.evaluate('window.fake.keepNullTokens = true')   # a bridge that does not know null removes a token
+                page.locator('#liveReapply').click()
+                page.wait_for_function('() => /Reapply stopped/.test(document.querySelector("#liveReconnectText").textContent)')
+                self.assertTrue(banner.is_visible(), 'the conflict stays open')
+                self.assertRegex(page.locator('#liveReconnectText').inner_text(), r'(?i)token')
+                self.assertEqual(frame.evaluate('window.fake.ledger().tokens'), self.LEFT_ON_TARGET)
+                self.assertNotIn('tokens', self.export(page)['live'], "Studio's saved state is not replaced by the target's")
+                # Once the target can remove them, the same button finishes the job.
+                frame.evaluate('window.fake.keepNullTokens = false')
+                page.locator('#liveReapply').click()
+                banner.wait_for(state='hidden')
+                self.assertEqual(frame.evaluate('window.fake.ledger().tokens'), {})
+                self.assertEqual(errors, [])
+
+    # -- 3. replies that arrive after several timeouts -----------------------
+    def edit_two_targets_while_the_target_is_unresponsive(self, page, frame):
+        """Edits hero.title (61) then hero.lead (17) with the target holding every reply, until both requests timed out."""
+        frame.evaluate('window.fake.hold = true')
+        # Two different targets, so the edits queue as two requests instead of coalescing.
+        self.select(page, frame, 'hero.title')
+        self.set_value(page, '#liveFontSize', 61)
+        self.select(page, frame, 'hero.lead')
+        self.set_value(page, '#liveFontSize', 17)
+        # The first request times out (8 s) and the second is sent; then the second times out as well.
+        self.wait_badge(page, '^No response from target$', timeout=15000)
+        frame.wait_for_function('window.fake.heldCount() === 2')
+        page.evaluate('() => { document.querySelector("#bridgeStatusBadge").textContent = "Waiting for the second request"; }')
+        self.wait_badge(page, '^No response from target$', timeout=15000)
+
+    def test_every_timed_out_request_stays_tracked_until_its_late_reply_arrives(self):
+        """A target that applies the queued requests in order, whatever revision they were based on."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors = self.open(engine, sync=True)
+                self.wait_connected(page)
+                frame = self.frame(page)
+                frame.evaluate('window.fake.ignoreBaseRevision = true')
+                self.edit_two_targets_while_the_target_is_unresponsive(page, frame)
+                frame.evaluate('window.fake.hold = false')
+                frame.evaluate('window.fake.release()')
+                frame.evaluate('window.fake.release()')
+                self.wait_badge(page, r'^Live · rev 2$')
+                saved = json.loads(self.code(page, 'Json'))['overrides']
+                self.assertEqual(saved, {'hero.title': {'fontSize': 61}, 'hero.lead': {'fontSize': 17}})
+                css = self.code(page, 'Css')
+                self.assertIn('font-size: 61px !important;', css)
+                self.assertIn('font-size: 17px !important;', css)
+                self.assertEqual(self.export(page)['live']['overrides'], saved)
+                page.locator('#liveCodeSync').click()
+                page.wait_for_function('() => /Saved/.test(document.querySelector("#liveCodeStatus").textContent)')
+                self.assertIn('font-size: 61px !important;', self.puts[-1]['body'])
+                self.assertIn('font-size: 17px !important;', self.puts[-1]['body'])
+                self.assertEqual(errors, [])
+
+    def test_a_late_revision_conflict_is_shown_and_the_first_edit_is_kept(self):
+        """The real outcome: the target applied the first request, then refused the second as based on an old revision."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors = self.open(engine, sync=True)
+                self.wait_connected(page)
+                frame = self.frame(page)
+                self.edit_two_targets_while_the_target_is_unresponsive(page, frame)
+                frame.evaluate('window.fake.hold = false')
+                frame.evaluate('window.fake.release()')
+                frame.evaluate('window.fake.release()')
+                # The second edit is reported, not lost without a word.
+                self.wait_badge(page, '^Rejected: revision-conflict$')
+                saved = json.loads(self.code(page, 'Json'))['overrides']
+                self.assertEqual(saved, {'hero.title': {'fontSize': 61}}, 'only what the target applied is saved')
+                css = self.code(page, 'Css')
+                self.assertIn('font-size: 61px !important;', css)
+                self.assertNotIn('17px', css)
+                self.assertEqual(frame.evaluate('window.fake.styleOf("hero.lead").fontSize'), '16px')
+                # The inspector shows what the page really has, not the refused value.
+                self.assertEqual(page.locator('#liveFontSize').input_value(), '16')
+                # Studio learned the target's revision from the late replies, so the user can simply enter it again.
+                self.set_value(page, '#liveFontSize', 18)
+                self.wait_badge(page, r'^Live · rev 2$')
+                self.assertEqual(json.loads(self.code(page, 'Json'))['overrides'],
+                                 {'hero.title': {'fontSize': 61}, 'hero.lead': {'fontSize': 18}})
+                page.locator('#liveCodeSync').click()
+                page.wait_for_function('() => /Saved/.test(document.querySelector("#liveCodeStatus").textContent)')
+                self.assertIn('font-size: 61px !important;', self.puts[-1]['body'])
+                self.assertIn('font-size: 18px !important;', self.puts[-1]['body'])
+                self.assertNotIn('17px', self.puts[-1]['body'])
+                self.assertEqual(errors, [])
+
+
 if __name__ == '__main__':
     unittest.main()

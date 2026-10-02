@@ -2119,7 +2119,7 @@ if (remembered) kitId.value = remembered;
   // composition JSON shape is unchanged; persisted only through the optional `live` field.
   const live = {
     url: "", expectedOrigin: null, sessionId: null, ready: false, revision: 0,
-    noBridgeTimer: null, timedOut: null, targetMeta: {}, savedTokens: {},
+    noBridgeTimer: null, timedOut: new Map(), targetMeta: {}, savedTokens: {},
     targets: new Map(), changes: { tokens: {}, targets: [], structure: [], imports: [] },
     reapply: null, reapplyError: "", popup: null, popoutMode: false, popupTimer: null, warnings: [], moveGuard: null, strategyChoice: new Map(), dragId: null,
     overrides: {}, canonicalRevision: 0, canonicalTarget: "", conflict: false,
@@ -3056,8 +3056,21 @@ if (remembered) kitId.value = remembered;
   // Text that goes into CSS: the bridge's UNSAFE_CSS_STRING, plus line breaks, comment markers and !important,
   // because Studio writes these values into a file.
   const UNSAFE_CSS_TEXT = /[;{}<>\\\n\r]|url\(|expression\(|\/\*|\*\/|!important/i;
-  // A selector may contain escaped quotes and backslashes (`[data-design-id="a\\"b"]`), so those pairs are removed first.
-  const unsafeCssText = (text, { selector = false } = {}) => UNSAFE_CSS_TEXT.test(selector ? String(text).replace(/\\["\\]/g, "") : text);
+  // Selectors have their own grammar: exactly what the bridge generates (tag, #id, .class, [data-design-id="..."],
+  // :nth-of-type(n), joined by " > "). An identifier is plain characters or CSS escapes, so utility classes such as
+  // `.sm\:flex`, `.\31 0` and `.\[\&\>\*\]\:p-4` work: a backslash plus a non-hex character is that character,
+  // and a backslash plus hex digits is a code point (6 digits, or fewer when no hex digit follows, then one optional space).
+  // Those alternatives start differently and the hex forms differ in length, so every text matches in only one way and
+  // checking it takes linear time: a hostile selector from a target cannot stall Studio. The quoted attribute value
+  // allows only `\"` and `\\`. Unescaped `{ } ; < >`, other backslashes, line breaks, comment markers and `url(` are refused.
+  const SELECTOR_IDENT = /(?:[\w\u00A0-\uFFFF-]|\\(?:[0-9a-f]{6}|[0-9a-f]{1,5}(?![0-9a-f])) ?|\\[^0-9a-f\r\n\f])+/i.source;
+  const SELECTOR_PART = `#${SELECTOR_IDENT}|\\.${SELECTOR_IDENT}|\\[data-design-id="(?:[^"\\\\{};<>\\r\\n]|\\\\["\\\\])*"\\]|:nth-of-type\\(\\d{1,4}\\)`;
+  const SELECTOR_STEP = `(?:(?:[a-z][a-z0-9-]*|\\*)(?:${SELECTOR_PART})*|(?:${SELECTOR_PART})+)`;
+  const SELECTOR_GRAMMAR = new RegExp(`^${SELECTOR_STEP}(?: > ${SELECTOR_STEP})*$`, "i");
+  const UNSAFE_SELECTOR_TEXT = /url\(|expression\(|\/\*|\*\/|!important/i;
+  const unsafeCssText = (text, { selector = false } = {}) => selector
+    ? UNSAFE_SELECTOR_TEXT.test(text) || !SELECTOR_GRAMMAR.test(text)
+    : UNSAFE_CSS_TEXT.test(text);
   const TYPEKIT_SHEET = /^https:\/\/use\.typekit\.net\/[A-Za-z0-9]{6,10}\.css$/;
   const LIVE_ALIGN = ["left", "center", "right", "justify", "start", "end"];
   const LIVE_TRANSFORM = ["none", "uppercase", "lowercase", "capitalize"];
@@ -3348,7 +3361,7 @@ if (remembered) kitId.value = remembered;
     live.ready = false;
     live.queue = [];
     live.inFlight = null;
-    live.timedOut = null;
+    live.timedOut.clear();
     clearTimeout(live.requestTimer);
     live.compositionLinked = false;
     live.selectedId = null;
@@ -3500,7 +3513,7 @@ if (remembered) kitId.value = remembered;
     live.requestTimer = setTimeout(() => {
       if (live.inFlight !== op) return;
       live.inFlight = null;
-      live.timedOut = op;
+      live.timedOut.set(op.requestId, op);   // stays tracked until its late reply arrives or the session ends
       setBridgeStatus("No response from target", "error");
       reapplyDone(op, false, "no response from the target");
       reseedLiveControls();
@@ -3543,7 +3556,14 @@ if (remembered) kitId.value = remembered;
     }
     // Acknowledged composition tokens (from ⚡ Sync, or cleared by a global reset) are saved state too;
     // a later target reload that loses them is a reconnect conflict, not a smaller overrides file.
-    if (op.kind === "composition" || (op.kind === "reset" && !op.targetId)) live.savedTokens = { ...live.changes.tokens };
+    if (op.kind === "composition" && op.reapply) {
+      // Reapply never replaces Studio's saved tokens with the target's. When the target now holds exactly the saved
+      // names, its canonical values are the acknowledged ones; otherwise finishReapply reports the mismatch.
+      const names = Object.keys(live.changes.tokens);
+      if (names.length === Object.keys(live.savedTokens).length && names.every(name => Object.hasOwn(live.savedTokens, name))) {
+        live.savedTokens = { ...live.changes.tokens };
+      }
+    } else if (op.kind === "composition" || (op.kind === "reset" && !op.targetId)) live.savedTokens = { ...live.changes.tokens };
     live.canonicalRevision = live.revision;
     live.canonicalTarget = live.url;
   }
@@ -3603,12 +3623,19 @@ if (remembered) kitId.value = remembered;
     reapplyDone(op, true);
   }
 
+  // Every request that timed out stays in `live.timedOut` (by request id), so a late acknowledgement is applied
+  // however many later requests timed out after it. A late rejection changed nothing, but it is reported like any
+  // rejection (the status says why and the controls show what the page really has); it is not retried, because the
+  // user moved on while the target was silent.
   function handleLateReply(data, applied) {
-    const op = live.timedOut;
-    if (!op || data.requestId !== op.requestId) return;
-    live.timedOut = null;
+    const op = typeof data.requestId === "string" ? live.timedOut.get(data.requestId) : undefined;
+    if (!op) return;
+    live.timedOut.delete(data.requestId);
     if (Number.isInteger(data.revision) && data.revision > live.revision) live.revision = data.revision;
-    if (applied) afterApplied(op, data);
+    if (applied) { afterApplied(op, data); return; }
+    const reason = typeof data.reason === "string" ? data.reason.slice(0, 60) : "invalid-message";
+    setBridgeStatus(`Rejected: ${reason}`, "rejected");
+    if (op.kind === "move") noteMoveRejection(op, data, reason); else reseedLiveControls(op.targetId);
   }
 
   function handleReply(data, applied) {
@@ -3730,14 +3757,30 @@ if (remembered) kitId.value = remembered;
     });
     reapplyOrders(saved, targetState, new Set(resets.keys()), track);
     // Tokens go back through a tokens-only composition update (no slots/layout).
-    if (Object.keys(live.savedTokens).length && !tokensEqual(live.savedTokens, live.changes.tokens)) {
-      track({ kind:"composition", patch:{ tokens:{ ...live.savedTokens } } });
-    }
+    const tokenPatch = reapplyTokenPatch();
+    if (tokenPatch) track({ kind:"composition", patch:{ tokens:tokenPatch } });
     if (!run.ops.size) finishReapply();
     else renderReconnectBanner();
   }
 
+  // Makes the target's composition tokens equal Studio's saved set: saved tokens are sent, and a token only the
+  // target holds is removed with null (a composition update never deletes an omitted token).
+  function reapplyTokenPatch() {
+    if (tokensEqual(live.savedTokens, live.changes.tokens)) return null;
+    const patch = { ...live.savedTokens };
+    Object.keys(live.changes.tokens).forEach(name => { if (!Object.hasOwn(live.savedTokens, name)) patch[name] = null; });
+    return patch;
+  }
+
+  // Success is only reported when the target's ledger tokens equal the saved set.
   function finishReapply() {
+    if (!tokensEqual(live.savedTokens, live.changes.tokens)) {
+      const extra = Object.keys(live.changes.tokens).filter(name => !Object.hasOwn(live.savedTokens, name));
+      failReapply(extra.length
+        ? `the target still has composition tokens Studio does not save (${extra.slice(0, 3).join(", ")}${extra.length > 3 ? ", …" : ""})`
+        : "the target's composition tokens do not match the saved tokens");
+      return;
+    }
     live.reapply = null;
     live.reapplyError = "";
     live.conflict = false;
@@ -3751,8 +3794,13 @@ if (remembered) kitId.value = remembered;
     if (!run || !run.ops.has(op)) return;
     run.ops.delete(op);
     if (ok) { if (!run.ops.size) finishReapply(); return; }
+    failReapply(reason);
+  }
+
+  function failReapply(reason) {
+    const run = live.reapply;
     live.reapply = null;
-    live.queue = live.queue.filter(item => !run.ops.has(item));
+    if (run) live.queue = live.queue.filter(item => !run.ops.has(item));
     live.reapplyError = `Reapply stopped (${reason}). Studio's saved overrides were kept and nothing was written to the overrides file. `
       + "Fix the cause, or press Reapply again.";
     setCodeStatus(live.reapplyError, "error");

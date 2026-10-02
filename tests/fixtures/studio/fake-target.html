@@ -46,8 +46,10 @@
       "https://fonts.googleapis.com/css2?family=A~B:wght@400&text=Hi%20there",
       "https://fonts.googleapis.com/css2?family=Inter&text=%E2%82%AC"]
   };
+  // ignoreBaseRevision: a target that applies requests queued while it was busy, whatever revision they were based on.
+  // keepNullTokens: an older bridge that does not know that a null token removes the override.
   const fake = window.fake = { hold: false, conflictAlways: false, rejectNext: null, warnNext: null,
-    framework: {}, guards: {}, bulk: false,
+    framework: {}, guards: {}, bulk: false, ignoreBaseRevision: false, keepNullTokens: false,
     get mode() { return mode; }, get overlay() { return overlay; }, get revision() { return revision; } };
   const params = new URLSearchParams(location.search);
   fake.bulk = params.has("bulk");
@@ -128,6 +130,8 @@
 
   function rect(el) { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; }
   function selector(def) { return def.selector || `[data-design-id="${def.id}"]`; }
+  // A target may report any selector (the real bridge reports ` > ` paths for auto-discovered targets).
+  window.fake.setSelector = (id, value) => { byId.get(id).selector = value; };
   function name(def) { return def.name || def.el.dataset.designName || def.id; }
   function role(def) { return def.role || def.el.dataset.designRole || ""; }
   function computed(el) {
@@ -262,6 +266,11 @@
     post({ type: "design:warning", requestId, targetId, kind: "runtime-error", message: String(message).slice(0, 300) });
   };
   fake.ledger = ledger;
+  // Tokens another editor (an earlier Studio session on the same page) left on the target.
+  fake.setTokens = values => Object.entries(values).forEach(([name, value]) => {
+    tokens[name] = String(value);
+    document.documentElement.style.setProperty(name, String(value));
+  });
   fake.bulkOmitsKeys = () => { const a = manifest(DEFS[0], true).arrangement; return !('siblings' in a) && !('containers' in a); };
   fake.styleOf = id => computed(byId.get(id).el);
   fake.textOf = id => byId.get(id).el.textContent;
@@ -345,6 +354,7 @@
     post({ type: "design:rejected", requestId: d.requestId, revision, targetId: d.targetId, reason, detail });
   }
   function conflict(d) {
+    if (fake.ignoreBaseRevision) return false;
     if (fake.conflictAlways) { revision += 1; reject(d, "revision-conflict", { baseRevision: d.baseRevision, revision }); return true; }
     if (typeof d.baseRevision === "number" && d.baseRevision !== revision) {
       reject(d, "revision-conflict", { baseRevision: d.baseRevision, revision });
@@ -480,6 +490,13 @@
       if (d.targetId === undefined) {
         if (conflict(d)) return;
         Object.entries(d.patch.tokens || {}).forEach(([name, value]) => {
+          if (value === null) {
+            // Addendum 6: null removes Studio's override; an unknown name is ignored.
+            if (fake.keepNullTokens || !(name in tokens)) return;
+            delete tokens[name];
+            document.documentElement.style.removeProperty(name);
+            return;
+          }
           tokens[name] = String(value);
           document.documentElement.style.setProperty(name, String(value));
         });

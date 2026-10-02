@@ -452,7 +452,7 @@ Bridge                                   Studio
 |---|---|---|
 | `design:hello` | `sessionId` | Pins this window, origin and session. Replies `design:ready`. |
 | `design:update` | `requestId, baseRevision, targetId, patch` | Validates the whole patch, applies it or rejects it. |
-| `design:update` (legacy composition) | `requestId, baseRevision, patch {tokens, slots, layout}`, no `targetId` | The Composer's **Sync to Live App**. Replies `design:applied` with `targetId: "global"`. Token names must match `--[a-z0-9-]{1,120}` and values follow the `fontFamily` rule. One invalid token rejects the whole update with `unsupported-value` (`detail.property`) and changes nothing. |
+| `design:update` (legacy composition) | `requestId, baseRevision, patch {tokens, slots, layout}`, no `targetId` | The Composer's **Sync to Live App**. Replies `design:applied` with `targetId: "global"`. Token names must match `--[a-z0-9-]{1,120}` and values follow the `fontFamily` rule. A `null` value removes Studio's override of that token and restores the page's own value. One invalid token rejects the whole update with `unsupported-value` (`detail.property`) and changes nothing. |
 | `design:select` | `targetId` or `null` | Selects, scrolls into view. Replies `design:selected`. |
 | `design:mode` | `mode: "select" \| "interact"` and/or `overlay: boolean` | Switches click handling. `overlay: true` makes the bridge draw its own outline (pop-out). No reply. |
 | `design:move` | `requestId, baseRevision, targetId, to, strategy?, force?` | `to` is one of `{index}`, `{before}`, `{after}`, `{container, index?}`. `strategy` is `"dom"` (default) or `"css-order"`. |

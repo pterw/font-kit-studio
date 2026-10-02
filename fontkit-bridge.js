@@ -351,10 +351,11 @@
   }
 
   // First invalid token in a composition patch, as { property, requested }, or null.
+  // A null value is valid: it removes Studio's override of that custom property.
   function invalidTokenInPatch(patch) {
     if (isPlainObject(patch.tokens)) {
       for (const [name, value] of Object.entries(patch.tokens)) {
-        if (!TOKEN_NAME.test(name) || safeCssString(value) === undefined) return { property: 'tokens', requested: name };
+        if (!TOKEN_NAME.test(name) || (value !== null && safeCssString(value) === undefined)) return { property: 'tokens', requested: name };
       }
     }
     for (const role of ['sans', 'serif', 'mono', 'display']) {
@@ -1025,6 +1026,11 @@
       if (isPlainObject(patch.tokens)) {
         canonicalPatch.tokens = {};
         for (const [key, value] of Object.entries(patch.tokens)) {
+          // null removes the override; a name Studio never overrode is ignored and not reported.
+          if (value === null) {
+            if (this.removeToken(key)) canonicalPatch.tokens[key] = null;
+            continue;
+          }
           const canonical = this.setToken(key, value);
           if (canonical !== undefined) canonicalPatch.tokens[key] = canonical;
         }
@@ -1618,6 +1624,15 @@
       if (!this.setStyle(document.documentElement, name, safe, { important: false, ledger: false })) return undefined;
       this.tokenOverrides.set(name, safe);
       return safe;
+    }
+
+    // Removes Studio's override of a token: the root's original inline value (or its absence) comes back
+    // exactly, because the original was captured once, before the first write. True when something was removed.
+    removeToken(name) {
+      if (!this.tokenOverrides.has(name)) return false;
+      this.clearStyle(document.documentElement, name);
+      this.tokenOverrides.delete(name);
+      return true;
     }
 
     // Text slot: a leaf element's whole content, else its first non-empty text node.

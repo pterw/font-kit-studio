@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en" style="--font-sans:  Georgia ;  color: navy">
+<head>
+<meta charset="utf-8">
+<title>Bridge test target with inline styles on the root</title>
+<!--
+  Fixture for the composition token removal tests in tests/test_bridge_runtime.py:
+  the author's inline style on <html> holds a token (and an unrelated declaration)
+  with unusual spacing, so a byte-exact restore is observable.
+-->
+<style>
+  :root { --brand-ink: #111111; }
+  body { margin: 0; color: var(--brand-ink); }
+</style>
+</head>
+<body>
+<h1 data-design-id="root.title">Title</h1>
+<script src="/fontkit-bridge.js"></script>
+</body>
+</html>

@@ -28,6 +28,7 @@ SPA_PAGE = f'{TARGET}/tests/fixtures/bridge/target-spa.html'
 TWICE_PAGE = f'{TARGET}/tests/fixtures/bridge/target-twice.html'
 DEFERRED_PAGE = f'{TARGET}/tests/fixtures/bridge/target-deferred.html'
 DEEP_PAGE = f'{TARGET}/tests/fixtures/bridge/target-deep.html'
+ROOT_STYLE_PAGE = f'{TARGET}/tests/fixtures/bridge/target-root-style.html'
 
 TITLE = 'landing.hero.title'
 LEAD = 'landing.hero.lead'
@@ -960,6 +961,100 @@ class LegacyCompositionTests(BridgeCase):
                 ack = self.wait_message(page, 'fontkit:ack', start)
                 self.assertEqual(ack['changes']['tokens'], {'--ok-font': 'Georgia, serif', longest: '1px',
                                                             '--font-serif': 'Georgia'})
+
+
+class TokenRemovalTests(BridgeCase):
+    """Addendum 6: a null composition token removes Studio's override and restores the original value."""
+    AUTHOR_STYLE = '--font-sans:  Georgia ;  color: navy'
+
+    def tokens(self, page, patch, **extra):
+        return self.request(page, {'type': 'design:update', 'patch': {'tokens': patch}, **extra})
+
+    def root_style(self, frame):
+        return frame.evaluate("document.documentElement.getAttribute('style')")
+
+    def test_null_removes_the_override_and_restores_the_authors_inline_style_byte_for_byte(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, target=ROOT_STYLE_PAGE)
+                self.hello(page)
+                self.assertEqual(self.root_style(frame), self.AUTHOR_STYLE)
+                authored = frame.evaluate("document.documentElement.style.getPropertyValue('--font-sans')")
+                self.assertEqual(authored.strip(), 'Georgia')
+
+                reply = self.tokens(page, {'--font-sans': 'Verdana, sans-serif', '--extra': '12px'})
+                self.assertEqual((reply['type'], reply['revision']), ('design:applied', 1))
+                self.assertEqual(reply['changes']['tokens'], {'--font-sans': 'Verdana, sans-serif', '--extra': '12px'})
+                self.assertEqual(frame.evaluate("document.documentElement.style.getPropertyValue('--font-sans')"),
+                                 'Verdana, sans-serif')
+
+                # A token the author never set is removed outright; the other override stays.
+                reply = self.tokens(page, {'--extra': None})
+                self.assertEqual((reply['type'], reply['revision'], reply['targetId']), ('design:applied', 2, 'global'))
+                self.assertEqual(reply['canonicalPatch'], {'tokens': {'--extra': None}})
+                self.assertEqual(reply['changes']['tokens'], {'--font-sans': 'Verdana, sans-serif'})
+                self.assertEqual(frame.evaluate("document.documentElement.style.getPropertyValue('--extra')"), '')
+
+                # Removing the last override gives the author's own inline value and attribute text back.
+                reply = self.tokens(page, {'--font-sans': None})
+                self.assertEqual((reply['type'], reply['revision']), ('design:applied', 3))
+                self.assertEqual(reply['canonicalPatch'], {'tokens': {'--font-sans': None}})
+                self.assertEqual(reply['changes']['tokens'], {})
+                self.assertEqual(frame.evaluate("document.documentElement.style.getPropertyValue('--font-sans')"), authored)
+                self.assertEqual(self.root_style(frame), self.AUTHOR_STYLE)
+
+                # The original is captured once: a second override and removal restores the same text.
+                self.assertEqual(self.tokens(page, {'--font-sans': 'Courier New'})['type'], 'design:applied')
+                self.assertEqual(self.tokens(page, {'--font-sans': None})['changes']['tokens'], {})
+                self.assertEqual(self.root_style(frame), self.AUTHOR_STYLE)
+                self.assertEqual(self.errors(frame), [])
+
+    def test_null_restores_a_token_the_stylesheet_defines_and_leaves_no_style_attribute(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                self.assertIsNone(self.root_style(frame))
+                self.assertEqual(self.tokens(page, {'--brand-ink': '#ff0000'})['changes']['tokens'], {'--brand-ink': '#ff0000'})
+                self.assertEqual(frame.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--brand-ink').trim()"), '#ff0000')
+                reply = self.tokens(page, {'--brand-ink': None})
+                self.assertEqual(reply['changes']['tokens'], {})
+                self.assertEqual(frame.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--brand-ink').trim()"), '#111111')
+                self.assertIsNone(self.root_style(frame), 'the bridge leaves no style attribute behind')
+
+    def test_unknown_names_are_ignored_and_invalid_names_still_reject_the_whole_update(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, target=ROOT_STYLE_PAGE)
+                self.hello(page)
+                reply = self.tokens(page, {'--never-set': None, '--font-sans': 'Verdana'})
+                self.assertEqual(reply['type'], 'design:applied')
+                self.assertEqual(reply['canonicalPatch'], {'tokens': {'--font-sans': 'Verdana'}},
+                                 'a null for a token that was never overridden is not reported')
+                self.assertEqual(reply['changes']['tokens'], {'--font-sans': 'Verdana'})
+                # The author's own inline custom property is not a Studio override, so null leaves it alone.
+                reply = self.tokens(page, {'--font-sans': None, '--color-never': None})
+                self.assertEqual(reply['changes']['tokens'], {})
+                self.assertEqual(self.root_style(frame), self.AUTHOR_STYLE)
+                for bad in ('--Upper', '--under_score', 'not-a-token', '--'):
+                    with self.subTest(name=bad):
+                        before = self.root_style(frame)
+                        reply = self.tokens(page, {'--font-sans': 'Verdana', bad: None})
+                        self.assertEqual((reply['type'], reply['reason']), ('design:rejected', 'unsupported-value'))
+                        self.assertEqual(reply['detail']['property'], 'tokens')
+                        self.assertEqual(self.root_style(frame), before, 'a rejected update changes nothing')
+                self.assertEqual(self.errors(frame), [])
+
+    def test_a_global_reset_still_restores_the_authors_inline_style(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, target=ROOT_STYLE_PAGE)
+                self.hello(page)
+                self.assertEqual(self.tokens(page, {'--font-sans': 'Verdana', '--extra': '1px'})['type'], 'design:applied')
+                self.assertEqual(self.tokens(page, {'--extra': None})['changes']['tokens'], {'--font-sans': 'Verdana'})
+                reset = self.request(page, {'type': 'design:reset'})
+                self.assertEqual(reset['changes']['tokens'], {})
+                self.assertEqual(self.root_style(frame), self.AUTHOR_STYLE)
 
 
 class AssetPlacementTests(BridgeCase):

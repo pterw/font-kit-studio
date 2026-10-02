@@ -616,6 +616,64 @@ class PopOutTests(LiveIntegrationCase):
                 self.assertEqual(page.errors, [])
 
 
+class AutoDiscoveredSelectorTests(LiveIntegrationCase):
+    def test_a_target_without_an_id_keeps_its_edit_in_the_css_panel_and_the_synced_file(self):
+        """The bridge's path selectors contain the child combinator; the edit must not be skipped."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                self.overrides.unlink(missing_ok=True)
+                page = self.connected(engine)
+                frame = self.frame(page)
+                solo = '#pricing .plan:first-child h3'
+                self.click_in_target(page, solo, '/Solo/')
+                self.assertEqual(page.locator('#liveTargetName').get_attribute('data-target-id') is not None, True)
+                self.assertIn('add data-design-id', page.locator('.live-target-id').text_content())
+                self.type_into(page, '#liveFontSize', '37')
+                self.wait_style(frame, solo, 'fontSize', '37px')
+                self.wait_badge(page, r'^Live · rev \d+$')
+                css = self.wait_code(page, 'Css', 'font-size: 37px !important;')
+                self.assertNotIn('skipped', css)
+                match = re.search(r'auto-discovered — add data-design-id for a stable selector \*/\n(.+) \{\n  font-size: 37px !important;', css)
+                self.assertIsNotNone(match, css)
+                selector = match.group(1)
+                self.assertIn(' > ', selector, 'the demo gives this heading a path selector')
+                # The persisted rule really addresses that heading, and only it.
+                self.assertEqual(frame.evaluate('(s) => [...document.querySelectorAll(s)].map(el => el.textContent.trim())', selector),
+                                 ['Solo'])
+                self.assertIn('Saved', self.sync(page))
+                self.assertIn(f'{selector} {{\n  font-size: 37px !important;', self.written())
+                self.assertEqual(self.written().strip(), self.tab(page, 'Css').strip())
+                self.assertEqual(page.errors, [])
+
+    def test_class_names_with_escaped_selector_characters_keep_the_edit(self):
+        """Tailwind arbitrary variants such as `[&>*]:p-4` are escaped by the bridge with `\\>`, `\\[` and `\\&`."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                self.overrides.unlink(missing_ok=True)
+                page = self.connected(engine)
+                frame = self.frame(page)
+                solo = '#pricing .plan:first-child h3'
+                frame.evaluate("""(s) => {
+                    document.querySelector(s).classList.add('[&>*]:p-4', 'a;b{c}');
+                    document.body.append(document.createElement('i'));  // a DOM change: the bridge recomputes its selectors
+                }""", solo)
+                self.click_in_target(page, solo, '/Solo/')
+                self.type_into(page, '#liveFontSize', '38')
+                self.wait_style(frame, solo, 'fontSize', '38px')
+                self.wait_badge(page, r'^Live · rev \d+$')
+                css = self.wait_code(page, 'Css', 'font-size: 38px !important;')
+                self.assertNotIn('skipped', css)
+                match = re.search(r'add data-design-id for a stable selector \*/\n(.+) \{\n  font-size: 38px !important;', css)
+                self.assertIsNotNone(match, css)
+                selector = match.group(1)
+                self.assertIn('\\[\\&\\>\\*\\]\\:p-4', selector, 'the escaped class is in the persisted selector')
+                self.assertEqual(frame.evaluate('(s) => [...document.querySelectorAll(s)].map(el => el.textContent.trim())', selector),
+                                 ['Solo'])
+                self.assertIn('Saved', self.sync(page))
+                self.assertIn(f'{selector} {{\n  font-size: 38px !important;', self.written())
+                self.assertEqual(page.errors, [])
+
+
 class ImportedTokensTests(LiveIntegrationCase):
     def export(self, page):
         page.locator('#exportJson').click()
@@ -653,6 +711,45 @@ class ImportedTokensTests(LiveIntegrationCase):
                 frame.wait_for_function('document.documentElement.style.getPropertyValue("--brand-ink") === "#123456"')
                 self.assertEqual(self.export(page)['live']['tokens'], {'--brand-ink': '#123456'})
                 self.assertIn('--brand-ink: #123456 !important;', self.wait_code(page, 'Css', '--brand-ink'))
+                self.assertEqual(page.errors, [])
+
+
+    def test_import_reconnect_reapply_removes_a_token_the_saved_state_no_longer_has(self):
+        """The target keeps a token Studio's saved state lost (a live state imported without tokens)."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page = self.connected(engine)
+                frame = self.frame(page)
+                base = self.export(page)
+                live = {'target': self.target, 'revision': 1, 'overrides': {'landing.hero.title': {'fontSize': 44}}}
+                banner = page.locator('#liveReconnectBanner')
+                token = 'document.documentElement.style.getPropertyValue("--brand-ink")'
+                # Save a token and put it on the real page through Reapply.
+                self.assertIn('Composition imported.',
+                              self.import_document(page, {**base, 'live': {**live, 'tokens': {'--brand-ink': '#123456'}}}))
+                banner.wait_for(state='visible')
+                page.locator('#liveReapply').click()
+                banner.wait_for(state='hidden')
+                frame.wait_for_function(f'{token} === "#123456"')
+                self.wait_style(frame, TITLE, 'fontSize', '44px')
+                # A live state without tokens replaces the saved set; the page still holds the token.
+                self.assertIn('Composition imported.', self.import_document(page, {**base, 'live': live}))
+                banner.wait_for(state='visible')
+                self.assertEqual(frame.evaluate(token), '#123456', 'importing never changes the page')
+                # The bridge announces itself again (a reconnect without a reload), then the user presses Reapply.
+                frame.evaluate('window.parent.postMessage({type: "design:bridge-ready", protocolVersion: 1}, "*")')
+                page.wait_for_function('() => /the live target has \\d+ targets? changed and 1 composition token\\b/.test('
+                                       'document.querySelector("#liveReconnectText").textContent)')
+                self.assertEqual(frame.evaluate(token), '#123456', 'reconnecting never changes the page')
+                page.locator('#liveReapply').click()
+                banner.wait_for(state='hidden')
+                frame.wait_for_function(f'{token} === ""')
+                self.assertIsNone(frame.evaluate('document.documentElement.getAttribute("style")'),
+                                  'the root has the inline style it had before Studio touched it')
+                self.assertNotIn('tokens', self.export(page)['live'])
+                self.assertNotIn('--brand-ink', self.tab(page, 'Css'))
+                self.wait_style(frame, TITLE, 'fontSize', '44px')
+                self.assertFalse(banner.is_visible())
                 self.assertEqual(page.errors, [])
 
 
