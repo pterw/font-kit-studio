@@ -35,7 +35,7 @@ Studio also still has the **Library** (a specimen browser for 16 free fonts) and
 
 ## Quickstart
 
-You need Python 3. It was developed and tested on Python 3.11, and nothing else is installed: the server uses only the standard library. If `python` is not found, use `python3`.
+You need Python 3. It was developed and tested on Python 3.11, and nothing else is installed: the server uses only the standard library. If `python` is not found, use `python3`. On Windows, `python` may be the Microsoft Store stub that opens the Store instead of running; use `py -3` or `python3` there.
 
 ```bash
 git clone https://github.com/pterw/font-kit-studio
@@ -43,7 +43,7 @@ cd font-kit-studio
 python scripts/serve.py
 ```
 
-1. Open the **Studio URL** the command prints. It looks like `http://localhost:8000/font_kit_studio_v0.1.1.html?target=http://localhost:8001/demo/`.
+1. Open the URL on the line that starts with **`Open:`**, the last line the command prints. It looks like `http://localhost:8000/font_kit_studio_v0.1.1.html?target=http://localhost:8001/demo/`. The `Target:` line is the demo app on its own port; you do not open it yourself. To have the command open the browser for you, run `python scripts/serve.py --open`.
 2. Wait for the badge to say **Connected (N targets)**. The demo app, "Halyard", is already instrumented.
 3. **Click** the big headline in the preview. Change its size, colour or text in the panel on the right.
 4. Watch the **Changes** panel under the preview. Press **Copy**, or press **Sync to file** to write the CSS to `demo/fontkit-overrides.css`, which the demo already links.
@@ -65,13 +65,15 @@ What does **not** work from a file: **Sync to file** and **Auto-sync** are switc
 | `--target-port` | `8001` | Port for the demo and any file in this repo. Studio and the target use different ports on purpose, so they stay separate origins. |
 | `--overrides` | `demo/fontkit-overrides.css` | The one file Sync may write. It must be a `.css` file inside this repo. |
 | `--no-sync` | off | Refuses all writes. |
+| `--open` | off | Opens the `Open:` URL in your default browser once both ports are listening. |
 | `--host` | `127.0.0.1` | Interface to listen on (loopback by default). See the notes below. |
 | `--quiet` | off | Turn off the per-request log. |
 
 Two things to know:
 
 - **A different `--overrides` path is written, but the demo does not link it.** The demo always links `demo/fontkit-overrides.css`. For your own app, add `<link rel="stylesheet" href="http://localhost:8001/<your overrides path>">` after your own CSS (in development), or just use Copy.
-- **`--host 0.0.0.0` does not give your LAN access.** By default the server listens on loopback only. It accepts `localhost`, `127.0.0.1` and the exact name you pass to `--host`. A phone or another computer that uses your machine's IP address gets `421 Misdirected Request`. This blocks DNS-rebinding attacks. To allow one address, pass it explicitly, for example `--host 192.168.1.20`.
+- **`--host 0.0.0.0` does not give your LAN access.** By default the server listens on loopback only. It accepts `localhost`, `127.0.0.1` and the exact name you pass to `--host`. A phone or another computer that uses your machine's IP address gets `421 Misdirected Request`. This blocks DNS-rebinding attacks. A browser sees a short page that names the accepted addresses and says to pass `--host`. To allow one address, pass it explicitly, for example `--host 192.168.1.20`.
+- **A busy port stops the server with a message that names it**, for example `--studio-port 8000 is in use; pick another with --studio-port <port>`. Pass a free port with that flag (and `--target-port` for the demo port).
 
 ## Workflows
 

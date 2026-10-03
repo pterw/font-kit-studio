@@ -3,6 +3,7 @@
 import http.client
 import importlib.util
 import json
+import os
 import re
 import shutil
 import signal
@@ -13,6 +14,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -53,10 +55,17 @@ def request(port, method, path, body=None, headers=None):
         conn.close()
 
 
+def load_serve():
+    spec = importlib.util.spec_from_file_location('fks_serve_module', SERVE)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 class Server:
     """A scripts/serve.py subprocess on free ports with an overrides file inside the repo."""
 
-    def __init__(self, *extra, overrides=None):
+    def __init__(self, *extra, overrides=None, env=None):
         work = REPO / 'work'  # gitignored scratch
         work.mkdir(exist_ok=True)
         self.scratch = Path(tempfile.mkdtemp(prefix='preview-server-', dir=work))
@@ -68,7 +77,8 @@ class Server:
         self.proc = subprocess.Popen(
             [sys.executable, str(SERVE), '--quiet', '--studio-port', str(self.studio),
              '--target-port', str(self.target), '--overrides', self.rel, *extra],
-            cwd=REPO, stdout=self.out, stderr=self.err)
+            cwd=REPO, stdout=self.out, stderr=self.err,
+            env={**os.environ, **env} if env else None)
         try:
             self.wait_ready()
         except BaseException:
@@ -221,6 +231,34 @@ class PreviewServerTest(unittest.TestCase):
                     self.assertIs(json.loads(body)['ok'], False)
                     self.assert_no_store(headers)
         self.assertFalse(s.overrides.exists())
+
+    def test_misdirected_page_escapes_what_it_prints(self):
+        page = load_serve().misdirected_page({'<img src=x onerror=1>:80'})
+        self.assertIn('&lt;img', page)
+        self.assertNotIn('<img', page)
+
+    def test_misdirected_browser_request_gets_a_readable_page(self):
+        s = self.server
+        for port in (s.studio, s.target):
+            html_headers = {'Host': f'evil.test:{port}', 'Accept': 'text/html,application/xhtml+xml'}
+            for method in ('GET', 'HEAD'):
+                status, headers, body = request(port, method, '/demo/', headers=html_headers)
+                self.assertEqual(status, 421, (port, method))
+                self.assertIn('text/html', headers['content-type'])
+                self.assert_no_store(headers)
+                if method == 'GET':
+                    page = body.decode()
+                    self.assertIn('--host', page)
+                    self.assertIn(f'localhost:{port}', page, 'names the host it accepts')
+                    self.assertNotIn('evil.test', page, 'the request Host is never echoed back')
+                    self.assertIsNone(re.search(r'<script|<link|<img|src=|@import', page, re.I))
+            # Anything that did not ask for HTML keeps the JSON answer.
+            for accept in ('application/json', '*/*'):
+                status, headers, body = request(
+                    port, 'GET', '/demo/', headers={'Host': f'evil.test:{port}', 'Accept': accept})
+                self.assertEqual(status, 421, accept)
+                self.assertIn('application/json', headers['content-type'])
+                self.assertIs(json.loads(body)['ok'], False)
 
     def test_status_endpoint_on_studio_port(self):
         status, headers, body = request(self.server.studio, 'GET', '/__fontkit/status')
@@ -453,6 +491,101 @@ class PreviewServerLifecycleTest(unittest.TestCase):
             finally:
                 server.close()
 
+    def test_last_line_before_the_wait_is_the_url_to_open(self):
+        server = Server()
+        try:
+            # Stdout goes to a file and is flushed with the Open: line, which can land after the
+            # ports start listening. Read it once the process has exited.
+            self.assertEqual(server.stop(), 0, server.read_err())
+            lines = server.read_out().splitlines()
+            self.assertEqual(lines[-1], 'Stopped.')
+            lines = lines[:-1]
+            expected = (f'Open: http://localhost:{server.studio}/font_kit_studio_v0.1.1.html'
+                        f'?target=http://localhost:{server.target}/demo/')
+            self.assertEqual(lines[-1], expected, lines)
+            self.assertTrue(lines[0].startswith('Studio:'), 'the existing lines are kept')
+            self.assertTrue(any(line.startswith('Target:') for line in lines))
+            self.assertTrue(any(line.startswith('Sync:') for line in lines))
+        finally:
+            server.close()
+
+    def run_with_fake_browser(self, *flags):
+        """Run serve.py with $BROWSER set to a script that records the URL it was given."""
+        work = REPO / 'work'
+        work.mkdir(exist_ok=True)
+        scratch = Path(tempfile.mkdtemp(prefix='preview-browser-', dir=work))
+        try:
+            log = scratch / 'opened.txt'
+            script = scratch / 'fake_browser.py'
+            script.write_text('import sys\nopen(sys.argv[1], "a").write(sys.argv[2] + "\\n")\n')
+            server = Server(*flags, env={'BROWSER': f'"{sys.executable}" "{script}" "{log}" %s'})
+            try:
+                expected = (f'http://localhost:{server.studio}/font_kit_studio_v0.1.1.html'
+                            f'?target=http://localhost:{server.target}/demo/')
+                self.assertEqual(server.stop(), 0, server.read_err())  # open() has returned by exit
+                opened = log.read_text().splitlines() if log.exists() else []
+                return opened, expected, server.read_out()
+            finally:
+                server.close()
+        finally:
+            shutil.rmtree(scratch, ignore_errors=True)
+
+    def test_open_flag_opens_the_studio_url_once(self):
+        opened, expected, out = self.run_with_fake_browser('--open')
+        self.assertEqual(opened, [expected])
+        self.assertIn(f'Open: {expected}', out)
+
+    def test_browser_is_not_opened_without_the_flag(self):
+        opened, expected, out = self.run_with_fake_browser()
+        self.assertEqual(opened, [])
+        self.assertIn(f'Open: {expected}', out)
+        self.assertNotIn('browser', out.lower(), 'nothing extra is printed when --open is off')
+
+    def test_busy_port_names_the_port_and_the_flag(self):
+        for busy_flag, other_flag in (('--studio-port', '--target-port'),
+                                      ('--target-port', '--studio-port')):
+            with self.subTest(busy=busy_flag), socket.socket() as held:
+                held.bind(('127.0.0.1', 0))
+                held.listen()
+                busy = held.getsockname()[1]
+                free = free_ports(1)[0]
+                result = subprocess.run(
+                    [sys.executable, str(SERVE), '--quiet', busy_flag, str(busy),
+                     other_flag, str(free)],
+                    cwd=REPO, capture_output=True, text=True, timeout=15)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertIn(f'{busy_flag} {busy} is in use; pick another with {busy_flag} <port>',
+                              result.stderr)
+                self.assertNotIn(other_flag, result.stderr, 'only the port that failed is named')
+                self.assertNotIn('Traceback', result.stderr)
+                self.assertEqual(result.stdout, '')
+
+    def test_unbindable_host_names_the_host_not_the_port_flag(self):
+        port = free_ports(1)[0]
+        result = subprocess.run(
+            [sys.executable, str(SERVE), '--quiet', '--host', '203.0.113.9',
+             '--studio-port', str(port)],
+            cwd=REPO, capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn(f'cannot listen on 203.0.113.9:{port} (--studio-port)', result.stderr)
+        self.assertNotIn('pick another with', result.stderr)
+        self.assertNotIn('Traceback', result.stderr)
+
+    def test_windows_never_shares_a_port(self):
+        serve = load_serve()
+        config = serve.Config('127.0.0.1', 8000, 8001, REPO / 'demo' / 'fontkit-overrides.css',
+                              True, True)
+        for platform, reuse in (('win32', False), ('linux', True), ('darwin', True)):
+            with self.subTest(platform=platform), mock.patch.object(sys, 'platform', platform):
+                server = serve.make_server(config, '127.0.0.1', 0, True)  # port 0: nothing taken
+                try:
+                    self.assertIs(bool(server.allow_reuse_address), reuse)
+                    # The option only counts when it is set before bind, so read the socket.
+                    self.assertEqual(
+                        server.socket.getsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR) != 0, reuse)
+                finally:
+                    server.server_close()
+
     def test_refuses_overrides_outside_repo(self):
         with tempfile.TemporaryDirectory() as outside:
             for path in (str(Path(outside) / 'x.css'), '../outside.css', 'demo/../../x.css',
@@ -486,6 +619,34 @@ class DemoPageTest(unittest.TestCase):
                 for engine in ENGINES:
                     with self.subTest(engine=engine):
                         self.check_demo(runtime, engine, server)
+        finally:
+            server.close()
+
+    def test_demo_loads_without_any_overrides_request_failing(self):
+        from playwright.sync_api import sync_playwright
+
+        overrides = REPO / 'demo' / 'fontkit-overrides.css'
+        self.assertFalse(overrides.exists(), 'this test needs a clone with no overrides file')
+        server = Server('--no-sync', overrides=overrides)
+        try:
+            with sync_playwright() as runtime:
+                for engine in ENGINES:
+                    with self.subTest(engine=engine):
+                        browser = launch(runtime, engine)
+                        try:
+                            page = browser.new_page()
+                            seen = []
+                            page.on('response', lambda res: seen.append((res.url, res.status)))
+                            page.goto(f'http://localhost:{server.target}/demo/', wait_until='load')
+                            sheet = [item for item in seen if 'fontkit-overrides.css' in item[0]]
+                            self.assertTrue(sheet, 'the demo requests the overrides stylesheet')
+                            self.assertEqual([item for item in sheet if item[1] >= 400], [], sheet)
+                            self.assertEqual(
+                                page.evaluate("document.querySelector('link[href=\"fontkit-overrides.css\"]')"
+                                              ".sheet !== null"), True, 'the empty sheet applied')
+                        finally:
+                            browser.close()
+            self.assertFalse(overrides.exists(), 'loading the demo never creates the file')
         finally:
             server.close()
 

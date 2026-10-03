@@ -10,10 +10,12 @@ fixed on the command line) which the target app links after its own CSS. All res
 are sent with Cache-Control: no-store.
 
   python3 scripts/serve.py [--host 127.0.0.1] [--studio-port 8000] [--target-port 8001]
-                           [--overrides demo/fontkit-overrides.css] [--no-sync] [--quiet]
+                           [--overrides demo/fontkit-overrides.css] [--no-sync] [--open] [--quiet]
 """
 
 import argparse
+import errno
+import html
 from functools import partial
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -26,6 +28,7 @@ import sys
 import tempfile
 import threading
 from urllib.parse import unquote
+import webbrowser
 
 REPO = Path(__file__).resolve().parents[1]
 STUDIO_HTML = "font_kit_studio_v0.1.1.html"
@@ -45,6 +48,7 @@ class Config:
         self.studio_url = f"http://{public}:{studio_port}"
         self.target_url = f"http://{public}:{target_port}/demo/"
         self.studio_path = f"/{STUDIO_HTML}?target={self.target_url}"
+        self.open_url = f"{self.studio_url}{self.studio_path}"  # printed as "Open:", launched by --open
         # Browsers leave the port out of `Origin` on the default port, so port 80 is allowed
         # both ways (hosts() does the same for the Host header).
         self.origins = {f"http://{name}:{studio_port}" for name in ("localhost", "127.0.0.1", public)}
@@ -126,9 +130,15 @@ class Handler(SimpleHTTPRequestHandler):
 
     def host_allowed(self):
         host = (self.headers.get("Host") or "").strip().lower()
-        if host in self.config.hosts(self.server.server_address[1]):
+        accepted = self.config.hosts(self.server.server_address[1])
+        if host in accepted:
             return True
-        self.fail(HTTPStatus.MISDIRECTED_REQUEST, "Host header not allowed")
+        if "text/html" in (self.headers.get("Accept") or "").lower():
+            self.close_connection = True
+            self.send_bytes(HTTPStatus.MISDIRECTED_REQUEST, misdirected_page(accepted).encode(),
+                            "text/html; charset=utf-8")
+        else:
+            self.fail(HTTPStatus.MISDIRECTED_REQUEST, "Host header not allowed")
         return False
 
     def do_GET(self):
@@ -191,6 +201,19 @@ class Handler(SimpleHTTPRequestHandler):
         return None
 
 
+def misdirected_page(accepted):
+    """The 421 answer for a browser: plain HTML from config values only, never the request's Host."""
+    names = ", ".join(f"<code>{html.escape(name)}</code>" for name in sorted(accepted))
+    return (
+        '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+        "<title>Wrong address</title></head>"
+        "<body><h1>Wrong address for this server</h1>"
+        f"<p>This server only answers requests addressed to {names}. It refuses other host "
+        "names to block DNS-rebinding attacks.</p>"
+        "<p>To use another address, restart it with <code>--host &lt;address&gt;</code>, "
+        "for example <code>--host 192.168.1.20</code>.</p></body></html>")
+
+
 def repo_servable(path):
     """True when `path`, with every link followed, is inside the repository with no hidden part."""
     try:
@@ -239,7 +262,12 @@ def resolve_overrides(value):
 def make_server(config, host, port, studio):
     handler = type("StudioHandler" if studio else "TargetHandler", (Handler,),
                    {"config": config, "studio": studio})
-    server = ThreadingHTTPServer((host, port), partial(handler, directory=str(REPO)))
+    server_class = ThreadingHTTPServer
+    if sys.platform == "win32":
+        # On Windows SO_REUSEADDR lets a second server bind a port that is already taken. The
+        # option only counts when set before bind, so it goes on the class, not the instance.
+        server_class = type("ExclusiveHTTPServer", (ThreadingHTTPServer,), {"allow_reuse_address": False})
+    server = server_class((host, port), partial(handler, directory=str(REPO)))
     server.daemon_threads = True
     return server
 
@@ -253,6 +281,7 @@ def main(argv=None):
                         help="stylesheet Studio may write (repo-relative; must stay inside the repo)")
     parser.add_argument("--no-sync", dest="sync", action="store_false",
                         help="refuse PUT /__fontkit/overrides.css")
+    parser.add_argument("--open", action="store_true", help="open Studio in the default browser")
     parser.add_argument("--quiet", action="store_true", help="do not log requests")
     args = parser.parse_args(argv)
 
@@ -264,12 +293,20 @@ def main(argv=None):
         parser.error("--studio-port and --target-port must differ")
 
     config = Config(args.host, args.studio_port, args.target_port, overrides, args.sync, args.quiet)
-    try:
-        servers = [make_server(config, args.host, args.studio_port, True),
-                   make_server(config, args.host, args.target_port, False)]
-    except OSError as error:
-        print(f"serve.py: cannot listen: {error}", file=sys.stderr)
-        return 1
+    servers = []
+    for flag, port, studio in (("--studio-port", args.studio_port, True),
+                               ("--target-port", args.target_port, False)):
+        try:
+            servers.append(make_server(config, args.host, port, studio))
+        except OSError as error:
+            in_use = error.errno in {errno.EADDRINUSE, getattr(errno, "WSAEADDRINUSE", None)}
+            if in_use:
+                print(f"serve.py: {flag} {port} is in use; pick another with {flag} <port>", file=sys.stderr)
+            else:  # e.g. a --host this machine does not own: the port flag is not the cause
+                print(f"serve.py: cannot listen on {args.host}:{port} ({flag}): {error}", file=sys.stderr)
+            for server in servers:
+                server.server_close()
+            return 1
 
     stop = threading.Event()
     for signum in (signal.SIGINT, signal.SIGTERM):
@@ -281,7 +318,10 @@ def main(argv=None):
     print(f"Studio:  {config.studio_url}{config.studio_path}")
     print(f"Target:  {config.target_url}")
     print(f"Sync:    {'on' if config.sync else 'off'} -> {config.overrides_rel}")
-    print("Press Ctrl-C to stop.", flush=True)
+    print("Press Ctrl-C to stop.")
+    print(f"Open: {config.open_url}", flush=True)
+    if args.open and not webbrowser.open(config.open_url):
+        print("serve.py: no browser could be opened; use the Open: URL above.", file=sys.stderr)
     while not stop.wait(0.5):
         pass
     for server in servers:

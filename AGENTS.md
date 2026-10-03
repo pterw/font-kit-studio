@@ -96,7 +96,7 @@ needs `PYTHONPATH=tests`; `discover -s tests` does not.
 `FKS_ENGINES` defaults to `chromium,firefox`. When an engine is unavailable,
 say so in the ledger; never report it as verified.
 
-Run the app: `python scripts/serve.py`, then open the printed Studio URL
+Run the app: `python scripts/serve.py`, then open the URL on its `Open:` line
 (Studio and the demo target run on separate localhost ports on purpose).
 
 ---
