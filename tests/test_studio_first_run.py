@@ -21,10 +21,11 @@ from test_studio_live import APP, EVIL, FAKE, TARGET, LiveCase
 NEED_URL = "Enter your app's URL"
 FULL_URL = 'Use a full URL starting with http:// or https://'
 NO_BRIDGE_HINT = ('Either nothing is running there, or the page does not load fontkit-bridge.js. '
-                  'Add <script src="fontkit-bridge.js"> after the page\'s own scripts, reload it, then press Connect Target.')
+                  'Add <script src="fontkit-bridge.js"></script> after the page\'s own scripts, reload it, then press Connect Target.')
 SERVE_LINE = 'Start the dev server: python scripts/serve.py'
-BLOCKED = ('Browsers block a web page from reaching localhost. '
-           'Open Studio from the dev server (python scripts/serve.py) or from the file on disk instead.')
+BLOCKED = ('No bridge answered. Nothing might be running there, the page may not load fontkit-bridge.js, '
+           'or your browser may block a web page from reaching localhost. '
+           'If it is the browser, open Studio from the dev server (python scripts/serve.py) or from the file on disk.')
 
 
 def one_line(text):
@@ -89,6 +90,31 @@ class TargetUrlFieldTests(LiveCase):
                 page.locator('#btnConnectTarget').click()
                 self.assertEqual(page.locator('#bridgeStatusBadge').inner_text(), FULL_URL)
                 self.assertEqual(page.locator('#targetAppFrame').get_attribute('src'), FAKE)
+                self.assertEqual(errors, [])
+
+    def test_a_special_scheme_without_slashes_is_refused_not_resolved_against_studio(self):
+        # new URL('http:example.com', 'http://studio.test/...') is Studio-relative, so the preview would load Studio's own origin.
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors = self.composer(engine)
+                for probe in ('http:example.com', 'http:/example.com', 'HTTPS:example.com'):
+                    self.type_keys(page, probe)
+                    page.locator('#btnConnectTarget').click()
+                    self.assertEqual(page.locator('#bridgeStatusBadge').inner_text(), FULL_URL, probe)
+                    self.assertIsNone(page.locator('#targetAppFrame').get_attribute('src'), probe)
+                    page.locator('#targetAppUrl').fill('')
+                self.assertEqual(errors, [])
+
+    def test_an_imported_live_target_without_slashes_is_rejected_and_never_prefills_the_field(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors = self.composer(engine)
+                exported = self.export(page)
+                for probe in ('http:example.com', 'http:/example.com'):
+                    status = self.import_document(page, {**exported, 'live': {'target': probe, 'revision': 1, 'overrides': {}}})
+                    self.assertIn('live.target must be an absolute http(s) URL.', status, probe)
+                    self.assertEqual(page.locator('#targetAppUrl').input_value(), '', probe)
+                    self.assertTrue(page.locator('#btnConnectTarget').is_disabled(), probe)
                 self.assertEqual(errors, [])
 
     def test_other_schemes_keep_their_own_refusal(self):

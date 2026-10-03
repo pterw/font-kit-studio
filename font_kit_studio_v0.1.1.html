@@ -1017,7 +1017,7 @@ body.dark .live-overlay-label { color: #111; }
         </div>
         <p id="bridgeWarning" class="bridge-warning" role="status" hidden><span id="bridgeWarningText"></span> <button id="bridgeWarningDismiss" class="btn" type="button">Dismiss</button></p>
         <p id="targetUrlHint" class="bridge-hint">Enter your app's URL</p>
-        <p id="bridgeHint" class="bridge-hint" hidden>Either nothing is running there, or the page does not load fontkit-bridge.js. Add <code>&lt;script src="fontkit-bridge.js"&gt;</code> after the page's own scripts, reload it, then press Connect Target. <span id="bridgeHintServe" hidden>Start the dev server: <code>python scripts/serve.py</code></span></p>
+        <p id="bridgeHint" class="bridge-hint" hidden>Either nothing is running there, or the page does not load fontkit-bridge.js. Add <code>&lt;script src="fontkit-bridge.js"&gt;&lt;/script&gt;</code> after the page's own scripts, reload it, then press Connect Target. <span id="bridgeHintServe" hidden>Start the dev server: <code>python scripts/serve.py</code></span></p>
       </div>
 
       <div class="c-field span-2">
@@ -3256,7 +3256,7 @@ if (remembered) kitId.value = remembered;
   function parseLiveField(raw) {
     if (!isPlainObject(raw)) throw new Error("live must be an object with target, revision and overrides.");
     if (typeof raw.target !== "string" || raw.target.length > 2048) throw new Error("live.target must be a URL string.");
-    if (raw.target && (!/^[a-z][a-z0-9+.-]*:/i.test(raw.target) || !safeTargetUrl(raw.target))) {
+    if (raw.target && (!hasUrlScheme(raw.target) || !safeTargetUrl(raw.target))) {
       throw new Error("live.target must be an absolute http(s) URL.");
     }
     if (!Number.isInteger(raw.revision) || raw.revision < 0) throw new Error("live.revision must be a non-negative integer.");
@@ -3612,12 +3612,16 @@ if (remembered) kitId.value = remembered;
   // ---- first run: the Target URL field --------------------------------------
   // The field starts empty. Only a loopback dev server may offer the demo (detectDevServerSync); it never connects.
   let offeredDemoUrl = "";
-  const BLOCKED_LOOPBACK_TEXT = "Browsers block a web page from reaching localhost. Open Studio from the dev server (python scripts/serve.py) or from the file on disk instead.";
+  // Only the two hostnames are known, so this states browser blocking as one possible cause beside the other two.
+  const BLOCKED_LOOPBACK_TEXT = "No bridge answered. Nothing might be running there, the page may not load fontkit-bridge.js, or your browser may block a web page from reaching localhost. If it is the browser, open Studio from the dev server (python scripts/serve.py) or from the file on disk.";
 
   // "demo/", "//host/app" and "localhost:8001/app" are not URLs Studio can load. "javascript:..." has a scheme,
-  // so safeTargetUrl judges it.
+  // so safeTargetUrl judges it. "http:example.com" and "http:/example.com" are refused here too: new URL() resolves
+  // them against Studio's own origin (a special scheme equal to the base's is relative), so the preview would
+  // load a Studio page instead of the typed host. parseLiveField uses this check for an imported live.target.
   function hasUrlScheme(raw) {
     const text = String(raw ?? "").trim();
+    if (/^https?:(?!\/\/)/i.test(text)) return false;
     return /^[a-z][a-z0-9+.-]*:/i.test(text) && !/^[^/:?#]+:\d+(?:[/?#]|$)/.test(text);
   }
 
