@@ -161,6 +161,10 @@ Rules of engagement:
   another agent's edits.
 - Stop only processes you started, by PID. Never kill by name pattern
   (`pkill -f chromium`): parallel agents run their own browsers.
+- Wait for long commands by running them in the foreground with a long
+  timeout, or by blocking on the process (`tail --pid=<pid> -f /dev/null`).
+  Never poll a status file with `sleep` loops; foreground sleeps are blocked
+  in cloud sessions and every retry wastes context.
 - User steering mid-run becomes a dated plan addendum plus a ledger event,
   before dispatching the work it changes.
 
