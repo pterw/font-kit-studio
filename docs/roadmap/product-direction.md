@@ -22,8 +22,10 @@ at once, and take away output you own. It works with any stack and needs no acco
 ## How it differs
 
 General visual editors (Cursor's visual editor, Onlook, Builder.io Fusion, Chrome DevTools)
-treat typography as one property among many and assume you have the source code. fontkit
-keeps typography at the centre:
+treat typography as one property among many and assume you have the source code. Free
+font-swap extensions (FontMee, TypeTaster, Fontastic and others) let anyone try a heading
+and body font on any site, but stop there. fontkit keeps typography at the centre and
+turns what you try into code you keep:
 
 - **Pairing on the real page.** Try a pairing across the whole page, not in a specimen.
 - **Type scales.** Generate a scale (modular ratios, fluid `clamp()` sizes), map it onto
@@ -41,30 +43,17 @@ keeps typography at the centre:
 There is no technical moat. The bet is that a focused, trustworthy tool beats a feature inside
 a general editor.
 
-## Surfaces
+## Surfaces and order
 
-The bridge protocol is the engine. It can sit behind more than one front end:
+The agreed design and release order now live in
+[the typography system design](../specs/2026-10-03-typography-system-design.md). In short:
+one command for Vite and React projects and a local proxy for any other dev server come
+first (R1); then the detection engine (R2), the pairing system (R3) and output and
+handoff (R4); then the browser extension for non-developers (R5). Source rewriting and
+"promote to source" come later.
 
-| Surface | For | Priority |
-|---|---|---|
-| Browser extension (side panel) | Anyone, on any site, nothing added to the app | **Lead.** This is the only surface that meets "any site, no setup". See [browser-extension.md](browser-extension.md). |
-| Standalone Studio (exists) | Your own app, offline work, any stack | Reference implementation. |
-| Dev-server plugin (Vite, Next) | Developers who want edits written into their project | Later, if developers ask for it. |
-
-## Order
-
-1. Finish the v0.2 pull request, including the known-limit fixes (plan Addendum 7).
-2. Solve the extension transport: a side panel is not the page's parent or opener, so the
-   bridge needs an extension channel with the same origin and session checks and its own
-   hostile-input tests.
-3. Extension first version: side panel, any tab, font swap and pairing, type scale,
-   readability guardrails, CSS and token export, per-site saved edits.
-4. Type-scale, guardrail and token features in Studio as well.
-5. Arranging in the extension (the guarded moves that Studio already has).
-6. Only then consider box-model editing, breakpoints or a dev-server plugin.
-
-Box-model handles and per-breakpoint editing are what general editors compete on. They are
-deliberately late: they pull fontkit into the fight it is least likely to win.
+Box-model handles and per-breakpoint editing are what general editors compete on. They
+stay out of scope: they pull fontkit into the fight it is least likely to win.
 
 ## A consumer option worth keeping in view
 
