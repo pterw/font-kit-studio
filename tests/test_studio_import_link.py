@@ -356,6 +356,151 @@ class ImportWhileLinkedTests(ImportLinkCase):
                 self.assertEqual(errors, [])
 
 
+class SupersededRejectionTests(ImportLinkCase):
+    """A request sent before an import (a composition edit or a Reapply step) is superseded by it. If the page rejects
+    it with a revision conflict after the import, Studio must not send it again: that would restyle the page with a
+    state the user just replaced, without any action by the user (Rule 6). The rejection only redoes the comparison."""
+
+    def hold_a_rejection(self, frame):
+        """The next request is rejected with a revision conflict, and the rejection stays held until released."""
+        frame.evaluate('window.fake.hold = true')
+        frame.evaluate('window.fake.conflictAlways = true')
+
+    def after_the_request_was_rejected(self, frame, count):
+        """The fake has produced (and is holding) its rejection; a retry, if Studio made one, would be applied."""
+        self.wait_composition_updates(frame, count)
+        frame.evaluate('window.fake.conflictAlways = false')
+
+    def assert_nothing_was_resent(self, page, frame, before, count, names=('--font-display',)):
+        self.assertEqual(self.page_tokens(frame), before, 'the page keeps what it rendered')
+        self.assert_b_is_saved(page, frame, count, names)
+        self.assertNotIn('Rejected', page.locator('#bridgeStatusBadge').inner_text(), 'the superseded request is not reported')
+
+    import_b = ImportWhileLinkedTests.import_b
+    assert_b_is_saved = ImportWhileLinkedTests.assert_b_is_saved
+    release_held = ImportWhileLinkedTests.release_held
+
+    def test_a_reapply_step_rejected_with_a_conflict_after_an_import_is_not_sent_again(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame, errors = self.linked_page(engine)
+                self.assertEqual(self.import_document(page, self.blank_document(engine)), STATUS)
+                page.locator('#liveReconnectBanner').wait_for(state='visible')
+                names = tuple(self.export(page)['live']['tokens'])
+                before = self.page_tokens(frame)
+                self.hold_a_rejection(frame)
+                page.locator('#liveReapply').click()          # the tokens step is sent; its rejection is held
+                self.after_the_request_was_rejected(frame, 2)
+                self.import_b(page, self.blank_document(engine), status='Composition imported.', names=names)
+                self.release_held(page, frame)
+                self.assert_nothing_was_resent(page, frame, before, 2, names)
+                self.assertEqual(errors, [])
+
+    def test_a_composition_edit_rejected_with_a_conflict_after_an_import_is_not_sent_again(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame, errors = self.linked_page(engine)
+                before = self.page_tokens(frame)
+                self.hold_a_rejection(frame)
+                page.locator('#compositionPreset').select_option('asteria')
+                page.locator('#applyPreset').click()
+                self.after_the_request_was_rejected(frame, 2)
+                self.import_b(page, self.blank_document(engine))
+                self.release_held(page, frame)
+                self.assert_nothing_was_resent(page, frame, before, 2)
+                self.assertEqual(errors, [])
+
+    def test_a_rejection_after_a_timeout_and_an_import_is_not_reported_or_sent_again(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame, errors = self.linked_page(engine)
+                before = self.page_tokens(frame)
+                self.hold_a_rejection(frame)
+                page.locator('#compositionPreset').select_option('asteria')
+                page.locator('#applyPreset').click()
+                self.after_the_request_was_rejected(frame, 2)
+                self.wait_badge(page, r'^No response from target$', timeout=15000)    # the request timed out
+                self.import_b(page, self.blank_document(engine))
+                self.release_held(page, frame)       # the late rejection of the superseded request
+                self.assert_nothing_was_resent(page, frame, before, 2)
+                self.assertEqual(errors, [])
+
+    def test_a_request_rejected_with_a_conflict_without_an_import_is_still_sent_again_once(self):
+        """Characterization: the one retry of an ordinary request stays."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame, errors = self.linked_page(engine)
+                self.hold_a_rejection(frame)
+                page.locator('#compositionPreset').select_option('asteria')
+                page.locator('#applyPreset').click()
+                self.after_the_request_was_rejected(frame, 2)
+                self.release_held(page, frame)
+                self.wait_composition_updates(frame, 3)
+                self.assertIn('"Fraunces"', self.page_tokens(frame)['--font-display'], 'the retry was applied')
+                self.assertEqual(errors, [])
+
+
+class ImportedTextWhitespaceTests(ImportLinkCase):
+    """The bridge ledger reports text trimmed; Studio's saved override keeps what the user typed. The import comparison
+    has to treat "Changed lead  " and "Changed lead" as the same text (as the reconnect comparison already does), or
+    it raises a conflict that is not one, and misses a saved edit the page still holds."""
+    TYPED = 'Changed lead  '
+
+    def saved_text_edit(self, engine):
+        page, frame, errors = self.linked_page(engine)
+        self.select(page, frame, 'hero.lead')
+        page.locator('#liveText').fill(self.TYPED)
+        frame.wait_for_function('window.fake.ledger().targets.some(t => t.targetId === "hero.lead" && t.text === "Changed lead")')
+        self.wait_badge(page, r'^Live · rev 2$')      # acknowledged, so saved
+        document = self.export(page)
+        self.assertEqual(document['live']['overrides'], {'hero.lead': {'text': self.TYPED}}, 'Studio keeps the whitespace')
+        return page, frame, errors, document
+
+    def test_importing_the_same_file_after_a_text_edit_with_trailing_spaces_shows_no_banner(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame, errors, document = self.saved_text_edit(engine)
+                self.assertEqual(self.import_document(page, document), STATUS)
+                page.wait_for_timeout(300)     # absence window: a false conflict would show within it
+                self.assertFalse(page.locator('#liveReconnectBanner').is_visible(), 'the page holds what the file holds')
+                self.assertEqual(self.export(page)['live']['overrides'], {'hero.lead': {'text': self.TYPED}})
+                self.assertEqual(errors, [])
+
+    def test_an_import_that_drops_a_text_edit_with_trailing_spaces_the_page_holds_raises_the_banner(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame, errors, document = self.saved_text_edit(engine)
+                document['live']['overrides'] = {}
+                self.assertEqual(self.import_document(page, document), STATUS)
+                page.locator('#liveReconnectBanner').wait_for(state='visible')
+                self.assertEqual(self.banner_heading(page), HEADING)
+                self.assertEqual(frame.evaluate('window.fake.ledger().targets.find(t => t.targetId === "hero.lead").text'), 'Changed lead')
+                self.assertEqual(errors, [])
+
+    def test_an_import_that_changes_a_text_edit_to_other_text_the_page_does_not_hold_still_differs(self):
+        """Normalizing must not hide a real difference: the page holds the old text, the file has another."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame, errors, document = self.saved_text_edit(engine)
+                document['live']['overrides'] = {'hero.lead': {'text': 'Another lead'}}
+                self.assertEqual(self.import_document(page, document), STATUS)
+                page.locator('#liveReconnectBanner').wait_for(state='visible')
+                self.assertEqual(errors, [])
+
+    def test_an_imported_override_the_page_lacks_raises_the_banner(self):
+        """A property that is missing on the page is not the same as a present one."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame, errors = self.linked_page(engine)
+                document = self.with_live_tokens(self.blank_document(engine))
+                document['live']['tokens'] = {}
+                document['live']['overrides'] = {'hero.lead': {'fontSize': 21}}
+                self.assertEqual(self.import_document(page, document), STATUS)
+                page.locator('#liveReconnectBanner').wait_for(state='visible')
+                self.assertEqual(self.banner_heading(page), HEADING)
+                self.assertEqual(errors, [])
+
+
 class ImportWhileNotLinkedTests(ImportLinkCase):
     """An import that is not linked behaves as it always did (characterization)."""
 

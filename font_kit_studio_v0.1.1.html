@@ -3334,9 +3334,11 @@ if (remembered) kitId.value = remembered;
     return saved;
   }
 
-  // The DOM-move status line's sentence for a saved container that holds children the bridge could not track (a
-  // data-design-id another element already has). Said once per container, by selector, until the container has no such
-  // child again. The bridge reports only the child's name (its slot in `orderIds` is empty), not its id. Text only.
+  // The DOM-move status line's sentence for a saved container that holds children the bridge did not register (it
+  // reports '' at their place in `orderIds`). Said once per container, by selector, until the container has no such
+  // child again. The bridge sends only the child's name, and '' covers more than one cause: a data-design-id another
+  // element already has, an empty one (data-design-id=""), or one over 300 characters. So the sentence says the child
+  // is not tracked and names those causes as possible, never as the fact. Text only.
   const duplicateIdAnnounced = new Set();
   function duplicateIdNote() {
     const named = [];
@@ -3349,8 +3351,9 @@ if (remembered) kitId.value = remembered;
       untracked.forEach(name => named.push(`"${String(name).slice(0, 60)}" in "${String(entry.name).slice(0, 60)}"`));
     });
     if (!named.length) return "";
-    return ` Not tracked (duplicate data-design-id): ${named.slice(0, 3).join("; ")}${named.length > 3 ? "; …" : ""}. Another element already uses its `
-      + "data-design-id (Spec 4.1), so Studio does not save its place; the other children keep their saved order.";
+    return ` Not tracked (unregistered): ${named.slice(0, 3).join("; ")}${named.length > 3 ? "; …" : ""}. The page did not register it; `
+      + "a duplicate or invalid data-design-id (already used by another element, empty, or over 300 characters) is a likely cause (Spec 4.1). "
+      + "Studio does not save its place; the other children keep their saved order.";
   }
   const sameIds = (a, b) => a.length === b.length && a.every((id, at) => id === b[at]);
   // Every saved container is in the target in the saved order. Containers only the target reorders (a composition
@@ -3386,6 +3389,11 @@ if (remembered) kitId.value = remembered;
     })]));
   }
   const overridesEqual = (a, b) => stableOverrides(a) === stableOverrides(b);
+  // One saved value in a map of overrides, compared the way overridesEqual does (text trimmed, numbers rounded): the
+  // bridge ledger reports text trimmed while Studio's saved override keeps what the user typed. A property that is
+  // missing is not the same as one that is present, whatever its value.
+  const holdsOverride = (map, id, key, value) => Object.prototype.hasOwnProperty.call(map, id) && isPlainObject(map[id])
+    && Object.prototype.hasOwnProperty.call(map[id], key) && overridesEqual({ v:{ [key]:map[id][key] } }, { v:{ [key]:value } });
 
   function safeCssText(value, max = 500, options) {
     const text = String(value ?? "");
@@ -4018,6 +4026,8 @@ if (remembered) kitId.value = remembered;
     live.timedOut.delete(data.requestId);
     if (Number.isInteger(data.revision) && data.revision > live.revision) live.revision = data.revision;
     if (applied) { afterApplied(op, data); return; }
+    // Sent before the user imported: its rejection is not news about anything the user asked for, only about the page.
+    if (op.importSuperseded) { reconcileAfterImport(); return; }
     const reason = typeof data.reason === "string" ? data.reason.slice(0, 60) : "invalid-message";
     setBridgeStatus(`Rejected: ${reason}`, "rejected");
     if (op.kind === "move") noteMoveRejection(op, data, reason); else reseedLiveControls(op.targetId);
@@ -4031,6 +4041,10 @@ if (remembered) kitId.value = remembered;
     if (Number.isInteger(data.revision) && data.revision >= 0) live.revision = data.revision;
     if (applied) {
       afterApplied(op, data);
+    } else if (op.importSuperseded) {
+      // Built from the state the import replaced (D035): never sent again, whatever the reason. Only the comparison
+      // with the page is redone, as for a superseded acknowledgement (recordCanonical).
+      reconcileAfterImport();
     } else {
       const reason = typeof data.reason === "string" ? data.reason.slice(0, 60) : "invalid-message";
       if (reason === "revision-conflict" && !op.retried) {
@@ -4111,12 +4125,12 @@ if (remembered) kitId.value = remembered;
     const page = ledgerToOverrides(live.changes);
     const saved = effectiveOverrides(live.overrides);
     const overridesHeld = Object.entries(saved)
-      .every(([id, patch]) => Object.entries(patch).every(([key, value]) => page[id] && page[id][key] === value));
+      .every(([id, patch]) => Object.entries(patch).every(([key, value]) => holdsOverride(page, id, key, value)));
     const dropped = live.importDropped;
     let droppedHeld = false;
     if (dropped) {
       droppedHeld = Object.entries(dropped.overrides)
-        .some(([id, patch]) => Object.entries(patch).some(([key, value]) => page[id]?.[key] === value && saved[id]?.[key] !== value));
+        .some(([id, patch]) => Object.entries(patch).some(([key, value]) => holdsOverride(page, id, key, value) && !holdsOverride(saved, id, key, value)));
       const pageOrder = savedStructureFrom(live.changes.structure);
       const holds = (list, entry) => list.some(item => item.selector === entry.selector && sameIds(item.ids, entry.ids));
       droppedHeld = droppedHeld || dropped.structure.some(entry => holds(pageOrder, entry) && !holds(live.structure, entry));

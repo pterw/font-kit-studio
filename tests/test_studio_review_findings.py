@@ -27,6 +27,15 @@ DUPLICATE_AFTER_FIRST_CARD = """() => {
 
 
 class DuplicateIdChildTests(studio.ArrangeCase):
+    def assert_untracked_wording(self, status):
+        """The child is described as not tracked (unregistered), with the possible causes named as possibilities: the
+        bridge cannot tell a duplicate id from an empty or oversized one, so it never says another element uses it."""
+        self.assertRegex(status, r'(?i)not tracked')
+        self.assertRegex(status, r'(?i)unregistered')
+        self.assertRegex(status, r'(?i)duplicate or invalid data-design-id')
+        self.assertRegex(status, r'(?i)empty')
+        self.assertNotRegex(status, r'(?i)another element (already )?uses')
+
     def move_card(self, page, frame, button, card, rev):
         self.select(page, frame, card)
         page.locator(button).click()
@@ -78,8 +87,7 @@ class DuplicateIdChildTests(studio.ArrangeCase):
                 frame.evaluate(DUPLICATE_AFTER_FIRST_CARD)
                 self.move_card(page, frame, '#liveMoveFirst', 'card.c', 1)
                 status = ' '.join(page.locator('#liveCodeStatus').inner_text().split())
-                self.assertRegex(status, r'(?i)duplicate data-design-id')
-                self.assertRegex(status, r'(?i)not tracked')
+                self.assert_untracked_wording(status)
                 self.assertIn('Card with a repeated id', status, 'it names the element')
                 self.assertIn('Cards', status, 'and its container')
                 self.assertRegex(status, r'(?i)kept in Studio', 'the move itself is still reported')
@@ -87,7 +95,25 @@ class DuplicateIdChildTests(studio.ArrangeCase):
                 self.move_card(page, frame, '#liveMoveLast', 'card.a', 2)
                 status = ' '.join(page.locator('#liveCodeStatus').inner_text().split())
                 self.assertRegex(status, r'(?i)kept in Studio')
-                self.assertNotRegex(status, r'(?i)duplicate data-design-id')
+                self.assertNotRegex(status, r'(?i)not tracked|unregistered|invalid data-design-id')
+                self.assertEqual(errors, [])
+
+    def test_a_child_with_an_empty_data_design_id_is_described_as_untracked_without_blaming_another_element(self):
+        """The bridge reports '' for any child it did not register: a duplicate id, an empty one (`data-design-id=""`) or
+        one over 300 characters. An empty slot does not prove a duplicate, so the status must not claim one."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors, frame = self.open_arrange(engine)
+                frame.evaluate("""() => {
+                    window.fake.mapStructure = e => ({...e,
+                        order: [e.order[0], 'DIV: "Card with an empty id"', ...e.order.slice(1)],
+                        orderIds: [e.orderIds[0], '', ...e.orderIds.slice(1)]});
+                }""")
+                self.move_card(page, frame, '#liveMoveFirst', 'card.c', 1)
+                status = ' '.join(page.locator('#liveCodeStatus').inner_text().split())
+                self.assert_untracked_wording(status)
+                self.assertIn('Card with an empty id', status)
+                self.assertIn('Cards', status)
                 self.assertEqual(errors, [])
 
     def test_a_container_without_a_duplicate_id_child_shows_no_such_text(self):
@@ -155,7 +181,8 @@ class RealBridgeDuplicateIdTests(integration.LiveIntegrationCase):
                 name = structure[0]['name']
                 status = ' '.join(page.locator('#liveCodeStatus').inner_text().split())
                 self.assertRegex(status, r'(?i)not tracked')
-                self.assertRegex(status, r'(?i)duplicate data-design-id')
+                self.assertRegex(status, r'(?i)duplicate or invalid data-design-id')
+                self.assertNotRegex(status, r'(?i)another element (already )?uses')
                 self.assertIn(f'in "{name}"', status, 'the status names the container')
                 self.assertIn('Plain one again', status, 'and the element')
                 self.assertRegex(status, r'(?i)kept in Studio')
