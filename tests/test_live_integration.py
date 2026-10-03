@@ -27,10 +27,10 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import quote
 
-from playwright.sync_api import TimeoutError as PlaywrightTimeout, sync_playwright
+from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from support import ENGINES, HTML, REPO, launch  # noqa: E402
+from support import ENGINES, HTML, REPO, close_contexts, launch, new_context, shared_runtime  # noqa: E402
 
 SERVE = REPO / 'scripts' / 'serve.py'
 TITLE = '[data-design-id="landing.hero.title"]'
@@ -69,9 +69,9 @@ class LiveIntegrationCase(unittest.TestCase):
         self.proc = None
         self.start_server()
         self.addCleanup(self.stop_server)
-        self.runtime = sync_playwright().start()
-        self.addCleanup(self.runtime.stop)
-        self.browsers = []
+        self.runtime = shared_runtime()   # one driver and one browser per engine per process (support.py)
+        self.browsers = []                # browsers a test launches itself; closed below
+        self.contexts = []                # one fresh context per test, closed below
         self.addCleanup(self.close_browsers)
 
     # ---- server --------------------------------------------------------
@@ -111,8 +111,11 @@ class LiveIntegrationCase(unittest.TestCase):
         self.log.close()
 
     def close_browsers(self):
-        for browser in self.browsers:
-            browser.close()
+        try:
+            close_contexts(self.contexts)
+        finally:
+            for browser in self.browsers:
+                browser.close()
 
     def written(self):
         return self.overrides.read_text(encoding='utf-8') if self.overrides.exists() else ''
@@ -123,9 +126,8 @@ class LiveIntegrationCase(unittest.TestCase):
 
     # ---- browser -------------------------------------------------------
     def open(self, engine, viewport=None, query=True):
-        browser = launch(self.runtime, engine)
-        self.browsers.append(browser)
-        context = browser.new_context(viewport=viewport or {'width': 1440, 'height': 900})
+        context = new_context(engine, viewport=viewport or {'width': 1440, 'height': 900})
+        self.contexts.append(context)
         if engine == 'chromium':  # the real clipboard works on localhost once permitted
             context.grant_permissions(['clipboard-read', 'clipboard-write'], origin=self.studio)
         self.font_requests = []

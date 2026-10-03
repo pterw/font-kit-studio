@@ -13,9 +13,8 @@ import unittest
 from pathlib import Path
 from urllib.parse import quote
 
-from playwright.sync_api import sync_playwright
-
-from support import ENGINES, HTML, REPO, launch, route_virtual_origins
+from support import (ENGINES, HTML, REPO, close_contexts, launch, new_context, route_virtual_origins,
+                     shared_runtime)
 
 FIXTURES = Path(__file__).resolve().parent / 'fixtures' / 'studio'
 STUDIO = 'http://studio.test'
@@ -28,19 +27,21 @@ FAKE = f'{TARGET}/fake-target.html'
 
 class LiveCase(unittest.TestCase):
     def setUp(self):
-        self.runtime = sync_playwright().start()
-        self.browsers = []
+        self.runtime = shared_runtime()   # one driver and one browser per engine per process (support.py)
+        self.browsers = []                # browsers a test launches itself; closed below
+        self.contexts = []                # one fresh context per test, closed below
 
     def tearDown(self):
-        for browser in self.browsers:
-            browser.close()
-        self.runtime.stop()
+        try:
+            close_contexts(self.contexts)
+        finally:
+            for browser in self.browsers:
+                browser.close()
 
     # ---- harness -------------------------------------------------------
     def context(self, engine, sync=None, viewport=None, status_target='http://localhost:8001/demo/'):
-        browser = launch(self.runtime, engine)
-        self.browsers.append(browser)
-        context = browser.new_context(viewport=viewport or {'width': 1600, 'height': 1200})
+        context = new_context(engine, viewport=viewport or {'width': 1600, 'height': 1200})
+        self.contexts.append(context)
         context.route('https://**/*', lambda route: route.abort())
         route_virtual_origins(context, {STUDIO: REPO, TARGET: FIXTURES, EVIL: FIXTURES, HOST: FIXTURES})
         self.puts = []

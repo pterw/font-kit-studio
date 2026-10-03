@@ -6,26 +6,27 @@ import unittest
 import zlib
 from pathlib import Path
 
-from playwright.sync_api import sync_playwright
-
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from support import ENGINES, HTML, launch  # noqa: E402
+from support import ENGINES, HTML, close_contexts, launch, new_context, shared_runtime  # noqa: E402
 
 
 class BrowserCase(unittest.TestCase):
     def setUp(self):
-        self.runtime = sync_playwright().start()
-        self.browsers = []
+        self.runtime = shared_runtime()   # one driver and one browser per engine per process (support.py)
+        self.browsers = []                # browsers a test launches itself; closed below
+        self.contexts = []                # one fresh context per test, closed below
 
     def tearDown(self):
-        for browser in self.browsers:
-            browser.close()
-        self.runtime.stop()
+        try:
+            close_contexts(self.contexts)
+        finally:
+            for browser in self.browsers:
+                browser.close()
 
     def page(self, engine):
-        browser = launch(self.runtime, engine)
-        self.browsers.append(browser)
-        page = browser.new_page(viewport={'width': 1600, 'height': 1200})
+        context = new_context(engine, viewport={'width': 1600, 'height': 1200})
+        self.contexts.append(context)
+        page = context.new_page()
         errors = []
         page.on('pageerror', lambda error: errors.append(str(error)))
         page.goto(HTML.as_uri())

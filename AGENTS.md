@@ -93,6 +93,10 @@ export FKS_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium
 Running single test modules by name (`python -m unittest tests.test_x`)
 needs `PYTHONPATH=tests`; `discover -s tests` does not.
 
+Browser tests share one Playwright driver and one browser per engine per process
+(`tests/support.py`), with a fresh context per test. Take the driver from
+`shared_runtime()`; a direct `sync_playwright()` fails while the shared driver runs.
+
 `FKS_ENGINES` defaults to `chromium` for the test suite. Firefox runs only
 the canary in `tests/firefox_canary.py` (D037):
 `PYTHONPATH=tests FKS_ENGINES=firefox python -m unittest firefox_canary -v`.
