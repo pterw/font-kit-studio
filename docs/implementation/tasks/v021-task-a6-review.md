@@ -130,3 +130,79 @@ entries with `sheet`, so the cap cannot be reached today and the tests exercise 
 
 Known limits to carry in the ledger (controller already ruled): the duplicate id is not named (bridge sends `''`);
 the 16-sheet guard cannot trigger with today's library; `compositionPatch` index fallbacks go to Task 4b.
+
+## Re-review (fix round 1)
+
+Reviewer: Leading. Scope: the four required fixes, as committed in `0f410c0` (head of `ccr-9eab25c9-mgatzt`) and
+described in the brief's "Fix round 1". **Verdict: Approved.** No further fix is required before the release point.
+Chromium only; Firefox not run, not verified. All runs were in a detached worktree at `0f410c0` (removed afterwards;
+the main tree was not touched except for this appended section).
+
+### Gates (worktree, `FKS_ENGINES=chromium`)
+
+- `python -m unittest tests.test_studio_review_findings -v`: Ran 11, OK (5 fake-target duplicate-id, 1 real-bridge,
+  5 sheet-limit).
+- `tests.test_bridge_runtime.OriginListTests` + `DuplicateIdOrderTests`: Ran 10, OK. Both classes are unchanged by the
+  fix round (`git diff 2cb8276 0f410c0 -- tests/test_bridge_runtime.py` is the original two additions only).
+- The formerly flaky `test_a_linked_edit_stops_the_status_naming_families_once_everything_is_sent`, run 10 times in
+  isolation: **10 of 10 passed** (it failed about half the runs before the fix).
+- Not re-run: `verify.py --static-only` (the release-point gate owns it), full suite, frontend gate, Firefox.
+
+### The four fixes
+
+1. **Flaky test: fixed.** `wait_first_slot` (`tests/test_studio_review_findings.py:214-223`) waits for a streamed
+   composition whose first slot carries the wanted family and returns the last matching patch; `sync_with` (`:199-209`)
+   and the linked-edit test use it, so no test reads `streamed(frame)[-1]` any more. It is a condition, not a count.
+   No `sleep` or `wait_for_timeout` in the file.
+2. **"Sent again" pinned: fixed.** The linked-edit test (`:249-267`) waits for and asserts `sent to the page again`,
+   keeps `Composition sent to the live app.`, and still asserts no `Extra 17` and no `not sent`.
+3. **Consent re-send: fixed.** `reportComposerFonts` now writes `text + sheetLimitNote()`
+   (`font_kit_studio_v0.1.1.html` ~:2244). The test (`:269-288`) syncs before the ask (asserts no sheets sent and no
+   note), presses Load free fonts, waits for the 16-sheet re-send, then asserts `Loaded 0/N ...` and the note naming
+   `Extra 17`. It depends on the test network being offline (it waits for `could not load`), the same assumption the
+   harness makes elsewhere; if the harness ever allowed Google Fonts the wait would need a different settle condition.
+4. **Real Studio against the real bridge: fixed.** `RealBridgeDuplicateIdTests` (`:114-177`) serves the bridge's
+   arrangement fixture through `scripts/serve.py`, adds a duplicate-id paragraph with a Playwright route on every
+   load, moves `arr.p.3` first, and asserts the export holds `['arr.p.3','arr.p.1','arr.p.2']`, the status names the
+   container and `Plain one again`, no banner, then reload + Reapply restores the registered order and the export is
+   unchanged. The fake-target reload + Reapply case is `:53-72`. Hostile/other-boundary rules are not affected.
+
+**Placement of fix 4.** It landed in `tests/test_studio_review_findings.py`, not `tests/test_live_integration.py`.
+Acceptable: the class subclasses `LiveIntegrationCase` (`import test_live_integration as integration` does not make
+the unittest loader collect those tests twice), it runs the same real-Studio/real-bridge harness, the brief's owned
+files were the new file, and `test_live_integration.py` was under edit by other tasks. Keep the module docstring
+pointer (it names the class). If the owner prefers all real-bridge tests in one module, moving the class later is
+mechanical.
+
+### Mutation results (worktree, restored with `git checkout` after each; `git status` clean)
+
+| Mutation | Failing tests |
+|---|---|
+| M4: blank the "sent to the page again" sentence | `test_a_linked_edit_stops_the_status_naming_families_once_everything_is_sent` (ERROR, wait on the text times out). Earlier survivor is now caught. |
+| M5: `reportComposerFonts` writes `text` without `sheetLimitNote()` | `test_the_consent_re_send_keeps_the_families_left_out_in_the_status` (FAIL) |
+| M6: restore the whole-container drop in `savedStructureFrom` | `test_a_dom_move_in_a_container_with_a_duplicate_id_child_is_saved_for_the_registered_children`, `test_reapply_after_a_reload_puts_the_registered_children_back_in_the_saved_order`, `RealBridgeDuplicateIdTests.test_a_dom_move_beside_a_duplicate_id_child_is_saved_reported_and_reapplied_after_a_reload` (3 ERROR), `test_the_status_says_once_per_container_...` (FAIL) |
+
+The three earlier mutations (dedupe, `sheetLimitNote` in Sync, `!id` early return) are covered by the same tests as in
+the first review; the first review's bridge tests are unchanged and pass.
+
+### Findings
+
+- None blocking. The code change in the fix round is one line (`reportComposerFonts`); the rest is tests and records.
+- Known limit, confirmed on the real bridge by the implementer and pinned by the test (`:171-175`): Reapply places the
+  registered ids at indexes 0..n-1, so the untracked duplicate-id element moves from index 2 to the end of its
+  container, and Studio does not mention it. It is not Studio's state, and fixing it needs the untracked child's
+  position from the bridge (the same contract gap as naming the id). Two cautions: the test pins the current
+  (undesirable) position as "observed", so a future fix will have to update that assertion on purpose; and the ledger
+  should list it beside "the duplicate id is not named". Optional follow-up: one sentence in the Reapply result
+  saying an untracked element may have moved.
+- Minor, not required: `reportComposerFonts` appends `sheetLimitNote()` from whatever `sheetsNotSent` last held, so
+  after the composition changes while unlinked the line can name families from the last send until the next Sync
+  recomputes it. Same staleness class as the first review's note on unlinked edits; acceptable for a guard that the
+  current 16-family library cannot trigger.
+
+### Not verified
+
+Firefox; the full `test_studio_live` suite (Task 5's `:4220` expectation mismatch from the first review is for the
+Task 5 round, and I did not check whether it is now fixed); the frontend gate and `verify.py` at `0f410c0`; the
+untracked child's position after Reapply on any page other than the arrangement fixture; behaviour with a network
+that lets Google Fonts load.

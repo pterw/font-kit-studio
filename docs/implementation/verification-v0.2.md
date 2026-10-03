@@ -308,3 +308,76 @@ After the run, `ps aux | grep serve.py` showed no process and `git status --shor
 - No physical devices were used; the 1440×900 and 390×844 checks are Chromium viewport emulation.
 - Chromium here is 141.0.7390.37 with Playwright 1.62.0, so results are not directly comparable with the v0.1.1 baseline browser versions.
 - The smoke run covers connection and layout at two viewports with the bundled demo page, not every v0.2.0 interaction; those are covered by the unittest/browser suite.
+
+# v0.2.1 PR A release-point verification — 2026-10-03
+
+Gate evidence for the first v0.2.1 pull request (fit-and-finish, behaviour: plan Tasks 1-5, 4b and A6). Nothing was changed to obtain it: the tree was clean before and after every gate.
+
+## Artifact and environment
+
+- Head: `0f410c0` on the PR A branch; `git status --short` empty before and after all gates.
+- Python 3.11.15; Node v22.22.0; Playwright (Python) 1.62.0; Chromium 141.0.7390.37 (`/opt/pw-browsers/chromium`, no `playwright install` run). Engines under test: Chromium only (`FKS_ENGINES=chromium`).
+- SHA-256 (`sha256sum`):
+
+| File | SHA-256 |
+|---|---|
+| `font_kit_studio_v0.1.1.html` | `0d907228ee90b1cc268e0039548e8fbd882a984a994215cbbcbf112f38c758d6` |
+| `fontkit-bridge.js` | `a91551238cdab1d626eb70256c75e2650c23a2ca8d7e06808452a5bed110cd69` |
+| `scripts/serve.py` | `706f10cc9b2970edba1800ee2d4dbb6b2db49cfe1b271894733b1df5ccd9ef71` |
+| `demo/index.html` | `ba7b03ef74439de192c3ecce3a12ab6e2b728cd16f914d0e8f36a631fd19b951` |
+
+## Exact commands
+
+```bash
+export PYTHONPATH=tests FKS_ENGINES=chromium FKS_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium
+python scripts/verify.py --static-only
+node --check fontkit-bridge.js
+python -m unittest discover -s tests
+python scripts/dev/frontend_gate.py --offline
+python scripts/dev/check_commit_messages.py --range origin/main..HEAD
+```
+
+## Gate results
+
+| Gate | Result |
+|---|---|
+| Static checks and provenance | PASS (unique IDs, inline JS syntax, three `supplied-v0.1.1` blobs match `SOURCES.json`) |
+| Bridge syntax (`node --check`) | OK |
+| Full unittest/browser suite, Chromium | `Ran 623 tests in 740.902s`, `OK` |
+| Frontend gate, offline | `SUMMARY OK: 15 of 15 planned runs finished. Blocking: 7 runs, 6 passed, 0 failed, 1 skipped. Advisory: 8 runs, 0 ADVISORY lines. 140 REPORT lines, 1 SKIP lines, 0 FAIL lines` |
+| Commit messages | `OK: 13 commits checked` |
+
+The one skipped blocking run is the free-fonts load check, which needs the network and is skipped by design under `--offline`. The 140 REPORT lines are advisory measurements (touch targets under 44 px in the wide-touch profile, for example `#liveReapply` at 160x30); they do not fail the build (D029) and are input for PR B's controls pass.
+
+The suite printed one `TargetClosedError` line to stderr. It is a Playwright future left pending when a page in `tests/test_studio_first_run.py` closes during teardown; it was already seen in that module's review and does not fail or skip any test.
+
+## Test count per file
+
+Counted with the unittest loader at the same head.
+
+| Test file | Tests |
+|---|---:|
+| `tests/test_bridge_runtime.py` | 128 |
+| `tests/test_commit_messages.py` | 21 |
+| `tests/test_font_kit_studio_v011.py` | 20 |
+| `tests/test_frontend_gate_fonts.py` | 6 |
+| `tests/test_frontend_gate_helpers.py` | 62 |
+| `tests/test_frontend_gate_report.py` | 35 |
+| `tests/test_frontend_gate_runner.py` | 56 |
+| `tests/test_frontend_gate_theme_browser.py` | 2 |
+| `tests/test_live_integration.py` | 43 |
+| `tests/test_preview_server.py` | 34 |
+| `tests/test_studio_first_run.py` | 22 |
+| `tests/test_studio_import_link.py` | 16 |
+| `tests/test_studio_live.py` | 152 |
+| `tests/test_studio_review_findings.py` | 11 |
+| `tests/test_studio_stage.py` | 11 |
+| `tests/test_support.py` | 4 |
+| **Total** | **623** |
+
+## Limits
+
+- Firefox is not installed here; it runs in CI and is advisory (D029). Gecko behaviour for these changes is unverified locally.
+- Phone and touch layouts were measured by the frontend gate's advisory profiles only; no physical devices were used.
+- The free-fonts load path was not exercised (offline gate); the suite covers it with routed font responses.
+- Windows port reuse in `scripts/serve.py` is checked by code reading only.
