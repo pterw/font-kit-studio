@@ -424,6 +424,21 @@ footer {
   background-size: 20px 20px;
   overflow: auto;
 }
+/* The live preview keeps the width the user chose and never scales: a wider preview scrolls inside its own viewport,
+   so the scrollbar sits right under the preview instead of at the bottom of the (tall) stage. --preview-width is set
+   by setDeviceWidth. In fullscreen the viewport takes the stage's height and centres, like the container did. */
+.preview-scroller {
+  width: min(100%, var(--preview-width, 100%));
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.composer-shell.is-theater-fullscreen .canvas-stage .preview-scroller {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+}
 .composer-canvas {
   width: min(100%, 960px);
   min-height: 620px;
@@ -1088,6 +1103,7 @@ body.dark .live-overlay-label { color: #111; }
             <button id="liveAcceptTarget" class="btn" type="button">Accept target state</button>
           </div>
         </div>
+        <div id="previewScroller" class="preview-scroller">
         <section id="targetAppContainer" tabindex="-1" style="display: none; position: relative; width: 100%; height: 720px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: #fff;">
           <iframe id="targetAppFrame" title="Target application preview" style="width: 100%; height: 100%; border: none;"></iframe>
           <div id="bridgePopoutPlaceholder" class="popout-placeholder" hidden>
@@ -1102,6 +1118,7 @@ body.dark .live-overlay-label { color: #111; }
             <div id="bridgeOverlaySelected" class="live-overlay is-selected" hidden><span class="live-overlay-label"></span></div>
           </div>
         </section>
+        </div>
         <section id="liveCodePanel" class="live-code-panel" aria-label="Live changes as code" hidden>
           <div class="live-code-head">
             <h2>Changes <span id="liveChangeCount" class="live-count" title="Changed targets and tokens">0</span></h2>
@@ -5281,7 +5298,12 @@ if (remembered) kitId.value = remembered;
     });
     if (!tokens["--font-display"] && state.slots[0]) tokens["--font-display"] = cssStack(byFamily(state.slots[0].family));
     if (!tokens["--font-sans"] && state.slots[1]) tokens["--font-sans"] = cssStack(byFamily(state.slots[1].family));
-    if (!tokens["--font-serif"] && state.slots[2]) tokens["--font-serif"] = cssStack(byFamily(state.slots[2].family));
+    // The serif token is the first text slot set in a serif family (the library marks a family's category in
+    // font.tags); slots[2] is whatever the preset put third, often a Row, so the position says nothing.
+    if (!tokens["--font-serif"]) {
+      const serifSlot = state.slots.find(slot => slot.type === "text" && byFamily(slot.family).tags.includes("serif"));
+      if (serifSlot) tokens["--font-serif"] = cssStack(byFamily(serifSlot.family));
+    }
     if (!tokens["--font-mono"] && state.slots[3]) tokens["--font-mono"] = cssStack(byFamily(state.slots[3].family));
 
     const slots = state.slots.map((slot, index) => {
@@ -5406,6 +5428,8 @@ if (remembered) kitId.value = remembered;
     if (targetAppContainerEl) {
       targetAppContainerEl.style.maxWidth = width;
       targetAppContainerEl.style.width = width;
+      // The viewport around the preview is as wide as the stage allows (see .preview-scroller); a wider preview scrolls.
+      targetAppContainerEl.parentElement?.style.setProperty("--preview-width", width);
     }
   }
 

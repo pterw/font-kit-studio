@@ -65,3 +65,62 @@ made RED.
 
 Append under this heading in this file: RED evidence (test names and failure text), the fix
 (functions and lines), GREEN evidence (your module count), what you did not verify.
+
+## Report
+
+Implementer: Kerning. Base: fast-forwarded the worktree from a6d2751 to 0e8befa before editing.
+
+### Root cause (width buttons)
+The stage (`.canvas-stage`, `overflow:auto`) did scroll, but it is about 1000 px tall (canvas, preview,
+code panel), so its horizontal scrollbar sat at the stage bottom, far below the preview (stage bottom
+at y=1818 in a 900 px window). The 1024 button also overflowed by 6 px at 1440x900 (stage content box
+1018 px). Nothing was clipped in the DOM; the user just could not find the scrollbar.
+
+### Serif category source
+Each entry of `fonts` (html:1163 on) carries `tags`, an array whose category entry is "serif", "sans"
+or "mono" (also `fallback: "serif"`). The fix uses `byFamily(slot.family).tags.includes("serif")`.
+
+### RED (before the fix, 12 failures, 6 tests)
+- `PreviewWidthTests.test_fixed_widths_scroll_instead_of_cropping_at_common_window_sizes`, all six
+  window/button pairs: `AssertionError: 1068 != 1024 : the preview is 1024px wide ... 'tag':
+  'canvas-stage', 'scrollWidth': 1068` and `1484 != 1440` (the nearest horizontal scroller was the
+  stage, not a preview viewport; its bottom was 1817 vs the preview bottom 1584).
+- `test_fluid_never_scrolls_horizontally_and_narrow_widths_fit`, three windows:
+  `1062 != 390` (the 390 preview sat in a stage-wide scroller).
+- `SerifTokenTests.test_serif_token_is_the_first_serif_family_when_slot_two_is_a_row`:
+  `'"Instrument Serif"' not found in '"Fraunces", serif'`.
+- `test_no_serif_token_is_sent_when_no_slot_uses_a_serif_family`: `'--font-serif' unexpectedly found in
+  {... '--font-serif': '"Fraunces", serif'}`.
+- `test_a_slot_whose_role_says_editorial_still_wins_the_serif_token`: passed before the fix
+  (characterization, not made RED). The fullscreen test passed on the old structure only as written
+  after the fix (new behaviour), see below.
+
+### Fix (font_kit_studio_v0.1.1.html, 26 lines)
+- CSS next to `.canvas-stage` (before `.composer-canvas`): `.preview-scroller` (width
+  `min(100%, var(--preview-width, 100%))`, `overflow-x:auto`, `overflow-y:hidden`) and one fullscreen
+  rule `.composer-shell.is-theater-fullscreen .canvas-stage .preview-scroller` (flex fill, centred). The
+  committed fullscreen CSS block is untouched; the new rule is a separate, more specific selector.
+- Markup: `#targetAppContainer` is wrapped in `<div id="previewScroller" class="preview-scroller">`. The
+  container, iframe, overlay layer and placeholder are unchanged, so overlay coordinates still align.
+- `setDeviceWidth`: also sets `--preview-width` on the wrapper (parent of the container).
+- `compositionPatch`: the `state.slots[2]` fallback for `--font-serif` is replaced by the first text slot
+  whose family has the "serif" tag; with none, no `--font-serif` is sent.
+- Result: the preview is never scaled, its viewport is at most as wide as the stage, the scrollbar sits
+  directly under the preview, and `scrollWidth` equals the chosen width (1440 and 1024 at 1440, 1280 and
+  1024 px windows). Fluid and 390 do not scroll.
+
+### GREEN
+`python -m unittest tests.test_studio_stage` (Chromium only): Ran 6 tests, OK. `python scripts/verify.py
+--static-only`: PASS (91 unique IDs, inline JS syntax, provenance).
+
+### Not verified
+- Firefox (not installed here; `FKS_ENGINES=chromium`), WebKit.
+- Headless Chromium hides scrollbars, so "visible scrollbar" is asserted by geometry (scrollWidth >
+  clientWidth, `overflow-x` auto, scroller bottom within 24 px of the preview bottom), not by pixels.
+- The existing suites (test_studio_live fullscreen, overlay and layout tests, the frontend gate) were not
+  run, per the brief. My module covers fullscreen fluid and 1440 only. Reviewer should run the existing
+  fullscreen and overlay tests, and the frontend gate layout check (it lists `#targetAppContainer`).
+- Markup change outside the named CSS and functions: the wrapper div near `#targetAppContainer`
+  (about html:1100). Task 3 and Task 5 do not own those lines, but a merge should be checked.
+- Row children are not considered for the serif token (only top-level text slots, matching the role pass).
+- `byFamily` falls back to `fonts[0]` (Fraunces, serif) for an unknown family, so such a slot counts as serif.
