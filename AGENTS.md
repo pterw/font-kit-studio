@@ -90,6 +90,9 @@ export FKS_ENGINES=chromium
 export FKS_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium
 ```
 
+Running single test modules by name (`python -m unittest tests.test_x`)
+needs `PYTHONPATH=tests`; `discover -s tests` does not.
+
 `FKS_ENGINES` defaults to `chromium,firefox`. When an engine is unavailable,
 say so in the ledger; never report it as verified.
 
@@ -128,6 +131,9 @@ claim graph verification you did not get.
 
 ## Work Model (subagent-driven development)
 
+- **Owner:** sets vision and scope, approves designs, requests external reviews
+  (Codex, Copilot) and merges. Agents never merge or call external reviews
+  themselves.
 - **Controller:** owns plans, ledgers, `AGENTS.md`, `docs/agents/global-rules.md`,
   git commits and pushes. The only role that spawns agents.
   Writes task briefs, dispatches agents, integrates results.
@@ -153,6 +159,8 @@ Rules of engagement:
   rounds, then escalate to the owner.
 - Check branch, HEAD and status before mutating anything. Never revert
   another agent's edits.
+- Stop only processes you started, by PID. Never kill by name pattern
+  (`pkill -f chromium`): parallel agents run their own browsers.
 - User steering mid-run becomes a dated plan addendum plus a ledger event,
   before dispatching the work it changes.
 

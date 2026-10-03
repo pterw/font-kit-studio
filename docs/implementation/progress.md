@@ -4,7 +4,9 @@ Plans: `docs/plans/2026-09-30-v0.1.1-responsive-rows.md` (complete), `docs/plans
 
 ## Current state
 
-v0.1.1 is complete. The v0.2.0 plan is complete: live preview of a target page, the Live Target inspector, the code panel with copy, download and sync, arrange with guards, pop-out, free fonts, end-to-end tests and the README. The CI workflow and the frontend gate (Task H) are complete; Studio makes no third-party request until the user loads free fonts (D028). Chromium is verified locally (342 tests, gate 0 enforced failures offline); Firefox is first verified in CI (D010). Open polish items from the final review are listed in `final-review-v0.2.md` (I2, M1-M9).
+- **v0.2.0 (PR #1, open, awaiting the owner's merge).** All plan tasks, review-fix rounds and every review thread are done; check CI on the current head before relying on it. In flight: plan Addendum 7 (known-limit fixes: DOM moves restored by Reapply, reconnect banner wording, removed author ids, the wrong-element re-select, origin-list case and `initFontKitBridge` narrowing, Composer tracking and font loading). Each Addendum 7 item is reviewed before it is committed to the PR branch.
+- **Next release.** The typography system design is approved: `docs/specs/2026-10-03-typography-system-design.md` (releases R1 one command, R2 engine, R3 pairing system, R4 output and handoff, R5 extension). Its R1 plan starts on a fresh branch from `main` after PR #1 merges. Open owner decisions are listed in the design's section 6 (package name, Studio file name, specimen canvas location).
+- **Evidence.** 434 tests pass in Chromium locally; Firefox runs in CI only and is advisory (D029).
 
 ## Recovery
 
