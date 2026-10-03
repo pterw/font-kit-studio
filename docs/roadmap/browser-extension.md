@@ -1,7 +1,9 @@
 # Roadmap: a simpler browser extension
 
 Status: **idea, not implemented.** Nothing in this repository builds an extension. This note
-says what a first version could be, so the README can point to something honest.
+says what a first version could be, so the README can point to something honest. It is the
+lead surface in the [product direction](product-direction.md), which owns who it is for and
+the order of work; this note owns the technical sketch.
 
 ## Why
 

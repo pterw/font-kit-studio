@@ -597,7 +597,7 @@ Known gaps:
 
 ## Roadmap
 
-A simpler **browser extension**, with no script tag, is an idea and is not built. See [`docs/roadmap/browser-extension.md`](docs/roadmap/browser-extension.md) for goals, a sketch, security rules and open questions.
+A simpler **browser extension**, with no script tag, is an idea and is not built. See [`docs/roadmap/browser-extension.md`](docs/roadmap/browser-extension.md) for goals, a sketch, security rules and open questions. Where fontkit is heading, and why typography stays at its centre, is in [`docs/roadmap/product-direction.md`](docs/roadmap/product-direction.md).
 
 ## Provenance
 
