@@ -1,7 +1,7 @@
 # Design: fontkit typography system (pairing, output, low-friction setup)
 
-Status: **draft.** Sections 1 and 2 are approved by the owner (2026-10-03).
-Section 3 is proposed and awaits approval. Sections 4 and 5 are not written yet.
+Status: **draft.** Sections 1, 2 and 3 are approved by the owner (2026-10-03).
+Sections 4 and 5 are proposed and await approval. Section 6 lists open decisions.
 Nothing here is built. Implementation starts only from a plan in `docs/plans/`.
 
 Related: [product direction](../roadmap/product-direction.md),
@@ -26,6 +26,10 @@ B conflicts with global rule 1 as written; the rule is amended before B is built
 ## 1. Starting fontkit (approved)
 
 Goal: one command, no edits to the project, nothing written until the user confirms.
+
+The command is written `npx fontkit` below for readability. The npm name `fontkit` already
+belongs to an unrelated, widely used font engine, so the real package name is an open
+decision (section 6).
 
 | Project | Command | What happens |
 |---|---|---|
@@ -85,7 +89,7 @@ the stylesheet.
 9. **The old Composer.** Its slot canvas stays as a specimen-sheet export, and existing
    composition JSON still imports into it (global rule 8).
 
-## 3. Output and handoff (proposed)
+## 3. Output and handoff (approved)
 
 ### 3.1 The type-system file
 
@@ -156,12 +160,75 @@ browser, no dependencies):
 
 Screenshots are not in the first version: Studio cannot capture a cross-origin page.
 
-## 4. Testing (not written yet)
+## 4. Testing (proposed)
 
-To cover: real React + Vite apps and a real Bootstrap 5 page in CI; both entry points;
-hostile cases at every new boundary (proxy targets, the write endpoint, the state block,
-role selectors); the "preview equals file" guarantee byte for byte.
+Global rule 8 and the AGENTS.md test rules still apply: real browsers, real cross-origin
+frames, a hostile case at every trust boundary, no vacuous tests.
 
-## 5. Build order (not written yet)
+### 4.1 Real apps in CI
 
-To be proposed after sections 3 and 4 are approved.
+| Fixture | Covers |
+|---|---|
+| Vite + React (plain CSS) | `npx` runner, plugin in `vite.config`, hot reload keeping the preview, React re-renders. |
+| Vite + React with CSS modules | Hashed class names flagged as unstable; `data-design-role` binding. |
+| Bootstrap 5 static site, Bootstrap CSS vendored | Proxy mode in front of `serve.py`; Bootstrap adapter (roles named from classes, `--bs-*` variables); an app CSP of `script-src 'self'`. |
+| Bootstrap 4 page | Fallback to plain selector rules. |
+
+Fixtures are committed with lockfiles and installed with `npm ci` in CI. Vite major
+versions to test are fixed in the plan, from what is current at that time.
+
+### 4.2 Guarantees, each with its own test
+
+- **Preview equals file:** the stylesheet the bridge applies and the file written to disk
+  are byte for byte the same.
+- **Clean undo:** removing the fontkit stylesheet leaves the page's DOM and computed
+  styles as they were before.
+- **Never in production:** `vite build` with the plugin produces output with no bridge
+  and no fontkit stylesheet.
+- **Honest preview:** an app rule that beats a role rule is reported with the element
+  count and the winning selector.
+- **Round trip:** reopening fontkit on a written file restores roles, candidates and
+  scale from the state block.
+- **Detection:** on each fixture, the detected text styles match an expected list.
+
+### 4.3 Hostile cases at the new boundaries
+
+| Boundary | Hostile cases |
+|---|---|
+| Proxy | Non-loopback target refused; a wrong `Host` header (DNS rebinding); path traversal through the proxy; the bridge only added to `text/html`; the app's CSP header passed through unchanged; oversized responses; WebSocket (hot reload) passed through untouched. |
+| Write endpoint (Node and `serve.py`) | Missing or wrong per-run token; wrong `Origin`; a path outside the allow-list; a symlink escape; a file edited by hand since the last write (refused); oversized body. |
+| State block | Malformed, oversized or hostile JSON is ignored with a message and never executed. |
+| Role stylesheet | Hostile selectors and values sent by a fake Studio are rejected by the bridge, which builds the CSS itself. |
+
+### 4.4 The friction test
+
+A gate check runs the one-command setup on the Vite + React fixture and measures the time
+until Studio shows the page connected, with no manual step. It fails if any step needs a
+person or the time exceeds a budget set in the plan. This keeps "little setup" true.
+
+### 4.5 The Node package
+
+Unit tests use Node's built-in test runner, so the package keeps zero dependencies. A test
+fails if `package.json` gains a runtime dependency (D030).
+
+## 5. Build order (proposed)
+
+Each release has its own plan, branch and pull request from `main`, after PR #1 merges.
+
+| Release | Scope | Why this position |
+|---|---|---|
+| R1 One command | The Node package: Vite runner, `vite.config` plugin, proxy mode, the per-run token, the dev-only refusal, connection to the existing Studio. Real-app fixtures and the friction test in CI. | Lowest friction first, so the owner can try fontkit on real apps immediately. Every later release is tested on these fixtures. |
+| R2 Engine | Text-style detection, the bridge-owned role stylesheet and its protocol messages, framework adapters (Bootstrap 5 and 4, React), the honest-preview reports. | The pairing UI needs it; it is testable on the R1 fixtures without new UI. |
+| R3 Pairing system | The new Composer: roles, candidates A/B/C, type scale, guardrails; the old canvas as the specimen-sheet export with JSON import kept. | Built on R2. |
+| R4 Output and handoff | The type-system file with state block, safe writes with diff and hash check (Node and `serve.py`), exports (tokens, Tailwind v4 and v3, Bootstrap Sass), the font kit, licence labels, the handoff zip. | Turns a chosen pairing into code the user keeps. |
+| Later | Browser extension; "promote to source" (C); source rewriting (B), after global rule 1 is amended. | Owner priority: A first, then B and C. |
+
+## 6. Open decisions
+
+1. **Package and command name.** `fontkit` on npm is an unrelated font engine with millions
+   of weekly downloads, so `npx fontkit` would run the wrong package. Options: a scoped name
+   (`@pterw/fontkit`, run as `npx @pterw/fontkit`) or a distinct name (for example
+   `fontkit-studio`, if free when checked). The product name may also be worth revisiting,
+   since search results for "fontkit" are dominated by that engine.
+2. **Where the specimen canvas lives** once the pairing system replaces the Composer's
+   main view: a tab inside the Composer, or a separate "Specimen" mode.
