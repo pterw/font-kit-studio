@@ -24,7 +24,9 @@
 - Agents started with `isolation: "worktree"` can be cut from an older commit
   than the branch head. Tell them to check `git rev-parse HEAD` and fast-forward
   before editing. Keep `.claude/worktrees/` in `.git/info/exclude`, apply their
-  diffs to the main tree with `git apply --3way`, and remove the worktrees after.
+  diffs to the main tree with `git apply --3way`, then `git restore --staged` those
+  paths (the apply stages them, and `git commit` takes the whole index, so an
+  unreviewed task can ride along), and remove the worktrees after.
 - Subagents cannot create new report files (the Write tool refuses); they return
   findings as text and the controller records them. They can append to existing
   task records.

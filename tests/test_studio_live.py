@@ -4343,5 +4343,124 @@ class StudioCompositionFontTests(LiveCase):
                 self.assertEqual(errors, [])
 
 
+class StudioFullscreenTests(LiveCase):
+    """Theater fullscreen: the way out has to be reachable by mouse, and what it hides has to be unreachable."""
+
+    SHELL = '.composer-shell'
+
+    def enter(self, page):
+        page.locator('#btnToggleFullscreen').click()
+        page.wait_for_function('document.querySelector(".composer-shell").classList.contains("is-theater-fullscreen")')
+
+    def is_fullscreen(self, page):
+        return page.evaluate('document.querySelector(".composer-shell").classList.contains("is-theater-fullscreen")')
+
+    def watch_clicks(self, frame):
+        frame.evaluate('window.__clicks = 0; window.addEventListener("click", () => { window.__clicks += 1; }, true);')
+
+    def test_the_exit_control_is_a_visible_button_above_the_preview_that_leaves_fullscreen_and_selects_nothing(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors = self.open(engine)
+                self.wait_connected(page)
+                frame = self.frame(page)
+                self.assertFalse(page.locator('#btnExitFullscreen').is_visible(), 'no Exit control outside fullscreen')
+                self.enter(page)
+                exit_button = page.locator('#btnExitFullscreen')
+                exit_button.wait_for(state='visible')
+                box = exit_button.bounding_box()
+                x, y = box['x'] + box['width'] / 2, box['y'] + box['height'] / 2
+                # The Exit control, not the preview or the inspector, is what a pointer finds at its own centre.
+                self.assertTrue(page.evaluate(
+                    '([x, y]) => document.elementFromPoint(x, y)?.closest("#btnExitFullscreen") !== null', [x, y]))
+                self.assertIn('Exit', exit_button.inner_text())
+                self.watch_clicks(frame)
+                before = len(self.received(frame))
+                badge = page.locator('#bridgeStatusBadge').inner_text()
+                page.mouse.click(x, y)
+                page.wait_for_function('!document.querySelector(".composer-shell").classList.contains("is-theater-fullscreen")')
+                self.assertFalse(self.is_fullscreen(page))
+                self.assertFalse(exit_button.is_visible())
+                self.assertEqual(frame.evaluate('window.__clicks'), 0, 'the click must not reach the preview')
+                self.assertEqual(page.locator('#liveTargetName').count(), 0, 'nothing is selected')
+                self.assertEqual(self.received(frame, 'design:select'), [])
+                self.assertEqual(len(self.received(frame)), before, 'leaving fullscreen sends nothing to the target')
+                self.assertEqual(page.locator('#bridgeStatusBadge').inner_text(), badge)
+                self.assertEqual(page.locator('#btnToggleFullscreen').inner_text(), '\u26f6 Fullscreen')
+                self.assertEqual(errors, [])
+
+    def test_the_exit_control_stays_on_screen_and_clear_of_the_inspector_at_every_width(self):
+        for engine in ENGINES:
+            for width, height in ((1024, 768), (390, 844)):
+                with self.subTest(engine=engine, width=width):
+                    page, errors = self.open(engine, viewport={'width': width, 'height': height})
+                    self.wait_connected(page)
+                    self.enter(page)
+                    exit_button = page.locator('#btnExitFullscreen')
+                    exit_button.wait_for(state='visible')
+                    box = exit_button.bounding_box()
+                    self.assertGreaterEqual(box['x'], 0)
+                    self.assertGreaterEqual(box['y'], 0)
+                    self.assertLessEqual(box['x'] + box['width'], width)
+                    self.assertLessEqual(box['y'] + box['height'], height)
+                    self.assertTrue(page.evaluate(
+                        '([x, y]) => document.elementFromPoint(x, y)?.closest("#btnExitFullscreen") !== null',
+                        [box['x'] + box['width'] / 2, box['y'] + box['height'] / 2]), 'a pointer finds the button')
+                    if width >= 1024:
+                        inspector = page.locator('#slotInspector').bounding_box()
+                        apart = (box['x'] + box['width'] <= inspector['x'] or inspector['x'] + inspector['width'] <= box['x']
+                                 or box['y'] + box['height'] <= inspector['y'] or inspector['y'] + inspector['height'] <= box['y'])
+                        self.assertTrue(apart, f'button {box} must not overlap the inspector {inspector}')
+                    exit_button.click()
+                    self.assertFalse(self.is_fullscreen(page))
+                    self.assertEqual(errors, [])
+
+    def test_the_covered_toolbar_is_inert_in_fullscreen_and_live_again_after_exit(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors = self.open(engine)
+                self.wait_connected(page)
+                self.assertIsNone(page.locator('.composer-toolbar').get_attribute('inert'))
+                self.enter(page)
+                self.assertIsNotNone(page.locator('.composer-toolbar').get_attribute('inert'))
+                self.assertEqual(page.locator('#btnToggleFullscreen').inner_text(), '\u2715 Exit (Esc)')
+                self.assertFalse(page.evaluate('document.head.hasAttribute("inert")'), '<head> is not page content')
+                self.assertEqual(page.evaluate('document.activeElement?.id'), 'btnExitFullscreen',
+                                 'focus moves to the control that undoes fullscreen')
+                page.locator('#btnDeviceDesktop').evaluate('(button) => button.focus()')
+                self.assertNotEqual(page.evaluate('document.activeElement?.id'), 'btnDeviceDesktop')
+                # Tab never lands on a control the user cannot see.
+                for _ in range(40):
+                    page.keyboard.press('Tab')
+                    self.assertFalse(page.evaluate('Boolean(document.activeElement?.closest(".composer-toolbar"))'))
+                self.assertEqual(page.locator('#btnExitFullscreen').count(), 1)
+                page.locator('#btnExitFullscreen').click()
+                self.assertFalse(self.is_fullscreen(page))
+                self.assertIsNone(page.locator('.composer-toolbar').get_attribute('inert'))
+                self.assertEqual(page.locator('[inert]').count(), 0, 'exit leaves nothing inert')
+                self.assertEqual(page.evaluate('document.activeElement?.id'), 'btnToggleFullscreen',
+                                 'focus returns to the toggle after a click exit')
+                page.locator('#btnDeviceDesktop').evaluate('(button) => button.focus()')
+                self.assertEqual(page.evaluate('document.activeElement?.id'), 'btnDeviceDesktop')
+                self.assertEqual(errors, [])
+
+    def test_escape_still_exits_fullscreen_and_lifts_the_inert_state(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors = self.open(engine)
+                self.wait_connected(page)
+                self.enter(page)
+                self.assertEqual(page.evaluate('document.activeElement?.id'), 'btnExitFullscreen')
+                page.keyboard.press('Escape')
+                self.assertFalse(self.is_fullscreen(page))
+                self.assertEqual(page.locator('[inert]').count(), 0)
+                self.assertEqual(page.evaluate('document.activeElement?.id'), 'btnToggleFullscreen',
+                                 'focus returns to the toggle after Esc')
+                self.assertEqual(page.locator('#btnToggleFullscreen').inner_text(), '\u26f6 Fullscreen')
+                self.enter(page)
+                self.assertTrue(self.is_fullscreen(page))
+                self.assertEqual(errors, [])
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -667,6 +667,20 @@ footer {
   max-height: calc(100vh - 20px) !important;
   overflow-y: auto !important;
 }
+/* The fullscreen layer covers the toolbar that holds the Fullscreen toggle, so the way out lives in the layer
+   itself: above the top-left of the preview, so it stays on screen at any width and never meets the inspector. */
+.theater-exit { display: none; }
+.composer-shell.is-theater-fullscreen .theater-exit {
+  display: inline-block;
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  z-index: 2;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .35);
+}
 
 /* ================================================================
    v0.2.0 — Live preview: bridge status, overlay, live inspector, code panel
@@ -1064,6 +1078,7 @@ body.dark .live-overlay-label { color: #111; }
     </section>
 
     <div class="composer-shell">
+      <button id="btnExitFullscreen" class="btn primary theater-exit" type="button" title="Leave fullscreen theater mode">✕ Exit fullscreen (Esc)</button>
       <div class="canvas-stage">
         <section id="composerCanvas" class="composer-canvas" aria-label="Brand composition preview"></section>
         <div id="liveReconnectBanner" class="live-banner" role="alert" hidden>
@@ -5378,6 +5393,7 @@ if (remembered) kitId.value = remembered;
   // Device Viewport & Theater Fullscreen Controller
   const composerShellEl = document.querySelector(".composer-shell");
   const btnToggleFullscreen = q("btnToggleFullscreen");
+  const btnExitFullscreen = q("btnExitFullscreen");
   const btnDeviceDesktop = q("btnDeviceDesktop");
   const btnDeviceLaptop = q("btnDeviceLaptop");
   const btnDeviceMobile = q("btnDeviceMobile");
@@ -5398,22 +5414,51 @@ if (remembered) kitId.value = remembered;
   if (btnDeviceMobile) btnDeviceMobile.addEventListener("click", () => setDeviceWidth("390px", btnDeviceMobile));
   if (btnDeviceFluid) btnDeviceFluid.addEventListener("click", () => setDeviceWidth("100%", btnDeviceFluid));
 
+  // Everything outside the fullscreen layer (the toolbar under the inspector, the page header, the other modes)
+  // is hidden by it, so it must not take clicks or Tab stops either. Only attributes set here are removed on exit.
+  let theaterInerted = [];
+  function setTheaterInert(on) {
+    if (!on) {
+      theaterInerted.forEach(el => el.removeAttribute("inert"));
+      theaterInerted = [];
+      return;
+    }
+    for (let node = composerShellEl; node && node !== document.body; node = node.parentElement) {
+      const parent = node.parentElement;
+      if (!parent) break;
+      for (const sibling of parent.children) {
+        if (sibling === node || sibling.hasAttribute("inert") || sibling.tagName === "SCRIPT") continue;
+        sibling.setAttribute("inert", "");
+        theaterInerted.push(sibling);
+      }
+    }
+  }
+
   function toggleFullscreenTheater() {
     if (!composerShellEl) return;
     const isFull = composerShellEl.classList.toggle("is-theater-fullscreen");
     if (btnToggleFullscreen) {
       btnToggleFullscreen.textContent = isFull ? "✕ Exit (Esc)" : "⛶ Fullscreen";
     }
+    setTheaterInert(isFull);
     if (isFull) {
       switchToTargetView();
       if (targetAppContainerEl) targetAppContainerEl.style.height = "100%";
+      // The toggle just became inert; keep the keyboard user's place on the control that undoes it.
+      if (btnExitFullscreen) btnExitFullscreen.focus();
     } else {
       if (targetAppContainerEl) targetAppContainerEl.style.height = "720px";
+      if (btnToggleFullscreen) btnToggleFullscreen.focus();
     }
   }
 
   if (btnToggleFullscreen) {
     btnToggleFullscreen.addEventListener("click", toggleFullscreenTheater);
+  }
+  if (btnExitFullscreen) {
+    btnExitFullscreen.addEventListener("click", () => {
+      if (composerShellEl?.classList.contains("is-theater-fullscreen")) toggleFullscreenTheater();
+    });
   }
 
   window.addEventListener("keydown", (e) => {
