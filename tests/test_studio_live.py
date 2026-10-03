@@ -2619,5 +2619,118 @@ class StudioReviewFixTests(LiveCase):
                 self.assertEqual(errors, [])
 
 
+class StudioPromotedTargetTests(LiveCase):
+    """An auto-discovered target that gets an author data-design-id keeps its saved edit, under the new id."""
+    NEW_ID = 'features.heading'
+
+    def watch_messages(self, page):
+        """Counts the target's replies once Studio has finished handling them (a 0 ms timer runs after every listener)."""
+        page.evaluate("""() => { window.__seen = { 'design:ready': 0, 'design:targets': 0 };
+            window.addEventListener('message', (event) => { const type = event.data && event.data.type;
+                if (type in window.__seen) setTimeout(() => { window.__seen[type] += 1; }, 0); }); }""")
+
+    def wait_seen(self, page, type, count=1):
+        page.wait_for_function('([type, count]) => window.__seen[type] >= count', arg=[type, count])
+
+    def test_saved_override_follows_the_target_to_its_new_id_without_a_conflict(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors = self.open(engine, sync=True)
+                self.wait_connected(page)
+                frame = self.frame(page)
+                self.select(page, frame, 'auto.h2.1')
+                before = frame.evaluate('window.fake.revision')
+                self.set_value(page, '#liveFontSize', 50)
+                self.wait_badge(page, rf'^Live · rev {before + 1}$')
+                css = self.code(page, 'Css')
+                self.assertIn('#features {\n  font-size: 50px !important;', css)
+                self.assertIn('add data-design-id for a stable selector', css)
+
+                frame.evaluate('(ids) => window.fake.promote(...ids)', ['auto.h2.1', self.NEW_ID])
+                # The edit is now filed under the new id, with the stable selector and no hint to add one.
+                page.wait_for_function('(id) => document.querySelector("#liveCodeOutput").textContent.includes("(" + id + ")")',
+                                       arg=self.NEW_ID)
+                css = self.code(page, 'Css')
+                self.assertIn(f'[data-design-id="{self.NEW_ID}"] {{\n  font-size: 50px !important;', css)
+                self.assertNotIn('auto.h2.1', css)
+                self.assertNotIn('add data-design-id', css)
+                self.assertEqual(json.loads(self.code(page, 'Json'))['overrides'], {self.NEW_ID: {'fontSize': 50}})
+                self.assertEqual(self.export(page)['live']['overrides'], {self.NEW_ID: {'fontSize': 50}})
+                self.assertEqual(page.locator('#liveChangeCount').text_content(), '1')
+                # The inspector follows the same element.
+                self.assertEqual(page.locator('#liveTargetName').get_attribute('data-target-id'), self.NEW_ID)
+
+                # A reconnect compares saved and target state: they agree, so there is nothing to resolve.
+                self.watch_messages(page)
+                frame.evaluate('window.fake.reannounce()')
+                self.wait_seen(page, 'design:ready')
+                self.assertFalse(page.locator('#liveReconnectBanner').is_visible())
+                self.assertEqual(self.updates(frame)[-1]['targetId'], 'auto.h2.1', 'nothing was sent after the promotion')
+                self.assertEqual(json.loads(self.code(page, 'Json'))['overrides'], {self.NEW_ID: {'fontSize': 50}})
+                page.locator('#liveCodeSync').click()
+                page.wait_for_function('() => /Saved/.test(document.querySelector("#liveCodeStatus").textContent)')
+                self.assertIn(f'[data-design-id="{self.NEW_ID}"] {{\n  font-size: 50px !important;', self.puts[-1]['body'])
+                self.assertEqual(errors, [])
+
+    def test_a_saved_override_under_the_old_id_is_rekeyed_when_the_bridge_reports_the_promotion(self):
+        """Studio opened after the promotion (an imported state still names the old id): the manifest bridges the two."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors = self.open(engine)
+                self.wait_connected(page)
+                frame = self.frame(page)
+                self.select(page, frame, 'auto.h2.1')
+                before = frame.evaluate('window.fake.revision')
+                self.set_value(page, '#liveFontSize', 50)
+                self.wait_badge(page, rf'^Live · rev {before + 1}$')
+                saved = self.export(page)
+                frame.evaluate('(ids) => window.fake.promote(...ids)', ['auto.h2.1', self.NEW_ID])
+                # A state saved under the old id is imported later; the next handshake names the id it became.
+                self.assertIn('Composition imported.', self.import_document(page, saved))
+                self.assertEqual(self.export(page)['live']['overrides'], {'auto.h2.1': {'fontSize': 50}})
+                self.watch_messages(page)
+                frame.evaluate('window.fake.reannounce()')
+                self.wait_seen(page, 'design:ready')
+                self.assertFalse(page.locator('#liveReconnectBanner').is_visible(), 'the saved edit is the target state')
+                self.assertEqual(self.export(page)['live']['overrides'], {self.NEW_ID: {'fontSize': 50}})
+                self.assertEqual(errors, [])
+
+    def test_a_previous_id_naming_a_live_target_or_nothing_usable_never_moves_a_saved_override(self):
+        """A buggy or hostile manifest must not drop the saved edit of a target that is still in the list."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors = self.open(engine, sync=True)
+                self.wait_connected(page)
+                frame = self.frame(page)
+                for target_id, size in (('hero.title', 50), ('auto.h2.1', 44)):
+                    self.select(page, frame, target_id)
+                    before = frame.evaluate('window.fake.revision')
+                    self.set_value(page, '#liveFontSize', size)
+                    self.wait_badge(page, rf'^Live · rev {before + 1}$')
+                saved = {'hero.title': {'fontSize': 50}, 'auto.h2.1': {'fontSize': 44}}
+                self.assertEqual(json.loads(self.code(page, 'Json'))['overrides'], saved)
+                css_before = self.code(page, 'Css')
+                sent = len(self.received(frame, 'design:update'))
+                self.watch_messages(page)
+                seen = 0
+                for previous in ('hero.title', 5, '', None, ['hero.title'], 'auto.h2.1', 'never.seen'):
+                    with self.subTest(previous=previous):
+                        frame.evaluate('([value]) => window.fake.setPreviousId("auto.h2.1", value)', [previous])
+                        frame.evaluate('window.fake.emitAll()')
+                        seen += 1
+                        self.wait_seen(page, 'design:targets', seen)
+                        self.assertEqual(json.loads(self.code(page, 'Json'))['overrides'], saved)
+                        self.assertEqual(self.export(page)['live']['overrides'], saved)
+                self.assertEqual(self.code(page, 'Css'), css_before)
+                page.locator('#liveCodeSync').click()
+                page.wait_for_function('() => /Saved/.test(document.querySelector("#liveCodeStatus").textContent)')
+                for rule in ('font-size: 50px !important;', 'font-size: 44px !important;'):
+                    self.assertIn(rule, self.puts[-1]['body'])
+                self.assertEqual(len(self.puts), 1, 'nothing was synced except by the explicit click')
+                self.assertEqual(len(self.received(frame, 'design:update')), sent, 'nothing was sent to the target')
+                self.assertFalse(page.locator('#liveReconnectBanner').is_visible())
+                self.assertEqual(errors, [])
+
+
 if __name__ == '__main__':
     unittest.main()

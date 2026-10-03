@@ -530,9 +530,10 @@
 
       if (typeof MutationObserver !== 'undefined') {
         this.mutationObserver = new MutationObserver((records) => this.handleMutations(records));
-        // childList drives discovery; class/id changes only invalidate cached selectors.
+        // childList drives discovery; class/id changes only invalidate cached selectors; an author
+        // data-design-id set in place (an auto target promoted by an app update) is discovered too.
         this.mutationObserver.observe(document.body || document.documentElement,
-          { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'id'] });
+          { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'id', 'data-design-id'] });
       }
       if (typeof ResizeObserver !== 'undefined') {
         this.resizeObserver = new ResizeObserver(() => this.scheduleBounds());
@@ -545,7 +546,13 @@
       let fast = this.lost.size > 0;
       records.forEach((record) => {
         if (record.type === 'attributes') {
-          if (!this.isOverlayNode(record.target)) this.domVersion += 1;
+          if (this.isOverlayNode(record.target)) return;
+          this.domVersion += 1;
+          if (record.attributeName === 'data-design-id' && !this.isBridgeAttr(record.target, 'data-design-id')) {
+            const id = record.target.getAttribute('data-design-id');
+            const known = this.recordFor(record.target);
+            if (isNonEmptyString(id) && !(known && known.id === id)) relevant = true;
+          }
           return;
         }
         if (this.isOverlayNode(record.target)) return;
@@ -1981,12 +1988,28 @@
       this.refreshRecord(record);
       this.targets.set(id, record);
       this.elementIds.set(el, id);
+      if (known) this.promote(known, record);
       const lost = this.lost.get(id);
       if (lost && lost.element !== el) {
         this.lost.delete(id);
         this.reapplyFrom(record, lost.element);
       }
       return true;
+    }
+
+    // The same element was registered under another id (an auto target that got an author data-design-id).
+    // Its edits stay with the element: the originals (style, text, moves) are keyed by element and are never
+    // captured again, so only what is keyed by id moves, and the manifest names the id it replaced.
+    promote(old, record) {
+      record.previousId = old.id;
+      this.changeOrder = new Set(Array.from(this.changeOrder).map((id) => (id === old.id ? record.id : id)));
+      if (this.fontRefs.has(old.id)) {
+        this.fontRefs.set(record.id, this.fontRefs.get(old.id));
+        this.fontRefs.delete(old.id);
+      }
+      if (this.selectedId === old.id) this.selectedId = record.id;
+      if (this.hoverId === old.id) this.hoverId = record.id;
+      this.reapplyLog.delete(old.id);
     }
 
     // A re-render removed an author target that had overrides: remember its
@@ -2250,6 +2273,7 @@
         }
       };
       if (record.arrangementOnly) manifest.arrangementOnly = true;
+      if (record.previousId) manifest.previousId = record.previousId;
       if (record.fontWeights) manifest.constraints = { fontWeights: record.fontWeights.slice() };
       return manifest;
     }

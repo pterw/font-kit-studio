@@ -1057,6 +1057,115 @@ class TokenRemovalTests(BridgeCase):
                 self.assertEqual(self.root_style(frame), self.AUTHOR_STYLE)
 
 
+class PromotedTargetTests(BridgeCase):
+    """An edited auto-discovered element that later gets an author data-design-id keeps its edit under the new id."""
+    NEW_ID = 'cards.one.title'
+    CARD = "[...document.querySelectorAll('h3')].find((el) => el.textContent.trim() === 'Card one' || el.textContent.trim() === 'Edited card')"
+
+    def edit_then_promote(self, page, frame, trigger):
+        ready = self.hello(page)
+        old = next(t for t in ready['targets'] if t['text'] == 'Card one' and t['tag'] == 'h3')
+        self.assertFalse(old['stable'])
+        self.assertTrue(old['id'].startswith('auto:'))
+        reply = self.applied(page, old['id'], {'fontSize': 33, 'color': '#336699', 'text': 'Edited card'})
+        self.assertEqual([entry['targetId'] for entry in reply['changes']['targets']], [old['id']])
+        start = self.mark(page)
+        frame.evaluate(f'({self.CARD}).setAttribute("data-design-id", "{self.NEW_ID}")')
+        trigger(page, frame, start)
+        return old
+
+    def rediscover(self, page, frame, start):
+        """A re-render elsewhere in the page: the next discovery run sees the attribute."""
+        frame.evaluate("document.body.append(document.createElement('i'))")
+        announced = self.wait_message(page, 'design:targets', start)
+        self.assertNotEqual(announced['type'], 'timeout')
+
+    def ledger_after_a_second_edit(self, page):
+        # Any later update reports the ledger; the title is a different, author target.
+        return self.applied(page, TITLE, {'fontSize': 41})['changes']
+
+    def test_the_edit_follows_the_element_to_its_new_id_and_reset_restores_the_original_exactly(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                old = self.edit_then_promote(page, frame, self.rediscover)
+                changes = self.ledger_after_a_second_edit(page)
+                self.assertEqual([entry['targetId'] for entry in changes['targets']], [self.NEW_ID, TITLE],
+                                 'the edit keeps its place in the change order, under the new id')
+                entry = changes['targets'][0]
+                self.assertEqual(entry['declarations'], {'font-size': '33px', 'color': '#336699'})
+                self.assertEqual((entry['text'], entry['originalText']), ('Edited card', 'Card one'))
+                self.assertTrue(entry['stable'])
+                self.assertEqual(entry['selector'], f'[data-design-id="{self.NEW_ID}"]')
+                self.assertNotIn('style=', entry['html'])
+                self.assertIn(f'data-design-id="{self.NEW_ID}"', entry['html'])
+                self.assertEqual(self.computed(frame, self.NEW_ID, 'fontSize'), '33px')
+
+                # The manifest names the id it replaced, so a Studio holding the old id can follow it.
+                start = self.mark(page)
+                self.control(page, {'type': 'design:select', 'targetId': self.NEW_ID})
+                selected = self.wait_message(page, 'design:selected', start)
+                self.assertEqual((selected['targetId'], selected['target']['id'], selected['target']['previousId']),
+                                 (self.NEW_ID, self.NEW_ID, old['id']))
+                self.assertTrue(selected['target']['stable'])
+                start = self.mark(page)
+                self.control(page, {'type': 'design:select', 'targetId': old['id']})
+                self.assertIsNone(self.wait_message(page, 'design:selected', start)['targetId'], 'the old id is gone')
+
+                # Reset of the new id restores the original captured before the first edit.
+                reply = self.request(page, {'type': 'design:reset', 'targetId': self.NEW_ID})
+                self.assertEqual((reply['type'], reply['reset']), ('design:applied', True))
+                self.assertEqual([e['targetId'] for e in reply['changes']['targets']], [TITLE])
+                self.assertIsNone(frame.evaluate(f'({self.CARD}).getAttribute("style")'))
+                self.assertEqual(frame.evaluate(f'({self.CARD}).textContent'), 'Card one')
+                self.assertEqual(frame.evaluate(f'({self.CARD}).getAttribute("data-design-id")'), self.NEW_ID)
+                self.assertEqual(self.errors(frame), [])
+
+    def test_a_fresh_studio_sees_the_edit_in_design_ready_and_the_old_id_is_gone(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                old = self.edit_then_promote(page, frame, self.rediscover)
+                ready = self.hello(page, 's2')
+                self.assertEqual([entry['targetId'] for entry in ready['changes']['targets']], [self.NEW_ID])
+                ids = [t['id'] for t in ready['targets']]
+                self.assertIn(self.NEW_ID, ids)
+                self.assertNotIn(old['id'], ids)
+                promoted = next(t for t in ready['targets'] if t['id'] == self.NEW_ID)
+                self.assertEqual(promoted['previousId'], old['id'])
+                self.assertTrue(all('previousId' not in t for t in ready['targets'] if t['id'] != self.NEW_ID),
+                                'only a promoted target names a previous id')
+
+    def test_reset_after_promotion_restores_the_authors_inline_style_byte_for_byte(self):
+        authored = 'margin:  0 ;color: red'
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                frame.evaluate(f"({self.CARD}).setAttribute('style', {json.dumps(authored)})")
+                self.edit_then_promote(page, frame, self.rediscover)
+                self.assertNotEqual(frame.evaluate(f'({self.CARD}).getAttribute("style")'), authored)
+                reply = self.request(page, {'type': 'design:reset', 'targetId': self.NEW_ID})
+                self.assertEqual(reply['type'], 'design:applied')
+                self.assertEqual(frame.evaluate(f'({self.CARD}).getAttribute("style")'), authored)
+                self.assertEqual(frame.evaluate(f'({self.CARD}).textContent'), 'Card one')
+                self.assertEqual(reply['changes']['targets'], [])
+
+    def test_setting_the_attribute_alone_is_enough_for_discovery(self):
+        """An app that adds the attribute in place (no node is added or removed) is still noticed."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+
+                def nothing(page, frame, start):
+                    announced = self.wait_message(page, 'design:targets', start,
+                                                  where=f"d.targets.some((t) => t.id === '{self.NEW_ID}')")
+                    self.assertNotEqual(announced['type'], 'timeout')
+
+                self.edit_then_promote(page, frame, nothing)
+                changes = self.ledger_after_a_second_edit(page)
+                self.assertEqual([entry['targetId'] for entry in changes['targets']], [self.NEW_ID, TITLE])
+
+
 class AssetPlacementTests(BridgeCase):
     """Legacy image slots: assets render only as <img>, never as live SVG markup."""
 

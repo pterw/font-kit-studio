@@ -192,6 +192,7 @@
       selector: selector(def), editable: { text, typography: text, color: true, alignment: text },
       text: def.el.textContent.trim().slice(0, 200), computed: computed(def.el), arrangement: arrangement(def, bulk) };
     if (def.arrangementOnly) m.arrangementOnly = true;
+    if ("previousId" in def) m.previousId = def.previousId;
     if (def.weights) m.constraints = { fontWeights: def.weights.slice() };
     return m;
   }
@@ -266,6 +267,23 @@
     post({ type: "design:warning", requestId, targetId, kind: "runtime-error", message: String(message).slice(0, 300) });
   };
   fake.ledger = ledger;
+  // Hostile or buggy manifests: any previousId value, announced with the full target list.
+  fake.setPreviousId = (id, value) => { byId.get(id).previousId = value; };
+  fake.emitAll = () => post({ type: "design:targets", targets: DEFS.map(d => manifest(d, fake.bulk)) });
+  // An auto-discovered target gets an author data-design-id (an app update): same element, edits and place in the
+  // change order move to the new id, the manifest names the id it replaced and the full list is announced.
+  fake.promote = (id, newId) => {
+    const def = byId.get(id);
+    byId.delete(id);
+    Object.assign(def, { id: newId, previousId: id, stable: true, selector: `[data-design-id="${newId}"]` });
+    byId.set(newId, def);
+    def.el.setAttribute("data-design-id", newId);
+    if (overrides[id]) { overrides[newId] = overrides[id]; delete overrides[id]; }
+    const at = order.indexOf(id);
+    if (at >= 0) order[at] = newId;
+    if (sheets.has(id)) { sheets.set(newId, sheets.get(id)); sheets.delete(id); }
+    post({ type: "design:targets", targets: DEFS.map(d => manifest(d, fake.bulk)) });
+  };
   // Tokens another editor (an earlier Studio session on the same page) left on the target.
   fake.setTokens = values => Object.entries(values).forEach(([name, value]) => {
     tokens[name] = String(value);

@@ -101,7 +101,7 @@ Studio also works in a narrow window. At 390 px wide the inspector stacks under 
 
 Values come back from the page, not from Studio. If the page snaps `550` to `600`, the box shows `600`. If the page rejects a value, the badge says `Rejected: <reason>` and nothing changes.
 
-Elements with a `data-design-id` have stable names. Others are discovered automatically (headings, paragraphs in sections, links in nav, buttons, images, badges and so on). Their selectors are built from the page structure, so the CSS tab marks them "auto-discovered, add data-design-id for a stable selector".
+Elements with a `data-design-id` have stable names. Others are discovered automatically (headings, paragraphs in sections, links in nav, buttons, images, badges and so on). Their selectors are built from the page structure, so the CSS tab marks them "auto-discovered, add data-design-id for a stable selector". If you add the attribute while editing, the target keeps its edits and moves to the new name; the next sync writes the stable selector.
 
 The badge shows where you are: `Idle`, `Connecting…`, `Bridge detected`, `Connected (N targets)`, `Live · rev N`, `Rejected: <reason>`, `No bridge detected` (after 4 seconds, with a hint), `Disconnected (window closed)`.
 
@@ -471,7 +471,7 @@ Bridge                                   Studio
 | `design:hover` | The target under the pointer changed (select mode only). |
 | `design:selected` | A click or `design:select` picked a target (or none). Includes the full manifest. |
 | `design:bounds` | Where the selected target is now, after scroll, resize or layout changes. |
-| `design:targets` | New targets appeared (for example after a re-render). |
+| `design:targets` | New targets appeared (for example after a re-render), or an auto-discovered target gained a `data-design-id`. A promoted target's manifest carries `previousId`, the id it had before. |
 | `design:warning` | An error was thrown within one second of a change (`kind: "runtime-error"`). |
 | `fontkit:ack` | Reply to the legacy `fontkit:change`. |
 

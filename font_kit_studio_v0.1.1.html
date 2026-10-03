@@ -3893,6 +3893,7 @@ if (remembered) kitId.value = remembered;
         live.revision = Number.isInteger(data.revision) && data.revision >= 0 ? data.revision : 0;
         live.targets = new Map(targets.map(t => [t.id, t]));
         targets.forEach(noteTargetMeta);
+        followPromotedTargets(targets);
         live.changes = normalizeLedger(data.changes);
         // Sibling-only registrations (arrangementOnly) serve the Arrange list; they are not editing targets.
         const listed = targets.filter(t => t.arrangementOnly !== true).length;
@@ -3942,6 +3943,7 @@ if (remembered) kitId.value = remembered;
           const list = data.targets.filter(t => isPlainObject(t) && typeof t.id === "string" && t.id);
           live.targets = new Map(list.map(t => [t.id, t]));
           list.forEach(noteTargetMeta);
+          if (followPromotedTargets(list)) { renderLiveCode(); scheduleAutoSync(); }
           if (live.selectedId && !live.targets.has(live.selectedId)) { live.selectedId = null; live.selectedRect = null; }
           if (live.hoverId && !live.targets.has(live.hoverId)) { live.hoverId = null; live.hoverRect = null; }
           renderOverlays();
@@ -4556,6 +4558,27 @@ if (remembered) kitId.value = remembered;
       name: typeof source.name === "string" && source.name ? source.name : meta.name || id,
       stable: typeof source.stable === "boolean" ? source.stable : meta.stable
     });
+  }
+
+  // A target that got an author data-design-id reports the id it replaced (manifest `previousId`, an additive v0.2
+  // field). The saved override follows the element to the new id, so the edit is neither lost nor reported as a
+  // conflict. True when something was re-keyed.
+  // An id that is still a live target in the same list was not replaced, so it is never re-keyed.
+  function followPromotedTargets(list) {
+    let moved = false;
+    const liveIds = new Set(list.map(target => target.id));
+    list.forEach(target => {
+      const previous = target.previousId;
+      if (typeof previous !== "string" || !previous || previous === target.id || liveIds.has(previous)) return;
+      if (live.selectedId === previous) live.selectedId = target.id;
+      if (!Object.hasOwn(live.overrides, previous)) return;
+      const current = Object.hasOwn(live.overrides, target.id) ? live.overrides[target.id] : {};
+      setOwn(live.overrides, target.id, { ...live.overrides[previous], ...current });
+      delete live.overrides[previous];
+      delete live.targetMeta[previous];
+      moved = true;
+    });
+    return moved;
   }
 
   function cssDeclaration(key, value) {

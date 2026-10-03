@@ -103,3 +103,117 @@ replies. Test: `test_a_late_revision_conflict_is_shown_and_the_first_edit_is_kep
 The earlier end-to-end test (a target that applies both queued requests) stays,
 and both tests now wait for the second timeout by condition instead of a fixed
 pause.
+
+## Promoted targets
+
+**Problem.** An element edited as an auto-discovered target can later get an
+author `data-design-id` (for example when the app follows Studio's "add a
+data-design-id" hint). Discovery then registered it under the new id, but the
+acknowledged change stayed listed under the old id, which no longer exists. The
+change ledger dropped it while the inline override stayed on the page, so the
+next handshake reported no change. Studio then opened a false reconnect conflict,
+or a fresh Studio lost the edit.
+
+**Bridge** (`fontkit-bridge.js`, `promote`). When discovery re-registers the same
+element under a new id, the edit moves with it: its place in the change order and
+its font stylesheet reference, plus the selection and hover when they pointed at
+the old id. The captured originals (inline style, text, moves) are keyed by
+element and are never captured again, so Reset of the new id restores exactly what
+the page had before the first edit (the author's inline `style` byte for byte,
+the original text). The ledger reports the target under the new id with the stable
+selector. Discovery also runs when an author `data-design-id` is set in place, so
+a promotion that adds or removes no node is noticed without waiting for another
+page change.
+
+**Contract addition (additive, implemented).** A target manifest may carry
+`previousId: "<old id>"` once its element was promoted. It appears in
+`design:ready`, `design:targets`, `design:selected` and `design:applied`
+manifests, and only on promoted targets. Studios that do not know the field
+ignore it.
+
+**Studio** (`followPromotedTargets`). When a manifest names a `previousId`
+Studio holds a saved override for, the override is re-keyed to the new id (merged
+under any override already saved for the new id), the target's metadata is
+dropped for the old id, and the inspector selection follows. This runs on
+`design:ready` before the reconnect comparison and on `design:targets`, so the CSS
+tab and exports show the stable selector without the "add data-design-id" hint,
+and a reconnect finds saved and live state in agreement. Nothing is sent to the
+page and nothing is written to the overrides file by the re-keying itself.
+
+**Limits.** An edit request already queued for the old id when the promotion
+happens is rejected as `unknown-target` and shown as such; the user enters it
+again. Only the most recent previous id is reported if an element is promoted
+twice. A Studio whose saved state names an old id the bridge never reports (the
+page was reloaded after the promotion, so the id is gone) cannot map it; that is
+an ordinary reconnect conflict the user resolves with Reapply or Accept.
+
+**Tests.** Bridge: `PromotedTargetTests` (edit as auto target, set the author id,
+run discovery, ledger under the new id in its original place, previous id in the
+manifest, byte-exact reset including an oddly spaced inline style, fresh handshake,
+attribute-only discovery). Studio with the fake target (now supports promotion):
+`StudioPromotedTargetTests` (saved override re-keyed with no conflict; a state
+saved under the old id re-keyed at the next handshake). Real bridge:
+`AutoDiscoveredSelectorTests.test_promoting_the_target_to_an_author_id_keeps_the_edit_and_raises_no_conflict`.
+
+## Gate font measurement deadline
+
+- Problem: `FONT_FACES_JS` in `scripts/dev/_frontend_gate_network.py`
+  awaited `document.fonts.ready` and then each `document.fonts.load()` in
+  turn. The 30 s status wait before it does not bound that evaluate, and
+  `page.evaluate` has no timeout. A promise that never settles stalled the
+  gate, so the retry, the REPORT and FAIL lines and the test suites after it
+  never ran.
+- Reproduced: with `document.fonts.load` pending for one family, the
+  measurement was still running after 300 s (killed by hand); a 30 s
+  watchdog in the new test ended the run with a stack dump.
+- Change: the in-page measurement races against one shared deadline
+  (`FONT_MEASURE_DEADLINE_MS`, 15 s per measurement, passed in by
+  `measure_font_faces`). Every family starts as `[0, 0]`, and the loads run
+  together so one stalled family cannot hide the others. Unanswered
+  families stay missing, so `settle_free_fonts` retries them and
+  `free_font_failures` reports them as before.
+- Tests: `tests/test_frontend_gate_fonts.py` runs the measurement in real
+  browsers against a pending `load`, a pending `ready`, eight stalled
+  families sharing one deadline, an answering page that must not wait for
+  the deadline, and the retry and failure reporting end to end.
+- Hardening: a rejecting `document.fonts.ready` or a page with no
+  `document.fonts` also returns all-missing counts instead of raising, and
+  the result is a copy so a late load cannot change it.
+- Worst case: one stalled attempt costs 15 s, so the online free-fonts
+  check is bounded at about 109 s (3 measurements, 2 status waits of 30 s,
+  1 s and 3 s backoffs).
+- Not run: the online gate cannot pass in this sandbox (Google Fonts is
+  unreachable, so it reports the documented "none of the 16 library
+  families produced a face" failure after the bounded retries).
+
+### Limits of promotion handling
+
+- An author-to-author rename (an element whose `data-design-id` changes from
+  one author id to another) carries the element's edits to the new id. An app
+  that reuses one DOM node for different items therefore carries the edits
+  across items.
+- Removing the author attribute from a promoted element is not noticed: the
+  ledger keeps reporting the stable selector.
+- The bridge keeps `previousId` on the record for the session. After a page
+  reload a saved override under a stale auto id could be re-keyed if a manifest
+  still names it; the case is narrow, and the guard below keeps it from touching
+  any target that is still in the list.
+
+### Round 2
+
+- **A `previousId` naming a live target no longer moves its override.**
+  `followPromotedTargets` ignores a `previousId` that is empty, not a string, equal
+  to the target's own id, or the id of any target in the same manifest list. A
+  manifest giving `auto.h2.1` the previous id `hero.title` used to drop the saved
+  `hero.title` edit while it stayed live on the page, so the next sync would have
+  written a file without it.
+  - RED: `test_a_previous_id_naming_a_live_target_or_nothing_usable_never_moves_a_saved_override`
+    failed 8 sub-tests before the change (saved overrides lost `hero.title`; the
+    CSS tab lost its rule).
+  - GREEN: it passes. Both saved overrides and the CSS tab are unchanged for seven
+    hostile or unusable values (a live id, a number, an empty string, null, a list,
+    its own id, an unknown id). Nothing is sent to the target, and the only write is
+    the explicit Sync click, which contains both rules.
+- **No fixed pauses.** The two re-announce tests now wait until Studio has finished
+  handling `design:ready`, using a counter that a zero-delay timer increments after
+  every message listener ran, instead of 300 and 400 ms sleeps.

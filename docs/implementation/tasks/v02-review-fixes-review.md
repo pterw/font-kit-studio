@@ -262,3 +262,165 @@ Firefox and the phone and touch profiles were not run (Firefox is not installed 
 - Nothing new found.
 
 **Task quality:** Approved
+
+## Promoted targets (review of the uncommitted fix on top of 7b7c542)
+
+Scope: `fontkit-bridge.js` (`promote`, `registerAuthor`, `handleMutations`,
+`manifestFor`), `font_kit_studio_v0.1.1.html` (`followPromotedTargets`), the
+bridge, Studio and integration tests, the fake target, the "Promoted targets"
+report section, Addendum 6 and the two README lines. The gate-network work by
+the other writer is out of scope.
+
+### Gates
+
+| Gate | Result |
+|---|---|
+| `tests.test_bridge_runtime`, `tests.test_studio_live`, `tests.test_live_integration` (Chromium only) | 192 tests, OK. No browser-closed or crash errors in the output. |
+| `python scripts/verify.py --static-only` | PASS |
+| `node --check fontkit-bridge.js` | OK |
+
+The module-name form of the command needs `PYTHONPATH=tests` (the tests import
+`support` as a top-level module); I ran it that way. Firefox was not run.
+
+### What works (verified against the real bridge)
+
+- The edit follows the element: after setting an author id, the ledger lists
+  the target under the new id with the stable selector, in its original place
+  in the change order. A double promotion ends under the final id. Two
+  elements given the same id in one tick: one wins, the other stays an auto
+  target, and no edit is lost.
+- The cleaned HTML of a promoted target has no `style`, no bridge role or name
+  attributes and keeps the author's `data-design-id`. A global reset leaves the
+  author's attribute in place. Reset by new id restores the inline style byte
+  for byte (the new test covers odd spacing).
+- Loop guards: 200 rewrites of the same author id on one element produce one
+  `design:targets`; flip-flopping the id 100 times produced two. The bridge's
+  own `data-design-id` writes are skipped through `isBridgeAttr`. No discovery
+  storm.
+- Studio with the real bridge and demo: the saved edit is re-keyed, no
+  reconnect conflict, nothing written to the overrides file by the re-key, and
+  the next sync writes the stable selector.
+- Studio merge order when both ids hold a saved override: the new id's override
+  wins. The reconnect comparison runs afterwards, so any difference from the
+  live element shows as an ordinary, visible conflict. Acceptable.
+- Author-id to author-id change: it now promotes too, and edits follow the
+  element. Safe for a plain rename. See Minor 3 for the element-reuse case.
+- A request for the old id that is in flight when the promotion happens is
+  rejected as `unknown-target` and shown (documented limit); nothing is
+  silently lost.
+
+### Issues
+
+#### Important
+
+1. **A buggy or hostile `previousId` makes Studio drop an unrelated saved
+   override.** `font_kit_studio_v0.1.1.html:4566-4579` (`followPromotedTargets`)
+   trusts any string `previousId` that is a key of `live.overrides`, including
+   the id of a target that is still live in the same manifest list. Verified in
+   a scratch copy with a fake target that reported `previousId: "hero.title"`
+   for the target `auto.h2.1`, with saved overrides for both
+   (`hero.title` 61 px, `auto.h2.1` 50 px): afterwards the saved state was
+   `{auto.h2.1: {fontSize: 50}}`. The `hero.title` override was deleted without
+   a banner or any wording, while the edit stays live on the page, so the next
+   sync writes a file without it. With different property names the two
+   overrides would have been merged onto the wrong target instead. Rule 6 and
+   Rule 5 (a new field crossing the boundary has no allow-listing), anti-pattern
+   5. `__proto__` and `constructor` as `previousId` are harmless (checked).
+   Suggested fix: skip the re-key when `previous` is the id of any target in the
+   same list (`list.some(t => t.id === previous)`), which also keeps
+   author-to-author renames working because the old author id is gone. Add the
+   hostile case to `StudioPromotedTargetTests`: a manifest whose `previousId`
+   names a live target with a saved override must leave both overrides as they
+   were. The AGENTS test rules ask for a hostile case at every trust boundary,
+   and none of the new tests has one.
+
+#### Minor
+
+2. Promotion tests that wait for "nothing happened" use fixed sleeps:
+   `tests/test_studio_live.py` `page.wait_for_timeout(300)` and `(400)` in
+   `StudioPromotedTargetTests`. Absence checks are the allowed exception, but
+   the first one waits first for `/Reconnected|Connected/`, which the badge may
+   already show before the re-announcement is processed. Wait for a positive
+   signal that the `design:ready` was handled (as the integration test does
+   with `__readySeen`) before asserting that no banner appeared.
+3. Author-to-author promotion keeps edits with the element, not with the id.
+   Where an app reuses a DOM node for a different item (a node whose
+   `data-design-id` changes from `card-1` to `card-2` while the old `card-2`
+   node is removed), the bridge already gives `card-2` the removed node's
+   overrides through the lost-target path, and now it also carries the reused
+   node's own edits to `card-2`; Studio re-keys the saved override the same
+   way. Author ids are meant to be the stable identity (Rule 3). This is an
+   edge case and the report does not mention it; record it in the report's
+   limits, or restrict `previousId`-based re-keying to auto ids
+   (`previousId` starting with `auto:`), which would also narrow Issue 1.
+4. Removing the author attribute from a promoted element (a demotion) is not
+   noticed: the attribute removal is not treated as relevant, so the bridge
+   keeps reporting the target as stable with `[data-design-id="..."]` while no
+   element carries that attribute (verified: ledger entry still stable, the
+   attribute is gone, the inline edit remains). A synced rule with that selector
+   would match nothing. This predates the change for any author id, but
+   promotion makes it more reachable. Record it as a limit or handle removal.
+5. A promotion that happens twice before Studio's next `design:targets`
+   reports only the latest old id, so a Studio holding the first auto id is not
+   re-keyed. Documented in the report; the result is a visible reconnect
+   conflict, not a loss.
+6. `previousId` stays on the record for the rest of the page's life and is sent
+   in every later `design:ready`. If a Studio holds a saved override under an
+   auto id that happens to equal that string from an earlier page life (auto ids
+   restart after a reload), it would be re-keyed to the promoted element. This
+   is the existing auto-id instability, narrowed by the fix for Issue 1.
+7. A queued edit for the old id is rejected instead of being re-targeted;
+   Studio could rewrite `targetId` of queued operations in
+   `followPromotedTargets`. Optional.
+
+### Docs
+
+Addendum 6 and the two README lines match the code. The plan's
+`TargetManifest` definition does not list `previousId`; the Addendum owns it,
+which the anti-duplication rule allows.
+
+### Verdict
+
+The bridge side is sound and well covered, with a real-bridge Studio test. The
+Studio re-key has one real data-loss path from an untrusted manifest field
+(Important 1) that is a small, local fix plus one hostile test.
+
+**Task quality:** Approved with fixes
+
+### Round 2 (scoped re-review of the promoted-target fixes)
+
+Gates: `tests.test_studio_live` 82 tests, OK (Chromium only; run with
+`PYTHONPATH=tests`); `verify.py --static-only` PASS.
+
+- **Important 1, resolved.** `followPromotedTargets`
+  (`font_kit_studio_v0.1.1.html`, around line 4566) now returns early when
+  `previousId` is not a string, is empty, equals the target's own id, or is the
+  id of any target in the same list. The selection follow sits behind the same
+  guard, so a bogus `previousId` cannot move the inspector selection either.
+  A legitimate promotion and an author-to-author rename still work, because the
+  old id is no longer in the list. Residual, by design: a manifest can still
+  re-key a saved override for an id that is not in the list (a target the page
+  no longer shows). The bridge is the authority on its own ids, so this adds no
+  power beyond what it has over its ledger. No action needed.
+- **New hostile test.** I removed the `liveIds.has(previous)` check in a scratch
+  copy: the test fails with 8 sub-test failures (matching the report's RED
+  claim), while the two promotion tests still pass. It covers seven values (a
+  live id, a number, empty, null, a list, its own id, an unknown id) and asserts
+  the saved state, export, CSS tab, that nothing was sent to the target, and
+  that the only write is the explicit Sync click. Not vacuous.
+- **The "handled" signal is sound.** Studio's message listener is registered at
+  start-up and does all its work synchronously, so it runs before a listener
+  added by the test for the same event; the 0 ms timer adds margin on top. Two
+  limits, neither a defect today: the counter counts every message of that type
+  from any source, so an unrelated `design:targets` or `design:ready` arriving
+  in the window would satisfy the wait early (the fake only emits them on
+  promotion, `emitAll` and re-announce, and the watch is installed after the
+  edits); and the fixed 300 and 400 ms sleeps are gone.
+- **Fake target.** `previousId` is now emitted whenever the property exists.
+  Only `promote` and `setPreviousId` create it, so every other test sees the
+  same manifests as before; the full `test_studio_live` run confirms it.
+- **Report.** "Limits of promotion handling" records Minors 3, 4 and 6
+  accurately, and "Round 2" states the RED and GREEN evidence I reproduced.
+  Minors 5 and 7 remain as already recorded (documented limit, optional).
+
+**Task quality:** Approved

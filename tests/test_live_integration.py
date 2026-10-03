@@ -673,6 +673,57 @@ class AutoDiscoveredSelectorTests(LiveIntegrationCase):
                 self.assertIn(f'{selector} {{\n  font-size: 38px !important;', self.written())
                 self.assertEqual(page.errors, [])
 
+    def test_promoting_the_target_to_an_author_id_keeps_the_edit_and_raises_no_conflict(self):
+        """The app follows Studio's hint and adds a data-design-id to the heading that was edited as an auto target."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                self.overrides.unlink(missing_ok=True)
+                page = self.connected(engine)
+                frame = self.frame(page)
+                solo = '#pricing .plan:first-child h3'
+                new_id = 'pricing.solo.title'
+                original_size = self.style(frame, solo, 'fontSize')
+                self.assertIsNone(frame.evaluate('(s) => document.querySelector(s).getAttribute("style")', solo))
+                self.click_in_target(page, solo, '/Solo/')
+                self.type_into(page, '#liveFontSize', '37')
+                self.wait_style(frame, solo, 'fontSize', '37px')
+                self.wait_badge(page, r'^Live · rev \d+$')
+                css = self.wait_code(page, 'Css', 'add data-design-id for a stable selector')
+                old_id = re.search(r'/\* [^(]*\((auto:[^)]+)\)', css).group(1)
+                self.assertEqual(list(json.loads(self.tab(page, 'Json'))['overrides']), [old_id])
+
+                # The attribute is set in place: no node is added or removed.
+                frame.evaluate('([s, id]) => document.querySelector(s).setAttribute("data-design-id", id)', [solo, new_id])
+                css = self.wait_code(page, 'Css', f'[data-design-id="{new_id}"] {{')
+                self.assertIn('font-size: 37px !important;', css)
+                self.assertNotIn(old_id, css)
+                self.assertNotIn('add data-design-id', css.split(new_id)[1].split('}')[0])
+                self.assertEqual(json.loads(self.tab(page, 'Json'))['overrides'], {new_id: {'fontSize': 37}})
+                self.assertEqual(page.locator('#liveChangeCount').text_content(), '1')
+                self.wait_style(frame, solo, 'fontSize', '37px')
+
+                # A reconnect (the bridge announces itself again) finds Studio and the page in agreement.
+                page.evaluate("""() => { window.__readySeen = 0; window.addEventListener('message', (event) => {
+                    if (event.data && event.data.type === 'design:ready') setTimeout(() => { window.__readySeen += 1; }, 0); }); }""")
+                frame.evaluate('window.parent.postMessage({type: "design:bridge-ready", protocolVersion: 1}, "*")')
+                page.wait_for_function('() => window.__readySeen === 1')
+                self.assertFalse(page.locator('#liveReconnectBanner').is_visible(), 'no false conflict')
+                self.assertEqual(json.loads(self.tab(page, 'Json'))['overrides'], {new_id: {'fontSize': 37}})
+                self.assertEqual(self.written(), '', 'nothing was written behind the user\'s back')
+
+                # The edit is still live: Reset restores the heading exactly, and the synced file has the stable rule.
+                self.click_in_target(page, solo, new_id)
+                self.type_into(page, '#liveFontSize', '39')
+                self.wait_style(frame, solo, 'fontSize', '39px')
+                self.wait_badge(page, r'^Live · rev \d+$')
+                self.assertIn('Saved', self.sync(page))
+                self.assertIn(f'[data-design-id="{new_id}"] {{\n  font-size: 39px !important;', self.written())
+                self.assertNotIn('auto:', self.written())
+                page.locator('#liveResetTarget').click()
+                self.wait_style(frame, solo, 'fontSize', original_size)
+                self.assertIsNone(frame.evaluate('(s) => document.querySelector(s).getAttribute("style")', solo))
+                self.assertEqual(page.errors, [])
+
 
 class ImportedTokensTests(LiveIntegrationCase):
     def export(self, page):
