@@ -42,6 +42,11 @@ __all__ = [
 #: channels yields a plausible ratio for a colour nobody painted.
 _RGB_FUNCTION_RE = re.compile(r"^rgba?\(", re.IGNORECASE)
 _COLOR_SRGB_RE = re.compile(r"^color\(\s*srgb\s", re.IGNORECASE)
+#: One CSS number: optional sign, digits with an optional fraction, optional
+#: exponent. A computed tiny channel serialises with an exponent (Chromium gives
+#: `color(srgb 1.00000e-7 0.2 0.3)`), and splitting at the "e" would read it as
+#: two numbers and shift every channel after it.
+_NUMBER_RE = re.compile(r"[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?", re.IGNORECASE)
 
 
 def _parse_rgb_string(value: str) -> tuple[float, float, float, float]:
@@ -65,7 +70,7 @@ def _parse_rgb_string(value: str) -> tuple[float, float, float, float]:
             "rgb(), rgba() and color(srgb ...) only. Teach it the new form "
             "rather than letting a contrast measurement guess at one."
         )
-    numbers = [float(part) for part in re.findall(r"[\d.]+", text)]
+    numbers = [float(part) for part in _NUMBER_RE.findall(text)]
     red, green, blue = (number * scale for number in numbers[:3])
     alpha = numbers[3] if len(numbers) > 3 else 1.0
     return red, green, blue, alpha

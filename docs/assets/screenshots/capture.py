@@ -26,6 +26,10 @@ from support import launch  # noqa: E402
 OUT = Path(__file__).resolve().parent
 TITLE = '[data-design-id="landing.hero.title"]'
 CTA = '[data-design-id="landing.hero.cta"]'
+# Poll on a timer, not on requestAnimationFrame (Playwright's default): a frame scrolled
+# offscreen (the mobile capture) or a backgrounded page may never run a rAF callback, which
+# stalls the wait. The same value as the gate's POLL_MS in scripts/dev/_frontend_gate_shared.py.
+POLL_MS = 50
 SIZES = {'desktop': {'width': 1440, 'height': 900}, 'mobile': {'width': 390, 'height': 844}}
 
 
@@ -71,7 +75,7 @@ def main():
 
 
 def badge(page, pattern):
-    page.wait_for_function('(re) => new RegExp(re).test(document.querySelector("#bridgeStatusBadge").textContent)', arg=pattern)
+    page.wait_for_function('(re) => new RegExp(re).test(document.querySelector("#bridgeStatusBadge").textContent)', arg=pattern, polling=POLL_MS)
 
 
 def capture(browser, studio, target, rel, target_port, name, viewport):
@@ -83,7 +87,7 @@ def capture(browser, studio, target, rel, target_port, name, viewport):
     page.goto(f'{studio}/font_kit_studio_v0.1.1.html?target={target}')
     badge(page, r'^Connected \(\d+ targets\)$')
     frame = page.locator('#targetAppFrame').element_handle().content_frame()
-    frame.wait_for_function('document.readyState === "complete"')
+    frame.wait_for_function('document.readyState === "complete"', polling=POLL_MS)
     badge(page, r'^Connected \(\d+ targets\)$')
 
     def to_top(selector, block='start'):
@@ -94,7 +98,7 @@ def capture(browser, studio, target, rel, target_port, name, viewport):
         for _ in range(2):
             locator.click()
             try:
-                page.wait_for_function('(t) => (document.querySelector("#liveTargetName") || {}).textContent === t', arg=text, timeout=3000)
+                page.wait_for_function('(t) => (document.querySelector("#liveTargetName") || {}).textContent === t', arg=text, timeout=3000, polling=POLL_MS)
                 return
             except Exception:
                 pass
@@ -125,22 +129,22 @@ def capture(browser, studio, target, rel, target_port, name, viewport):
         page.locator('#targetAppFrame').wait_for(state='visible')
         badge(page, r'^Connected \(\d+ targets\)$')
         frame = page.locator('#targetAppFrame').element_handle().content_frame()
-        frame.wait_for_function('document.readyState === "complete"')
+        frame.wait_for_function('document.readyState === "complete"', polling=POLL_MS)
         badge(page, r'^Connected \(\d+ targets\)$')
 
     # Edit the hero title so the panels show real changes. The values differ from the demo's own
     # (60.96px, -0.02em, #14213d), so the screenshots show a visible edit.
     select(TITLE, 'Hero title')
     type_into('#liveFontSize', '72')
-    frame.wait_for_function(f'getComputedStyle(document.querySelector({TITLE!r})).fontSize === "72px"')
+    frame.wait_for_function(f'getComputedStyle(document.querySelector({TITLE!r})).fontSize === "72px"', polling=POLL_MS)
     type_into('#liveLetterSpacing', '-0.04')
-    frame.wait_for_function(f'parseFloat(getComputedStyle(document.querySelector({TITLE!r})).letterSpacing) < -2.5')
+    frame.wait_for_function(f'parseFloat(getComputedStyle(document.querySelector({TITLE!r})).letterSpacing) < -2.5', polling=POLL_MS)
     type_into('#liveColorHex', '#0b6e4f')
     page.keyboard.press('Tab')
-    frame.wait_for_function(f'getComputedStyle(document.querySelector({TITLE!r})).color === "rgb(11, 110, 79)"')
-    page.wait_for_function('() => /^Live/.test(document.querySelector("#bridgeStatusBadge").textContent)')
+    frame.wait_for_function(f'getComputedStyle(document.querySelector({TITLE!r})).color === "rgb(11, 110, 79)"', polling=POLL_MS)
+    page.wait_for_function('() => /^Live/.test(document.querySelector("#bridgeStatusBadge").textContent)', polling=POLL_MS)
     page.locator('#codeTabCss').click()
-    page.wait_for_function('() => document.querySelector("#liveCodeOutput").textContent.includes("color: #0b6e4f")')
+    page.wait_for_function('() => document.querySelector("#liveCodeOutput").textContent.includes("color: #0b6e4f")', polling=POLL_MS)
     page.locator('#liveCodeOutput').evaluate('el => el.scrollTop = 0')
 
     page.mouse.move(0, 0)
@@ -149,7 +153,7 @@ def capture(browser, studio, target, rel, target_port, name, viewport):
         page.locator('#liveCodePanel').screenshot(path=str(OUT / f'code-panel-{name}.png'))
         # Theater mode gives the preview, the Changes panel and the inspector the whole window.
         page.locator('#btnToggleFullscreen').click()
-        page.wait_for_function('() => document.querySelector("#liveCodePanel").getBoundingClientRect().bottom < innerHeight')
+        page.wait_for_function('() => document.querySelector("#liveCodePanel").getBoundingClientRect().bottom < innerHeight', polling=POLL_MS)
         page.screenshot(path=str(OUT / f'target-app-{name}.png'))
         page.keyboard.press('Escape')
     else:

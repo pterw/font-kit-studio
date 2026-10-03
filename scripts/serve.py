@@ -45,7 +45,11 @@ class Config:
         self.studio_url = f"http://{public}:{studio_port}"
         self.target_url = f"http://{public}:{target_port}/demo/"
         self.studio_path = f"/{STUDIO_HTML}?target={self.target_url}"
+        # Browsers leave the port out of `Origin` on the default port, so port 80 is allowed
+        # both ways (hosts() does the same for the Host header).
         self.origins = {f"http://{name}:{studio_port}" for name in ("localhost", "127.0.0.1", public)}
+        if studio_port == 80:
+            self.origins |= {f"http://{name}" for name in ("localhost", "127.0.0.1", public)}
         self.write_lock = threading.Lock()
 
     def hosts(self, port):

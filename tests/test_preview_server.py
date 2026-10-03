@@ -182,6 +182,25 @@ class PreviewServerTest(unittest.TestCase):
         self.assertEqual(clean('//__fontkit/status?x=1'), '/__fontkit/status')
         self.assertEqual(clean('/demo/?v=2#top'), '/demo')
 
+    def test_default_port_origins_and_hosts_omit_the_port(self):
+        # A browser never sends ":80": a page on http://localhost sends `Origin: http://localhost`
+        # and `Host: localhost`. Checked on the config, since binding port 80 needs root.
+        spec = importlib.util.spec_from_file_location('fks_serve_config', SERVE)
+        serve = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(serve)
+        overrides = REPO / 'demo' / 'fontkit-overrides.css'
+        for host in ('127.0.0.1', 'localhost', ''):
+            with self.subTest(host=host):
+                config = serve.Config(host, 80, 8001, overrides, True, True)
+                for origin in ('http://localhost', 'http://127.0.0.1'):
+                    self.assertIn(origin, config.origins)
+                self.assertIn('localhost', config.hosts(80))
+                self.assertIn('localhost:80', config.hosts(80), 'an explicit :80 is harmless')
+        config = serve.Config('127.0.0.1', 8000, 8001, overrides, True, True)
+        self.assertEqual(config.origins, {'http://localhost:8000', 'http://127.0.0.1:8000'})
+        self.assertNotIn('http://localhost', config.origins, 'a non-default port always carries it')
+        self.assertEqual(config.hosts(8001), {'localhost:8001', '127.0.0.1:8001', '[::1]:8001'})
+
     def test_host_header_allow_list(self):
         s = self.server
         for port in (s.studio, s.target):

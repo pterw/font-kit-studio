@@ -62,6 +62,20 @@ class ColourParsingTests(unittest.TestCase):
         self.assertEqual((red, green, blue, alpha), (255.0, 127.5, 0.0, 1.0))
         self.assertEqual(_parse_rgb_string('color(srgb 0 0 0 / 0.25)')[3], 0.25)
 
+    def test_exponent_notation_is_read_as_one_number(self):
+        # Chromium serialises a tiny channel with an exponent: color(srgb 1e-7 ...) computes to
+        # color(srgb 1.00000e-7 ...), and color-mix() with a tiny share gives 1.19209e-7.
+        red, green, blue, alpha = _parse_rgb_string('color(srgb 1.00000e-7 0.2 0.3 / 0.5)')
+        self.assertAlmostEqual(red, 255e-7)
+        self.assertAlmostEqual(green, 51.0)
+        self.assertAlmostEqual(blue, 76.5)
+        self.assertEqual(alpha, 0.5)
+        self.assertAlmostEqual(_parse_rgb_string('color(srgb 1.19209e-7 0 1)')[0], 1.19209e-7 * 255)
+        self.assertAlmostEqual(_parse_rgb_string('color(srgb 0.2 0.2 0.2 / 5e-1)')[3], 0.5)
+        self.assertAlmostEqual(_parse_rgb_string('color(srgb 0.2 0.2 0.2 / 1.5E-3)')[3], 0.0015)
+        self.assertAlmostEqual(_parse_rgb_string('rgba(1, 2, 3, 1e-2)')[3], 0.01)
+        self.assertEqual(_parse_rgb_string('color(srgb .5 0 0)')[0], 127.5)
+
     def test_an_unknown_serialisation_is_refused_not_guessed(self):
         for text in ('oklch(0.5 0.2 30)', 'hsl(10 20% 30%)', '#ffffff', 'lab(50 10 10)'):
             with self.subTest(text=text), self.assertRaises(ValueError):

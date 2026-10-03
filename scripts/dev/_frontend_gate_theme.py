@@ -123,10 +123,13 @@ CONTRAST_JS = """([roots, excludes]) => {
     const transparent = (value) => value === 'transparent' || /^rgba\\(.*,\\s*0\\)$/.test(value);
     // Alpha of a computed colour: rgb() is opaque, rgba() ends in it, and
     // color(srgb ...) (how a color-mix() serialises) carries it after a slash.
+    // A tiny alpha serialises with an exponent (`/ 1.00000e-7`), so read a whole CSS number.
+    const slashAlpha = /\\/\\s*([+-]?(?:\\d+\\.?\\d*|\\.\\d+)(?:e[+-]?\\d+)?)\\s*\\)$/i;
+    const commaAlpha = /^rgba\\(.*,\\s*([+-]?(?:\\d+\\.?\\d*|\\.\\d+)(?:e[+-]?\\d+)?)\\)$/i;
     const alphaOf = (value) => {
-        const slash = value.match(/\\/\\s*([\\d.]+)\\s*\\)$/);
+        const slash = value.match(slashAlpha);
         if (slash) return Number(slash[1]);
-        const comma = value.match(/^rgba\\(.*,\\s*([\\d.]+)\\)$/);
+        const comma = value.match(commaAlpha);
         return comma ? Number(comma[1]) : 1;
     };
     const samples = [];
