@@ -2241,7 +2241,7 @@ if (remembered) kitId.value = remembered;
     writeStore("font-kit-studio-kit-ids", ids.join(","));
   }
 
-  const reportComposerFonts = text => { composerStatus.textContent = text; };
+  const reportComposerFonts = text => { composerStatus.textContent = text + sheetLimitNote(); };
   kitPreset.addEventListener("change", () => {
     if (kitPreset.value === "google") loadAllFreeFonts(reportComposerFonts);
     else if (kitPreset.value === "adobe") {
@@ -3146,6 +3146,7 @@ if (remembered) kitId.value = remembered;
   const GOOGLE_SHEET_DISPLAY = ["auto", "block", "swap", "fallback", "optional"];
   const MAX_SHEET_FAMILIES = 8;
   const MAX_COMPOSITION_SHEETS = 16;
+  let sheetsNotSent = []; // library families the last composition update could not send (the bridge takes 16 sheets)
   const CUSTOM_PROPERTY = /^--[a-z0-9-]{1,120}$/;
   // Text that goes into CSS: the bridge's UNSAFE_CSS_STRING, plus line breaks, comment markers and !important,
   // because Studio writes these values into a file.
@@ -3315,18 +3316,41 @@ if (remembered) kitId.value = remembered;
   // what its own import takes back. A name is clamped; an entry past a limit (selector, id or the first 100 containers),
   // or one that repeats an id another saved container holds, is left out, so an export always imports again. A container
   // with more than 500 children is rejected by the length check: the ledger keeps 500 names but 501 ids (normalizeLedger).
+  // A child the bridge could not register (its data-design-id is another element's, Spec 4.1) reports '' at its place:
+  // it is skipped, and the container keeps the other children in order (duplicateIdNote says so, once).
   function savedStructureFrom(structure) {
     const saved = [];
     const ids = new Set();
     (structure || []).forEach(entry => {
-      const list = entry.orderIds;
+      const reported = entry.orderIds;
       if (saved.length >= MAX_STRUCTURE_ENTRIES || !entry.selector || entry.selector.length > MAX_SELECTOR_LENGTH) return;
-      if (!list.length || list.length !== entry.order.length || new Set(list).size !== list.length) return;
-      if (list.some(id => !id || id.length > 300 || ids.has(id))) return;
+      if (!reported.length || reported.length !== entry.order.length) return;
+      const list = reported.filter(Boolean);
+      if (!list.length || new Set(list).size !== list.length) return;
+      if (list.some(id => id.length > 300 || ids.has(id))) return;
       list.forEach(id => ids.add(id));
-      saved.push({ selector:entry.selector, name:entry.name.slice(0, 200), ids:[...list] });
+      saved.push({ selector:entry.selector, name:entry.name.slice(0, 200), ids:list });
     });
     return saved;
+  }
+
+  // The DOM-move status line's sentence for a saved container that holds children the bridge could not track (a
+  // data-design-id another element already has). Said once per container, by selector, until the container has no such
+  // child again. The bridge reports only the child's name (its slot in `orderIds` is empty), not its id. Text only.
+  const duplicateIdAnnounced = new Set();
+  function duplicateIdNote() {
+    const named = [];
+    live.structure.forEach(saved => {
+      const entry = live.changes.structure.find(item => item.selector === saved.selector);
+      const untracked = entry && entry.orderIds.length === entry.order.length ? entry.order.filter((name, at) => !entry.orderIds[at]) : [];
+      if (!untracked.length) { duplicateIdAnnounced.delete(saved.selector); return; }
+      if (duplicateIdAnnounced.has(saved.selector)) return;
+      duplicateIdAnnounced.add(saved.selector);
+      untracked.forEach(name => named.push(`"${String(name).slice(0, 60)}" in "${String(entry.name).slice(0, 60)}"`));
+    });
+    if (!named.length) return "";
+    return ` Not tracked (duplicate data-design-id): ${named.slice(0, 3).join("; ")}${named.length > 3 ? "; …" : ""}. Another element already uses its `
+      + "data-design-id (Spec 4.1), so Studio does not save its place; the other children keep their saved order.";
   }
   const sameIds = (a, b) => a.length === b.length && a.every((id, at) => id === b[at]);
   // Every saved container is in the target in the saved order. Containers only the target reorders (a composition
@@ -3981,7 +4005,7 @@ if (remembered) kitId.value = remembered;
     }
     return `Moved in the page markup. ${where}but it is not in the CSS file: Sync to file writes CSS only, so the move adds no CSS rules `
       + "(the file only gains a comment that points to the HTML tab). "
-      + (cssOrder ? "CSS order is the move strategy the CSS file keeps." : "CSS order, which the CSS file keeps, needs a flex or grid parent.");
+      + (cssOrder ? "CSS order is the move strategy the CSS file keeps." : "CSS order, which the CSS file keeps, needs a flex or grid parent.") + duplicateIdNote();
   }
 
   // Every request that timed out stays in `live.timedOut` (by request id), so a late acknowledgement is applied
@@ -5495,7 +5519,7 @@ if (remembered) kitId.value = remembered;
   // loaded again, which the user's ask covers. Only once the user has asked for free fonts (D031, D032): loading them
   // contacts Google Fonts (rule 7), so without the ask the key is absent and the bridge keeps what it has.
   function withCompositionSheets(patch) {
-    if (!freeFontsAllowed) return patch;
+    if (!freeFontsAllowed) { sheetsNotSent = []; return patch; }
     const sheets = [];
     const add = url => { if (url && !sheets.includes(url)) sheets.push(url); };
     const addFamily = family => add(safeFontStylesheet(fontStylesheetUrl(byFamily(family))));
@@ -5505,7 +5529,22 @@ if (remembered) kitId.value = remembered;
     });
     tokenFontSheets({ ...live.savedTokens, ...patch.tokens }).forEach(add);
     patch.fontStylesheets = sheets.slice(0, MAX_COMPOSITION_SHEETS);
+    // The bridge refuses a longer list and treats the list as complete, so the families past the limit stay in their
+    // fallback fonts on the page: the Composer status says which (when the list changes, and in every Sync's line).
+    const before = sheetsNotSent.join("|");
+    sheetsNotSent = sheets.slice(MAX_COMPOSITION_SHEETS).map(url => fonts.find(font => fontStylesheetUrl(font) === url)?.name || "another font");
+    if (sheetsNotSent.length && sheetsNotSent.join("|") !== before) composerStatus.textContent = sheetLimitNote().trim();
+    else if (!sheetsNotSent.length && before && composerStatus.textContent.includes("Not sent to the page (")) {
+      // The line a Sync wrote ends with the note; drop the note, keep what came before it.
+      composerStatus.textContent = `${composerStatus.textContent.slice(0, composerStatus.textContent.indexOf("Not sent to the page ("))}`
+        + "Every library font of the composition is sent to the page again.";
+    }
     return patch;
+  }
+  function sheetLimitNote() {
+    if (!sheetsNotSent.length) return "";
+    return ` Not sent to the page (${MAX_COMPOSITION_SHEETS}-sheet limit): ${sheetsNotSent.slice(0, 6).join(", ")}`
+      + `${sheetsNotSent.length > 6 ? `, and ${sheetsNotSent.length - 6} more` : ""}. They show in fallback fonts there.`;
   }
 
   // The sheets of the library fonts that composition tokens name (a token holds a font stack): Studio's saved tokens
@@ -5547,7 +5586,7 @@ if (remembered) kitId.value = remembered;
     live.importDropped = null;   // the user chose to send the composition; the next acknowledgement settles the banner
     broadcastLiveState(true);
     composerStatus.textContent = "Composition sent to the live app. Specimen edits keep streaming until the target reconnects."
-      + (!freeFontsAllowed && compositionUsesLibraryFonts() ? ` ${FONTS_WAIT_NOTE}` : "");
+      + (!freeFontsAllowed && compositionUsesLibraryFonts() ? ` ${FONTS_WAIT_NOTE}` : "") + sheetLimitNote();
     if (syncBtnEl) {
       syncBtnEl.textContent = "✓ Synced!";
       setTimeout(() => { syncBtnEl.textContent = "⚡ Sync to Live App"; }, 1400);

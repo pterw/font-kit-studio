@@ -426,6 +426,30 @@ class OriginListTests(BridgeCase):
                 self.assertEqual(result['origins'], ['http://studio.test'])
                 self.assertIn('allowedOrigins ignored', result['seen'][0])
 
+    def test_case_only_duplicate_origins_are_stored_once_and_the_same_options_again_change_nothing(self):
+        spelled = ['http://studio.test', 'HTTP://STUDIO.test/']
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.assertTrue(frame.evaluate(self.BUILD, spelled))
+                self.assertEqual(frame.evaluate('window.__fontkitBridge.allowedOrigins'), ['http://studio.test'],
+                                 'the list is stored without the case-only repeat')
+                self.hello(page)
+                self.applied(page, TITLE, {'fontSize': 55})
+                for _ in range(2):
+                    result = frame.evaluate(self.REINIT, '__opts')
+                    self.assertTrue(result['same'])
+                    self.assertEqual(result['seen'], [], 'the same options again are not a policy change')
+                    self.assertEqual(result['origins'], ['http://studio.test'])
+                    self.assertEqual(result['session'], 's1')
+                # A repeat inside one list is dropped, and the other origins keep the order they were given in.
+                result = frame.evaluate(self.INIT, {'allowedOrigins': ['HTTP://Studio.test', 'http://studio.test', 'http://studio.test/']})
+                self.assertEqual(result['origins'], ['http://studio.test'])
+                self.assertEqual(len(result['seen']), 1)
+                self.assertIn('allowedOrigins unchanged (http://studio.test)', result['seen'][0])
+                self.assertEqual(self.applied(page, TITLE, {'fontSize': 60})['revision'], 2)
+                self.assertEqual(self.errors(frame), [])
+
     def test_init_narrows_an_open_bridge_and_a_foreign_origin_is_then_refused(self):
         for engine in ENGINES:
             with self.subTest(engine=engine):
@@ -3511,6 +3535,30 @@ class AttributeWriteTests(BridgeCase):
                 frame.evaluate('render()')
                 page.wait_for_timeout(300)
                 self.assertEqual(self.applied(page, 'spa.body', {'fontSize': 30})['type'], 'design:applied')
+
+
+class DuplicateIdOrderTests(ArrangeCase):
+    """A child whose data-design-id another target already holds is not a target (Spec 4.1). Studio's saved DOM
+    order has to cope with that child, so the contract is pinned here: its slot in `orderIds` is '' and every
+    other id stays in place."""
+
+    def test_a_duplicate_id_child_reports_an_empty_id_at_its_position_and_the_others_stay_aligned(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, target=ARRANGE_PAGE)
+                frame.evaluate("""() => {
+                    const dup = document.createElement('p');
+                    dup.setAttribute('data-design-id', 'arr.p.1');
+                    dup.textContent = 'Plain one again';
+                    document.querySelector('.plain [data-design-id="arr.p.1"]').after(dup);
+                }""")
+                self.hello(page)
+                reply = self.moved(page, 'arr.p.3', {'container': 'arr.plain', 'index': 0})
+                group = next(e for e in reply['changes']['structure'] if e['containerKey'] == 'arr.plain')
+                self.assertEqual(group['orderIds'], ['arr.p.3', 'arr.p.1', '', 'arr.p.2'])
+                self.assertEqual(len(group['order']), len(group['orderIds']), 'orderIds stays aligned with order')
+                self.assertIn('Plain one again', group['order'][2], 'the untracked child still has its name slot')
+                self.assertEqual(self.errors(frame), [])
 
 
 if __name__ == '__main__':

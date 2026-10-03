@@ -372,10 +372,12 @@
 
   // A list of origins (array or space/comma separated string) without trailing slashes, in lower case (browsers
   // report an origin's scheme and host in lower case, so `HTTP://Studio.Test` must still match); null means "any
-  // origin" (a `*` in the list).
+  // origin" (a `*` in the list). A spelling that differs only in case is the same origin, so it is kept once (first
+  // position wins); otherwise a repeat of the same options would compare unequal and report a policy change.
   function parseOriginList(list) {
     if (typeof list === 'string') list = list.split(/[\s,]+/);
     list = Array.from(list).map((origin) => String(origin).trim().replace(/\/+$/, '').toLowerCase()).filter(Boolean);
+    list = list.filter((origin, index) => list.indexOf(origin) === index);
     return list.includes('*') ? null : list;
   }
 
