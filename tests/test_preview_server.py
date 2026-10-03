@@ -600,6 +600,12 @@ class PreviewServerLifecycleTest(unittest.TestCase):
                 self.assertEqual(list(Path(outside).iterdir()), [])
 
 
+def route_demo_stylesheet(page, server):
+    """Send the demo's `fontkit-overrides.css` request to the server's scratch overrides path."""
+    page.route(f'http://localhost:{server.target}/demo/fontkit-overrides.css',
+               lambda route: route.continue_(url=f'http://localhost:{server.target}/{server.rel}'))
+
+
 class DemoPageTest(unittest.TestCase):
     def test_demo_source_is_offline(self):
         source = DEMO.read_text()
@@ -612,8 +618,10 @@ class DemoPageTest(unittest.TestCase):
     def test_demo_loads_from_target_port(self):
         from playwright.sync_api import sync_playwright
 
-        # Default overrides path, sync off: nothing is written; the missing file serves empty.
-        server = Server('--no-sync', overrides=REPO / 'demo' / 'fontkit-overrides.css')
+        # Sync off and a scratch overrides path that is never created: the demo's stylesheet
+        # request is routed there, so the checkout's own demo/fontkit-overrides.css (which
+        # Sync to file creates) never takes part.
+        server = Server('--no-sync')
         try:
             with sync_playwright() as runtime:
                 for engine in ENGINES:
@@ -625,9 +633,11 @@ class DemoPageTest(unittest.TestCase):
     def test_demo_loads_without_any_overrides_request_failing(self):
         from playwright.sync_api import sync_playwright
 
-        overrides = REPO / 'demo' / 'fontkit-overrides.css'
-        self.assertFalse(overrides.exists(), 'this test needs a clone with no overrides file')
-        server = Server('--no-sync', overrides=overrides)
+        # The server's own scratch overrides path is the file under test. The checkout's
+        # demo/fontkit-overrides.css (Sync to file creates it) is never read or touched.
+        server = Server('--no-sync')
+        overrides = server.overrides
+        self.assertFalse(overrides.exists(), 'the scratch overrides file starts missing')
         try:
             with sync_playwright() as runtime:
                 for engine in ENGINES:
@@ -635,12 +645,13 @@ class DemoPageTest(unittest.TestCase):
                         browser = launch(runtime, engine)
                         try:
                             page = browser.new_page()
+                            route_demo_stylesheet(page, server)
                             seen = []
                             page.on('response', lambda res: seen.append((res.url, res.status)))
                             page.goto(f'http://localhost:{server.target}/demo/', wait_until='load')
-                            sheet = [item for item in seen if 'fontkit-overrides.css' in item[0]]
-                            self.assertTrue(sheet, 'the demo requests the overrides stylesheet')
-                            self.assertEqual([item for item in sheet if item[1] >= 400], [], sheet)
+                            sheet = [item for item in seen if item[0].endswith('/' + server.rel)]
+                            self.assertTrue(sheet, f'the demo requests the scratch overrides stylesheet: {seen}')
+                            self.assertEqual(sheet, [(f'http://localhost:{server.target}/{server.rel}', 200)])
                             self.assertEqual(
                                 page.evaluate("document.querySelector('link[href=\"fontkit-overrides.css\"]')"
                                               ".sheet !== null"), True, 'the empty sheet applied')
@@ -658,6 +669,7 @@ class DemoPageTest(unittest.TestCase):
             page.on('pageerror', lambda error: errors.append(str(error)))
             page.on('request', lambda req: requests.append(req.url))
             page.on('response', lambda res: responses.__setitem__(res.url.split('?')[0], res.status))
+            route_demo_stylesheet(page, server)
             # The bridge is being rewritten concurrently: only prove the tag resolves to the
             # served file, without executing it.
             bridge = f'http://localhost:{server.target}/fontkit-bridge.js'
@@ -668,7 +680,7 @@ class DemoPageTest(unittest.TestCase):
             self.assertTrue(page.evaluate('window.__bridgeStub === true'))
             origin = f'http://localhost:{server.target}/'
             self.assertEqual([url for url in requests if not url.startswith(origin)], [])
-            self.assertEqual(responses.get(f'{origin}demo/fontkit-overrides.css'), 200)
+            self.assertEqual(responses.get(f'{origin}{server.rel}'), 200)
 
             info = page.evaluate('''ids => {
                 const present = ids.filter(id => document.querySelectorAll(
