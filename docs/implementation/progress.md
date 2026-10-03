@@ -4,8 +4,8 @@ Plans: `docs/plans/2026-09-30-v0.1.1-responsive-rows.md` (complete), `docs/plans
 
 ## Current state
 
-- **v0.2.0 merged (PR #1, 2026-10-03).** Plan Addendum 7 (known-limit fixes) follows as its own pull request from the same branch, restarted on `main`: reviewed, all seven items and the review's fixes done, records in `tasks/v02-addendum-7-*.md`. Open for the owner after it lands: while a composition is linked, a composition acknowledgement replaces tokens imported from JSON with the page's tokens (`recordCanonical`), which predates Addendum 7 and needs a ruling (Rule 2 against Rule 6) and a failing test first.
-- **Next release.** The typography system design is approved: `docs/specs/2026-10-03-typography-system-design.md` (releases R1 one command, R2 engine, R3 pairing system, R4 output and handoff, R5 extension). Its R1 plan starts on a fresh branch from `main` after the Addendum 7 pull request merges. Open owner decisions are listed in the design's section 6 (package name, Studio file name, specimen canvas location).
+- **v0.2.0 and its known-limit fixes are merged** (PR #1 and PR #2, 2026-10-03; `main` at a6d2751). Next, on `ccr-9eab25c9-mgatzt` restarted from `main`: the fit-and-finish pull request listed in `audit-2026-10-03-first-run-and-controls.md` (scope awaits the owner's go-ahead; how the owner launched the demo decides which first-run fix leads), including D035 (an import while linked keeps the imported tokens). Branch `wip/addendum-7` is obsolete; the owner deletes it in the GitHub UI.
+- **Next release.** The typography system design is approved: `docs/specs/2026-10-03-typography-system-design.md` (releases R1 one command, R2 engine, R3 pairing system, R4 output and handoff, R5 extension). Its R1 plan follows the fit-and-finish pull request; the proposed package name is `fontkitstudio` (design section 6). Open owner decisions are listed in the design's section 6 (package name, Studio file name, specimen canvas location).
 - **Evidence.** 517 tests pass in Chromium locally; Firefox runs in CI only and is advisory (D029).
 
 ## Recovery

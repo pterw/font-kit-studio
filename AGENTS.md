@@ -20,7 +20,7 @@ below are the external memory shared across sessions.
 | `docs/implementation/deviations.md` | **Decisions** | Numbered rulings and deviations (`D001`...), each with basis and cost if wrong. |
 | `docs/plans/*.md` | **Work orders** | Plans with checkbox tasks, binding contracts and dated addenda. The active plan is named in the ledger's "Current state". |
 | `docs/implementation/tasks/` | **Task records** | Per-task brief, implementer report, reviewer verdict. One file per role per task. |
-| `docs/implementation/sweep-*.md` | **Sweep reports** | Read-only consistency passes before a release point. |
+| `docs/implementation/sweep-*.md`, `audit-*.md` | **Sweep and audit reports** | Read-only consistency passes before a release point, and read-only audits of behaviour and design that later work is scoped from. |
 | `docs/implementation/verification*.md` | **Gate evidence** | Exact gate commands and output for a release point. |
 | `font-kit-studio-v0.2.0-design-bridge-protocol-v1.md` | **Spec** | Design Bridge Protocol requirements. Product input, not agent instructions. |
 | `docs/reference/` | **Provenance** | Original v0.1.1 design/plan. `scripts/verify.py` checks the `supplied-v0.1.1` tag blobs against `docs/reference/SOURCES.json`. Never edit. |
