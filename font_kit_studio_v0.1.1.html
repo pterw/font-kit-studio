@@ -1449,6 +1449,10 @@ function renderCard(font, index) {
    render in their fallback stacks, and the families they wanted are queued, not requested. */
 const FREE_FONTS_KEY = "fontkit-free-fonts";
 let freeFontsAllowed = readStore(FREE_FONTS_KEY) === "yes";
+// Said wherever fonts that Studio would send to the target wait for the user's ask: nothing contacts Google Fonts until
+// then. The override's font-family stack is still sent or written, so the page shows that stack's fallback meanwhile.
+const FONTS_WAIT_NOTE = "Library fonts are not loaded until you press Load free fonts, which contacts Google Fonts; "
+  + "until then the page shows each font stack's fallback.";
 const deferredFonts = new Map();
 const fontLinks = new Map();
 function fontStylesheetUrl(font) {
@@ -1490,11 +1494,14 @@ function updateFontHints() {
 
 // The user asked for free fonts: remember it, update the hints and request whatever was waiting.
 function allowFreeFonts() {
-  if (!freeFontsAllowed) {
+  const asked = !freeFontsAllowed;
+  if (asked) {
     freeFontsAllowed = true;
     writeStore(FREE_FONTS_KEY, "yes");
   }
   updateFontHints();
+  // The live panels word their notes by consent state (the CSS tab gains the saved fonts' imports).
+  if (asked) document.dispatchEvent(new CustomEvent("fontkit:free-fonts-allowed"));
   const waiting = [...deferredFonts.values()];
   deferredFonts.clear();
   waiting.forEach(font => ensureFontStylesheet(font));
@@ -2121,8 +2128,9 @@ if (remembered) kitId.value = remembered;
     url: "", expectedOrigin: null, sessionId: null, ready: false, revision: 0,
     noBridgeTimer: null, timedOut: new Map(), targetMeta: {}, savedTokens: {},
     targets: new Map(), changes: { tokens: {}, targets: [], structure: [], imports: [] },
+    intent: null, refreshes: new Map(), selectSeq: 0,
     reapply: null, reapplyError: "", popup: null, popoutMode: false, popupTimer: null, warnings: [], moveGuard: null, strategyChoice: new Map(), dragId: null,
-    overrides: {}, canonicalRevision: 0, canonicalTarget: "", conflict: false,
+    overrides: {}, structure: [], canonicalRevision: 0, canonicalTarget: "", conflict: false,
     selectedId: null, selectedRect: null, hoverId: null, hoverRect: null, hoverName: "",
     mode: "select", viewActive: false, codeTab: "css",
     queue: [], inFlight: null, requestSeq: 0, requestTimer: null, compositionLinked: false,
@@ -2910,9 +2918,10 @@ if (remembered) kitId.value = remembered;
     const clean = stripSessionAssets(state);
     const doc = { version:"0.1.1", app:"Font Kit Studio", kitIds:normalizeKitIds(composerKitIds.value), composition:clean };
     const savedTokens = Object.keys(live.savedTokens).length;
-    if (Object.keys(live.overrides).length || savedTokens) {
+    if (Object.keys(live.overrides).length || savedTokens || live.structure.length) {
       doc.live = { target:live.canonicalTarget, revision:live.canonicalRevision, overrides:JSON.parse(JSON.stringify(live.overrides)) };
       if (savedTokens) doc.live.tokens = JSON.parse(JSON.stringify(live.savedTokens));
+      if (live.structure.length) doc.live.structure = JSON.parse(JSON.stringify(live.structure));
     }
     return doc;
   }
@@ -3052,6 +3061,7 @@ if (remembered) kitId.value = remembered;
   const GOOGLE_SHEET_VALUE = /^(?:[A-Za-z0-9+:;,@.\-_~]|%(?:20|2[Bb]|2[Cc]|3[Aa]|3[Bb]|40))+$/;
   const GOOGLE_SHEET_DISPLAY = ["auto", "block", "swap", "fallback", "optional"];
   const MAX_SHEET_FAMILIES = 8;
+  const MAX_COMPOSITION_SHEETS = 16;
   const CUSTOM_PROPERTY = /^--[a-z0-9-]{1,120}$/;
   // Text that goes into CSS: the bridge's UNSAFE_CSS_STRING, plus line breaks, comment markers and !important,
   // because Studio writes these values into a file.
@@ -3179,7 +3189,64 @@ if (remembered) kitId.value = remembered;
       });
       if (Object.keys(canonical).length) setOwn(overrides, id, canonical);
     });
-    return { target:raw.target, revision:raw.revision, overrides, tokens:parseLiveTokens(raw.tokens) };
+    return { target:raw.target, revision:raw.revision, overrides, tokens:parseLiveTokens(raw.tokens), structure:parseLiveStructure(raw.structure) };
+  }
+
+  // Saved DOM order (additive `live.structure`): for each container the bridge reported as reordered, its selector,
+  // a display name, and its children's target ids in order. Reapply replays it; nothing here is ever CSS or markup,
+  // so the checks are about shape and size, not about what the strings say.
+  const MAX_STRUCTURE_ENTRIES = 100;
+  const MAX_STRUCTURE_IDS = 500;
+  function parseLiveStructure(raw) {
+    if (raw === undefined) return [];
+    if (!Array.isArray(raw)) throw new Error("live.structure must be a list of reordered containers.");
+    if (raw.length > MAX_STRUCTURE_ENTRIES) throw new Error(`live.structure may hold at most ${MAX_STRUCTURE_ENTRIES} containers.`);
+    const seenSelectors = new Set();
+    const seenIds = new Set();
+    return raw.map((entry, at) => {
+      const where = `live.structure[${at}]`;
+      if (!isPlainObject(entry)) throw new Error(`${where} must be an object with selector, name and ids.`);
+      if (typeof entry.selector !== "string" || !entry.selector || entry.selector.length > MAX_SELECTOR_LENGTH) {
+        throw new Error(`${where}.selector must be a text of 1–${MAX_SELECTOR_LENGTH} characters.`);
+      }
+      if (seenSelectors.has(entry.selector)) throw new Error(`${where}.selector appears twice.`);
+      seenSelectors.add(entry.selector);
+      if (typeof entry.name !== "string" || entry.name.length > 200) throw new Error(`${where}.name must be a text of at most 200 characters.`);
+      if (!Array.isArray(entry.ids) || !entry.ids.length || entry.ids.length > MAX_STRUCTURE_IDS) {
+        throw new Error(`${where}.ids must list 1–${MAX_STRUCTURE_IDS} target ids.`);
+      }
+      entry.ids.forEach(id => {
+        if (typeof id !== "string" || !id || id.length > 300) throw new Error(`${where}.ids must hold target ids of 1–300 characters.`);
+        if (seenIds.has(id)) throw new Error(`${where}.ids names "${id.slice(0, 40)}" more than once.`);
+        seenIds.add(id);
+      });
+      return { selector:entry.selector, name:entry.name, ids:[...entry.ids] };
+    });
+  }
+
+  // What Studio saves of the bridge's ledger structure: only containers that report their children's ids, and only
+  // what its own import takes back. A name is clamped; an entry past a limit (selector, id or the first 100 containers),
+  // or one that repeats an id another saved container holds, is left out, so an export always imports again. A container
+  // with more than 500 children is rejected by the length check: the ledger keeps 500 names but 501 ids (normalizeLedger).
+  function savedStructureFrom(structure) {
+    const saved = [];
+    const ids = new Set();
+    (structure || []).forEach(entry => {
+      const list = entry.orderIds;
+      if (saved.length >= MAX_STRUCTURE_ENTRIES || !entry.selector || entry.selector.length > MAX_SELECTOR_LENGTH) return;
+      if (!list.length || list.length !== entry.order.length || new Set(list).size !== list.length) return;
+      if (list.some(id => !id || id.length > 300 || ids.has(id))) return;
+      list.forEach(id => ids.add(id));
+      saved.push({ selector:entry.selector, name:entry.name.slice(0, 200), ids:[...list] });
+    });
+    return saved;
+  }
+  const sameIds = (a, b) => a.length === b.length && a.every((id, at) => id === b[at]);
+  // Every saved container is in the target in the saved order. Containers only the target reorders (a composition
+  // sync, another editor) are not Studio's saved state and never count as a difference.
+  function structureHeld(saved, targetStructure) {
+    const target = savedStructureFrom(targetStructure);
+    return saved.every(entry => target.some(item => item.selector === entry.selector && sameIds(item.ids, entry.ids)));
   }
 
   // D017: the saved composition tokens (CSS custom properties) travel in the same validated live field.
@@ -3259,7 +3326,10 @@ if (remembered) kitId.value = remembered;
         stable: entry.stable === true,
         name: typeof entry.name === "string" && entry.name ? entry.name : entry.containerKey,
         html: typeof entry.html === "string" ? entry.html : "",
-        order: (Array.isArray(entry.order) ? entry.order : []).filter(name => typeof name === "string").slice(0, 500)
+        order: (Array.isArray(entry.order) ? entry.order : []).filter(name => typeof name === "string").slice(0, 500),
+        // The same children by target id (additive; an older bridge omits it and its moves cannot be saved). One past the
+        // save limit is kept so a container with more children is recognised, not saved as a truncated order.
+        orderIds: (Array.isArray(entry.orderIds) ? entry.orderIds : []).filter(id => typeof id === "string").slice(0, MAX_STRUCTURE_IDS + 1)
       });
     });
     if (isPlainObject(raw.tokens)) {
@@ -3370,6 +3440,8 @@ if (remembered) kitId.value = remembered;
     clearTimeout(live.requestTimer);
     live.compositionLinked = false;
     live.selectedId = null;
+    live.intent = null;
+    live.refreshes.clear();
     live.selectedRect = null;
     live.hoverId = null;
     live.hoverRect = null;
@@ -3466,6 +3538,34 @@ if (remembered) kitId.value = remembered;
     renderOverlays();
   });
 
+  // ---- selection requests -------------------------------------------------------
+  // live.selectedId follows the bridge's replies, so it lags what the user just asked for. live.intent is the user's
+  // latest choice: a click in the page, or a request Studio sent for them (the target list, a sibling, "All targets").
+  function requestSelection(targetId) {
+    live.intent = targetId;
+    live.refreshes.forEach(entry => { entry.superseded = true; });
+    sendDesignMessage({ type:"design:select", targetId });
+  }
+
+  // Studio asks again for the target that is already selected (a fresh manifest or bounds after a reset, restore or
+  // move). Nothing is sent when the user has picked something else since: that pick brings its own fresh manifest, and
+  // an old answer must never move the selection back. The request carries an id so its reply is told apart from the
+  // user's own choices.
+  function refreshSelection() {
+    const targetId = live.selectedId;
+    if (!targetId || live.intent !== targetId) return;
+    sendTrackedSelection(targetId);
+  }
+
+  // A select request whose reply is told apart from the user's own choices. It is superseded by anything the user picks
+  // after it was sent, so a click in the page that lands within one round trip of it is never overridden.
+  function sendTrackedSelection(targetId) {
+    const requestId = `fks-sel-${++live.selectSeq}`;
+    live.refreshes.set(requestId, { targetId, superseded:false });
+    if (live.refreshes.size > 20) live.refreshes.delete(live.refreshes.keys().next().value);
+    sendDesignMessage({ type:"design:select", targetId, requestId });
+  }
+
   // ---- request queue: one in flight, per-target coalescing --------------------
   function pendingPatch(targetId) {
     const merged = {};
@@ -3520,7 +3620,7 @@ if (remembered) kitId.value = remembered;
       live.inFlight = null;
       live.timedOut.set(op.requestId, op);   // stays tracked until its late reply arrives or the session ends
       setBridgeStatus("No response from target", "error");
-      reapplyDone(op, false, "no response from the target");
+      reapplyDone(op, false, `no response from the target while ${stepName(op)}`);
       reseedLiveControls();
       pumpLiveQueue();
     }, REQUEST_TIMEOUT_MS);
@@ -3545,6 +3645,7 @@ if (remembered) kitId.value = remembered;
       if (Object.keys(entry).length) setOwn(live.overrides, targetId, entry); else delete live.overrides[targetId];
     } else if (op.kind === "move") {
       if (op.strategy === "css-order") syncOrderFromLedger(siblingIds(op, data));
+      else if (!op.reapply) syncStructureFromLedger(op, data);
     } else if (op.kind === "reset") {
       // A reset sent by Reapply only clears the target's CSS order group; Studio's saved state changes
       // only when the replayed values themselves are acknowledged.
@@ -3552,7 +3653,11 @@ if (remembered) kitId.value = remembered;
       else if (op.targetId) {
         delete live.overrides[op.targetId];
         syncOrderFromLedger(siblingIds(op, data));
-      } else live.overrides = {};
+        syncStructureFromLedger(op, data);
+      } else {
+        // Studio sends no global reset today; one that did would also have to clear the saved DOM order.
+        live.overrides = {};
+      }
     } else if (op.kind === "restore") {
       Object.keys(live.overrides).forEach(id => {
         delete live.overrides[id].text;
@@ -3598,6 +3703,31 @@ if (remembered) kitId.value = remembered;
     });
   }
 
+  // Saved DOM order mirrors what the target acknowledged for the containers a move or reset touched, as saved CSS
+  // order does for its sibling group. Only the user's own move adds a container: a reset only refreshes or drops what
+  // is already saved, so a container the target reordered for other reasons (a composition sync, another editor) is
+  // never saved (rule 6). Without an open reconnect conflict the saved order is the target's, so a saved container
+  // the target no longer reorders was put back and is dropped; while a conflict is open, the page is not what was
+  // saved, so containers this move did not touch stay exactly as saved.
+  function syncStructureFromLedger(op, data) {
+    const fromLedger = savedStructureFrom(live.changes.structure);
+    const touched = new Set(op.containerBefore ? [op.containerBefore] : []);
+    const after = isPlainObject(data.target?.arrangement) ? data.target.arrangement.containerSelector : "";
+    if (typeof after === "string" && after) touched.add(after);
+    [...live.structure, ...fromLedger].forEach(entry => { if (entry.ids.includes(op.targetId)) touched.add(entry.selector); });
+    const next = [];
+    live.structure.forEach(entry => {
+      const now = fromLedger.find(item => item.selector === entry.selector);
+      if (touched.has(entry.selector) || !live.conflict) { if (now) next.push(now); } else next.push(entry);
+    });
+    if (op.kind === "move") {
+      fromLedger.forEach(entry => {
+        if (touched.has(entry.selector) && !next.some(item => item.selector === entry.selector)) next.push(entry);
+      });
+    }
+    live.structure = next;
+  }
+
   function acceptApplied(op, data) {
     if (isPlainObject(data.target) && typeof data.target.id === "string") {
       live.targets.set(data.target.id, data.target);
@@ -3608,24 +3738,45 @@ if (remembered) kitId.value = remembered;
   }
 
   function afterApplied(op, data) {
-    if (op.kind === "move" || op.kind === "reset") op.groupBefore = (arrangementOf(op.targetId)?.siblings || []).map(sibling => sibling.id);
+    if (op.kind === "move" || op.kind === "reset") {
+      op.groupBefore = (arrangementOf(op.targetId)?.siblings || []).map(sibling => sibling.id);
+      const selector = live.targets.get(op.targetId)?.arrangement?.containerSelector;
+      op.containerBefore = typeof selector === "string" ? selector : "";
+    }
     acceptApplied(op, data);
     setBridgeStatus(`Live · rev ${live.revision}`, "live");
     if (op.kind === "move") {
       live.moveGuard = null;
       // Moving a sibling leaves the selected element's own arrangement stale: ask the target again.
-      if (live.selectedId && (op.targetId !== live.selectedId || !isPlainObject(data.target))) {
-        sendDesignMessage({ type:"design:select", targetId:live.selectedId });
-      }
+      if (live.selectedId && (op.targetId !== live.selectedId || !isPlainObject(data.target))) refreshSelection();
       refreshLiveInspector();
     }
     if (op.kind === "update") reflectCanonical(op.targetId, data.canonicalPatch);
-    if ((op.kind === "reset" || op.kind === "restore") && live.selectedId) {
-      sendDesignMessage({ type:"design:select", targetId:live.selectedId });
-    }
+    if ((op.kind === "reset" || op.kind === "restore") && live.selectedId) refreshSelection();
     renderLiveCode();
-    scheduleAutoSync();
+    const domMove = op.kind === "move" && op.strategy !== "css-order" && !op.reapply;
+    // A DOM move changes no CSS, so there is nothing for auto-sync to write; the status line says where the move lives.
+    if (domMove) setCodeStatus(domMoveNotice(op));
+    else {
+      if (op.kind === "move" && !op.reapply) setCodeStatus("Moved with CSS order: Sync to file writes it as order rules, so the CSS file keeps it.");
+      scheduleAutoSync();
+    }
     reapplyDone(op, true);
+  }
+
+  // Said when a DOM move is acknowledged, from what was actually saved: whether the move is kept, whether Reapply can
+  // bring it back, and that the CSS file only gains a header comment (no CSS rule).
+  function domMoveNotice(op) {
+    const cssOrder = arrangementOf(op.targetId)?.cssOrderAvailable === true;
+    const kept = live.structure.some(entry => entry.ids.includes(op.targetId));
+    const where = !kept
+      ? "This move is not saved: the target's bridge does not report its children's ids, so Reapply cannot bring it back. The HTML tab shows it, "
+      : op.force === true
+        ? "The move is kept in Studio, but Reapply cannot replay a guarded move, so a reload loses it from the page. The HTML tab shows it, "
+        : "The move is kept in Studio (Reapply puts it back after a reload) and the HTML tab shows it, ";
+    return `Moved in the page markup. ${where}but it is not in the CSS file: Sync to file writes CSS only, so the move adds no CSS rules `
+      + "(the file only gains a comment that points to the HTML tab). "
+      + (cssOrder ? "CSS order is the move strategy the CSS file keeps." : "CSS order, which the CSS file keeps, needs a flex or grid parent.");
   }
 
   // Every request that timed out stays in `live.timedOut` (by request id), so a late acknowledgement is applied
@@ -3660,7 +3811,7 @@ if (remembered) kitId.value = remembered;
       }
       setBridgeStatus(`Rejected: ${reason}`, "rejected");
       if (op.kind === "move") noteMoveRejection(op, data, reason); else reseedLiveControls(op.targetId);
-      reapplyDone(op, false, `the target rejected it: ${reason}`);
+      reapplyDone(op, false, rejectionText(op, data, reason));
     }
     pumpLiveQueue();
   }
@@ -3692,15 +3843,17 @@ if (remembered) kitId.value = remembered;
 
   function reconcileSavedOverrides() {
     const targetState = ledgerToOverrides(live.changes);
-    if (!Object.keys(live.overrides).length && !Object.keys(live.savedTokens).length) {
+    if (!Object.keys(live.overrides).length && !Object.keys(live.savedTokens).length && !live.structure.length) {
       live.overrides = targetState;
       live.savedTokens = { ...live.changes.tokens };
+      // Containers only the page reordered are not Studio's saved state: none is adopted (rule 6).
       live.canonicalRevision = live.revision;
       live.canonicalTarget = live.url;
       live.conflict = false;
     } else {
       live.conflict = !overridesEqual(effectiveOverrides(live.overrides), targetState)
-        || !tokensEqual(live.savedTokens, live.changes.tokens);
+        || !tokensEqual(live.savedTokens, live.changes.tokens)
+        || !structureHeld(live.structure, live.changes.structure);
     }
     renderReconnectBanner();
   }
@@ -3708,6 +3861,7 @@ if (remembered) kitId.value = remembered;
   function adoptImportedLive(candidate) {
     live.overrides = candidate.overrides;
     live.savedTokens = candidate.tokens;
+    live.structure = candidate.structure;
     live.canonicalRevision = candidate.revision;
     live.canonicalTarget = candidate.target;
     if (!live.url && candidate.target && safeTargetUrl(candidate.target) && targetAppUrlInput) targetAppUrlInput.value = candidate.target;
@@ -3736,13 +3890,23 @@ if (remembered) kitId.value = remembered;
     const ids = new Set([...Object.keys(targetState), ...Object.keys(saved)]);
     const resets = staleOrderResets(saved, targetState);
     const resetIds = new Set(resets.values());
-    const run = { ops:new Set() };
+    // `total` and `done` count the steps, so a failure can say how far the page got.
+    const run = { ops:new Set(), total:0, done:0 };
     live.reapply = run;
     live.reapplyError = "";
+    // Saved DOM order is planned first: when a container cannot be found, nothing is sent at all.
+    const structurePlan = planStructureReplay(new Set(resets.keys()), resetIds);
+    if (structurePlan.missing.length) {
+      const why = item => (item.holdsNone ? `the container "${item.name}" no longer holds any of the elements Studio saved in it`
+        : `the page has no container for "${item.name}"`);
+      failReapply(`${structurePlan.missing.slice(0, 3).map(why).join("; ")}${structurePlan.missing.length > 3 ? "; …" : ""}`
+        + ", so its saved DOM order cannot be placed");
+      return;
+    }
     const track = op => {
       op.reapply = true;
       run.ops.add(op);
-      if (!enqueueLiveOp(op)) run.ops.delete(op);
+      if (enqueueLiveOp(op)) run.total += 1; else run.ops.delete(op);
     };
     ids.forEach(id => {
       const want = saved[id] || {};
@@ -3754,16 +3918,21 @@ if (remembered) kitId.value = remembered;
       if (!reset) Object.keys(have).forEach(key => { if (!(key in want)) patch[key] = null; });
       delete patch.order;   // saved order is restored below through design:move, not as a patch key
       // The family travels with its stylesheet, as when it was chosen: library families bring theirs, others release it.
+      // Without the user's ask (Load free fonts, an inspector pick) a library family goes without its stylesheet: the
+      // page shows the stack's fallback rather than contacting Google Fonts because a document was applied (rule 7).
       if ("fontFamily" in patch) {
         const font = typeof patch.fontFamily === "string" ? libraryFontForStack(patch.fontFamily) : null;
-        patch.fontStylesheet = font ? fontStylesheetUrl(font) : null;
+        if (!font) patch.fontStylesheet = null;
+        else if (freeFontsAllowed) patch.fontStylesheet = fontStylesheetUrl(font);
       }
       if (Object.keys(patch).length) track({ kind:"update", targetId:id, patch });
     });
     reapplyOrders(saved, targetState, new Set(resets.keys()), track);
+    // DOM order goes back after every reset above (a reset also returns an element to its original place).
+    structurePlan.moves.forEach(move => track({ kind:"move", ...move, strategy:"dom" }));
     // Tokens go back through a tokens-only composition update (no slots/layout).
     const tokenPatch = reapplyTokenPatch();
-    if (tokenPatch) track({ kind:"composition", patch:{ tokens:tokenPatch } });
+    if (tokenPatch) track({ kind:"composition", patch:freeFontsAllowed ? { tokens:tokenPatch, fontStylesheets:composedFontSheets() } : { tokens:tokenPatch } });
     if (!run.ops.size) finishReapply();
     else renderReconnectBanner();
   }
@@ -3786,11 +3955,30 @@ if (remembered) kitId.value = remembered;
         : "the target's composition tokens do not match the saved tokens");
       return;
     }
+    if (!structureHeld(live.structure, live.changes.structure)) {
+      failReapply(structureProblem());
+      return;
+    }
     live.reapply = null;
     live.reapplyError = "";
     live.conflict = false;
+    if (savedFontsWaiting()) setCodeStatus(`Reapplied. ${FONTS_WAIT_NOTE}`);
     renderReconnectBanner();
     scheduleAutoSync();
+  }
+
+  // Why the page does not hold the saved DOM order although every Reapply step was acknowledged: a saved child that
+  // the page no longer has can never be placed; otherwise the page (or its framework) changed the order again.
+  function structureProblem() {
+    const gone = [];
+    live.structure.forEach(entry => entry.ids.forEach(id => { if (!live.targets.has(id)) gone.push(id); }));
+    if (gone.length) {
+      return `a saved child is no longer on the page (${gone.slice(0, 3).join(", ")}${gone.length > 3 ? ", …" : ""}), so the saved DOM order cannot be restored`;
+    }
+    const target = savedStructureFrom(live.changes.structure);
+    const differing = live.structure.filter(entry => !target.some(item => item.selector === entry.selector && sameIds(item.ids, entry.ids)));
+    return `the order of ${differing.slice(0, 3).map(entry => `"${entry.name || entry.selector}"`).join(", ")} on the page differs from the saved order `
+      + "even after Reapply moved its elements; something on the page may be changing it again";
   }
 
   // Called when a Reapply step is acknowledged (ok) or fails; other operations are ignored.
@@ -3798,16 +3986,41 @@ if (remembered) kitId.value = remembered;
     const run = live.reapply;
     if (!run || !run.ops.has(op)) return;
     run.ops.delete(op);
-    if (ok) { if (!run.ops.size) finishReapply(); return; }
+    if (ok) { run.done += 1; if (!run.ops.size) finishReapply(); return; }
     failReapply(reason);
+  }
+
+  // What a Reapply step was doing, for a failure message (names come from the target, shown as text only).
+  function stepName(op) {
+    const name = id => `"${String(live.targetMeta[id]?.name || id).slice(0, 60)}"`;
+    if (op.kind === "move") return `moving ${name(op.targetId)}`;
+    if (op.kind === "update") return `updating ${name(op.targetId)}`;
+    if (op.kind === "reset") return `resetting ${name(op.targetId)}`;
+    return "updating the composition tokens";
+  }
+
+  // A rejection says which step, the bridge's reason code and its own message (a guard explains itself there).
+  function rejectionText(op, data, reason) {
+    const message = isPlainObject(data.detail) && typeof data.detail.message === "string" ? data.detail.message.slice(0, 200) : "";
+    return `the target rejected ${stepName(op)} (${reason}${message ? `: ${message}` : ""})`;
+  }
+
+  // How far a stopped Reapply got: the page is only changed by the steps that were acknowledged.
+  function reapplyProgress(run) {
+    const total = run?.total || 0;
+    const done = run?.done || 0;
+    if (!total) return "Nothing was changed on the page.";
+    if (!done) return "None of its steps had been applied to the page.";
+    if (done >= total) return `All ${total} Reapply step${total === 1 ? " was" : "s were"} applied to the page.`;
+    return `${done} of ${total} Reapply steps were already applied to the page, so it is partly changed.`;
   }
 
   function failReapply(reason) {
     const run = live.reapply;
     live.reapply = null;
     if (run) live.queue = live.queue.filter(item => !run.ops.has(item));
-    live.reapplyError = `Reapply stopped (${reason}). Studio's saved overrides were kept and nothing was written to the overrides file. `
-      + "Fix the cause, or press Reapply again.";
+    live.reapplyError = `Reapply stopped (${reason}). ${reapplyProgress(run)} Studio's saved overrides were kept and nothing was written to `
+      + "the overrides file. Fix the cause, or press Reapply again.";
     setCodeStatus(live.reapplyError, "error");
     renderReconnectBanner();
   }
@@ -3831,11 +4044,56 @@ if (remembered) kitId.value = remembered;
     });
   }
 
+  // The key the page now uses for the container the saved selector names: any target whose manifest reports that
+  // container selector knows it. Keys of containers without an author id change on every load, selectors do not.
+  function containerKeyForSelector(selector) {
+    for (const target of live.targets.values()) {
+      const arrangement = target.arrangement;
+      if (isPlainObject(arrangement) && arrangement.containerSelector === selector && typeof arrangement.containerKey === "string" && arrangement.containerKey) {
+        return arrangement.containerKey;
+      }
+    }
+    return "";
+  }
+
+  // Moves that put every saved container's children back in their saved order, one container at a time. A child that
+  // is already in the container moves by index; one that is elsewhere moves into it. A container the target already
+  // holds in the saved order is left alone, unless a reset in this Reapply touches it: the reset that clears a CSS
+  // order also returns its element to where it started, so those containers are always replayed. Children the page
+  // no longer has are skipped (finishReapply says so). The container is found by its selector; if there is none, or
+  // it holds none of the saved children (the selector now names another container), nothing is moved into it.
+  function planStructureReplay(resetKeys, resetIds) {
+    const plan = { moves:[], missing:[] };
+    const have = savedStructureFrom(live.changes.structure);
+    live.structure.forEach(entry => {
+      const key = containerKeyForSelector(entry.selector);
+      const current = have.find(item => item.selector === entry.selector);
+      const reset = (key && resetKeys.has(key)) || entry.ids.some(id => resetIds.has(id));
+      if (current && sameIds(current.ids, entry.ids) && !reset) return;
+      const name = entry.name || entry.selector;
+      if (!key) { plan.missing.push({ name, holdsNone:false }); return; }
+      if (!entry.ids.some(id => arrangementOf(id)?.containerKey === key)) { plan.missing.push({ name, holdsNone:true }); return; }
+      let index = 0;
+      entry.ids.forEach(id => {
+        if (!live.targets.has(id)) return;
+        // An element a reset sends back may not be where the manifest says any more: it is always moved by container.
+        const inside = arrangementOf(id)?.containerKey === key && !resetIds.has(id);
+        plan.moves.push({ targetId:id, to:inside ? { index } : { container:key, index } });
+        index += 1;
+      });
+    });
+    return plan;
+  }
+
   // Explicit resolution: Studio's saved overrides are replaced by the target's live state.
   // Auto-sync is switched off so the overrides file is only rewritten by a deliberate Sync.
   function acceptTargetState() {
     live.overrides = ledgerToOverrides(live.changes);
     live.savedTokens = { ...live.changes.tokens };
+    // A saved container the page holds exactly as saved stays saved; the rest is dropped. Containers only the page
+    // reordered were never Studio's, so Accept does not adopt them (rule 6).
+    const held = savedStructureFrom(live.changes.structure);
+    live.structure = live.structure.filter(entry => held.some(item => item.selector === entry.selector && sameIds(item.ids, entry.ids)));
     live.canonicalRevision = live.revision;
     live.canonicalTarget = live.url;
     live.conflict = false;
@@ -3846,7 +4104,11 @@ if (remembered) kitId.value = remembered;
     const autoWasOn = Boolean(liveCodeAutoSync?.checked);
     if (liveCodeAutoSync) liveCodeAutoSync.checked = false;
     const count = Object.keys(live.overrides).length;
-    setCodeStatus(`Saved overrides and composition tokens replaced by the target's state (${count} target${count === 1 ? "" : "s"}). `
+    const tokens = Object.keys(live.savedTokens).length;
+    const containers = live.structure.length;
+    setCodeStatus(`Studio's saved overrides, composition tokens and DOM order were replaced by what the page has now `
+      + `(${count} target${count === 1 ? "" : "s"}, ${tokens} composition token${tokens === 1 ? "" : "s"}, `
+      + `${containers} DOM-order container${containers === 1 ? "" : "s"}). `
       + `The overrides file is unchanged until you press Sync to file${autoWasOn ? "; auto-sync was turned off" : ""}.`);
     renderReconnectBanner();
     renderLiveCode();
@@ -3856,9 +4118,34 @@ if (remembered) kitId.value = remembered;
   function resetNotice() {
     const resets = staleOrderResets(effectiveOverrides(live.overrides), ledgerToOverrides(live.changes));
     if (!resets.size) return "";
-    const moved = [...resets.values()].some(id => live.changes.structure.some(entry => entry.containerKey === arrangementOf(id)?.containerKey));
+    const kept = new Set(live.structure.map(entry => entry.selector));
+    const moved = [...resets.values()].some(id => live.changes.structure.some(entry => entry.containerKey === arrangementOf(id)?.containerKey && !kept.has(entry.selector)));
     return ` Reapply will also reset the arrangement of ${resets.size === 1 ? "one sibling group" : `${resets.size} sibling groups`}`
       + ` (a leftover CSS order can only be cleared that way)${moved ? ", which also undoes the DOM moves in them (see the HTML tab's structure blocks)" : ""}.`;
+  }
+
+  // Accept replaces Studio's saved state with the page's. The next Sync writes a smaller file only when everything the
+  // page holds is already saved (same values) and Studio saves more: then nothing the page has is lost from the file.
+  function acceptShrinksFile() {
+    const page = ledgerToOverrides(live.changes);
+    const saved = effectiveOverrides(live.overrides);
+    const shared = {};
+    Object.entries(page).forEach(([id, patch]) => {
+      shared[id] = {};
+      Object.keys(patch).forEach(key => { if (saved[id] && key in saved[id]) shared[id][key] = saved[id][key]; });
+    });
+    const pageHeld = overridesEqual(shared, page)
+      && Object.entries(live.changes.tokens).every(([name, value]) => Object.hasOwn(live.savedTokens, name) && live.savedTokens[name] === value);
+    return pageHeld && (!overridesEqual(saved, page) || !tokensEqual(live.savedTokens, live.changes.tokens));
+  }
+
+  // Saved DOM order is part of the comparison; say how much of it the page holds.
+  function structureSentence() {
+    if (!live.structure.length) return "";
+    const target = savedStructureFrom(live.changes.structure);
+    const held = live.structure.filter(entry => target.some(item => item.selector === entry.selector && sameIds(item.ids, entry.ids))).length;
+    const plural = n => `${n} container${n === 1 ? "" : "s"}`;
+    return `Studio also saved DOM order changes in ${plural(live.structure.length)}; the live target holds ${held} of them. `;
   }
 
   function renderReconnectBanner() {
@@ -3873,9 +4160,17 @@ if (remembered) kitId.value = remembered;
       const targetTokens = Object.keys(live.changes.tokens).length;
       reconnectText.textContent = `Studio has saved overrides for ${plural(count)} and ${tokenCount(savedTokens)}; `
         + `the live target has ${plural(targetCount)} changed and ${tokenCount(targetTokens)}. `
-        + "Nothing was applied automatically. Reapply sends Studio's overrides and tokens to the target; "
-        + "Accept target state replaces Studio's saved overrides and composition tokens with the target's state, "
-        + "and the overrides file only changes when you sync."
+        + structureSentence()
+        // A page styled by a synced overrides file has nothing for the bridge to count: say why it can look right.
+        + (count && !targetCount && !targetTokens && !live.changes.structure.length
+          ? "If you synced, the overrides file already styles the page, and the bridge counts only edits made through Studio, "
+            + "so it reports 0 live edits; that is why the page can look right. " : "")
+        + "Nothing was applied automatically. Reapply sends Studio's saved overrides, composition tokens and DOM order to the target, "
+        + "so you can keep editing them. "
+        + "Accept target state replaces Studio's saved overrides, composition tokens and DOM order with what the page has now"
+        + (acceptShrinksFile() ? ", so the next Sync writes a smaller file" : "")
+        + "; the overrides file only changes when you sync."
+        + (savedFontsWaiting() ? ` ${FONTS_WAIT_NOTE}` : "")
         + resetNotice();
       if (live.reapplyError) reconnectText.textContent = `${live.reapplyError} ${reconnectText.textContent}`;
     }
@@ -3904,9 +4199,10 @@ if (remembered) kitId.value = remembered;
         const listed = targets.filter(t => t.arrangementOnly !== true).length;
         setBridgeStatus(`Connected (${listed} target${listed === 1 ? "" : "s"})`, "connected");
         if (live.mode !== "select" || live.popoutMode) sendMode();
-        if (live.selectedId && !live.targets.has(live.selectedId)) live.selectedId = null;
+        live.refreshes.clear();   // a new handshake: nothing asked earlier will be answered
+        if (live.selectedId && !live.targets.has(live.selectedId)) { live.selectedId = null; live.intent = null; }
         // A kept selection (re-hello after a load) is re-sent so the bridge reports fresh bounds.
-        if (live.selectedId && !live.selectedRect) sendDesignMessage({ type:"design:select", targetId:live.selectedId });
+        if (live.selectedId && !live.selectedRect) { live.intent = live.selectedId; refreshSelection(); }
         reconcileSavedOverrides();
         renderOverlays();
         renderLiveCode();
@@ -3925,12 +4221,25 @@ if (remembered) kitId.value = remembered;
         renderOverlays();
         break;
       }
-      case "design:selected":
+      case "design:selected": {
         if (isPlainObject(data.target) && typeof data.target.id === "string") {
           live.targets.set(data.target.id, data.target);
           noteTargetMeta(data.target);
         }
-        live.selectedId = typeof data.targetId === "string" ? data.targetId : null;
+        const answerTo = typeof data.requestId === "string" ? live.refreshes.get(data.requestId) : undefined;
+        if (answerTo) live.refreshes.delete(data.requestId);
+        if (answerTo?.superseded) {
+          // The target answered an older Studio request after the user picked something else: keep the user's pick
+          // and put the target's selection back on it.
+          if (!live.refreshes.size) sendTrackedSelection(live.intent);
+          refreshLiveInspector();
+          break;
+        }
+        const picked = typeof data.targetId === "string" ? data.targetId : null;
+        live.intent = picked;
+        // Anything else the target selects is the user's choice: older requests no longer apply.
+        if (!answerTo) live.refreshes.forEach(entry => { entry.superseded = true; });
+        live.selectedId = picked;
         live.selectedRect = live.selectedId ? data.rect : null;
         if (live.moveGuard && live.moveGuard.targetId !== live.selectedId) live.moveGuard = null;
         // A click inside the iframe leaves keyboard focus in the target; bring it back so Alt+Arrow keeps working.
@@ -3938,6 +4247,7 @@ if (remembered) kitId.value = remembered;
         renderOverlays();
         refreshLiveInspector();
         break;
+      }
       case "design:warning": noteWarning(data); break;
       case "design:bounds":
         if (data.targetId === live.selectedId) { live.selectedRect = data.rect; renderOverlays(); }
@@ -3949,7 +4259,7 @@ if (remembered) kitId.value = remembered;
           live.targets = new Map(list.map(t => [t.id, t]));
           list.forEach(noteTargetMeta);
           if (followPromotedTargets(list)) { renderLiveCode(); scheduleAutoSync(); }
-          if (live.selectedId && !live.targets.has(live.selectedId)) { live.selectedId = null; live.selectedRect = null; }
+          if (live.selectedId && !live.targets.has(live.selectedId)) { live.selectedId = null; live.intent = null; live.selectedRect = null; }
           if (live.hoverId && !live.targets.has(live.hoverId)) { live.hoverId = null; live.hoverRect = null; }
           renderOverlays();
           refreshLiveInspector();
@@ -4094,7 +4404,7 @@ if (remembered) kitId.value = remembered;
         <p class="empty-inspector">${live.mode === "select" ? "Click an element in the preview, or pick a target below." : "Interact mode: the preview behaves normally. Switch to Select to pick elements."}</p>
         <div class="live-target-list">${items || '<p class="inspector-note">The target exposed no editable elements.</p>'}</div>`;
       slotInspector.querySelectorAll("[data-live-target]").forEach(button => {
-        button.addEventListener("click", () => sendDesignMessage({ type:"design:select", targetId:button.dataset.liveTarget }));
+        button.addEventListener("click", () => requestSelection(button.dataset.liveTarget));
       });
       return;
     }
@@ -4178,7 +4488,7 @@ if (remembered) kitId.value = remembered;
     slotInspector.querySelector("[data-live-back]")?.addEventListener("click", () => {
       live.selectedId = null;
       live.selectedRect = null;
-      sendDesignMessage({ type:"design:select", targetId:null });
+      requestSelection(null);
       renderOverlays();
       renderLiveInspector();
     });
@@ -4218,9 +4528,7 @@ if (remembered) kitId.value = remembered;
   // (Addendum 3); the Arrange UI only trusts design:selected / design:applied, so ask for the selection again.
   function fetchFullArrangement() {
     const arrangement = selectedArrangement();
-    if (arrangement && arrangement.count > 0 && !arrangement.complete) {
-      sendDesignMessage({ type:"design:select", targetId:live.selectedId });
-    }
+    if (arrangement && arrangement.count > 0 && !arrangement.complete) refreshSelection();
   }
 
   const arrangementOf = targetId => normalizeArrangement(live.targets.get(targetId)?.arrangement);
@@ -4369,7 +4677,7 @@ if (remembered) kitId.value = remembered;
       if (step) { event.preventDefault(); items[at + step]?.focus(); return; }
       if (event.key === "Home") { event.preventDefault(); items[0]?.focus(); return; }
       if (event.key === "End") { event.preventDefault(); items[items.length - 1]?.focus(); return; }
-      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); sendDesignMessage({ type:"design:select", targetId:id }); }
+      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); requestSelection(id); }
     });
     // HTML5 drag and drop: the upper half of an item drops before it, the lower half after it.
     item.addEventListener("dragstart", event => {
@@ -4576,12 +4884,22 @@ if (remembered) kitId.value = remembered;
       const previous = target.previousId;
       if (typeof previous !== "string" || !previous || previous === target.id || liveIds.has(previous)) return;
       if (live.selectedId === previous) live.selectedId = target.id;
-      if (!Object.hasOwn(live.overrides, previous)) return;
-      const current = Object.hasOwn(live.overrides, target.id) ? live.overrides[target.id] : {};
-      setOwn(live.overrides, target.id, { ...live.overrides[previous], ...current });
-      delete live.overrides[previous];
-      delete live.targetMeta[previous];
-      moved = true;
+      if (live.intent === previous) live.intent = target.id;
+      let rekeyed = false;
+      if (live.structure.some(entry => entry.ids.includes(previous))) {
+        live.structure = live.structure.map(entry => ({ ...entry, ids:entry.ids.map(id => (id === previous ? target.id : id)) }));
+        rekeyed = true;
+      }
+      if (Object.hasOwn(live.overrides, previous)) {
+        const current = Object.hasOwn(live.overrides, target.id) ? live.overrides[target.id] : {};
+        setOwn(live.overrides, target.id, { ...live.overrides[previous], ...current });
+        delete live.overrides[previous];
+        delete live.targetMeta[previous];
+        rekeyed = true;
+      }
+      // A manifest may name any id it replaced, so a saved edit never changes its key without saying so.
+      if (rekeyed) setCodeStatus(`Moved the saved edit for ${previous.slice(0, 80)} to ${target.id.slice(0, 80)} because the page reported it.`);
+      moved = moved || rekeyed;
     });
     return moved;
   }
@@ -4603,15 +4921,29 @@ if (remembered) kitId.value = remembered;
   // The persisted stylesheet: Studio's canonical (acknowledged) overrides, not the session ledger.
   // Font stylesheets: what the target acknowledged, plus the library families Studio's saved overrides use,
   // so the persisted CSS still loads them after the target (and its ledger) was reloaded.
+  // The families Studio's saved overrides use only add their sheets once the user has asked for free fonts: a file with
+  // such an @import contacts Google Fonts whenever the page loads, and importing a document is not asking (D032).
   function liveImports() {
     const urls = [...live.changes.imports];
-    Object.values(live.overrides).forEach(patch => {
-      const font = typeof patch.fontFamily === "string" ? libraryFontForStack(patch.fontFamily) : null;
-      const url = font ? safeFontStylesheet(fontStylesheetUrl(font)) : "";
-      if (url && !urls.includes(url)) urls.push(url);
-    });
+    if (freeFontsAllowed) {
+      Object.values(live.overrides).forEach(patch => {
+        const font = typeof patch.fontFamily === "string" ? libraryFontForStack(patch.fontFamily) : null;
+        const url = font ? safeFontStylesheet(fontStylesheetUrl(font)) : "";
+        if (url && !urls.includes(url)) urls.push(url);
+      });
+    }
+    tokenFontSheets().forEach(url => { if (!urls.includes(url)) urls.push(url); });
     return urls;
   }
+
+  // True while a library font that Studio's saved overrides or tokens name has no stylesheet because the user has not
+  // asked for free fonts yet: the page shows the stack's fallback, and the notes say so.
+  function savedFontsWaiting() {
+    if (freeFontsAllowed) return false;
+    return Object.values(live.overrides).some(patch => typeof patch.fontFamily === "string" && libraryFontForStack(patch.fontFamily))
+      || Object.values(live.savedTokens).some(value => libraryFontForStack(value));
+  }
+  document.addEventListener("fontkit:free-fonts-allowed", () => { renderReconnectBanner(); renderLiveCode(); });
 
   function liveCss() {
     const lines = [];
@@ -4665,7 +4997,9 @@ if (remembered) kitId.value = remembered;
   }
 
   function liveJson() {
-    return JSON.stringify({ target:live.url, revision:live.revision, overrides:live.overrides }, null, 2);
+    const doc = { target:live.url, revision:live.revision, overrides:live.overrides };
+    if (live.structure.length) doc.structure = live.structure;
+    return JSON.stringify(doc, null, 2);
   }
 
   const CODE_FORMATS = {
@@ -4773,7 +5107,9 @@ if (remembered) kitId.value = remembered;
             method:"PUT", headers:{ "Content-Type":"text/css" }, body:css, cache:"no-store" });
           const info = await response.json().catch(() => ({}));
           if (!response.ok || info.ok !== true) throw new Error(info.error || `HTTP ${response.status}`);
-          if (!live.syncTimer && !live.syncQueued) setCodeStatus(`Saved ${info.bytes ?? css.length} bytes to ${info.path || live.syncPath}.`, "saved");
+          if (!live.syncTimer && !live.syncQueued) {
+            setCodeStatus(`Saved ${info.bytes ?? css.length} bytes to ${info.path || live.syncPath}.${savedFontsWaiting() ? ` ${FONTS_WAIT_NOTE}` : ""}`, "saved");
+          }
         } catch (error) {
           setCodeStatus(`Sync failed: ${error.message}`, "error");
         }
@@ -4849,7 +5185,9 @@ if (remembered) kitId.value = remembered;
       const payload = { id:slot.id, index, role:slot.role, type:slot.type };
       if (slot.type === "text") {
         Object.assign(payload, { fontFamily:cssStack(byFamily(slot.family)), weight:slot.weight, size:slot.size,
-          lineHeight:slot.lineHeight, tracking:slot.tracking, align:slot.align, colorHex:resolvedColor(slot), transform:slot.transform,
+          // The composition contract carries tracking in thousandths of an em (the bridge divides by 1000); the
+          // Composer holds em, so 0.32em travels as 320 and arrives as 0.32em.
+          lineHeight:slot.lineHeight, tracking:roundTo(slot.tracking * 1000, 3), align:slot.align, colorHex:resolvedColor(slot), transform:slot.transform,
           text:slot.text, textTouched:Boolean(slot.textTouched) });
       } else if (slot.type === "image") {
         Object.assign(payload, { imageName:slot.imageName, assetDataUrl:slot.assetDataUrl, imageWidth:slot.imageWidth, opacity:slot.opacity });
@@ -4864,7 +5202,48 @@ if (remembered) kitId.value = remembered;
       }
       return payload;
     });
-    return { tokens, slots, layout:{ order:slots.map(s => ({ id:s.id, role:s.role, index:s.index })) } };
+    const patch = { tokens, slots, layout:{ order:slots.map(s => ({ id:s.id, role:s.role, index:s.index })) } };
+    // The stylesheets for the library fonts this update sends, so the target can render them (D021). Only once the
+    // user has asked for free fonts: loading them contacts Google Fonts (rule 7). The list is the complete set.
+    if (freeFontsAllowed) patch.fontStylesheets = compositionFontSheets();
+    return patch;
+  }
+
+  // Google Fonts stylesheets of the library families the composition's text slots (and row children) use, in slot
+  // order, each through the same allow-list the bridge applies. A family outside the library has no sheet to send.
+  function compositionFontSheets() {
+    const sheets = [];
+    const add = family => {
+      const url = safeFontStylesheet(fontStylesheetUrl(byFamily(family)));
+      if (url && !sheets.includes(url)) sheets.push(url);
+    };
+    state.slots.forEach(slot => {
+      if (slot.type === "text") add(slot.family);
+      else if (slot.type === "row") (slot.children || []).forEach(child => { if (child.family) add(child.family); });
+    });
+    return sheets.slice(0, MAX_COMPOSITION_SHEETS);
+  }
+
+  // The complete set a Reapply's composition update carries: what a Sync sends plus the saved token fonts. The bridge
+  // treats the list as the whole set and releases the rest, so sending only the token fonts would drop the sheet of a
+  // font only a slot uses. This holds whether or not the composition is linked: a re-hello ends the link, but the page
+  // keeps the sheets it loaded. After a reload the extra sheets are simply loaded again, which the user's ask covers.
+  function composedFontSheets() {
+    const sheets = compositionFontSheets();
+    tokenFontSheets().forEach(url => { if (!sheets.includes(url)) sheets.push(url); });
+    return sheets.slice(0, MAX_COMPOSITION_SHEETS);
+  }
+
+  // The sheets of the library fonts that Studio's saved composition tokens name (a saved token holds a font stack).
+  function tokenFontSheets() {
+    if (!freeFontsAllowed) return [];
+    const sheets = [];
+    Object.values(live.savedTokens).forEach(value => {
+      const font = libraryFontForStack(value);
+      const url = font ? safeFontStylesheet(fontStylesheetUrl(font)) : "";
+      if (url && !sheets.includes(url)) sheets.push(url);
+    });
+    return sheets;
   }
 
   let liveSyncDebounceTimer = null;
@@ -4877,6 +5256,13 @@ if (remembered) kitId.value = remembered;
     if (immediate) run(); else liveSyncDebounceTimer = setTimeout(run, 20);
   }
 
+  // True when a text slot uses a library family that has a Google Fonts stylesheet (whether or not it may be loaded).
+  function compositionUsesLibraryFonts() {
+    const uses = family => Boolean(fontStylesheetUrl(byFamily(family)));
+    return state.slots.some(slot => (slot.type === "text" && uses(slot.family))
+      || (slot.type === "row" && (slot.children || []).some(child => child.family && uses(child.family))));
+  }
+
   function syncToLiveApp() {
     if (!live.ready) {
       composerStatus.textContent = "Connect a bridge-instrumented target app before syncing the composition.";
@@ -4884,7 +5270,8 @@ if (remembered) kitId.value = remembered;
     }
     live.compositionLinked = true;
     broadcastLiveState(true);
-    composerStatus.textContent = "Composition sent to the live app. Specimen edits keep streaming until the target reconnects.";
+    composerStatus.textContent = "Composition sent to the live app. Specimen edits keep streaming until the target reconnects."
+      + (!freeFontsAllowed && compositionUsesLibraryFonts() ? ` ${FONTS_WAIT_NOTE}` : "");
     if (syncBtnEl) {
       syncBtnEl.textContent = "✓ Synced!";
       setTimeout(() => { syncBtnEl.textContent = "⚡ Sync to Live App"; }, 1400);
