@@ -39,20 +39,50 @@ FONT_STATUS_SETTLED = (
     'document.querySelector("#freeFontStatus").textContent)'
 )
 
-#: Takes the family names; returns {family: [faces found, faces loaded]}.
-FONT_FACES_JS = """async (families) => {
-    await document.fonts.ready;
+#: One deadline for a whole measurement (fonts.ready and every load together).
+#: The status wait above does not bound the measurement: a pending
+#: `document.fonts.ready` or `document.fonts.load()` would keep `evaluate`
+#: waiting past it, so the retry and the REPORT/FAIL lines would never run
+#: and CI could reach its job timeout. A family that has not answered by
+#: then counts as missing, which is what the retry policy already handles.
+FONT_MEASURE_DEADLINE_MS = 15000
+
+#: Takes [family names, deadline ms]; returns {family: [faces found, faces loaded]}.
+#: Every family starts as [0, 0] and the loads run together, so one that
+#: never answers cannot hide the others; the race against the timer means the
+#: evaluate always settles. A rejecting `fonts.ready` or a page with no
+#: `document.fonts` also leaves everything missing instead of raising, and the
+#: returned object is a copy, so a load that resolves late cannot change it.
+FONT_FACES_JS = """async ([families, deadlineMs]) => {
     const results = {};
-    for (const family of families) {
-        try {
-            const faces = await document.fonts.load(`16px "${family}"`);
-            results[family] = [faces.length, faces.filter(f => f.status === 'loaded').length];
-        } catch (error) {
-            results[family] = [0, 0];
-        }
+    for (const family of families) results[family] = [0, 0];
+    const measure = async () => {
+        await document.fonts.ready;
+        await Promise.all(families.map(async (family) => {
+            try {
+                const faces = await document.fonts.load(`16px "${family}"`);
+                results[family] = [faces.length, faces.filter(f => f.status === 'loaded').length];
+            } catch (error) {
+                results[family] = [0, 0];
+            }
+        }));
+    };
+    let timer;
+    const expired = new Promise(resolve => { timer = setTimeout(resolve, deadlineMs); });
+    try {
+        await Promise.race([measure(), expired]);
+    } catch (error) {
+        // document.fonts is missing or fonts.ready rejected: nothing was measured.
+    } finally {
+        clearTimeout(timer);
     }
-    return results;
+    return Object.fromEntries(Object.entries(results).map(([family, counts]) => [family, [...counts]]));
 }"""
+
+
+def measure_font_faces(page, families: list[str], deadline_ms: int = FONT_MEASURE_DEADLINE_MS) -> dict:
+    """{family: [faces found, faces loaded]} read from the page, settled within `deadline_ms`."""
+    return page.evaluate(FONT_FACES_JS, [families, deadline_ms])
 
 
 def is_google_stylesheet(url: str) -> bool:
@@ -224,7 +254,7 @@ def check_free_fonts_load(ctx: GateContext) -> Outcome:
     families = page.evaluate("[...document.querySelectorAll('#grid .card')].map(c => c._font.css)")
 
     def measure(only):
-        return page.evaluate(FONT_FACES_JS, only or families)
+        return measure_font_faces(page, only or families)
 
     def retry(_missing):
         page.locator("#loadFreeFontsLibrary").click()
