@@ -108,7 +108,10 @@ credentials and kit IDs.
 ## 8. Simple runtime, strict tests
 
 - Studio stays a single HTML file with no runtime dependencies or build step.
-  The bridge stays dependency-free. Dev tooling uses the Python stdlib.
+  The bridge stays dependency-free. The Python dev server and dev tooling use
+  the Python stdlib. The Vite integration is a Node package with zero runtime
+  dependencies that uses the project's own Vite, and never runs in a
+  production build (D030).
   Google Fonts stylesheets load only after the user asks (Rule 7); offline or
   before that, the fallback stacks are used.
 - Preserve what users already have: Library mode, the Composer, existing leaf
