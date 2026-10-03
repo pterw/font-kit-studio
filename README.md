@@ -51,6 +51,14 @@ python scripts/serve.py
 
 To use your own app, add the one script tag from [Add fontkit to your app](#add-fontkit-to-your-app) and put your app's address in the **Target URL** box.
 
+A few things Studio tells you on the way in:
+
+- The **Target URL** box starts empty, and **Connect Target** stays disabled with "Enter your app's URL" until you type one. A URL needs `http://` or `https://`.
+- When Studio is served by the dev server and opened without `?target=`, it prefills the demo address and the button reads **Connect to the demo**. It never connects on its own.
+- If nothing answers within 4 seconds, the badge says `No bridge answered at <origin> within 4 s.` and the hint names both causes: nothing is running there, or the page does not load `fontkit-bridge.js`. Opened from disk, the hint adds how to start the dev server.
+- If Studio is hosted on the web and your app is on `localhost`, Chromium may block the reach; after 4 seconds with no answer, Studio says so. Open Studio from the dev server or from the file on disk instead.
+- Fullscreen no longer connects as a side effect; press **Connect Target** when you are ready.
+
 ### Open the Studio HTML file directly
 
 `font_kit_studio_v0.1.1.html` is a single file with no dependencies. You can double-click it, or open it from disk, and it works for the Library and the Composer. You can also connect it to a running app by typing the app's URL into **Target URL**, and the inspector, the Changes panel and Copy all work.
@@ -105,7 +113,7 @@ Values come back from the page, not from Studio. If the page snaps `550` to `600
 
 Elements with a `data-design-id` have stable names. Others are discovered automatically (headings, paragraphs in sections, links in nav, buttons, images, badges and so on). Their selectors are built from the page structure, so the CSS tab marks them "auto-discovered, add data-design-id for a stable selector". If you add the attribute while editing, the target keeps its edits and moves to the new name; the next sync writes the stable selector. If you remove an author `data-design-id` while editing, the edit moves to an automatic id (the target's manifest carries `previousId`, naming the id you removed), and the unstable-selector hint comes back.
 
-The badge shows where you are: `Idle`, `Connecting…`, `Bridge detected`, `Connected (N targets)`, `Live · rev N`, `Rejected: <reason>`, `No bridge detected` (after 4 seconds, with a hint), `Disconnected (window closed)`.
+The badge shows where you are: `Idle`, `Connecting…`, `Bridge detected`, `Connected (N targets)`, `Live · rev N`, `Rejected: <reason>`, `No bridge answered at <origin> within 4 s.` (with a hint that says what to check), `Disconnected (window closed)`.
 
 ### Select vs Interact
 
@@ -220,7 +228,8 @@ Both work with or without a target app:
 - **Composer**: build flow layouts from 2 to 4 leaf slots per row, with PNG/SVG brand marks, rules and spacers. Export JSON or CSS, and import it again.
 - **Specimen / Target App** switches the Composer between its own canvas and your live app. **Sync to Live App** is the explicit button that sends the Composer's composition to the page. It sets the page's font tokens and each text slot's tracking, and once you have asked for free fonts it also loads the stylesheets of the library fonts the composition uses (before that it sends the font stacks only, and says so). It also reorders the page's main sections by slot order and adds a short CSS `transition` to them. That reordering does not show in the Changes panel. Reload the preview to undo it.
 - **Restore Page Text** (in the bar above the preview) puts every changed text back and keeps the styles.
-- Device buttons (390 / 1024 / 1440 / Fluid) set the preview width. **Fullscreen** uses the whole window (`Esc` leaves).
+- Device buttons (390 / 1024 / 1440 / Fluid) set the preview width. A preview wider than the window scrolls sideways under its own scrollbar and is never scaled, so the inspector's measurements stay true to the page. **Fullscreen** uses the whole window; leave it with the **Exit** button in the top-left of the preview or with `Esc`.
+- Importing a composition JSON while the Composer is linked to the page keeps the imported tokens and ends the link: nothing is sent, the status says so, and the reconnect banner appears if the page differs. Press **Sync to Live App** to send the import and link again.
 
 Exported JSON stays at version `0.1.1`. It can carry an optional `live` field with your saved overrides, tokens and DOM order (`live.structure`). Older files without it still import.
 
@@ -425,7 +434,7 @@ Separate several origins with spaces or commas. Origins are compared without reg
 
 For a page where you cannot add the tag, you can inject the bridge by hand. A bookmarklet cannot run inside Studio's iframe, so use it in a **pop-out**:
 
-1. In Studio, enter the page's URL and press **Connect Target**. It says `No bridge detected`.
+1. In Studio, enter the page's URL and press **Connect Target**. It says `No bridge answered at <origin> within 4 s.`
 2. Press **Pop out**. The page opens in its own window.
 3. In that window, run the bookmarklet below. Create a bookmark whose URL is that line, and click the bookmark. Or open the DevTools console and paste only the part after `javascript:` (Chrome asks you to type `allow pasting` first). Browsers remove `javascript:` from text pasted into the address bar, so pasting the whole line there does nothing.
 

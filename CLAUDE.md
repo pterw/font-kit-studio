@@ -27,6 +27,15 @@
   diffs to the main tree with `git apply --3way`, then `git restore --staged` those
   paths (the apply stages them, and `git commit` takes the whole index, so an
   unreviewed task can ride along), and remove the worktrees after.
+- Merging several worktree tasks into one tree: `git apply --3way` refuses when the
+  target file already has uncommitted edits from another task; stage that state first
+  (`git add` the file) so it becomes the merge's "ours", apply, then unstage. To commit
+  one task out of a tree that holds several, apply that task's patch with
+  `git apply --cached` (index only) and commit; the other tasks stay in the working
+  tree. Copy whole files from a worktree only while that agent is the sole writer of
+  the file. Run every task's test module on the merged tree before committing: tasks
+  that are disjoint in code can still collide in behaviour (one task's new status
+  wording or token rule breaking another task's assertions).
 - Subagents cannot create new report files (the Write tool refuses); they return
   findings as text and the controller records them. They can append to existing
   task records.

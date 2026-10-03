@@ -1669,7 +1669,7 @@ class BookmarkletTests(LiveIntegrationCase):
                 withhold = lambda route: route.fulfill(status=404, body='')  # noqa: E731  the page "has no script tag"
                 page.context.route(bridge, withhold)
                 page.goto(f'{self.app}?target={quote(self.target, safe=":/")}')
-                self.wait_badge(page, r'^No bridge detected$')
+                self.wait_badge(page, r'^No bridge answered at ')
                 self.assertTrue(page.locator('#bridgeHint').is_visible())
                 with page.expect_popup() as info:
                     page.locator('#bridgePopOut').click()
@@ -1677,7 +1677,7 @@ class BookmarkletTests(LiveIntegrationCase):
                 popup.wait_for_load_state()
                 self.assertEqual(popup.evaluate('typeof window.__fontkitBridge'), 'undefined')
                 # Like a person: wait until Studio gives up on the page, then run the bookmarklet's code.
-                self.wait_badge(page, r'^No bridge detected$', timeout=15000)
+                self.wait_badge(page, r'^No bridge answered at ', timeout=15000)
                 page.context.unroute(bridge, withhold)
                 popup.evaluate(code)
                 self.wait_badge(page, CONNECTED)

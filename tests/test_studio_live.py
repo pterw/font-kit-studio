@@ -312,7 +312,7 @@ class StudioProtocolTests(LiveCase):
             with self.subTest(engine=engine):
                 page, errors = self.open(engine, target=f'{TARGET}/no-bridge.html')
                 self.wait_badge(page, '^Connecting…$')
-                self.wait_badge(page, '^No bridge detected$', timeout=7000)
+                self.wait_badge(page, r'^No bridge answered at http://target\.test within 4 s\.$', timeout=7000)
                 hint = page.locator('#bridgeHint')
                 self.assertTrue(hint.is_visible())
                 self.assertIn('fontkit-bridge.js', hint.inner_text())
@@ -938,10 +938,12 @@ class StudioFixRound1Tests(LiveCase):
                     self.assertTrue(status.startswith('Import failed:'), status)
                 self.assertEqual(self.export(page), exported)
                 self.assertEqual(errors, [])
-                # A dev-server status.target with an unsafe scheme is never used to prefill.
+                # A dev-server status.target with an unsafe scheme is never used to prefill. Studio runs on studio.test
+                # here, so this proves the origin gate (nothing is offered from a non-loopback origin); the scheme and
+                # host checks on a loopback Studio are in test_studio_first_run.DemoOfferTests.
                 page, errors = self.open(engine, target=None, sync=True, status_target='javascript:parent.__pwned=1')
                 page.wait_for_function('() => !document.querySelector("#liveCodeSync").disabled')
-                self.assertEqual(page.locator('#targetAppUrl').input_value(), 'http://localhost:8001/demo/')
+                self.assertEqual(page.locator('#targetAppUrl').input_value(), '')
                 self.assert_not_loaded(page)
                 self.assertEqual(errors, [])
 
@@ -1098,7 +1100,7 @@ class StudioFixRound1Tests(LiveCase):
                             self.assertEqual(len(set(hellos)), 1)
                             self.assertNotEqual(hellos[0], sid)
                     frame.evaluate('(url) => { location.href = url; }', f'{TARGET}/no-bridge.html')
-                    self.wait_badge(page, '^No bridge detected$', timeout=7000)
+                    self.wait_badge(page, r'^No bridge answered at http://target\.test within 4 s\.$', timeout=7000)
                     self.assertTrue(page.locator('#bridgeHint').is_visible())
                     self.assertEqual(page.locator('#liveFontSize').count(), 0)
                     self.assertEqual(errors, [])
@@ -4212,13 +4214,13 @@ class StudioCompositionFontTests(LiveCase):
                 self.sync(page)
                 synced = self.sheets_sent(frame)[0]
                 self.assertEqual(len(synced), 4)
-                # A saved override the page lacks opens a conflict without a reload (the composition stays linked).
-                self.watch_handled(page)
+                # A saved override the page lacks opens a conflict without a reload. The composition was linked, so the
+                # import ends the link (D035): it sends nothing, says so, and the banner is raised by the import itself.
                 doc = {**self.export(page), 'live': {'target': FAKE, 'revision': 0, 'overrides': {'hero.title': {'fontSize': 40}}}}
-                self.assertIn('Composition imported.', self.import_document(page, doc))
-                self.wait_handled(page, 1)                 # the import streams the composition; the page acknowledges it
+                self.assertIn('Imported; the link to the page is off.', self.import_document(page, doc))
                 banner = page.locator('#liveReconnectBanner')
                 banner.wait_for(state='visible')
+                self.assertEqual(page.locator('#liveReconnectHeading').inner_text(), 'Imported state differs from the target.')
                 # Another editor then adds a token; Studio learns of it from the next acknowledgement.
                 frame.evaluate('window.fake.setTokens({"--extra-font": "Georgia, serif"})')
                 self.select(page, frame, 'hero.lead')

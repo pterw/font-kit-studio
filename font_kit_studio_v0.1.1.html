@@ -4,6 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Font Kit Studio v0.1.1</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2314213d'/%3E%3Ctext x='16' y='24' font-family='Georgia,serif' font-size='22' font-weight='700' text-anchor='middle' fill='%23ffffff'%3EF%3C/text%3E%3C/svg%3E" />
 
 <!--
   FONTS
@@ -993,8 +994,8 @@ body.dark .live-overlay-label { color: #111; }
             <span id="bridgeStatusBadge" class="bridge-badge" data-state="idle" role="status" aria-live="polite">Idle</span>
           </div>
           <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 6px; flex: 1 1 240px; min-width: 0; max-width: 100%;">
-            <input id="targetAppUrl" type="text" value="http://localhost:8001/demo/" placeholder="Target URL e.g. http://localhost:8001/demo/" aria-label="Target application URL" spellcheck="false" style="padding: 6px 8px; font-size: 12px; font-family: monospace; min-width: 100px; flex: 1 1 100px; max-width: 100%; box-sizing: border-box;" />
-            <button id="btnConnectTarget" class="btn" type="button" style="padding: 6px 10px; font-size: 11px; font-weight: 600;">Connect Target</button>
+            <input id="targetAppUrl" type="text" value="" placeholder="Target URL e.g. http://localhost:8001/demo/" aria-label="Target application URL" spellcheck="false" style="padding: 6px 8px; font-size: 12px; font-family: monospace; min-width: 100px; flex: 1 1 100px; max-width: 100%; box-sizing: border-box;" />
+            <button id="btnConnectTarget" class="btn" type="button" disabled title="Enter your app's URL" style="padding: 6px 10px; font-size: 11px; font-weight: 600;">Connect Target</button>
             <button id="btnRestoreOriginalText" class="btn" type="button" style="padding: 6px 8px; font-size: 11px;" title="Restore original text in live web app">↻ Restore Page Text</button>
             <div class="segmented" style="display: inline-flex; flex-shrink: 0;">
               <button id="viewSpecimenCanvas" class="active" type="button" style="padding: 6px 8px; font-size: 11px;">Specimen</button>
@@ -1015,7 +1016,8 @@ body.dark .live-overlay-label { color: #111; }
           </div>
         </div>
         <p id="bridgeWarning" class="bridge-warning" role="status" hidden><span id="bridgeWarningText"></span> <button id="bridgeWarningDismiss" class="btn" type="button">Dismiss</button></p>
-        <p id="bridgeHint" class="bridge-hint" hidden>No bridge answered. Add <code>&lt;script src="fontkit-bridge.js"&gt;&lt;/script&gt;</code> to the target page (after its own scripts), reload it, then press Connect Target.</p>
+        <p id="targetUrlHint" class="bridge-hint">Enter your app's URL</p>
+        <p id="bridgeHint" class="bridge-hint" hidden>Either nothing is running there, or the page does not load fontkit-bridge.js. Add <code>&lt;script src="fontkit-bridge.js"&gt;</code> after the page's own scripts, reload it, then press Connect Target. <span id="bridgeHintServe" hidden>Start the dev server: <code>python scripts/serve.py</code></span></p>
       </div>
 
       <div class="c-field span-2">
@@ -2161,7 +2163,7 @@ if (remembered) kitId.value = remembered;
     noBridgeTimer: null, timedOut: new Map(), targetMeta: {}, savedTokens: {},
     targets: new Map(), changes: { tokens: {}, targets: [], structure: [], imports: [] },
     intent: null, refreshes: new Map(), selectSeq: 0,
-    reapply: null, reapplyError: "", popup: null, popoutMode: false, popupTimer: null, warnings: [], moveGuard: null, strategyChoice: new Map(), dragId: null,
+    reapply: null, reapplyError: "", importLinked: false, importDropped: null, popup: null, popoutMode: false, popupTimer: null, warnings: [], moveGuard: null, strategyChoice: new Map(), dragId: null,
     overrides: {}, structure: [], canonicalRevision: 0, canonicalTarget: "", conflict: false, conflictCause: "reconnect",
     selectedId: null, selectedRect: null, hoverId: null, hoverRect: null, hoverName: "",
     mode: "select", viewActive: false, codeTab: "css",
@@ -3017,6 +3019,39 @@ if (remembered) kitId.value = remembered;
     showExport("CSS tokens", lines.join("\n"), "font-kit-studio-tokens.css", "text/css");
   }
 
+  // Ends the link between the composition and the page. What was queued for the link is dropped; a request already
+  // sent still gets its reply, but that reply is not Studio's saved state (recordCanonical).
+  function endCompositionLink() {
+    live.compositionLinked = false;
+    clearTimeout(liveSyncDebounceTimer);
+    liveSyncDebounceTimer = null;
+    live.queue = live.queue.filter(op => op.kind !== "composition" || op.reapply);
+    [live.inFlight, ...live.timedOut.values()].forEach(op => {
+      if (op && op.kind === "composition" && !op.reapply) op.importSuperseded = true;
+    });
+  }
+
+  // A Reapply built from the state the import replaces must not reach the page or write its values back as saved
+  // state: its queued steps are dropped, and its in-flight and timed-out steps are marked so their replies only
+  // update what Studio knows about the page (recordCanonical). No error banner: the user chose the import.
+  function endRunningReapply() {
+    live.queue = live.queue.filter(op => !op.reapply);
+    [live.inFlight, ...live.timedOut.values()].forEach(op => { if (op && op.reapply) op.importSuperseded = true; });
+    live.reapply = null;
+    live.reapplyError = "";
+  }
+
+  // What Studio saved before an import made while linked: the page may still hold it after the import dropped it
+  // (reconcileImportedLinked). Kept across imports until the user resolves the difference or syncs.
+  function rememberSavedBeforeImport() {
+    const kept = live.importDropped || { overrides:{}, structure:[] };
+    Object.entries(effectiveOverrides(live.overrides)).forEach(([id, patch]) => setOwn(kept.overrides, id, { ...(kept.overrides[id] || {}), ...patch }));
+    live.structure.forEach(entry => {
+      if (!kept.structure.some(item => item.selector === entry.selector && sameIds(item.ids, entry.ids))) kept.structure.push({ selector:entry.selector, ids:[...entry.ids] });
+    });
+    live.importDropped = kept;
+  }
+
   function importCompositionJson(file) {
     const reader = new FileReader();
     reader.onload = () => {
@@ -3038,17 +3073,35 @@ if (remembered) kitId.value = remembered;
         if (!slots.length) slots.push(makeTextSlot("Custom", DEFAULT_FAMILY));
         const width = String(incoming.canvasWidth || "960");
         const kitIds = Array.isArray(data.kitIds) ? normalizeKitIds(data.kitIds.filter(id => typeof id === "string").join(", ")) : [];
+        // The import is the user's latest explicit state (D035): it ends the link before it is published, so nothing
+        // streams it to the page and no later acknowledgement from the page replaces it.
+        const wasLinked = live.compositionLinked;
+        endRunningReapply();
+        if (wasLinked) { endCompositionLink(); rememberSavedBeforeImport(); }
+        live.importLinked = wasLinked;
         // Only publish a fully hydrated candidate; failed validation leaves live state intact.
         Object.assign(state, { canvasWidth:width === "100%" ? width : String(rowNumber(width, 960, 240, 2400)),
           background, slots, selectedId:slots[0].id });
         // Legacy documents without kitIds retain the receiving selection; explicit IDs replace it, even when empty.
         if (Object.hasOwn(data, "kitIds")) composerKitIds.value = kitIds.join(", ");
-        if (liveCandidate) adoptImportedLive(liveCandidate);
+        // A linked composition's tokens are what the page holds from it; a file that carries none saves the tokens
+        // this composition would send, so the page's tokens are compared with the import, not the other way round.
+        const linkedTokens = wasLinked && !(liveCandidate && Object.keys(liveCandidate.tokens).length) ? compositionPatch().tokens : null;
+        if (liveCandidate) {
+          if (linkedTokens) liveCandidate.tokens = linkedTokens;
+          adoptImportedLive(liveCandidate, wasLinked);
+        } else if (linkedTokens) {
+          live.savedTokens = linkedTokens;
+          if (live.ready) reconcileImportedLinked();
+          renderLivePanels();
+        }
         familyOptions(canvasBgFamily, state.background.family);
         populateSavedColors(canvasSavedColor, state.background.saved);
         syncCompositionControls();
         renderComposer();
-        composerStatus.textContent = "Composition imported. Image assets must be reselected in v0.1.1.";
+        composerStatus.textContent = wasLinked
+          ? "Imported; the link to the page is off. Press Sync to Live App to send this composition."
+          : "Composition imported. Image assets must be reselected in v0.1.1.";
       } catch (err) {
         composerStatus.textContent = `Import failed: ${err.message}`;
       }
@@ -3078,7 +3131,6 @@ if (remembered) kitId.value = remembered;
   // Design Bridge Protocol v1 — Studio protocol client (v0.2.0)
   // Contract: docs/plans/2026-10-02-v0.2.0-live-preview-code-sync.md
   // ==========================================
-  const DEFAULT_TARGET_URL = "http://localhost:8001/demo/";
   const NO_BRIDGE_MS = 4000;
   const REQUEST_TIMEOUT_MS = 8000;
   const AUTO_SYNC_MS = 400;
@@ -3136,6 +3188,8 @@ if (remembered) kitId.value = remembered;
   const targetAppFrameEl = q("targetAppFrame");
   const bridgeStatusBadge = q("bridgeStatusBadge");
   const bridgeHint = q("bridgeHint");
+  const bridgeHintServe = q("bridgeHintServe");
+  const targetUrlHint = q("targetUrlHint");
   const syncBtnEl = q("btnSyncToApp");
   const bridgeModeSelect = q("bridgeModeSelect");
   const bridgeModeInteract = q("bridgeModeInteract");
@@ -3505,7 +3559,8 @@ if (remembered) kitId.value = remembered;
       live.noBridgeTimer = null;
       if (!live.expectedOrigin) return;
       detachSession();
-      setBridgeStatus("No bridge detected", "missing", true);
+      if (isBlockedLoopbackReach(live.expectedOrigin)) setBridgeStatus(BLOCKED_LOOPBACK_TEXT, "missing");
+      else setBridgeStatus(`No bridge answered at ${targetOriginLabel()} within ${NO_BRIDGE_MS / 1000} s.`, "missing", true);
       renderLivePanels();
     }, NO_BRIDGE_MS);
   }
@@ -3522,15 +3577,65 @@ if (remembered) kitId.value = remembered;
       && url.protocol === location.protocol && url.port === location.port && path(url.pathname) === path(location.pathname);
   }
 
+  // ---- first run: the Target URL field --------------------------------------
+  // The field starts empty. Only a loopback dev server may offer the demo (detectDevServerSync); it never connects.
+  let offeredDemoUrl = "";
+  const BLOCKED_LOOPBACK_TEXT = "Browsers block a web page from reaching localhost. Open Studio from the dev server (python scripts/serve.py) or from the file on disk instead.";
+
+  // "demo/", "//host/app" and "localhost:8001/app" are not URLs Studio can load. "javascript:..." has a scheme,
+  // so safeTargetUrl judges it.
+  function hasUrlScheme(raw) {
+    const text = String(raw ?? "").trim();
+    return /^[a-z][a-z0-9+.-]*:/i.test(text) && !/^[^/:?#]+:\d+(?:[/?#]|$)/.test(text);
+  }
+
+  // A web page served from a non-loopback origin cannot reach a loopback target in Chromium. Location and the
+  // target origin decide; nothing is probed.
+  function isBlockedLoopbackReach(origin) {
+    if (location.protocol !== "http:" && location.protocol !== "https:") return false;
+    if (LOOPBACK_HOSTS.includes(location.hostname)) return false;
+    try { return LOOPBACK_HOSTS.includes(new URL(origin).hostname); } catch { return false; }
+  }
+
+  function targetOriginLabel() {
+    return live.expectedOrigin && live.expectedOrigin !== "null" ? live.expectedOrigin : (live.url || "the page");
+  }
+
+  function refreshConnectControl() {
+    if (!btnConnectTarget || !targetAppUrlInput) return;
+    const value = targetAppUrlInput.value.trim();
+    btnConnectTarget.disabled = !value;
+    btnConnectTarget.title = value ? "" : "Enter your app's URL";
+    btnConnectTarget.textContent = offeredDemoUrl && value === offeredDemoUrl && !live.url ? "Connect to the demo" : "Connect Target";
+    if (targetUrlHint) targetUrlHint.hidden = Boolean(value);
+  }
+
+  // The dev server names the demo, but its answer is data: offer only an address Studio would accept from a user
+  // and that stays on this machine (a loopback host, never Studio itself).
+  function isOfferableDemo(raw) {
+    if (typeof raw !== "string" || !hasUrlScheme(raw)) return false;
+    const url = safeTargetUrl(raw);
+    return Boolean(url) && LOOPBACK_HOSTS.includes(url.hostname) && !isStudioDocument(url);
+  }
+
+  // Typing reaches Connect through "input"; every place that sets the field in code calls refreshConnectControl().
+  if (targetAppUrlInput) {
+    targetAppUrlInput.addEventListener("input", refreshConnectControl);
+    window.addEventListener("pageshow", refreshConnectControl);
+    refreshConnectControl();
+  }
+  if (bridgeHintServe) bridgeHintServe.hidden = location.protocol !== "file:";
+
   // One URL gate for the iframe and the pop-out: http(s) only (file: only from file:), never Studio itself.
   function resolveTarget(raw) {
+    if (!hasUrlScheme(raw)) { setBridgeStatus("Use a full URL starting with http:// or https://", "error"); return null; }
     const resolved = safeTargetUrl(raw);
     if (!resolved) { setBridgeStatus("Invalid target URL", "error"); return null; }
     // Anti-recursion: never embed Font Kit Studio inside itself.
     if (isStudioDocument(resolved)) {
       setBridgeStatus("Recursion blocked", "error");
       console.warn("[FontKitStudio] Blocked recursive self-embedding:", resolved.href);
-      if (targetAppUrlInput) targetAppUrlInput.value = DEFAULT_TARGET_URL;
+      if (targetAppUrlInput) { targetAppUrlInput.value = ""; refreshConnectControl(); }
       return null;
     }
     return resolved;
@@ -3538,7 +3643,8 @@ if (remembered) kitId.value = remembered;
 
   function connectTargetApp(url) {
     if (!targetAppFrameEl) return;
-    const raw = String(url || targetAppUrlInput.value || DEFAULT_TARGET_URL).trim();
+    const raw = String(url || targetAppUrlInput.value || "").trim();
+    if (!raw) return false;
     const resolved = resolveTarget(raw);
     if (!resolved) return false;
     leavePopout(true);
@@ -3549,6 +3655,7 @@ if (remembered) kitId.value = remembered;
     setBridgeStatus("Connecting…", "connecting");
     armNoBridgeTimer();
     targetAppFrameEl.src = resolved.href;
+    refreshConnectControl();
     renderLivePanels();
     return true;
   }
@@ -3669,6 +3776,9 @@ if (remembered) kitId.value = remembered;
   }
 
   function recordCanonical(op, data) {
+    // Sent before the user imported (D035): what the page acknowledged is not the user's saved state, whatever the
+    // request was. The ledger is already updated; only the comparison with the page is redone, so the banner follows it.
+    if (op.importSuperseded) { reconcileAfterImport(); return; }
     const targetId = typeof data.targetId === "string" && data.targetId !== "global" ? data.targetId : op.targetId;
     if (op.kind === "update" && targetId) {
       const entry = { ...(live.overrides[targetId] || {}) };
@@ -3714,7 +3824,11 @@ if (remembered) kitId.value = remembered;
       if (names.length === Object.keys(live.savedTokens).length && names.every(name => Object.hasOwn(live.savedTokens, name))) {
         live.savedTokens = { ...live.changes.tokens };
       }
-    } else if (op.kind === "composition" || (op.kind === "reset" && !op.targetId)) live.savedTokens = { ...live.changes.tokens };
+    } else if (op.kind === "composition" || (op.kind === "reset" && !op.targetId)) {
+      live.savedTokens = { ...live.changes.tokens };
+      // A Sync after an import sends the imported composition: once the page holds it the import conflict is over.
+      if (op.kind === "composition" && live.conflict && live.conflictCause === "import") reconcileImportedLinked();
+    }
     live.canonicalRevision = live.revision;
     live.canonicalTarget = live.url;
   }
@@ -3950,15 +4064,46 @@ if (remembered) kitId.value = remembered;
     renderReconnectBanner();
   }
 
-  function adoptImportedLive(candidate) {
+  function adoptImportedLive(candidate, wasLinked = false) {
     live.overrides = candidate.overrides;
     live.savedTokens = candidate.tokens;
     live.structure = candidate.structure;
     live.canonicalRevision = candidate.revision;
     live.canonicalTarget = candidate.target;
-    if (!live.url && candidate.target && safeTargetUrl(candidate.target) && targetAppUrlInput) targetAppUrlInput.value = candidate.target;
-    if (live.ready) reconcileSavedOverrides("import");
+    if (!live.url && candidate.target && safeTargetUrl(candidate.target) && targetAppUrlInput) { targetAppUrlInput.value = candidate.target; refreshConnectControl(); }
+    if (live.ready) { if (wasLinked) reconcileImportedLinked(); else reconcileSavedOverrides("import"); }
     renderLivePanels();
+  }
+
+  // The reconnect comparison for an import made while the composition is linked (D035), and for the page's replies
+  // after it. A linked composition also styles the page's own elements (slot fonts, sizes, colours), which Studio
+  // never saves as overrides, so extra changed targets are not a difference. The page differs when it lacks
+  // something Studio saved (a composition token, a saved override value, a saved DOM order), or still holds
+  // something Studio saved before the import and the import dropped or changed (live.importDropped: the same
+  // (target, property, value) or DOM-order entry; a property the composition also styles is only counted when the
+  // page holds the value the user saved). Blind spot: a page entry Studio never saved, and did not save before the
+  // import either, is not a difference; neither is a page value that was changed after the user saved theirs.
+  function reconcileImportedLinked() {
+    const page = ledgerToOverrides(live.changes);
+    const saved = effectiveOverrides(live.overrides);
+    const overridesHeld = Object.entries(saved)
+      .every(([id, patch]) => Object.entries(patch).every(([key, value]) => page[id] && page[id][key] === value));
+    const dropped = live.importDropped;
+    let droppedHeld = false;
+    if (dropped) {
+      droppedHeld = Object.entries(dropped.overrides)
+        .some(([id, patch]) => Object.entries(patch).some(([key, value]) => page[id]?.[key] === value && saved[id]?.[key] !== value));
+      const pageOrder = savedStructureFrom(live.changes.structure);
+      const holds = (list, entry) => list.some(item => item.selector === entry.selector && sameIds(item.ids, entry.ids));
+      droppedHeld = droppedHeld || dropped.structure.some(entry => holds(pageOrder, entry) && !holds(live.structure, entry));
+    }
+    live.conflictCause = "import";
+    live.conflict = droppedHeld || !(overridesHeld && tokensEqual(live.savedTokens, live.changes.tokens) && structureHeld(live.structure, live.changes.structure));
+    renderReconnectBanner();
+  }
+
+  function reconcileAfterImport() {
+    if (live.importLinked) reconcileImportedLinked(); else reconcileSavedOverrides("import");
   }
 
   // Targets whose CSS order exists on the target but not in Studio's saved state. The bridge can only clear an
@@ -4054,6 +4199,7 @@ if (remembered) kitId.value = remembered;
     live.reapply = null;
     live.reapplyError = "";
     live.conflict = false;
+    live.importDropped = null;
     if (savedFontsWaiting()) setCodeStatus(`Reapplied. ${FONTS_WAIT_NOTE}`);
     renderReconnectBanner();
     scheduleAutoSync();
@@ -4189,6 +4335,7 @@ if (remembered) kitId.value = remembered;
     live.canonicalRevision = live.revision;
     live.canonicalTarget = live.url;
     live.conflict = false;
+    live.importDropped = null;
     live.reapply = null;
     live.reapplyError = "";
     clearTimeout(live.syncTimer);
@@ -4944,7 +5091,9 @@ if (remembered) kitId.value = remembered;
 
   function popOutTarget() {
     if (live.popoutMode && live.popup && !live.popup.closed) { try { live.popup.focus(); } catch (_) { /* ignore */ } return; }
-    const resolved = resolveTarget(String(targetAppUrlInput.value || live.url || DEFAULT_TARGET_URL).trim());
+    const raw = String(targetAppUrlInput.value || live.url || "").trim();
+    if (!raw) { setBridgeStatus("Enter your app's URL", "error"); return; }
+    const resolved = resolveTarget(raw);
     if (!resolved) return;
     let win = null;
     try { win = window.open(resolved.href, POPOUT_NAME, popoutFeatures()); } catch (_) { win = null; }
@@ -5204,9 +5353,12 @@ if (remembered) kitId.value = remembered;
         setSyncAvailability(false, "The Font Kit dev server is running with sync disabled (--no-sync).");
       }
       const queryTarget = new URLSearchParams(location.search).get("target");
-      if (status && typeof status.target === "string" && safeTargetUrl(status.target) && !queryTarget && !live.url
-          && targetAppUrlInput && targetAppUrlInput.value === DEFAULT_TARGET_URL) {
+      // The demo is offered, never connected: only a loopback dev server names one, and only into an empty field.
+      if (status && isOfferableDemo(status.target) && !queryTarget && !live.url
+          && LOOPBACK_HOSTS.includes(location.hostname) && targetAppUrlInput && !targetAppUrlInput.value.trim()) {
+        offeredDemoUrl = status.target;
         targetAppUrlInput.value = status.target;
+        refreshConnectControl();
       }
     } catch {
       setSyncAvailability(false, "No Font Kit dev server answered /__fontkit/status. Run python scripts/serve.py to enable Sync to file.");
@@ -5392,6 +5544,7 @@ if (remembered) kitId.value = remembered;
       return;
     }
     live.compositionLinked = true;
+    live.importDropped = null;   // the user chose to send the composition; the next acknowledgement settles the banner
     broadcastLiveState(true);
     composerStatus.textContent = "Composition sent to the live app. Specimen edits keep streaming until the target reconnects."
       + (!freeFontsAllowed && compositionUsesLibraryFonts() ? ` ${FONTS_WAIT_NOTE}` : "");
@@ -5467,7 +5620,7 @@ if (remembered) kitId.value = remembered;
     }
     setTheaterInert(isFull);
     if (isFull) {
-      switchToTargetView();
+      switchToTargetView({ connect: false });
       if (targetAppContainerEl) targetAppContainerEl.style.height = "100%";
       // The toggle just became inert; keep the keyboard user's place on the control that undoes it.
       if (btnExitFullscreen) btnExitFullscreen.focus();
@@ -5515,14 +5668,15 @@ if (remembered) kitId.value = remembered;
     renderInspector();
   }
 
-  function switchToTargetView() {
+  // `connect: false` shows the Target view without loading the typed URL (fullscreen only changes the layout).
+  function switchToTargetView(options) {
     if (viewTargetBtn) viewTargetBtn.classList.add("active");
     if (viewSpecimenBtn) viewSpecimenBtn.classList.remove("active");
     if (composerCanvasEl) composerCanvasEl.style.display = "none";
     if (targetAppContainerEl) targetAppContainerEl.style.display = "block";
     live.viewActive = true;
     if (liveCodePanel) liveCodePanel.hidden = false;
-    if (!targetAppFrameEl.getAttribute("src")) connectTargetApp(targetAppUrlInput.value);
+    if (options?.connect !== false && !targetAppFrameEl.getAttribute("src")) connectTargetApp(targetAppUrlInput.value);
     renderLivePanels();
   }
 
@@ -5574,6 +5728,7 @@ if (remembered) kitId.value = remembered;
     switchMode("composer");
     if (safeTargetUrl(initialTarget)) {
       targetAppUrlInput.value = initialTarget;
+      refreshConnectControl();
       connectTargetApp(initialTarget);
       switchToTargetView();
     } else {
