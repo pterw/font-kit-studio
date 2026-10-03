@@ -33,3 +33,7 @@
   reuse a role name as an address unless you mean that exact agent.
 - The session's git proxy refuses branch deletion (HTTP 403). Ask the owner to
   delete branches in the GitHub UI.
+- When asked what fontkit is, who it is for or how it competes, answer from
+  `docs/roadmap/product-direction.md` ("Where it stands"), the typography system
+  design and the README, and say plainly which parts are designed but not built.
+  Never present R1-R5 as shipped.

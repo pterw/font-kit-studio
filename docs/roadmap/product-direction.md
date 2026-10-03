@@ -80,3 +80,27 @@ time. Treat it as a possible direction, not the plan.
 - **Store review and privacy.** The extension needs a privacy statement and a minimal
   permission list.
 - **Scope.** One maintainer cannot build three surfaces at once. Sequence them.
+
+## Where it stands (2026-10-03)
+
+Be exact about this when describing fontkit to anyone: the shipped product and the pitched
+product are not the same thing yet.
+
+- **Shipped (v0.2.0):** live per-element editing of a page that loads the bridge, DOM
+  moves with guards, an overrides stylesheet the dev server writes, the Library and the
+  Composer. Covered by 548 browser tests, hostile-input cases on every boundary, and a CI
+  gate for network isolation and contrast. The first-run experience has known defects
+  (`docs/implementation/audit-2026-10-03-first-run-and-controls.md`).
+- **Designed, not built:** everything in "How it differs" above. One-command start (R1),
+  role detection (R2), pairing and type scales (R3), token output (R4), the extension (R5).
+- **Against "just looking", fontkit loses today.** A font-swap extension is faster for a
+  quick peek because fontkit needs a script tag in the page. That is by design (Studio
+  never runs inside the page it edits) and R1 and R5 remove the friction without giving up
+  the design.
+- **The extension earns its place only with the engine.** Click-and-swap alone is a
+  smaller DevTools. It ships after R2-R4 so it carries roles, pairings, scales and handoff
+  into a tab the user does not own; built earlier it would be the DevTools remake it is
+  accused of being.
+- **The README is the product page**, and does not position fontkit against competitors;
+  that comparison lives here. A separate product page makes sense once R1 ships and there is
+  a one-command story for people who do not start from a repository.
