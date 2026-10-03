@@ -725,6 +725,96 @@ class AutoDiscoveredSelectorTests(LiveIntegrationCase):
                 self.assertEqual(page.errors, [])
 
 
+class DuplicateBridgeTests(LiveIntegrationCase):
+    def test_a_second_new_fontkitbridge_after_connect_changes_nothing_for_the_studio(self):
+        """An HMR re-run of `new FontKitBridge()`: one bridge answers, and Reset still restores the original."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page = self.connected(engine)
+                frame = self.frame(page)
+                original_size = self.style(frame, TITLE, 'fontSize')
+                original_style = frame.evaluate('(s) => document.querySelector(s).getAttribute("style")', TITLE)
+                original_html = frame.evaluate('document.body.innerHTML')
+                self.select_hero_title(page)
+                self.type_into(page, '#liveFontSize', '56')
+                self.wait_style(frame, TITLE, 'fontSize', '56px')
+                self.wait_badge(page, r'^Live · rev \d+$')
+                page.evaluate("""() => { window.__seen = { ready: 0, applied: 0 };
+                    window.addEventListener('message', (event) => { const type = event.data && event.data.type;
+                        const key = type === 'design:ready' ? 'ready' : type === 'design:applied' ? 'applied' : null;
+                        if (key) setTimeout(() => { window.__seen[key] += 1; }, 0); }); }""")
+                warned = frame.evaluate("""() => { const seen = []; const warn = console.warn;
+                    console.warn = (...args) => seen.push(args.join(' '));
+                    const first = window.__fontkitBridge; const again = new FontKitBridge({ enableHighlightOverlay: true });
+                    console.warn = warn; return [again === first, seen.length]; }""")
+                self.assertEqual(warned, [True, 1])
+                # Nothing new announces itself, so Studio does not re-handshake with a second bridge.
+                self.assertEqual(frame.evaluate('document.querySelectorAll("#fontkit-bridge-overlay").length'), 0)
+                # Studio re-handshakes anyway when asked to (a reload of the page's script, say): one answer.
+                frame.evaluate('window.parent.postMessage({type: "design:bridge-ready", protocolVersion: 1}, "*")')
+                page.wait_for_function('() => window.__seen.ready >= 1')
+                page.wait_for_timeout(300)
+                self.assertEqual(page.evaluate('window.__seen.ready'), 1)
+                self.assertFalse(page.locator('#liveReconnectBanner').is_visible())
+                # An edit gets exactly one acknowledgement, and Reset restores what the author had.
+                self.select_hero_title(page)
+                page.locator('#liveFontSize').fill('52')   # one input event, so one request
+                self.wait_style(frame, TITLE, 'fontSize', '52px')
+                self.wait_badge(page, r'^Live · rev \d+$')
+                self.assertEqual(page.evaluate('window.__seen.applied'), 1)
+                page.locator('#liveResetTarget').click()
+                self.wait_style(frame, TITLE, 'fontSize', original_size)
+                self.assertEqual(frame.evaluate('(s) => document.querySelector(s).getAttribute("style")', TITLE), original_style)
+                self.assertEqual(frame.evaluate('document.body.innerHTML'), original_html)
+                self.assertEqual(page.errors, [])
+
+
+class StableIdSelectorTests(LiveIntegrationCase):
+    STABLE_IDS = [
+        ('hero;alternate', '#pricing .plan:nth-child(1) h3'),
+        ('a{b}<c>"d\\e', '#pricing .plan:nth-child(2) h3'),
+        ('x"]{} body{color:red}/*', '#pricing .plan:nth-child(1) .price'),
+    ]
+
+    def test_stable_ids_with_css_special_characters_keep_their_rule_and_stay_safe(self):
+        """The bridge writes such ids as CSS escapes, so the persisted rule is valid and holds no raw `; { } < >`."""
+        for engine in ENGINES:
+            for design_id, locator in self.STABLE_IDS:
+                with self.subTest(engine=engine, id=design_id):
+                    self.overrides.unlink(missing_ok=True)
+                    page = self.connected(engine)
+                    frame = self.frame(page)
+                    page.evaluate("""() => { window.__targets = 0; window.addEventListener('message', (event) => {
+                        if (event.data && event.data.type === 'design:targets') setTimeout(() => { window.__targets += 1; }, 0); }); }""")
+                    frame.evaluate('([s, id]) => document.querySelector(s).setAttribute("data-design-id", id)', [locator, design_id])
+                    # The bridge announces the promoted target and Studio has handled it before anything is clicked.
+                    page.wait_for_function('() => window.__targets >= 1')
+                    self.click_in_target(page, locator, design_id)
+                    page.locator('#liveFontSize').fill('41')
+                    self.wait_style(frame, locator, 'fontSize', '41px')
+                    css = self.wait_code(page, 'Css', 'font-size: 41px !important;')
+                    self.assertNotIn('skipped', css)
+                    match = re.search(r'\n(\[data-design-id="(?:[^"\\\n]|\\.)*"\]) \{\n  font-size: 41px !important;', css)
+                    self.assertIsNotNone(match, css)
+                    selector = match.group(1)
+                    for raw in ';{}<>':
+                        self.assertNotIn(raw, selector)
+                    # On the target page the persisted selector finds exactly the edited element.
+                    self.assertEqual(frame.evaluate(
+                        '([s, id]) => { const found = [...document.querySelectorAll(s)];'
+                        ' return [found.length, found[0] && found[0].getAttribute("data-design-id") === id]; }',
+                        [selector, design_id]), [1, True], selector)
+                    # What a stylesheet parser sees: one rule block, and nothing a <style> element could end early.
+                    code = re.sub(r'/\*.*?\*/', '', css, flags=re.S)
+                    self.assertEqual((code.count('{'), code.count('}')), (1, 1))
+                    self.assertNotIn('body', re.sub(r'"(?:[^"\\]|\\.)*"', '""', code))
+                    for raw in '<>':
+                        self.assertNotIn(raw, css)
+                    self.assertIn('Saved', self.sync(page))
+                    self.assertEqual(self.written().strip(), css.strip())
+                    self.assertEqual(page.errors, [])
+
+
 class ImportedTokensTests(LiveIntegrationCase):
     def export(self, page):
         page.locator('#exportJson').click()

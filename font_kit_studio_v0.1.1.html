@@ -3062,11 +3062,13 @@ if (remembered) kitId.value = remembered;
   // and a backslash plus hex digits is a code point (6 digits, or fewer when no hex digit follows, then one optional space).
   // Those alternatives start differently and the hex forms differ in length, so every text matches in only one way and
   // checking it takes linear time: a hostile selector from a target cannot stall Studio. The quoted attribute value
-  // allows only `\"` and `\\`. Unescaped `{ } ; < >`, other backslashes, line breaks, comment markers and `url(` are refused.
+  // allows `\"`, `\\` and hex escapes (`\3b `, with the one space that ends it); unescaped `{ } ; < >`, other backslashes, line breaks, comment markers and `url(` are refused.
   const SELECTOR_IDENT = /(?:[\w\u00A0-\uFFFF-]|\\(?:[0-9a-f]{6}|[0-9a-f]{1,5}(?![0-9a-f])) ?|\\[^0-9a-f\r\n\f])+/i.source;
-  const SELECTOR_PART = `#${SELECTOR_IDENT}|\\.${SELECTOR_IDENT}|\\[data-design-id="(?:[^"\\\\{};<>\\r\\n]|\\\\["\\\\])*"\\]|:nth-of-type\\(\\d{1,4}\\)`;
+  const SELECTOR_PART = `#${SELECTOR_IDENT}|\\.${SELECTOR_IDENT}|\\[data-design-id="(?:[^"\\\\{};<>\\r\\n]|\\\\["\\\\]|\\\\(?:[0-9a-f]{6}|[0-9a-f]{1,5}(?![0-9a-f]))(?: |(?! )))*"\\]|:nth-of-type\\(\\d{1,4}\\)`;
   const SELECTOR_STEP = `(?:(?:[a-z][a-z0-9-]*|\\*)(?:${SELECTOR_PART})*|(?:${SELECTOR_PART})+)`;
   const SELECTOR_GRAMMAR = new RegExp(`^${SELECTOR_STEP}(?: > ${SELECTOR_STEP})*$`, "i");
+  // An id of 300 characters can need five characters per escape, so selectors may be longer than declaration values.
+  const MAX_SELECTOR_LENGTH = 2000;
   const UNSAFE_SELECTOR_TEXT = /url\(|expression\(|\/\*|\*\/|!important/i;
   const unsafeCssText = (text, { selector = false } = {}) => selector
     ? UNSAFE_SELECTOR_TEXT.test(text) || !SELECTOR_GRAMMAR.test(text)
@@ -3211,7 +3213,10 @@ if (remembered) kitId.value = remembered;
     const text = String(value ?? "");
     return text.length <= max && !unsafeCssText(text, options) ? text : null;
   }
-  const commentText = value => String(value ?? "").replace(/\*\//g, "* /").replace(/[\n\r]+/g, " ");
+  // Text that goes into a CSS comment: no way to close or reopen the comment, no line break, and no `<` or `>`
+  // (so the file can be pasted into a <style> element), whatever the id or name the target reported.
+  const commentText = value => String(value ?? "").replace(/\*(?=\/)|\/(?=\*)/g, "$& ").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/[\n\r]+/g, " ");
   const htmlCommentText = value => String(value ?? "").replace(/--/g, "- -").replace(/[\n\r]+/g, " ");
 
   // Same allow-list as the bridge's fontStylesheet key: Google Fonts css2 (1 to 8 families, at most one display and
@@ -4581,6 +4586,14 @@ if (remembered) kitId.value = remembered;
     return moved;
   }
 
+  // The bridge's `[data-design-id="..."]` form for an id (same escaping as fontkit-bridge.js): `"` and `\` with a
+  // backslash, characters special in CSS or HTML as hex escapes, so no raw `; { } < >` reaches the stylesheet.
+  function designIdSelector(id) {
+    const value = String(id).replace(/["\\]|[\u0000-\u001f\u007f;{}<>()/*!]/g,
+      ch => (ch === '"' || ch === "\\" ? `\\${ch}` : `\\${ch.codePointAt(0).toString(16)} `));
+    return `[data-design-id="${value}"]`;
+  }
+
   function cssDeclaration(key, value) {
     if (key === "fontSize") return `${value}px`;
     if (key === "letterSpacing") return `${value}em`;
@@ -4625,9 +4638,9 @@ if (remembered) kitId.value = remembered;
       const meta = live.targetMeta[targetId] || {};
       const name = meta.name || targetId;
       const assumed = !meta.selector;
-      const selector = meta.selector ? safeCssText(meta.selector, 500, { selector:true }) : `[data-design-id="${targetId.replace(/["\\]/g, "\\$&")}"]`;
+      const selector = meta.selector ? safeCssText(meta.selector, MAX_SELECTOR_LENGTH, { selector:true }) : designIdSelector(targetId);
       lines.push("");
-      if (!selector || safeCssText(selector, 500, { selector:true }) === null) {
+      if (!selector || safeCssText(selector, MAX_SELECTOR_LENGTH, { selector:true }) === null) {
         lines.push(`/* ${commentText(name)} (${commentText(targetId)}) — skipped: the target reported no safe selector */`);
         return;
       }

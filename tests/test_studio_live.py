@@ -2355,12 +2355,22 @@ class StudioReviewFixTests(LiveCase):
         '.\\[\\&\\>\\*\\]\\:p-4:nth-of-type(1) > p:nth-of-type(2)',
         '.a\\;b\\{c\\}d\\<e\\\\f:nth-of-type(1)',
         '.\\31 0 > b.a\\31  > i',
+        '[data-design-id="hero\\3b alternate"]',
+        '[data-design-id="a\\7b b\\7d \\3c c\\3e \\"d\\\\e"] > p:nth-of-type(1)',
+        '[data-design-id="x\\"]\\7b \\7d  body\\7b color:red\\7d \\2f \\2a "]:nth-of-type(2)',
     ]
     REJECTED_SELECTORS = [
         'main > h2 { color: red } h3',
         'main > h2; color: red',
         'main > h2 } body { display: none',
         'main > h2 <script>',
+        '[data-design-id="x"]{} body{color:red}/*"]',
+        '[data-design-id="x\\"]{} body{color:red}"]',
+        '[data-design-id="a<b"]',
+        '[data-design-id="a{b"]',
+        '[data-design-id="a;b"]',
+        '[data-design-id="a\\3bb\\"]',
+        '[data-design-id="a\\"]',
         'main > h2\\',
         'main > h2\\{',
         'main > url(https://evil.example/a)',
@@ -2422,6 +2432,9 @@ class StudioReviewFixTests(LiveCase):
         '.' + '\\a' * 250 + ';',
         'a' + ' > a\\1' * 90 + '\\',
         '.' + 'a' * 495 + '{',
+        '[data-design-id="' + '\\aaaaaa' * 60 + '{"]',
+        '[data-design-id="' + ' ' * 300 + '\\ab ' * 30 + '{"]',
+        '[data-design-id="' + '\\a ' * 150 + '\\"]',
     ]
 
     def test_adversarial_escape_runs_do_not_freeze_studio_and_are_skipped(self):
@@ -2451,8 +2464,10 @@ class StudioReviewFixTests(LiveCase):
         start = source.index('  const UNSAFE_CSS_TEXT')
         end = source.index(': UNSAFE_CSS_TEXT.test(text);', start) + len(': UNSAFE_CSS_TEXT.test(text);')
         code = source[start:end] + '\nreturn unsafeCssText;'
-        inputs = self.ADVERSARIAL + ['.' + '\\31 ' * 120 + 'a', 'a' + ' > a:nth-of-type(1)' * 25,
-                                     '.' + 'a\\;' * 160, '[data-design-id="' + 'x\\"' * 120 + '"]']
+        valid = ['.' + '\\31 ' * 120 + 'a', 'a' + ' > a:nth-of-type(1)' * 25, '.' + 'a\\;' * 160,
+                 '[data-design-id="' + 'x\\"' * 120 + '"]', '[data-design-id="' + '\\3b ' * 120 + '"]',
+                 '[data-design-id="' + '\\a  ' * 100 + 'x"]', '[data-design-id="' + '\\aaaaaa' * 60 + '"]']
+        inputs = self.ADVERSARIAL + valid
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 browser = launch(self.runtime, engine)
@@ -2466,7 +2481,7 @@ class StudioReviewFixTests(LiveCase):
                 for length, elapsed, _ in timings:
                     self.assertLess(elapsed, 50, f'{length} characters took {elapsed:.1f} ms')
                 self.assertEqual([unsafe for _, _, unsafe in timings[:len(self.ADVERSARIAL)]], [True] * len(self.ADVERSARIAL))
-                self.assertEqual([unsafe for _, _, unsafe in timings[len(self.ADVERSARIAL):]], [False] * 4,
+                self.assertEqual([unsafe for _, _, unsafe in timings[len(self.ADVERSARIAL):]], [False] * len(valid),
                                  'long but well-formed selectors are still accepted')
 
     # -- 2. composition tokens that exist only on the target -----------------

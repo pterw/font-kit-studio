@@ -40,8 +40,17 @@
  *    exists returns that instance and warns that the options were ignored.
  *  - Loading the script more than once keeps the first instance and the first
  *    class (window.FontKitBridge is never replaced).
- *  - A constructed instance also replaces an auto-created instance that no
- *    Studio has said hello to yet, so `defer`/`async` ordering is safe.
+ *  - `new FontKitBridge(...)` again (HMR) behaves by state. Once a Studio has talked to the
+ *    existing bridge, the constructor returns that bridge; it is never replaced and its
+ *    options are not merged, except `allowedOrigins`: a list that narrows the running policy
+ *    (an open bridge allows everything) is applied, one that would widen it ("*", an origin
+ *    not yet allowed, a non-list) is ignored, and a pinned Studio at an origin that is no
+ *    longer allowed loses its session. One console warning says what was applied and what
+ *    was ignored. A bridge that no Studio has talked to yet, or one that was disposed, is
+ *    replaced by the new instance, so changed options apply.
+ *  - Subclasses: `new Sub()` while a connected bridge exists returns the running instance
+ *    (whatever `super()` returns is `this`), so the rest of the subclass constructor runs
+ *    against that instance and `instanceof Sub` is false.
  *  Options: allowedOrigins, autoDiscover, autoDiscoverSemantic,
  *  enableClickToSelect, enableHighlightOverlay (default false), tokens, onApplied.
  *  The Studio can also switch an outline overlay on at runtime with
@@ -304,6 +313,15 @@
     return String(value).replace(/[^a-zA-Z0-9_\u00A0-\uFFFF-]/g, (ch) => `\\${ch}`);
   }
 
+  // `[data-design-id="..."]` for any id. Inside the quotes `"` and `\` get a backslash, and every character that could
+  // end the string, the rule or a <style> element (`; { } < > ( ) / * !` and control characters) is written as a CSS
+  // hex escape (`\3b `), so the selector text never holds a raw character that is special in CSS or HTML.
+  function designIdSelector(id) {
+    const value = String(id).replace(/["\\]|[\u0000-\u001f\u007f;{}<>()/*!]/g,
+      (ch) => (ch === '"' || ch === '\\' ? `\\${ch}` : `\\${ch.codePointAt(0).toString(16)} `));
+    return `[data-design-id="${value}"]`;
+  }
+
   function collapse(text) {
     return String(text || '').replace(/\s+/g, ' ').trim();
   }
@@ -343,11 +361,17 @@
       if (script && script.hasAttribute('data-allowed-origins')) list = script.getAttribute('data-allowed-origins');
     }
     if (list == null) return null;
+    list = parseOriginList(list);
+    if (list !== null && !list.length) console.warn('[FontKitBridge] allowedOrigins is empty; no Studio can connect.');
+    return list;
+  }
+
+  // A list of origins (array or space/comma separated string) without trailing slashes; null means "any origin"
+  // (a `*` in the list).
+  function parseOriginList(list) {
     if (typeof list === 'string') list = list.split(/[\s,]+/);
     list = Array.from(list).map((origin) => String(origin).trim().replace(/\/+$/, '')).filter(Boolean);
-    if (list.includes('*')) return null;
-    if (!list.length) console.warn('[FontKitBridge] allowedOrigins is empty; no Studio can connect.');
-    return list;
+    return list.includes('*') ? null : list;
   }
 
   // First invalid token in a composition patch, as { property, requested }, or null.
@@ -366,6 +390,34 @@
 
   class FontKitBridge {
     constructor(rawOptions) {
+      // One bridge per page. When a Studio has already talked to the bridge on this page, a second
+      // `new FontKitBridge(...)` (an HMR re-run, say) returns that instance instead of starting a duplicate that
+      // would answer the Studio as well and capture the first one's edits as its "originals". Its options are not
+      // merged into the running bridge, with one exception: an `allowedOrigins` list that narrows the running
+      // policy (an open bridge allows everything) is applied, so a security option is never silently dropped. It can
+      // never widen the policy, and a pinned Studio at an origin that is no longer allowed loses its session.
+      // Everything else is ignored, and the warning says what was applied and what was ignored. A bridge that no
+      // Studio has talked to yet (or a disposed one) is replaced instead, so changed options apply (see below).
+      if (typeof window !== 'undefined') {
+        const running = global.__fontkitBridge;
+        if (running && !running.disposed && running.everConnected && typeof running.narrowAllowedOrigins === 'function') {
+          const given = isPlainObject(rawOptions) ? rawOptions : {};
+          const parts = [];
+          if (given.allowedOrigins != null) {
+            const before = running.allowedOrigins === null ? 'any origin' : (running.allowedOrigins.join(' ') || 'no origin');
+            const outcome = running.narrowAllowedOrigins(given.allowedOrigins);
+            const after = running.allowedOrigins === null ? 'any origin' : (running.allowedOrigins.join(' ') || 'no origin');
+            parts.push(!outcome.applied ? `allowedOrigins ignored (it would not narrow the running policy: ${before})`
+              : outcome.changed ? `allowedOrigins narrowed to ${after} (was: ${before})` : `allowedOrigins unchanged (${after})`);
+          }
+          const ignored = Object.keys(given).filter((key) => key !== 'allowedOrigins');
+          if (ignored.length) parts.push(`ignored: ${ignored.join(', ')}`);
+          console.warn('[FontKitBridge] A bridge already exists on this page; new FontKitBridge() returned it. '
+            + (parts.length ? `${parts.join('; ')}. ` : 'Its options were ignored. ')
+            + 'Set window.FONTKIT_BRIDGE_OPTIONS or use data-auto-init="false" to configure the first one.');
+          return running;
+        }
+      }
       const options = isPlainObject(rawOptions) ? rawOptions : {};
       this.initOptions = rawOptions; // compared by initFontKitBridge()
       this.protocolVersion = PROTOCOL_VERSION;
@@ -465,11 +517,11 @@
         const existing = global.__fontkitBridge;
         if (!existing) {
           global.__fontkitBridge = this;
-        } else if (existing.auto === true && !existing.everConnected && typeof existing.dispose === 'function') {
-          existing.dispose();
-          global.__fontkitBridge = this;
         } else {
-          console.warn('[FontKitBridge] Another bridge instance already exists; both will answer the Studio.');
+          // Only a replaceable instance gets here (the check at the top returned any other): one that no
+          // Studio has talked to yet, or one that was disposed.
+          if (typeof existing.dispose === 'function') existing.dispose();
+          global.__fontkitBridge = this;
         }
       }
 
@@ -731,6 +783,24 @@
 
     originAllowed(origin) {
       return this.allowedOrigins === null || this.allowedOrigins.includes(origin);
+    }
+
+    // Applies an `allowedOrigins` request only when it narrows the running policy: every requested origin is already
+    // allowed (an open bridge allows everything), and the request is a list, not "any origin". Never widens.
+    // A pinned Studio whose origin is no longer allowed is dropped, like a hello from a disallowed origin is ignored:
+    // the bridge goes inert and applies nothing more. Returns { applied, changed }.
+    narrowAllowedOrigins(requested) {
+      if (typeof requested !== 'string' && !Array.isArray(requested)) return { applied: false, changed: false };
+      const list = parseOriginList(requested);
+      const current = this.allowedOrigins;
+      if (list === null || (current !== null && !list.every((origin) => current.includes(origin)))) {
+        return { applied: false, changed: false };
+      }
+      const next = Array.from(new Set(list));
+      const changed = current === null || next.length !== current.length;
+      this.allowedOrigins = next;
+      if (this.studioSource && !this.originAllowed(this.studioOrigin)) this.dropSession();
+      return { applied: true, changed };
     }
 
     // A pop-out Studio (window.opener) can close without saying goodbye: drop the
@@ -1852,7 +1922,7 @@
     // unique id). The selector is verified: querySelectorAll(selector) must be
     // exactly this element, otherwise the path is extended up to the body.
     selectorFor(record) {
-      if (record.stable) return `[data-design-id="${record.id.replace(/["\\]/g, '\\$&')}"]`;
+      if (record.stable) return designIdSelector(record.id);
       return this.uniqueSelector(record.element);
     }
 
@@ -2384,7 +2454,7 @@
 
     containerSelector(el) {
       const author = el.getAttribute('data-design-id');
-      if (author && !this.isBridgeAttr(el, 'data-design-id')) return `[data-design-id="${author.replace(/["\\]/g, '\\$&')}"]`;
+      if (author && !this.isBridgeAttr(el, 'data-design-id')) return designIdSelector(author);
       return this.uniqueSelector(el);
     }
 

@@ -1166,6 +1166,36 @@ class PromotedTargetTests(BridgeCase):
                 self.assertEqual([entry['targetId'] for entry in changes['targets']], [self.NEW_ID, TITLE])
 
 
+class StableSelectorEscapeTests(BridgeCase):
+    """data-design-id values can hold any character; the selector the bridge reports never holds a raw special one."""
+    IDS = ['hero;alternate', 'a{b}<c>"d\\e', 'x"]{} body{color:red}/*', 'url(x)!important', 'tab\there', 'new\nline', '\u00e9\u4e2d' + 'z' * 40]
+
+    def test_selectors_use_css_escapes_and_match_exactly_their_element(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                for design_id in self.IDS:
+                    with self.subTest(id=design_id):
+                        frame.evaluate("""([id]) => { const el = document.querySelector('#footer-note');
+                            el.setAttribute('data-design-id', id); document.body.append(document.createElement('i')); }""", [design_id])
+                        start = self.mark(page)
+                        self.wait_message(page, 'design:targets', start, f'd.targets.some((t) => t.id === {json.dumps(design_id)})')
+                        self.control(page, {'type': 'design:select', 'targetId': design_id})
+                        target = self.wait_message(page, 'design:selected', start, f'd.targetId === {json.dumps(design_id)}')['target']
+                        selector = target['selector']
+                        self.assertTrue(target['stable'])
+                        for raw in ';{}<>()/*!\n\t':
+                            self.assertNotIn(raw, selector)
+                        self.assertEqual(frame.evaluate(
+                            '([s, id]) => { const found = [...document.querySelectorAll(s)];'
+                            ' return [found.length, found[0] && found[0].getAttribute("data-design-id") === id]; }',
+                            [selector, design_id]), [1, True], selector)
+                        reply = self.applied(page, design_id, {'fontSize': 21})
+                        self.assertEqual(self.entry(reply['changes'], design_id)['selector'], selector)
+                        self.request(page, {'type': 'design:reset', 'targetId': design_id})
+
+
 class AssetPlacementTests(BridgeCase):
     """Legacy image slots: assets render only as <img>, never as live SVG markup."""
 
@@ -2413,6 +2443,204 @@ class SpaRobustnessTests(BridgeCase):
                 self.assertTrue(warnings['kept'])
                 self.assertEqual(len(warnings['seen']), 1)
                 self.applied(page, TITLE, {'fontSize': 41})
+
+    def test_a_second_constructed_bridge_after_connect_returns_the_connected_one(self):
+        """An HMR re-run of `new FontKitBridge(...)` must not add a second bridge that also answers the Studio."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                self.assertEqual(len(self.messages(page, 'design:bridge-ready')), 1)
+                self.applied(page, TITLE, {'fontSize': 55, 'color': '#336699'})
+                self.assertNotEqual(self.style_attr(frame, TITLE), TITLE_STYLE)
+                result = frame.evaluate("""() => {
+                    const seen = [];
+                    const warn = console.warn;
+                    console.warn = (...args) => seen.push(args.join(' '));
+                    const first = window.__fontkitBridge;
+                    const again = new FontKitBridge({ allowedOrigins: ['http://studio.test'], enableHighlightOverlay: true });
+                    const twice = new FontKitBridge();
+                    console.warn = warn;
+                    return { same: again === first && twice === first && window.__fontkitBridge === first,
+                             instance: again instanceof FontKitBridge, seen,
+                             overlay: first.options.enableHighlightOverlay === true,
+                             origins: first.allowedOrigins };
+                }""")
+                self.assertTrue(result['same'], 'the constructor returns the connected instance')
+                self.assertTrue(result['instance'])
+                self.assertFalse(result['overlay'], 'the new options are not merged into the running bridge')
+                self.assertEqual(result['origins'], ['http://studio.test'], 'an open bridge is narrowed by allowedOrigins')
+                self.assertEqual(len(result['seen']), 2)
+                self.assertIn('allowedOrigins narrowed to http://studio.test', result['seen'][0])
+                self.assertIn('ignored: enableHighlightOverlay', result['seen'][0])
+                self.assertIn('options were ignored', result['seen'][1])
+
+                # No second bridge-ready, and a Studio that re-handshakes anyway gets one answer per request.
+                page.wait_for_timeout(300)
+                self.assertEqual(len(self.messages(page, 'design:bridge-ready')), 1)
+                start = self.mark(page)
+                self.hello(page, 's2')
+                self.assertEqual(len(self.messages(page, 'design:ready', start)), 1)
+                reply = self.applied(page, TITLE, {'fontSize': 60})
+                page.wait_for_timeout(300)
+                self.assertEqual(len(self.messages(page, 'design:applied', start)), 1)
+                self.assertEqual(reply['changes']['targets'][0]['declarations']['font-size'], '60px')
+                self.assertEqual(self.entry(reply['changes'], TITLE)['originalText'], 'Make type sing')
+
+                # Reset restores the author's inline style byte for byte (one set of originals, captured once).
+                reset = self.request(page, {'type': 'design:reset', 'targetId': TITLE})
+                self.assertEqual(reset['type'], 'design:applied')
+                self.assertEqual(self.style_attr(frame, TITLE), TITLE_STYLE)
+                self.assertEqual(self.errors(frame), [])
+
+
+class RepeatedConstructionTests(BridgeCase):
+    """`new FontKitBridge(...)` again on a page that already has a bridge (HMR): what applies and what is ignored."""
+    CALL = """(options) => {
+        const seen = [];
+        const warn = console.warn;
+        console.warn = (...args) => seen.push(args.join(' '));
+        const first = window.__fontkitBridge;
+        const again = new FontKitBridge(options);
+        console.warn = warn;
+        return { same: again === first, seen, origins: first.allowedOrigins, session: first.sessionId };
+    }"""
+
+    def test_a_narrowing_allowed_origins_ends_a_pinned_session_at_a_now_disallowed_origin(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                self.applied(page, TITLE, {'fontSize': 55})
+                result = frame.evaluate(self.CALL, {'allowedOrigins': ['http://other.test'], 'enableHighlightOverlay': True})
+                self.assertTrue(result['same'])
+                self.assertEqual(result['origins'], ['http://other.test'])
+                self.assertIsNone(result['session'], 'the session of the disallowed origin is ended')
+                self.assertEqual(len(result['seen']), 1)
+                self.assertIn('allowedOrigins narrowed to http://other.test', result['seen'][0])
+                self.assertIn('ignored: enableHighlightOverlay', result['seen'][0])
+                # Inert: no more answers, no new session from that origin, and the page is the author's again.
+                start = self.mark(page)
+                reply = self.update(page, TITLE, {'fontSize': 70})
+                self.assertEqual(reply['type'], 'timeout')
+                self.assertEqual(page.evaluate("() => hello('s2')")['type'], 'timeout')
+                self.assertEqual(self.messages(page, 'design:applied', start), [])
+                self.assertEqual(self.computed(frame, TITLE, 'fontSize'), '55px', 'no further patch was applied')
+                self.assertEqual(frame.evaluate('window.__fontkitBridge.active'), True)
+                self.assertEqual(self.errors(frame), [])
+
+    def test_narrowing_keeps_an_allowed_pinned_studio_and_never_widens(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                # Open -> two origins: applied. The pinned Studio is still allowed, so its session continues.
+                result = frame.evaluate(self.CALL, {'allowedOrigins': ['http://studio.test', 'http://evil.test']})
+                self.assertEqual(result['origins'], ['http://studio.test', 'http://evil.test'])
+                self.assertEqual(result['session'], 's1')
+                self.applied(page, TITLE, {'fontSize': 55})
+                # Wider, or "any origin": ignored, and the warning says so.
+                for wider in (['http://studio.test', 'http://evil.test', 'http://third.test'], ['*'], '*', ['http://third.test']):
+                    with self.subTest(wider=wider):
+                        result = frame.evaluate(self.CALL, {'allowedOrigins': wider})
+                        self.assertEqual(result['origins'], ['http://studio.test', 'http://evil.test'])
+                        self.assertEqual(result['session'], 's1')
+                        self.assertEqual(len(result['seen']), 1)
+                        self.assertIn('allowedOrigins ignored', result['seen'][0])
+                # Narrower again: the intersection. The allowed Studio can still say hello and edit.
+                result = frame.evaluate(self.CALL, {'allowedOrigins': ['http://studio.test']})
+                self.assertEqual(result['origins'], ['http://studio.test'])
+                ready = self.hello(page, 's2')
+                self.assertEqual(ready['type'], 'design:ready')
+                self.assertEqual(self.applied(page, TITLE, {'fontSize': 60})['revision'], 2)
+                # An empty list narrows to nothing; a call without the option changes nothing.
+                result = frame.evaluate(self.CALL, {})
+                self.assertEqual(result['origins'], ['http://studio.test'])
+                self.assertIn('options were ignored', result['seen'][0])
+                result = frame.evaluate(self.CALL, {'allowedOrigins': []})
+                self.assertEqual(result['origins'], [])
+                self.assertIsNone(result['session'])
+                self.assertEqual(self.errors(frame), [])
+
+    def test_a_configured_bridge_is_never_widened_by_a_later_open_call(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, target=OPTIONS_PAGE)
+                self.hello(page)
+                self.assertEqual(frame.evaluate('window.__fontkitBridge.allowedOrigins'), ['http://studio.test'])
+                for wider in ('*', ['*'], ['http://studio.test', 'http://evil.test'], 'http://evil.test'):
+                    result = frame.evaluate(self.CALL, {'allowedOrigins': wider})
+                    self.assertEqual(result['origins'], ['http://studio.test'], wider)
+                    self.assertIn('allowedOrigins ignored', result['seen'][0])
+                    self.assertTrue(result['same'])
+                # Values that are not a list of origins are ignored too (never "narrowed" to nothing).
+                for odd in (5, {'a': 1}, True):
+                    result = frame.evaluate(self.CALL, {'allowedOrigins': odd})
+                    self.assertEqual(result['origins'], ['http://studio.test'])
+                    self.assertEqual(result['session'], 's1')
+                self.assertEqual(self.applied(page, 'options.title', {'fontSize': 22})['type'], 'design:applied')
+
+    def test_a_constructed_bridge_no_studio_has_talked_to_is_replaced_so_new_options_apply(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                result = frame.evaluate("""() => {
+                    const auto = window.__fontkitBridge;
+                    const mine = new FontKitBridge({ allowedOrigins: ['http://evil.test'] });
+                    const later = new FontKitBridge({ allowedOrigins: ['http://studio.test'], enableHighlightOverlay: true });
+                    return { autoDisposed: auto.disposed, mineDisposed: mine.disposed, latest: later === window.__fontkitBridge,
+                             distinct: later !== mine, origins: later.allowedOrigins, overlay: later.options.enableHighlightOverlay };
+                }""")
+                self.assertEqual(result, {'autoDisposed': True, 'mineDisposed': True, 'latest': True, 'distinct': True,
+                                          'origins': ['http://studio.test'], 'overlay': True})
+                ready = self.hello(page)
+                self.assertEqual(ready['type'], 'design:ready')
+                self.assertEqual(len(self.messages(page, 'design:ready')), 1, 'only the latest bridge answers')
+                # Once a Studio has talked to it, it is kept.
+                self.assertEqual(frame.evaluate(self.CALL, {'enableHighlightOverlay': False})['same'], True)
+
+    def test_a_disposed_bridge_is_replaced_by_the_next_new(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                result = frame.evaluate("""() => {
+                    const first = window.__fontkitBridge;
+                    first.dispose();
+                    const seen = [];
+                    const warn = console.warn;
+                    console.warn = (...args) => seen.push(args.join(' '));
+                    const next = new FontKitBridge({ enableHighlightOverlay: true, allowedOrigins: ['http://studio.test'] });
+                    console.warn = warn;
+                    return { replaced: next !== first && next === window.__fontkitBridge, seen,
+                             overlay: next.options.enableHighlightOverlay, origins: next.allowedOrigins, active: next.active };
+                }""")
+                self.assertEqual(result['replaced'], True)
+                self.assertEqual(result['seen'], [], 'a disposed bridge is not "an existing bridge": no warning')
+                self.assertEqual(result['overlay'], True)
+                self.assertEqual(result['origins'], ['http://studio.test'])
+                self.assertEqual(self.hello(page, 's2')['type'], 'design:ready')
+                self.assertEqual(self.applied(page, TITLE, {'fontSize': 52})['type'], 'design:applied')
+                self.assertEqual(self.errors(frame), [])
+
+    def test_new_of_a_subclass_returns_the_running_bridge_and_its_constructor_body_runs_on_it(self):
+        """JavaScript semantics: whatever `super()` returns is `this`. Documented in the bridge docblock."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                result = frame.evaluate("""() => {
+                    class Mine extends FontKitBridge { constructor(options) { super(options); this.mineRan = true; } }
+                    const first = window.__fontkitBridge;
+                    const warn = console.warn;
+                    console.warn = () => {};
+                    const sub = new Mine({ allowedOrigins: ['http://studio.test'] });
+                    console.warn = warn;
+                    return { same: sub === first, mineRan: first.mineRan === true, global: window.__fontkitBridge === first,
+                             origins: first.allowedOrigins };
+                }""")
+                self.assertEqual(result, {'same': True, 'mineRan': True, 'global': True, 'origins': ['http://studio.test']})
+                self.assertEqual(self.applied(page, TITLE, {'fontSize': 52})['type'], 'design:applied')
 
 
 class LedgerHtmlTests(BridgeCase):

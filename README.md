@@ -381,7 +381,7 @@ Without any markup, fontkit discovers headings, paragraphs inside sections, nav 
 
 | Attribute | Meaning |
 |---|---|
-| `data-design-id="landing.hero.title"` | A stable id. CSS rules use `[data-design-id="…"]`, so the selector survives refactors. Must be unique on the page. |
+| `data-design-id="landing.hero.title"` | A stable id. CSS rules use `[data-design-id="…"]`, so the selector survives refactors. Must be unique on the page. Any characters work: quotes and backslashes are backslash-escaped, and `; { } < > ( ) / * !` and control characters are written as CSS escapes such as `\3b `. |
 | `data-design-role="display"` | A role label such as `display`, `title`, `body`, `button`, `metadata` or `image`. |
 | `data-design-name="Hero title"` | The friendly name shown in Studio. |
 | `data-design-weights="400 600 800"` | The weights this element allows. Studio snaps requests to the nearest one. |
@@ -413,7 +413,7 @@ By default the bridge accepts a `design:hello` from the window that framed or op
 <script>initFontKitBridge({ allowedOrigins: ['http://localhost:8000'] })</script>
 ```
 
-Separate several origins with spaces or commas. `new FontKitBridge({ allowedOrigins: […] })` also works. Loading the script twice (for example on hot reload) keeps the first instance. Options are `allowedOrigins`, `autoDiscover`, `autoDiscoverSemantic`, `enableClickToSelect`, `enableHighlightOverlay`, `tokens` and `onApplied`.
+Separate several origins with spaces or commas. `new FontKitBridge({ allowedOrigins: […] })` also works. Loading the script twice (for example on hot reload) keeps the first instance. Once a Studio has talked to the bridge, calling `new FontKitBridge(...)` again returns that bridge and ignores the new options, with one exception: an `allowedOrigins` list that narrows the current policy is applied, and a connected Studio at an origin that is no longer allowed loses its session. A wider list, `*` or a non-list value is ignored. A console warning says what was applied and what was ignored. A bridge that no Studio has talked to yet, or one that was disposed, is replaced by the new one, so changed options apply during hot reload. To configure the first bridge, use `window.FONTKIT_BRIDGE_OPTIONS`, `data-allowed-origins` or `data-auto-init="false"`. Options are `allowedOrigins`, `autoDiscover`, `autoDiscoverSemantic`, `enableClickToSelect`, `enableHighlightOverlay`, `tokens` and `onApplied`.
 
 ### Bookmarklet
 
