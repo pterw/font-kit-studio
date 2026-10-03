@@ -4,9 +4,9 @@ Plans: `docs/plans/2026-09-30-v0.1.1-responsive-rows.md` (complete), `docs/plans
 
 ## Current state
 
-- **v0.2.0 (PR #1, open, awaiting the owner's merge).** All plan tasks, review-fix rounds and every review thread are done; check CI on the current head before relying on it. In flight: plan Addendum 7 (known-limit fixes: DOM moves restored by Reapply, reconnect banner wording, removed author ids, the wrong-element re-select, origin-list case and `initFontKitBridge` narrowing, Composer tracking and font loading). Each Addendum 7 item is reviewed before it is committed to the PR branch. Status: all seven items are implemented with failing-first tests, uncommitted, report at `tasks/v02-addendum-7-report.md`; next are the independent review, the doc changes the report lists (README, D020/D021, plan contract and checkboxes), then one commit. Composer sync does not count as asking for free fonts (D031).
-- **Next release.** The typography system design is approved: `docs/specs/2026-10-03-typography-system-design.md` (releases R1 one command, R2 engine, R3 pairing system, R4 output and handoff, R5 extension). Its R1 plan starts on a fresh branch from `main` after PR #1 merges. Open owner decisions are listed in the design's section 6 (package name, Studio file name, specimen canvas location).
-- **Evidence.** 434 tests pass in Chromium locally; Firefox runs in CI only and is advisory (D029).
+- **v0.2.0 merged (PR #1, 2026-10-03).** Plan Addendum 7 (known-limit fixes) follows as its own pull request from the same branch, restarted on `main`: reviewed, all seven items and the review's fixes done, records in `tasks/v02-addendum-7-*.md`. Open for the owner after it lands: while a composition is linked, a composition acknowledgement replaces tokens imported from JSON with the page's tokens (`recordCanonical`), which predates Addendum 7 and needs a ruling (Rule 2 against Rule 6) and a failing test first.
+- **Next release.** The typography system design is approved: `docs/specs/2026-10-03-typography-system-design.md` (releases R1 one command, R2 engine, R3 pairing system, R4 output and handoff, R5 extension). Its R1 plan starts on a fresh branch from `main` after the Addendum 7 pull request merges. Open owner decisions are listed in the design's section 6 (package name, Studio file name, specimen canvas location).
+- **Evidence.** 517 tests pass in Chromium locally; Firefox runs in CI only and is advisory (D029).
 
 ## Recovery
 
@@ -50,3 +50,20 @@ Every implementation task was independently reviewed. Final suite on Chromium: 2
   - Repeated construction: once a Studio has talked to the bridge, a second `new FontKitBridge(...)` returns it; only an `allowedOrigins` list that narrows the policy is applied, dropping a Studio that is no longer allowed. An unconnected or disposed bridge is replaced, so hot-reload options apply.
   - Author ids with CSS-special characters keep their rules: the bridge writes `; { } < > ( ) / * !` and control characters as CSS escapes, Studio's selector grammar accepts them, and CSS comments neutralise `/*`, `*/`, `<` and `>`.
   - 434 tests (Chromium); records in `tasks/v02-review-fixes-*.md`.
+- **Addendum 7, known-limit fixes (2026-10-03).** Each item reproduced with a failing test first, then independently reviewed (`tasks/v02-addendum-7-review.md`: Approved with fixes; the fixes were re-reviewed and approved):
+  - DOM moves survive a reload: Studio saves them as `live.structure` and Reapply replays them after its resets. Only a user's DOM move enters the saved order; a reset, a connect or Accept never adopts a container the page reordered by itself (stricter than the review's R2 suggestion, which kept adoption on connect, because a composition sync reorders containers too). A container is replayed only while it still holds a saved child, and failures name the step and say what was already applied.
+  - The reconnect banner explains 0 live edits after a sync and says Accept replaces saved overrides, tokens and DOM order; a removed author id moves the edit to an auto id with `previousId`; a late acknowledgement no longer moves the selection off the user's pick (`requestId` on `design:select`).
+  - Origins compare without case and `initFontKitBridge` narrows a running bridge; Composer tracking arrives in thousandths of an em; composition updates carry `fontStylesheets`, sent only after the free-fonts ask, and imported or applied documents wait for the ask too (D031, D032).
+  - Review found and fixed: page-only containers saved by a reset, Reapply undoing its own saved move (hidden by the fake's visual-order `orderIds`), a saved export its own import refused, status lines that promised a restore, imported fonts reaching Google before the ask, and test gaps shown by surviving mutations.
+  - 517 tests (Chromium; Firefox not run here); offline frontend gate OK; the online free-fonts check could not run here (the gate's browser has no proxy) and runs in CI. Decisions D020 (extended), D021 (closed), D031, D032, D033.
+- **PR #2 review fixes (2026-10-03).** Codex: pressing Load free fonts after a linked Composer sync now re-sends the composition with its stylesheets; consent alone still sends nothing to an unlinked page (Rule 6). Reviewed in `tasks/v02-addendum-7-review.md`; 519 tests (Chromium).
+  - Copilot findings, each reproduced first and fixed test-first:
+    - A reset of an unrelated element no longer overwrites or drops a saved DOM order after the page changed it in session; Studio keeps the saved order and shows the banner.
+    - A DOM move made while the banner is open is not saved when it would put an element in two saved containers or exceed 100 containers, and the status says so.
+    - `initFontKitBridge` narrows the allow-list even when given back the options object the bridge was built from.
+    - The banner no longer promises a smaller CSS file, or 0 live edits, for text-only saved edits.
+    - Selections Studio makes for the user are tracked like its own refreshes, so a late reply cannot override a newer page click.
+  - One builder now sets a composition's complete stylesheet set for Sync, linked edits, the consent re-send and Reapply, so a streamed edit no longer releases a saved token's font.
+  - A real Studio + real bridge test covers Load free fonts after a linked sync. Limits recorded in D034.
+  - A reset whose reply names the element's container no longer drops a saved container the page restored since the last reply (the fake target's `resetNamesTarget` switch covers it). The banner heading now says what raised it: a reconnect, the page changing a saved DOM order, or an import.
+  - 548 tests (Chromium; Firefox not run here); offline frontend gate OK.

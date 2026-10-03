@@ -48,8 +48,16 @@
   };
   // ignoreBaseRevision: a target that applies requests queued while it was busy, whatever revision they were based on.
   // keepNullTokens: an older bridge that does not know that a null token removes the override.
-  const fake = window.fake = { hold: false, conflictAlways: false, rejectNext: null, warnNext: null,
+  const fake = window.fake = { hold: false, holdAll: false, conflictAlways: false, rejectNext: null, warnNext: null,
     framework: {}, guards: {}, bulk: false, ignoreBaseRevision: false, keepNullTokens: false,
+    // undoMoves: a page that re-renders and silently puts a DOM move back (the move is still acknowledged).
+    // mapStructure / extraStructure: ledger structure entries as the bridge could report them (oversized names, ids
+    // and selectors, more children than Studio saves, an id two containers both claim). priorStructure is the same but
+    // listed before the page's own entries (containers the page reordered long before, so they fill Studio's limit first).
+    undoMoves: false, mapStructure: null, extraStructure: [], priorStructure: [],
+    // resetNamesTarget: a reset reply that names the element's manifest (the real bridge does, on a targeted reset);
+    // left off, the reply omits `target`, which the protocol allows.
+    resetNamesTarget: false,
     get mode() { return mode; }, get overlay() { return overlay; }, get revision() { return revision; } };
   const params = new URLSearchParams(location.search);
   fake.bulk = params.has("bulk");
@@ -121,6 +129,7 @@
   const order = [];       // first-change order
   const tokens = {};
   const sheets = new Map(); // target id -> font stylesheet it references (the bridge keeps only referenced imports)
+  let compositionSheets = []; // the latest composition update's `fontStylesheets` (a complete set; omitted means unchanged)
 
   const CSS = { fontFamily: "font-family", fontSize: "font-size", fontWeight: "font-weight", lineHeight: "line-height",
     letterSpacing: "letter-spacing", color: "color", textAlign: "text-align", textTransform: "text-transform", order: "order" };
@@ -211,13 +220,17 @@
     return clone;
   }
   function structure() {
-    return structTouched.map(parent => {
+    return fake.priorStructure.concat(structTouched.map(parent => {
       const current = registeredChildren(parent).map(d => d.id);
       const original = originalOrder.get(parent) || [];
       if (JSON.stringify(current) === JSON.stringify(original)) return null;
       return { containerKey: containerKey(parent), selector: containerSelector(parent), stable: parent.hasAttribute("data-design-id"),
-        name: containerName(parent), html: cleanedClone(parent).outerHTML, order: visualSiblings(parent).map(name) };
-    }).filter(Boolean);
+        // Both lists follow the DOM (like the bridge's childElements), not CSS order: a reset that clears a CSS order
+        // must not look, in the ledger, like it also undid a DOM move.
+        name: containerName(parent), html: cleanedClone(parent).outerHTML, order: registeredChildren(parent).map(name),
+        // The same children by target id (an older bridge omits it: ?noOrderIds).
+        ...(params.has("noOrderIds") ? {} : { orderIds: registeredChildren(parent).map(d => d.id) }) };
+    }).filter(Boolean).map(entry => (fake.mapStructure ? fake.mapStructure(entry) : entry)).concat(fake.extraStructure));
   }
   function ledger() {
     const targets = [];
@@ -235,12 +248,17 @@
     });
     // ?hostile: the ledger also carries values a Studio must not trust (shared-rules tests).
     const extra = params.has("hostile") ? hostileLedger : { tokens: {}, imports: [] };
-    return { tokens: { ...tokens, ...extra.tokens }, targets, structure: structure(), imports: [...new Set([...sheets.values(), ...extra.imports])] };
+    return { tokens: { ...tokens, ...extra.tokens }, targets, structure: structure(), imports: [...new Set([...sheets.values(), ...compositionSheets, ...extra.imports])] };
   }
-  function post(msg) {
+  function post(msg, front) {
     if (!pinned) return;
     const full = { protocolVersion: 1, sessionId: pinned.sessionId, ...msg };
-    if (fake.hold && (msg.type === "design:applied" || msg.type === "design:rejected")) { held.push(full); return; }
+    // holdAll: every reply stays in one ordered pipe until released one at a time (messages in flight in both directions).
+    // `front` puts a message ahead of the replies already in the pipe (an event that happened before they were produced).
+    if (fake.holdAll || (fake.hold && (msg.type === "design:applied" || msg.type === "design:rejected"))) {
+      if (front) held.unshift(full); else held.push(full);
+      return;
+    }
     pinned.source.postMessage(full, pinned.origin === "null" ? "*" : pinned.origin);
   }
   fake.release = function () {
@@ -250,9 +268,9 @@
   };
   fake.heldCount = () => held.length;
   fake.bumpRevision = () => { revision += 1; return revision; };
-  fake.select = function (id) {
+  fake.select = function (id, front) {
     const def = byId.get(id);
-    post({ type: "design:selected", targetId: id, rect: rect(def.el), target: manifest(def) });
+    post({ type: "design:selected", targetId: id, rect: rect(def.el), target: manifest(def) }, front === true);
   };
   fake.hover = function (id) {
     if (id == null) { post({ type: "design:hover", targetId: null }); return; }
@@ -284,6 +302,20 @@
     if (sheets.has(id)) { sheets.set(newId, sheets.get(id)); sheets.delete(id); }
     post({ type: "design:targets", targets: DEFS.map(d => manifest(d, fake.bulk)) });
   };
+  // The reverse: an author target loses its data-design-id. Same element, edits and place in the change order move
+  // to an auto id, the manifest names the author id it replaced, and the full list is announced.
+  fake.demote = (id, newId, newSelector) => {
+    const def = byId.get(id);
+    byId.delete(id);
+    Object.assign(def, { id: newId, previousId: id, stable: false, selector: newSelector });
+    byId.set(newId, def);
+    def.el.removeAttribute("data-design-id");
+    if (overrides[id]) { overrides[newId] = overrides[id]; delete overrides[id]; }
+    const at = order.indexOf(id);
+    if (at >= 0) order[at] = newId;
+    if (sheets.has(id)) { sheets.set(newId, sheets.get(id)); sheets.delete(id); }
+    post({ type: "design:targets", targets: DEFS.map(d => manifest(d, fake.bulk)) });
+  };
   // Tokens another editor (an earlier Studio session on the same page) left on the target.
   fake.setTokens = values => Object.entries(values).forEach(([name, value]) => {
     tokens[name] = String(value);
@@ -293,6 +325,13 @@
   fake.styleOf = id => computed(byId.get(id).el);
   fake.textOf = id => byId.get(id).el.textContent;
   fake.arrangementOf = id => arrangement(byId.get(id));
+  // The page reorders a container by itself (as a composition sync reorders the page's sections): no message, but the
+  // container shows up in the ledger's structure like any other reordered container.
+  fake.reverse = key => {
+    const parent = containerByKey(key).el;
+    [...parent.children].reverse().forEach(child => parent.appendChild(child));
+    if (!structTouched.includes(parent)) structTouched.push(parent);
+  };
   // Registered children of a container (by key) in DOM order / visual order.
   fake.domOrder = key => registeredChildren(containerByKey(key).el).map(d => d.id);
   fake.visualOrder = key => visualSiblings(containerByKey(key).el).map(d => d.id);
@@ -465,10 +504,12 @@
       });
     } else {
       [currentParent, destParent].forEach(parent => { if (!structTouched.includes(parent)) structTouched.push(parent); });
+      const before = registeredChildren(destParent).map(item => item.el);
       const list = registeredChildren(destParent).filter(x => x !== def);
       if (index < list.length) destParent.insertBefore(def.el, list[index].el);
       else if (list.length) list[list.length - 1].el.after(def.el);
       else destParent.appendChild(def.el);
+      if (fake.undoMoves && sameParent) before.forEach(el => destParent.appendChild(el));
     }
     revision += 1;
     const now = arrangement(def);
@@ -506,7 +547,15 @@
     if (d.type === "design:update") {
       if (!d.patch || typeof d.patch !== "object" || Array.isArray(d.patch)) { reject(d, "invalid-message"); return; }
       if (d.targetId === undefined) {
+        if ("fontStylesheets" in d.patch) {
+          const list = d.patch.fontStylesheets;
+          if (!Array.isArray(list) || list.length > 16 || !list.every(url => typeof url === "string" && url.length <= 2000 && FONT_SHEET.test(url))) {
+            reject(d, "unsupported-value", { property: "fontStylesheets" });
+            return;
+          }
+        }
         if (conflict(d)) return;
+        if ("fontStylesheets" in d.patch) compositionSheets = [...new Set(d.patch.fontStylesheets)];
         Object.entries(d.patch.tokens || {}).forEach(([name, value]) => {
           if (value === null) {
             // Addendum 6: null removes Studio's override; an unknown name is ignored.
@@ -541,9 +590,11 @@
     } else if (d.type === "design:move") {
       handleMove(d);
     } else if (d.type === "design:select" || d.type === "design:highlight") {
+      // A select request may carry a requestId; the reply echoes it (additive contract field).
+      const echo = typeof d.requestId === "string" ? { requestId: d.requestId } : {};
       const def = byId.get(d.targetId);
-      if (!def) { post({ type: "design:selected", targetId: null }); return; }
-      post({ type: "design:selected", targetId: def.id, rect: rect(def.el), target: manifest(def) });
+      if (!def) { post({ type: "design:selected", targetId: null, ...echo }); return; }
+      post({ type: "design:selected", targetId: def.id, rect: rect(def.el), target: manifest(def), ...echo });
     } else if (d.type === "design:mode") {
       if (d.mode === "select" || d.mode === "interact") mode = d.mode;
       if (typeof d.overlay === "boolean") overlay = d.overlay;
@@ -560,11 +611,12 @@
           if (def.originalStyle == null) def.el.removeAttribute("style"); else def.el.setAttribute("style", def.originalStyle); });
         Object.keys(tokens).forEach(name => { document.documentElement.style.removeProperty(name); delete tokens[name]; });
         sheets.clear();
+        compositionSheets = [];
         order.length = 0;
       }
       revision += 1;
       post({ type: "design:applied", requestId: d.requestId, revision, targetId: d.targetId || "global", canonicalPatch: {},
-        reset: true, changes: ledger() });
+        reset: true, ...(d.targetId && fake.resetNamesTarget ? { target: manifest(byId.get(d.targetId)) } : {}), changes: ledger() });
     } else if (d.type === "design:restore-text") {
       if (conflict(d)) return;
       DEFS.forEach(def => { def.el.textContent = def.originalText; });

@@ -20,6 +20,7 @@ TARGET = 'http://target.test'
 EVIL = 'http://evil.test'
 TARGET_PAGE = f'{TARGET}/tests/fixtures/bridge/target.html'
 RESTRICTED_PAGE = f'{TARGET}/tests/fixtures/bridge/target-restricted.html'
+RESTRICTED_UPPER_PAGE = f'{TARGET}/tests/fixtures/bridge/target-restricted-upper.html'
 MANUAL_PAGE = f'{TARGET}/tests/fixtures/bridge/target-manual.html'
 OPTIONS_PAGE = f'{TARGET}/tests/fixtures/bridge/target-options.html'
 CONSTRUCTED_PAGE = f'{TARGET}/tests/fixtures/bridge/target-constructed.html'
@@ -386,6 +387,190 @@ class InitOptionTests(BridgeCase):
                 self.assertTrue(frame.evaluate('window.__mine === window.__fontkitBridge'))
 
 
+class OriginListTests(BridgeCase):
+    """Origins are compared case-insensitively, and initFontKitBridge narrows a running bridge like the constructor."""
+    INIT = """(options) => {
+        const seen = [];
+        const warn = console.warn;
+        console.warn = (...args) => seen.push(args.join(' '));
+        const first = window.__fontkitBridge;
+        const again = initFontKitBridge(options);
+        console.warn = warn;
+        return { same: again === first, seen, origins: first.allowedOrigins, session: first.sessionId };
+    }"""
+
+    def test_an_allowed_origin_written_in_mixed_case_still_matches_the_lower_case_origin_the_browser_reports(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, host=EVIL, target=RESTRICTED_UPPER_PAGE)
+                self.assertEqual(page.evaluate('() => hello("s1")')['type'], 'timeout', 'a foreign origin is still refused')
+                page, frame = self.open(engine, host=STUDIO, target=RESTRICTED_UPPER_PAGE)
+                self.hello(page)
+                self.assertEqual(self.applied(page, 'restricted.title', {'fontSize': 22})['type'], 'design:applied')
+                self.assertEqual(frame.evaluate('window.__fontkitBridge.allowedOrigins'),
+                                 ['http://studio.test', 'http://localhost:4173'])
+
+    def test_a_mixed_case_list_narrows_like_its_lower_case_twin(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, target=RESTRICTED_PAGE)
+                self.hello(page)
+                call = RepeatedConstructionTests.CALL
+                # Same origin, other spelling: applied (it narrows nothing further), and the session continues.
+                result = frame.evaluate(call, {'allowedOrigins': ['HTTP://STUDIO.test/']})
+                self.assertEqual(result['origins'], ['http://studio.test'])
+                self.assertEqual(result['session'], 's1')
+                self.assertIn('allowedOrigins narrowed to http://studio.test', result['seen'][0])
+                # A different origin in capitals is still a wider list and is ignored.
+                result = frame.evaluate(call, {'allowedOrigins': ['HTTP://EVIL.TEST']})
+                self.assertEqual(result['origins'], ['http://studio.test'])
+                self.assertIn('allowedOrigins ignored', result['seen'][0])
+
+    def test_init_narrows_an_open_bridge_and_a_foreign_origin_is_then_refused(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, host=EVIL)
+                self.assertIsNone(frame.evaluate('window.__fontkitBridge.allowedOrigins'), 'the bridge starts open')
+                result = frame.evaluate(self.INIT, {'allowedOrigins': ['HTTP://Studio.test']})
+                self.assertTrue(result['same'])
+                self.assertEqual(result['origins'], ['http://studio.test'])
+                self.assertEqual(len(result['seen']), 1)
+                self.assertIn('allowedOrigins narrowed to http://studio.test', result['seen'][0])
+                # The page that embeds the bridge is not an allowed Studio any more.
+                self.assertEqual(page.evaluate('() => hello("s1")')['type'], 'timeout')
+                self.assertEqual(self.messages(page, 'design:ready'), [])
+                self.assertEqual(self.errors(frame), [])
+
+    def test_init_narrows_a_running_connected_bridge_and_never_widens_it(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                self.applied(page, TITLE, {'fontSize': 55})
+                # Open -> two origins is a narrowing; the pinned Studio is still allowed.
+                result = frame.evaluate(self.INIT, {'allowedOrigins': ['http://studio.test', 'http://third.test']})
+                self.assertEqual((result['origins'], result['session']), (['http://studio.test', 'http://third.test'], 's1'))
+                for wider in (['*'], '*', ['http://studio.test', 'http://third.test', 'http://fourth.test']):
+                    with self.subTest(wider=wider):
+                        before = frame.evaluate('window.__fontkitBridge.allowedOrigins')
+                        result = frame.evaluate(self.INIT, {'allowedOrigins': wider})
+                        self.assertEqual(result['origins'], before)
+                        self.assertEqual(len(result['seen']), 1)
+                        self.assertIn('allowedOrigins ignored', result['seen'][0])
+                result = frame.evaluate(self.INIT, {'allowedOrigins': ['http://studio.test']})
+                self.assertEqual((result['origins'], result['session']), (['http://studio.test'], 's1'))
+                self.assertEqual(self.applied(page, TITLE, {'fontSize': 60})['revision'], 2)
+                # Narrowed away from the pinned Studio: its session ends, like with the constructor.
+                result = frame.evaluate(self.INIT, {'allowedOrigins': []})
+                self.assertEqual((result['origins'], result['session']), ([], None))
+                self.assertEqual(self.update(page, TITLE, {'fontSize': 70})['type'], 'timeout')
+                self.assertEqual(self.computed(frame, TITLE, 'fontSize'), '60px')
+                # Without the option nothing changes, and the old "options ignored" warning stays.
+                result = frame.evaluate(self.INIT, {'enableHighlightOverlay': True})
+                self.assertEqual(len(result['seen']), 1)
+                self.assertIn('ignored', result['seen'][0])
+                self.assertEqual(self.errors(frame), [])
+
+    # The options object a bridge was built from can be edited and handed back to initFontKitBridge(). The bridge
+    # copies the list at construction, so the edit only takes effect when init reads it again.
+    BUILD = """(origins) => {
+        window.__opts = { allowedOrigins: origins };
+        window.__mine = new FontKitBridge(window.__opts);
+        return window.__mine === window.__fontkitBridge;
+    }"""
+    EDIT = """(mode) => {
+        const opts = window.__opts;
+        if (mode === 'replace') opts.allowedOrigins = ['http://other.test'];
+        else if (mode === 'in place') opts.allowedOrigins.splice(0, 1);
+        else if (mode === 'string') opts.allowedOrigins = 'http://other.test';
+        else if (mode === 'wider') opts.allowedOrigins = ['http://studio.test', 'http://other.test', 'http://evil.test'];
+        else if (mode === 'any') opts.allowedOrigins = ['*'];
+    }"""
+    REINIT = """(name) => {
+        const seen = [];
+        const warn = console.warn;
+        console.warn = (...args) => seen.push(args.join(' '));
+        const first = window.__fontkitBridge;
+        let again;
+        try {
+            again = initFontKitBridge(window[name]);
+        } finally {
+            console.warn = warn;
+        }
+        return { same: again === first, seen, origins: first.allowedOrigins, session: first.sessionId };
+    }"""
+
+    def test_init_with_the_options_object_the_bridge_was_built_from_applies_its_edited_subset(self):
+        for engine in ENGINES:
+            for mode in ('replace', 'in place', 'string'):
+                with self.subTest(engine=engine, mode=mode):
+                    page, frame = self.open(engine)
+                    self.assertTrue(frame.evaluate(self.BUILD, ['http://studio.test', 'http://other.test']))
+                    self.hello(page)
+                    self.applied(page, TITLE, {'fontSize': 55})
+                    frame.evaluate(self.EDIT, mode)
+                    result = frame.evaluate(self.REINIT, '__opts')
+                    self.assertTrue(result['same'])
+                    self.assertEqual(result['origins'], ['http://other.test'])
+                    self.assertIsNone(result['session'], 'the Studio at the removed origin loses its session')
+                    self.assertEqual(len(result['seen']), 1, 'a changed policy is announced')
+                    self.assertIn('allowedOrigins narrowed to http://other.test', result['seen'][0])
+                    # Hostile case: the removed origin is refused, for the old session and for a new hello.
+                    self.assertEqual(self.update(page, TITLE, {'fontSize': 70})['type'], 'timeout')
+                    self.assertEqual(page.evaluate('() => hello("s2")')['type'], 'timeout')
+                    self.assertEqual(self.computed(frame, TITLE, 'fontSize'), '55px', 'no patch from the removed origin applies')
+                    self.assertEqual(len(self.messages(page, 'design:ready')), 1)
+                    self.assertEqual(self.errors(frame), [])
+
+    def test_init_with_the_options_object_the_bridge_was_built_from_never_widens_it(self):
+        for engine in ENGINES:
+            for mode in ('wider', 'any'):
+                with self.subTest(engine=engine, mode=mode):
+                    page, frame = self.open(engine, host=EVIL)
+                    self.assertTrue(frame.evaluate(self.BUILD, ['http://studio.test', 'http://other.test']))
+                    frame.evaluate(self.EDIT, mode)
+                    result = frame.evaluate(self.REINIT, '__opts')
+                    self.assertTrue(result['same'])
+                    self.assertEqual(result['origins'], ['http://studio.test', 'http://other.test'])
+                    # Hostile case: the origin the edit tried to add is still refused.
+                    self.assertEqual(page.evaluate('() => hello("s1")')['type'], 'timeout')
+                    self.assertEqual(self.messages(page, 'design:ready'), [])
+                    self.assertEqual(self.errors(frame), [])
+
+    def test_init_with_an_unchanged_options_object_is_quiet_and_changes_nothing(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.assertTrue(frame.evaluate(self.BUILD, ['http://studio.test', 'http://other.test']))
+                self.hello(page)
+                self.applied(page, TITLE, {'fontSize': 55})
+                for _ in range(2):
+                    result = frame.evaluate(self.REINIT, '__opts')
+                    self.assertTrue(result['same'])
+                    self.assertEqual(result['seen'], [])
+                    self.assertEqual(result['origins'], ['http://studio.test', 'http://other.test'])
+                    self.assertEqual(result['session'], 's1')
+                self.assertEqual(self.applied(page, TITLE, {'fontSize': 60})['revision'], 2)
+                # A different object is still announced, as before.
+                result = frame.evaluate(self.INIT, {'allowedOrigins': ['http://studio.test', 'http://other.test']})
+                self.assertEqual(len(result['seen']), 1)
+
+    def test_init_with_the_page_global_options_object_stays_quiet_until_it_is_edited(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, target=OPTIONS_PAGE)
+                self.hello(page)
+                result = frame.evaluate(self.REINIT, 'FONTKIT_BRIDGE_OPTIONS')
+                self.assertTrue(result['same'])
+                self.assertEqual((result['seen'], result['origins'], result['session']), ([], ['http://studio.test'], 's1'))
+                frame.evaluate("() => { window.FONTKIT_BRIDGE_OPTIONS.allowedOrigins = []; }")
+                result = frame.evaluate(self.REINIT, 'FONTKIT_BRIDGE_OPTIONS')
+                self.assertEqual((result['origins'], result['session']), ([], None))
+                self.assertEqual(len(result['seen']), 1)
+                self.assertEqual(self.update(page, 'options.title', {'fontSize': 70})['type'], 'timeout')
+                self.assertEqual(self.errors(frame), [])
+
+
 class SessionLifecycleTests(BridgeCase):
     def test_closed_opener_studio_stops_click_interception(self):
         for engine in ENGINES:
@@ -721,6 +906,30 @@ class SelectionTests(BridgeCase):
                 self.assertIsNone(self.wait_message(page, 'design:selected', start)['targetId'])
                 # The Studio draws overlays: nothing is injected into the target DOM by default.
                 self.assertEqual(frame.evaluate("document.querySelectorAll('[id^=\"fontkit-bridge\"]').length"), 0)
+
+    def test_a_select_request_id_is_echoed_in_the_reply_and_only_when_it_is_a_sane_string(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                # The reply to a request names the request; a selection the page makes by itself does not.
+                for target_id in (TITLE, None, 'no.such.target'):
+                    with self.subTest(target=target_id):
+                        start = self.mark(page)
+                        self.control(page, {'type': 'design:select', 'targetId': target_id, 'requestId': 'fks-sel-7'})
+                        reply = self.wait_message(page, 'design:selected', start)
+                        self.assertEqual(reply.get('requestId'), 'fks-sel-7')
+                        self.assertEqual(reply['targetId'], target_id if target_id == TITLE else None)
+                start = self.mark(page)
+                frame.evaluate(f"({BY_ID})('{LEAD}').click()")
+                self.assertNotIn('requestId', self.wait_message(page, 'design:selected', start))
+                # Hostile values are never echoed back as data: wrong types, empty, oversized.
+                for bad in (7, True, {'a': 1}, ['x'], '', 'x' * 101):
+                    with self.subTest(requestId=bad):
+                        start = self.mark(page)
+                        self.control(page, {'type': 'design:select', 'targetId': TITLE, 'requestId': bad})
+                        self.assertNotIn('requestId', self.wait_message(page, 'design:selected', start))
+                self.assertEqual(self.errors(frame), [])
 
     def test_bounds_follow_scroll_and_size_changes_of_the_selected_target(self):
         for engine in ENGINES:
@@ -1164,6 +1373,256 @@ class PromotedTargetTests(BridgeCase):
                 self.edit_then_promote(page, frame, nothing)
                 changes = self.ledger_after_a_second_edit(page)
                 self.assertEqual([entry['targetId'] for entry in changes['targets']], [self.NEW_ID, TITLE])
+
+
+class DemotedTargetTests(BridgeCase):
+    """An edited author target whose data-design-id is removed keeps its edit, under an auto id that names the old one."""
+    BADGE_EL = f"({BY_ID})('{LEAD}')"
+
+    def edit_then_remove(self, page, frame, trigger):
+        ready = self.hello(page)
+        self.assertTrue(next(t for t in ready['targets'] if t['id'] == LEAD)['stable'])
+        self.applied(page, LEAD, {'color': '#445566'})
+        self.applied(page, TITLE, {'fontSize': 33, 'text': 'Edited title'})
+        start = self.mark(page)
+        frame.evaluate(f'({self.BADGE_EL}).removeAttribute("data-design-id")')
+        trigger(page, frame, start)
+
+    def announced(self, page, start):
+        message = self.wait_message(page, 'design:targets', start, f"d.targets.some((t) => t.previousId === '{LEAD}')")
+        self.assertNotEqual(message['type'], 'timeout', 'the removal was never announced')
+        return next(t for t in message['targets'] if t.get('previousId') == LEAD)
+
+    def attribute_alone(self, page, frame, start):
+        self.announced(page, start)
+
+    def rediscover(self, page, frame, start):
+        frame.evaluate("document.body.append(document.createElement('i'))")
+        self.announced(page, start)
+
+    def test_removing_the_attribute_alone_moves_the_edit_to_an_auto_id_naming_the_old_one(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                # No other change in the page: the attribute removal itself must be noticed.
+                self.edit_then_remove(page, frame, self.attribute_alone)
+                message = self.wait_message(page, 'design:targets', 0, f"d.targets.some((t) => t.previousId === '{LEAD}')")
+                target = next(t for t in message['targets'] if t.get('previousId') == LEAD)
+                self.assertFalse(target['stable'])
+                self.assertRegex(target['id'], r'^auto:p:')
+                self.assertNotIn(LEAD, [t['id'] for t in message['targets']], 'the author id is gone')
+                self.assertNotRegex(target['selector'], r'data-design-id="landing')
+
+    def test_the_edit_keeps_its_originals_and_its_place_in_the_change_order(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.edit_then_remove(page, frame, self.rediscover)
+                # Any later update reports the ledger; the badge is a different, author target.
+                changes = self.applied(page, BADGE, {'fontWeight': 600})['changes']
+                ids = [entry['targetId'] for entry in changes['targets']]
+                self.assertEqual(len(ids), 3)
+                self.assertRegex(ids[0], r'^auto:p:', 'the edit keeps its first place, under the new id')
+                self.assertEqual(ids[1:], [TITLE, BADGE])
+                entry = changes['targets'][0]
+                self.assertEqual(entry['declarations'], {'color': '#445566'})
+                self.assertFalse(entry['stable'])
+                self.assertNotIn('data-design-id="landing.hero.lead"', entry['html'])
+                self.assertNotIn('style=', entry['html'])
+                self.assertEqual(frame.evaluate(f"document.querySelectorAll({json.dumps(entry['selector'])}).length"), 1)
+                self.assertEqual(frame.evaluate(f"getComputedStyle(document.querySelector({json.dumps(entry['selector'])})).color"),
+                                 'rgb(68, 85, 102)')
+
+                # Reset of the new id restores the original inline style, captured before the first edit.
+                reply = self.request(page, {'type': 'design:reset', 'targetId': ids[0]})
+                self.assertEqual((reply['type'], reply['reset']), ('design:applied', True))
+                self.assertEqual([e['targetId'] for e in reply['changes']['targets']], [TITLE, BADGE])
+                self.assertIsNone(frame.evaluate(f"document.querySelector('p.lead').getAttribute('style')"))
+                self.assertEqual(self.errors(frame), [])
+
+    def test_a_fresh_studio_sees_the_demoted_target_and_the_old_id_is_gone(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.edit_then_remove(page, frame, self.rediscover)
+                ready = self.hello(page, 's2')
+                ids = [t['id'] for t in ready['targets']]
+                self.assertNotIn(LEAD, ids)
+                demoted = next(t for t in ready['targets'] if t.get('previousId') == LEAD)
+                self.assertEqual(demoted['text'], 'Lead copy bold tail')
+                self.assertEqual(sum('previousId' in t for t in ready['targets']), 1)
+                self.assertEqual(self.entry(ready['changes'], demoted['id'])['declarations'], {'color': '#445566'})
+
+    def test_the_selection_follows_the_element(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                self.control(page, {'type': 'design:select', 'targetId': LEAD})
+                self.assertEqual(self.wait_message(page, 'design:selected', 0, f"d.targetId === '{LEAD}'")['targetId'], LEAD)
+                start = self.mark(page)
+                frame.evaluate(f'({self.BADGE_EL}).removeAttribute("data-design-id")')
+                demoted = self.announced(page, start)
+                # Selecting again by the new id works and names the old one; the old id is unknown.
+                start = self.mark(page)
+                self.control(page, {'type': 'design:select', 'targetId': demoted['id']})
+                selected = self.wait_message(page, 'design:selected', start, f"d.targetId === '{demoted['id']}'")
+                self.assertEqual(selected['target']['previousId'], LEAD)
+                start = self.mark(page)
+                self.control(page, {'type': 'design:select', 'targetId': LEAD})
+                self.assertIsNone(self.wait_message(page, 'design:selected', start)['targetId'])
+
+    def test_an_author_id_that_is_still_there_or_changed_is_not_a_removal(self):
+        """Renaming to another author id is a promotion (the element keeps its edits); only a missing id is a demotion."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                self.applied(page, LEAD, {'color': '#445566'})
+                start = self.mark(page)
+                frame.evaluate(f'({self.BADGE_EL}).setAttribute("data-design-id", "landing.hero.lead.renamed")')
+                message = self.wait_message(page, 'design:targets', start, "d.targets.some((t) => t.id === 'landing.hero.lead.renamed')")
+                renamed = next(t for t in message['targets'] if t['id'] == 'landing.hero.lead.renamed')
+                self.assertTrue(renamed['stable'])
+                self.assertEqual(renamed['previousId'], LEAD)
+                self.assertFalse(any(t['id'].startswith('auto:p:') and t.get('previousId') for t in message['targets']))
+
+    def test_giving_the_id_back_and_resetting_leaves_the_markup_byte_for_byte_as_it_was(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                original = frame.evaluate("document.querySelector('p.lead').outerHTML")
+                self.hello(page)
+                self.applied(page, LEAD, {'color': '#445566', 'text': 'Edited tail'})
+                start = self.mark(page)
+                frame.evaluate("document.querySelector('p.lead').removeAttribute('data-design-id')")
+                self.announced(page, start)
+                start = self.mark(page)
+                frame.evaluate("document.querySelector('p.lead').setAttribute('data-design-id', 'landing.hero.lead')")
+                back = self.wait_message(page, 'design:targets', start, f"d.targets.some((t) => t.id === '{LEAD}' && t.previousId)")
+                self.assertNotEqual(back['type'], 'timeout', 'the id coming back was never announced')
+                reply = self.request(page, {'type': 'design:reset'})
+                self.assertEqual((reply['type'], reply['reset']), ('design:applied', True))
+                self.assertEqual(frame.evaluate("document.querySelector('p.lead').outerHTML"), original)
+                self.assertEqual(self.errors(frame), [])
+
+    def test_an_authors_own_role_and_name_survive_the_round_trip(self):
+        """Only attributes the bridge wrote are dropped when the author id comes back."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                self.applied(page, TITLE, {'color': '#445566'})
+                start = self.mark(page)
+                frame.evaluate("document.querySelector('h1').removeAttribute('data-design-id')")
+                message = self.wait_message(page, 'design:targets', start, f"d.targets.some((t) => t.previousId === '{TITLE}')")
+                self.assertNotEqual(message['type'], 'timeout')
+                frame.evaluate("document.querySelector('h1').setAttribute('data-design-id', 'landing.hero.title')")
+                self.wait_message(page, 'design:targets', start, f"d.targets.some((t) => t.id === '{TITLE}' && t.previousId)")
+                self.assertEqual(frame.evaluate("[document.querySelector('h1').getAttribute('data-design-role'), "
+                                                "document.querySelector('h1').getAttribute('data-design-name')]"),
+                                 ['display', 'Hero title'])
+
+    def test_removing_an_id_nothing_edited_still_leaves_one_target_for_the_element(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                start = self.mark(page)
+                frame.evaluate(f'({self.BADGE_EL}).removeAttribute("data-design-id")')
+                demoted = self.announced(page, start)
+                self.assertFalse(demoted['stable'])
+                self.assertEqual(frame.evaluate("document.querySelectorAll('p.lead').length"), 1)
+                self.assertEqual(self.errors(frame), [])
+
+
+class DemotedArrangementBranchTests(BridgeCase):
+    """Removing an author id keeps an edited, role-hinted or semantic element an ordinary target; only a
+    plain, unedited, non-semantic element (the badge span) is kept for arrangement alone."""
+
+    def remove_id(self, page, frame, design_id):
+        start = self.mark(page)
+        self.element(frame, design_id, '(el) => { el.removeAttribute("data-design-id"); document.body.append(document.createElement("i")); }')
+        message = self.wait_message(page, 'design:targets', start, f"d.targets.some((t) => t.previousId === '{design_id}')")
+        self.assertNotEqual(message['type'], 'timeout', 'the removal was never announced')
+        return next(t for t in message['targets'] if t.get('previousId') == design_id)
+
+    def assert_ready_agrees(self, page, demoted):
+        ready = self.hello(page, 's2')
+        again = next(t for t in ready['targets'] if t.get('previousId') == demoted['previousId'])
+        self.assertEqual(again.get('arrangementOnly'), demoted.get('arrangementOnly'))
+        return again
+
+    def test_an_unedited_plain_span_is_kept_for_arrangement_only(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                demoted = self.remove_id(page, frame, BADGE)
+                self.assertIs(demoted.get('arrangementOnly'), True)
+                self.assertIs(self.assert_ready_agrees(page, demoted).get('arrangementOnly'), True)
+
+    def test_the_same_span_after_an_edit_is_an_ordinary_target(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                self.applied(page, BADGE, {'color': '#445566'})
+                demoted = self.remove_id(page, frame, BADGE)
+                self.assertNotIn('arrangementOnly', demoted)
+                self.assertNotIn('arrangementOnly', self.assert_ready_agrees(page, demoted))
+
+    def test_the_same_span_with_an_author_role_is_an_ordinary_target(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                self.element(frame, BADGE, '(el) => el.setAttribute("data-design-role", "stat")')
+                demoted = self.remove_id(page, frame, BADGE)
+                self.assertNotIn('arrangementOnly', demoted)
+                self.assertEqual(demoted['role'], 'stat')
+                self.assertNotIn('arrangementOnly', self.assert_ready_agrees(page, demoted))
+
+    def test_a_semantic_element_is_an_ordinary_target_even_when_unedited(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                demoted = self.remove_id(page, frame, LEAD)
+                self.assertNotIn('arrangementOnly', demoted)
+                self.assertNotIn('arrangementOnly', self.assert_ready_agrees(page, demoted))
+
+    def test_a_second_removal_does_not_read_the_bridges_own_role_as_an_author_hint(self):
+        """Demote, give the author id back, remove it again: the span is still plain, so still arrangement-only."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                self.assertIs(self.remove_id(page, frame, BADGE).get('arrangementOnly'), True)
+                start = self.mark(page)
+                frame.evaluate("""() => document.querySelector('span[data-design-id^="auto:span"]')
+                    .setAttribute('data-design-id', 'landing.stat.badge')""")
+                back = self.wait_message(page, 'design:targets', start, f"d.targets.some((t) => t.id === '{BADGE}')")
+                self.assertNotEqual(back['type'], 'timeout', 'the id coming back was never announced')
+                self.assertNotIn('arrangementOnly', next(t for t in back['targets'] if t['id'] == BADGE))
+                self.assertIs(self.remove_id(page, frame, BADGE).get('arrangementOnly'), True)
+
+    def test_a_plain_span_that_leaves_the_page_and_comes_back_is_still_arrangement_only(self):
+        """The role attribute the bridge wrote on the first demotion must not make the re-attached span ordinary."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                self.assertIs(self.remove_id(page, frame, BADGE).get('arrangementOnly'), True)
+                spans = "[...window.__fontkitBridge.targets.values()].filter((r) => r.id.startsWith('auto:span'))"
+                frame.evaluate("""() => { const el = document.querySelector('span[data-design-id^="auto:span"]');
+                    window.__parent = el.parentNode; window.__span = el; el.remove(); }""")
+                frame.wait_for_function(f"{spans}.length === 0")
+                start = self.mark(page)
+                frame.evaluate("window.__parent.append(window.__span)")
+                back = self.wait_message(page, 'design:targets', start, "d.targets.some((t) => t.text === '42 fonts')")
+                self.assertNotEqual(back['type'], 'timeout', 'the span coming back was never announced')
+                self.assertIs(next(t for t in back['targets'] if t['text'] == '42 fonts').get('arrangementOnly'), True)
 
 
 class StableSelectorEscapeTests(BridgeCase):
@@ -1735,10 +2194,15 @@ class MoveTests(ArrangeCase):
                 structure = reply['changes']['structure']
                 self.assertEqual([e['containerKey'] for e in structure], ['arr.plain', 'arr.group'])
                 group = structure[1]
-                self.assertEqual(set(group), {'containerKey', 'selector', 'stable', 'name', 'html', 'order'})
+                self.assertEqual(set(group), {'containerKey', 'selector', 'stable', 'name', 'html', 'order', 'orderIds'})
                 self.assertEqual((group['selector'], group['stable']), ('[data-design-id="arr.group"]', True))
                 self.assertEqual(len(group['order']), 4)
                 self.assertEqual(group['order'], [s['name'] for s in reply['target']['arrangement']['siblings']])
+                # orderIds names the same children by target id, in the same order, so a saved order can be replayed.
+                self.assertEqual(group['orderIds'], [s['id'] for s in reply['target']['arrangement']['siblings']])
+                self.assertEqual(group['orderIds'][0], 'arr.p.3')
+                self.assertEqual(len(group['orderIds']), len(group['order']))
+                self.assertEqual(len(structure[0]['orderIds']), 2)
                 self.assertTrue(group['html'].startswith('<div class="btn-group" data-design-id="arr.group"'))
                 self.assertIn('Plain three', group['html'])
                 self.assertNotIn('auto:', group['html'])
@@ -2271,6 +2735,98 @@ class FontStylesheetTests(BridgeCase):
                 self.hello(page)
                 self.applied(page, MARK, {'fontStylesheet': TYPEKIT})
                 self.assertEqual(self.links(frame), [['stylesheet', TYPEKIT]])
+
+
+class CompositionFontStylesheetTests(BridgeCase):
+    """A composition update may carry `fontStylesheets`: the library fonts it sends. They go through the same strict
+    allow-list, injection, ledger and reset path as the per-target `fontStylesheet` key."""
+
+    def composition(self, page, sheets, **patch):
+        return self.request(page, {'type': 'design:update', 'patch': {**patch, 'fontStylesheets': sheets}})
+
+    def links(self, frame):
+        return frame.evaluate(LINKS)
+
+    def test_the_sheets_of_a_composition_update_are_injected_recorded_and_reported(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                reply = self.composition(page, [GOOGLE, GOOGLE_2, GOOGLE], tokens={'--font-display': 'Inter, sans-serif'})
+                self.assertEqual((reply['type'], reply['targetId']), ('design:applied', 'global'))
+                self.assertEqual(reply['canonicalPatch']['fontStylesheets'], [GOOGLE, GOOGLE_2], 'unique, in order')
+                self.assertEqual(reply['canonicalPatch']['tokens'], {'--font-display': 'Inter, sans-serif'})
+                self.assertEqual(reply['changes']['imports'], [GOOGLE, GOOGLE_2])
+                self.assertEqual(self.links(frame), [['stylesheet', GOOGLE], ['stylesheet', GOOGLE_2]])
+                frame.wait_for_function("() => [...document.querySelectorAll('link[data-fontkit-font]')].every((l) => l.sheet !== null)")
+                self.assertEqual(sorted(self.font_requests), sorted([GOOGLE, GOOGLE_2]))
+                # A fresh Studio sees them in design:ready, and a tokens-only update leaves them alone.
+                self.assertEqual(self.hello(page, 's2')['changes']['imports'], [GOOGLE, GOOGLE_2])
+                reply = self.request(page, {'type': 'design:update', 'patch': {'tokens': {'--font-sans': 'Verdana'}}})
+                self.assertNotIn('fontStylesheets', reply['canonicalPatch'])
+                self.assertEqual(reply['changes']['imports'], [GOOGLE, GOOGLE_2])
+                self.assertEqual(self.errors(frame), [])
+
+    def test_each_update_is_the_complete_set_and_a_target_reference_keeps_a_sheet_alive(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                self.composition(page, [GOOGLE, GOOGLE_2])
+                reply = self.composition(page, [GOOGLE_2, TYPEKIT])
+                self.assertEqual(reply['changes']['imports'], [GOOGLE_2, TYPEKIT], 'the dropped sheet is released')
+                self.assertEqual(self.links(frame), [['stylesheet', GOOGLE_2], ['stylesheet', TYPEKIT]])
+                # A target that references the same sheet keeps it when the composition lets go, and vice versa.
+                self.applied(page, TITLE, {'fontStylesheet': TYPEKIT})
+                reply = self.composition(page, [])
+                self.assertEqual(reply['changes']['imports'], [TYPEKIT])
+                self.assertEqual(self.links(frame), [['stylesheet', TYPEKIT]])
+                self.composition(page, [TYPEKIT])
+                reply = self.applied(page, TITLE, {'fontStylesheet': None})
+                self.assertEqual(reply['changes']['imports'], [TYPEKIT], 'the composition still needs it')
+                reply = self.composition(page, [])
+                self.assertEqual(reply['changes']['imports'], [])
+                self.assertEqual(self.links(frame), [])
+                self.assertEqual(self.errors(frame), [])
+
+    def test_reset_all_removes_the_composition_sheets_and_a_targeted_reset_does_not(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                self.composition(page, [GOOGLE])
+                reply = self.request(page, {'type': 'design:reset', 'targetId': TITLE})
+                self.assertEqual(reply['changes']['imports'], [GOOGLE])
+                reply = self.request(page, {'type': 'design:reset'})
+                self.assertEqual(reply['changes']['imports'], [])
+                self.assertEqual(self.links(frame), [])
+                # After a reset the same set can be sent again.
+                self.assertEqual(self.composition(page, [GOOGLE])['changes']['imports'], [GOOGLE])
+                self.assertEqual(self.links(frame), [['stylesheet', GOOGLE]])
+
+    def test_a_bad_sheet_list_rejects_the_whole_update_and_changes_nothing(self):
+        bad_lists = [
+            [url for url in FontStylesheetTests.INVALID if isinstance(url, str)],
+            'https://use.typekit.net/abc123.css', 5, True, {'a': 1}, None,
+            [GOOGLE, 'https://evil.test/x.css'], [GOOGLE, 5], [GOOGLE, None], [[GOOGLE]],
+            [f'https://use.typekit.net/abcdef{n:02d}.css' for n in range(17)],
+        ]
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                for sheets in bad_lists[1:] + [[url] for url in bad_lists[0]]:
+                    with self.subTest(sheets=str(sheets)[:60]):
+                        reply = self.composition(page, sheets, tokens={'--font-display': 'Inter, sans-serif'})
+                        self.assertEqual((reply['type'], reply['reason']), ('design:rejected', 'unsupported-value'), sheets)
+                        self.assertEqual(reply['detail']['property'], 'fontStylesheets')
+                        self.assertLessEqual(len(str(reply['detail']['requested'])), 200)
+                self.assertEqual(self.links(frame), [])
+                self.assertEqual(self.font_requests, [])
+                self.assertEqual(frame.evaluate('window.__fontkitBridge.revision'), 0)
+                self.assertEqual(frame.evaluate("document.documentElement.style.getPropertyValue('--font-display')"), '',
+                                 'a rejected update applies none of its tokens either')
+                self.assertEqual(self.errors(frame), [])
 
 
 class SpaRobustnessTests(BridgeCase):

@@ -101,7 +101,7 @@ Studio also works in a narrow window. At 390 px wide the inspector stacks under 
 
 Values come back from the page, not from Studio. If the page snaps `550` to `600`, the box shows `600`. If the page rejects a value, the badge says `Rejected: <reason>` and nothing changes.
 
-Elements with a `data-design-id` have stable names. Others are discovered automatically (headings, paragraphs in sections, links in nav, buttons, images, badges and so on). Their selectors are built from the page structure, so the CSS tab marks them "auto-discovered, add data-design-id for a stable selector". If you add the attribute while editing, the target keeps its edits and moves to the new name; the next sync writes the stable selector.
+Elements with a `data-design-id` have stable names. Others are discovered automatically (headings, paragraphs in sections, links in nav, buttons, images, badges and so on). Their selectors are built from the page structure, so the CSS tab marks them "auto-discovered, add data-design-id for a stable selector". If you add the attribute while editing, the target keeps its edits and moves to the new name; the next sync writes the stable selector. If you remove an author `data-design-id` while editing, the edit moves to an automatic id (the target's manifest carries `previousId`, naming the id you removed), and the unstable-selector hint comes back.
 
 The badge shows where you are: `Idle`, `Connecting…`, `Bridge detected`, `Connected (N targets)`, `Live · rev N`, `Rejected: <reason>`, `No bridge detected` (after 4 seconds, with a hint), `Disconnected (window closed)`.
 
@@ -124,15 +124,17 @@ Under the preview, **Changes** shows what you have done so far, built only from 
 
 | Tab | Shows |
 |---|---|
-| **CSS** | `@import` lines for any free fonts first, then one rule per changed element with `!important` declarations. This is the file Sync writes. |
+| **CSS** | `@import` lines first for the free fonts in use (only once you have asked for free fonts, see [Free fonts](#free-fonts)), then one rule per changed element with `!important` declarations. This is the file Sync writes. |
 | **HTML** | The changed elements as clean snippets: text edits, and the container for every element you moved. Bridge-added attributes and inline overrides are removed. |
-| **JSON** | `{ "target", "revision", "overrides" }`: the same changes keyed by target id. |
+| **JSON** | `{ "target", "revision", "overrides" }`: the same changes keyed by target id. When a DOM move is saved it also holds `structure`, the saved DOM order. |
 
 Buttons: **Copy** (clipboard), **Download** (`fontkit-overrides.css`, `fontkit-changes.html` or `fontkit-overrides.json`), **Sync to file**, and **Auto-sync**.
 
 - **Sync to file** needs `python scripts/serve.py`. It writes the CSS tab to the overrides file in one atomic step.
 - **Auto-sync** rewrites the file about 400 ms after the last change. Writes never overlap, and the latest state wins.
-- Text changes go in the HTML tab, not the stylesheet. DOM moves also live in the HTML tab. CSS-order moves are plain CSS (`order`), so they are in the stylesheet.
+- Text changes go in the HTML tab, not the stylesheet. DOM moves also live in the HTML tab. Studio keeps them in its saved state and in the live JSON (`structure`), so **Reapply** puts them back after a reload, but Sync never writes them: it adds no CSS rules for a DOM move (the file only gains a comment that points to the HTML tab). CSS-order moves are plain CSS (`order`), so they are in the stylesheet.
+- A bridge from before `orderIds` (see [Bridge to Studio](#bridge-to-studio)) cannot have its DOM moves saved. Studio says so when you make one.
+- If the page itself changes the order of a container Studio saved (for example when the app re-renders it), Studio keeps its saved order instead of adopting the page's order, and shows the reconnect banner at the next DOM move or reset it processes, or when the page reconnects. A DOM move is not saved when it would put an element in two saved containers (possible while that banner is open) or save more than 100 containers; the status says so, and **Reapply** or **Accept target state** resolves the first case.
 
 Studio never writes the file until you press Sync (or turn on Auto-sync).
 
@@ -151,7 +153,7 @@ Arrange is the section at the bottom of the inspector. It reorders the selected 
 
 | Strategy | What happens | Output |
 |---|---|---|
-| **DOM order** | The element really moves in the page's markup. | HTML tab (a "Structure" block with the container's cleaned HTML). Not saved by Sync. |
+| **DOM order** | The element really moves in the page's markup. | HTML tab (a "Structure" block with the container's cleaned HTML). Kept in Studio and replayed by Reapply; Sync writes no CSS for it. |
 | **CSS order** | The markup stays as it is. Studio sets `order` on every sibling. | CSS tab, and Sync. |
 
 CSS order is the default when the parent looks framework-managed (React, Vue or Svelte markers). It changes how the page looks, not the reading or Tab order, so check keyboard order yourself if that matters.
@@ -164,7 +166,7 @@ CSS order is the default when the parent looks framework-managed (React, Vue or 
 | `radio-group` | Separating a radio button from its group. |
 | `label-reference`, `aria-reference` | Taking a control out of the `<label>` that wraps it, or moving an element across a shadow-DOM boundary so a `label for`, `aria-controls`, `aria-labelledby` or `aria-describedby` link would stop resolving. An ordinary move inside one document cannot break an `id` link, so those are not blocked. |
 | `content-model` | Putting a block element (a `div`, a `ul`, a heading…) inside a paragraph, heading, `span`, link, button, label or `summary`. Cannot be overridden. |
-| `framework-managed` | Touching a part of the page that React, Vue or Svelte owns, because the framework may undo it. This one has a **Move anyway** button. The others do not. |
+| `framework-managed` | Touching a part of the page that React, Vue or Svelte owns, because the framework may undo it. This one has a **Move anyway** button. The others do not. A move made with Move anyway is kept in Studio, but Reapply cannot replay a guarded move: the guard refuses it again and Reapply stops with the reason. |
 | `css-order` | Using the CSS order strategy on a parent that is not flex or grid, or to move between containers. |
 
 ![A move blocked by the form-owner guard](docs/assets/screenshots/arrange-guard-desktop.png)
@@ -192,19 +194,21 @@ When the preview reloads, the new page has none of your live edits. Studio does 
 
 | Button | Does |
 |---|---|
-| **Reapply Studio overrides** | Sends Studio's saved changes to the page again. Text, fonts, and CSS-order moves are replayed. If a leftover CSS order has to be cleared first, the banner says so, and that also undoes DOM moves in that group. |
-| **Accept target state** | Studio adopts what the page has now. The overrides file is left alone until you press Sync. |
+| **Reapply Studio overrides** | Sends Studio's saved changes to the page again, so you can keep editing them. Text, fonts and CSS-order moves are replayed first, then DOM-order moves in order, then composition tokens. If a leftover CSS order has to be cleared first, the banner says so. That reset puts the element back where it started, so it undoes a DOM move only when the move is not saved; a saved DOM move is replayed after the resets. |
+| **Accept target state** | Replaces Studio's saved overrides and composition tokens with what the page has now, and keeps only the saved DOM order the page still holds exactly as saved. Saved overrides and tokens the page does not hold are dropped; containers that only the page reordered are not adopted. The overrides file is left alone until you press Sync, and the next Sync writes a smaller CSS file only when the page holds fewer style edits and tokens than Studio saved, and the banner says when (text edits never change the CSS file). |
 
-If Reapply fails, Studio keeps its saved state, writes nothing, and says what happened. You can press it again.
+After you press **Sync to file** and reload, the page can look right while the banner reports 0 live edits. The synced overrides file already styles the page, and the bridge counts only edits made through Studio, so there is nothing to count. That is expected. Nothing was applied automatically, and the overrides file only changes when you sync.
+
+If Reapply fails, Studio keeps its saved state, writes nothing, and says what happened: which step the page refused and why (a guard explains itself), how many Reapply steps were already applied (so the page may be partly changed), or that a saved DOM-order container is gone from the page (nothing is sent then). You can press it again.
 
 ### Free fonts
 
 - The default is **16 free open-source fonts** (SIL Open Font License) from Google Fonts: serif, sans, display and mono, several of them variable. Nothing is bundled and no kit ID is filled in.
-- **Studio is silent until you ask.** On first load it makes no request outside the server it came from. Specimens render in fallback fonts, and a short hint next to the Library and Composer font controls says so. Fonts load when you press **Load free fonts** (Library or Composer), switch the Composer's Kit preset to Free Google Fonts (from another preset), or pick a library family in the Live Target inspector (Target App view). Picking a family in the Composer's slot inspector does not load anything; it says the slot is shown in a fallback font until you load the free fonts. Studio then remembers that choice in this browser (`localStorage` key `fontkit-free-fonts`, guarded: if storage is blocked it simply asks again each visit), and later visits load cards as they scroll into view. To forget it, clear the site data for Studio.
-- Choosing one in the inspector loads its stylesheet in the page too, and the CSS tab starts with the matching `@import`.
+- **Studio is silent until you ask.** On first load it makes no request outside the server it came from. Specimens render in fallback fonts, and a short hint next to the Library and Composer font controls says so. Fonts load when you press **Load free fonts** (Library or Composer), switch the Composer's Kit preset to Free Google Fonts (from another preset), or pick a library family in the Live Target inspector (Target App view). Picking a family in the Composer's slot inspector does not load anything; it says the slot is shown in a fallback font until you load the free fonts. The target app stays silent too: Studio sends it no library-font stylesheet until you ask. **Sync to Live App** in the Composer, importing a composition, and applying one with Sync or Reapply do not count as asking. Until you ask, saved or imported overrides and tokens add no Google Fonts `@import` to the CSS tab or the synced overrides file (stylesheets the page itself already loaded are still listed), and the page shows the fallback of each font stack (the stack itself is still sent). The reconnect banner, the Reapply and Sync statuses and the Composer say so: "Library fonts are not loaded until you press Load free fonts, which contacts Google Fonts; until then the page shows each font stack's fallback." Studio then remembers that choice in this browser (`localStorage` key `fontkit-free-fonts`, guarded: if storage is blocked it simply asks again each visit), and later visits load cards as they scroll into view. To forget it, clear the site data for Studio.
+- Choosing one in the inspector loads its stylesheet in the page too, and the CSS tab starts with the matching `@import`. Saved or imported overrides that name a library font get their `@import` and page stylesheet only after you have asked.
 - **Adobe Fonts** is bring-your-own. Choose "Bring your own Adobe kit" in the Composer's Kit preset and paste your own kit ID. Studio ships with the field empty.
 
-Loading Google Fonts needs a network connection, and it sends a request to Google (your IP address and the font names) every time a font stylesheet loads, so that is what pressing Load free fonts agrees to. Until you press it, nothing contacts Google. Offline, or if you block those requests, the page keeps its fallback fonts and nothing breaks.
+Loading Google Fonts needs a network connection, and it sends a request to Google (your IP address and the font names) every time a font stylesheet loads, so that is what pressing Load free fonts agrees to. Until you press it, nothing contacts Google. Offline, or if you block those requests, the page shows each font stack's fallback and nothing breaks.
 
 ### Library and Composer
 
@@ -212,11 +216,11 @@ Both work with or without a target app:
 
 - **Library**: browse specimens for the free families.
 - **Composer**: build flow layouts from 2 to 4 leaf slots per row, with PNG/SVG brand marks, rules and spacers. Export JSON or CSS, and import it again.
-- **Specimen / Target App** switches the Composer between its own canvas and your live app. **Sync to Live App** is the explicit button that sends the Composer's composition to the page. It sets the page's font tokens, and it also reorders the page's main sections by slot order and adds a short CSS `transition` to them. That reordering does not show in the Changes panel. Reload the preview to undo it.
+- **Specimen / Target App** switches the Composer between its own canvas and your live app. **Sync to Live App** is the explicit button that sends the Composer's composition to the page. It sets the page's font tokens and each text slot's tracking, and once you have asked for free fonts it also loads the stylesheets of the library fonts the composition uses (before that it sends the font stacks only, and says so). It also reorders the page's main sections by slot order and adds a short CSS `transition` to them. That reordering does not show in the Changes panel. Reload the preview to undo it.
 - **Restore Page Text** (in the bar above the preview) puts every changed text back and keeps the styles.
 - Device buttons (390 / 1024 / 1440 / Fluid) set the preview width. **Fullscreen** uses the whole window (`Esc` leaves).
 
-Exported JSON stays at version `0.1.1`. It can carry an optional `live` field with your saved overrides and tokens. Older files without it still import.
+Exported JSON stays at version `0.1.1`. It can carry an optional `live` field with your saved overrides, tokens and DOM order (`live.structure`). Older files without it still import.
 
 ## Why fontkit
 
@@ -253,7 +257,7 @@ It can, and fontkit tries to stop the common cases before they happen.
 
 - **Guards.** Moving a form control out of its form, splitting a radio group, taking a control out of its wrapping label, or putting a block element inside a paragraph or button is refused, with the reason shown. A segmented control made of radio buttons inside a form is the case these guards are for.
 - **CSS order.** When the parent is flex or grid, you can reorder with the CSS `order` strategy. The markup does not change, so the form still submits the same way. This is the default for framework-managed parents. It changes only the visual order, not the Tab or reading order.
-- **Framework warning.** If React, Vue or Svelte seems to own that part of the page, a DOM move may be undone on the next render. Studio warns, and offers **Move anyway** only for that guard.
+- **Framework warning.** If React, Vue or Svelte seems to own that part of the page, a DOM move may be undone on the next render. Studio warns, and offers **Move anyway** only for that guard. Reapply cannot replay a move made that way, so a reload can lose it from the page.
 - **Runtime errors.** If the page throws within a second of your change, you see the message.
 - **Test it.** Switch to **Interact**, then submit the form and click through it.
 - **You apply it.** Nothing reaches your source until you copy the output and apply it. Reset puts the page back.
@@ -413,7 +417,7 @@ By default the bridge accepts a `design:hello` from the window that framed or op
 <script>initFontKitBridge({ allowedOrigins: ['http://localhost:8000'] })</script>
 ```
 
-Separate several origins with spaces or commas. `new FontKitBridge({ allowedOrigins: […] })` also works. Loading the script twice (for example on hot reload) keeps the first instance. Once a Studio has talked to the bridge, calling `new FontKitBridge(...)` again returns that bridge and ignores the new options, with one exception: an `allowedOrigins` list that narrows the current policy is applied, and a connected Studio at an origin that is no longer allowed loses its session. A wider list, `*` or a non-list value is ignored. A console warning says what was applied and what was ignored. A bridge that no Studio has talked to yet, or one that was disposed, is replaced by the new one, so changed options apply during hot reload. To configure the first bridge, use `window.FONTKIT_BRIDGE_OPTIONS`, `data-allowed-origins` or `data-auto-init="false"`. Options are `allowedOrigins`, `autoDiscover`, `autoDiscoverSemantic`, `enableClickToSelect`, `enableHighlightOverlay`, `tokens` and `onApplied`.
+Separate several origins with spaces or commas. Origins are compared without regard to case. `new FontKitBridge({ allowedOrigins: […] })` also works. Loading the script twice (for example on hot reload) keeps the first instance. Once a Studio has talked to the bridge, calling `new FontKitBridge(...)` again returns that bridge and ignores the new options, with one exception: an `allowedOrigins` list that narrows the current policy is applied, and a connected Studio at an origin that is no longer allowed loses its session. A wider list, `*` or a non-list value is ignored. `initFontKitBridge({ allowedOrigins: […] })` on a bridge that is already running does the same, whether or not a Studio has connected, including when you pass back the same options object after editing its list: it narrows the policy, never widens it, and ignores its other options. Passing the original options object unchanged is quiet. A console warning says what was applied and what was ignored. `new FontKitBridge` replaces a bridge that no Studio has talked to yet, or one that was disposed, so changed options apply during hot reload; `initFontKitBridge` never replaces a bridge. To configure the first bridge, use `window.FONTKIT_BRIDGE_OPTIONS`, `data-allowed-origins` or `data-auto-init="false"`. Options are `allowedOrigins`, `autoDiscover`, `autoDiscoverSemantic`, `enableClickToSelect`, `enableHighlightOverlay`, `tokens` and `onApplied`.
 
 ### Bookmarklet
 
@@ -452,8 +456,8 @@ Bridge                                   Studio
 |---|---|---|
 | `design:hello` | `sessionId` | Pins this window, origin and session. Replies `design:ready`. |
 | `design:update` | `requestId, baseRevision, targetId, patch` | Validates the whole patch, applies it or rejects it. |
-| `design:update` (legacy composition) | `requestId, baseRevision, patch {tokens, slots, layout}`, no `targetId` | The Composer's **Sync to Live App**. Replies `design:applied` with `targetId: "global"`. Token names must match `--[a-z0-9-]{1,120}` and values follow the `fontFamily` rule. A `null` value removes Studio's override of that token and restores the page's own value. One invalid token rejects the whole update with `unsupported-value` (`detail.property`) and changes nothing. |
-| `design:select` | `targetId` or `null` | Selects, scrolls into view. Replies `design:selected`. |
+| `design:update` (legacy composition) | `requestId, baseRevision, patch {tokens, slots, layout, fontStylesheets?}`, no `targetId` | The Composer's **Sync to Live App**. Replies `design:applied` with `targetId: "global"`. Token names must match `--[a-z0-9-]{1,120}` and values follow the `fontFamily` rule. A `null` value removes Studio's override of that token and restores the page's own value. One invalid token rejects the whole update with `unsupported-value` (`detail.property`) and changes nothing. `slots[].tracking` is in thousandths of an em (`20` is `0.02em`). `fontStylesheets` is an optional list of at most 16 stylesheet URLs, each held to the `fontStylesheet` rule below. It is the complete set: sheets left out are released unless a target still uses them, and an omitted key leaves the set alone. One bad value rejects the whole update with `unsupported-value` (`detail.property: "fontStylesheets"`) and changes nothing, not even the tokens. |
+| `design:select` | `targetId` or `null`, optional `requestId` | Selects, scrolls into view. Replies `design:selected`, which echoes a `requestId` that is a string of 1 to 100 characters. |
 | `design:mode` | `mode: "select" \| "interact"` and/or `overlay: boolean` | Switches click handling. `overlay: true` makes the bridge draw its own outline (pop-out). No reply. |
 | `design:move` | `requestId, baseRevision, targetId, to, strategy?, force?` | `to` is one of `{index}`, `{before}`, `{after}`, `{container, index?}`. `strategy` is `"dom"` (default) or `"css-order"`. |
 | `design:reset` | `requestId, baseRevision, targetId?` | Removes overrides and undoes moves for one target, or for everything. |
@@ -471,9 +475,11 @@ Bridge                                   Studio
 | `design:hover` | The target under the pointer changed (select mode only). |
 | `design:selected` | A click or `design:select` picked a target (or none). Includes the full manifest. |
 | `design:bounds` | Where the selected target is now, after scroll, resize or layout changes. |
-| `design:targets` | New targets appeared (for example after a re-render), or an auto-discovered target gained a `data-design-id`. A promoted target's manifest carries `previousId`, the id it had before. |
+| `design:targets` | New targets appeared (for example after a re-render), or an auto-discovered target gained a `data-design-id`. A target whose id changed carries `previousId` in its manifest, the id it had before: an auto-discovered target that gained a `data-design-id`, or one whose author `data-design-id` was removed (it moves to an auto id). |
 | `design:warning` | An error was thrown within one second of a change (`kind: "runtime-error"`). |
 | `fontkit:ack` | Reply to the legacy `fontkit:change`. |
+
+The change ledger in `design:ready` and `design:applied` lists each container whose children were moved in `structure[]`, with `order` (the children's names) and `orderIds` (the same children by target id; names can repeat, ids cannot). Studio saves and replays DOM moves from `orderIds`.
 
 ### Patch keys
 
@@ -500,7 +506,7 @@ fontkit edits a live page from another window, so both sides check every message
 
 **Inert by default.** Before Studio connects, the bridge does not change the page or block clicks. The only thing it sends is a `design:bridge-ready` that carries no page data, to the window that framed or opened the page. Your app works as normal.
 
-**What gets through.** Studio only loads `http:` and `https:` targets (`file:` only when Studio itself is a file) and never itself. The bridge only accepts the values in the patch table above. Text goes in as text, never as markup. Font stylesheets must be a Google Fonts `css2` URL or an Adobe Fonts kit URL. Placed images are `<img>` elements with PNG or SVG data, never inserted markup.
+**What gets through.** Studio only loads `http:` and `https:` targets (`file:` only when Studio itself is a file) and never itself. The bridge only accepts the values in the patch table above. Text goes in as text, never as markup. Font stylesheets, one per patch or a composition's list of up to 16, must each be a Google Fonts `css2` URL or an Adobe Fonts kit URL. Placed images are `<img>` elements with PNG or SVG data, never inserted markup.
 
 **The dev server.** By default it listens on loopback only. It checks the `Host` header (so a hostile website cannot reach it by DNS rebinding), checks `Origin` on writes, limits a write to 1 MiB, writes atomically to the single `.css` file you named inside this repo, and sends `Cache-Control: no-store`. `--no-sync` turns writes off. It serves the files of this repo on both ports, so do not expose it to untrusted networks.
 
@@ -591,7 +597,7 @@ A Google Fonts request on first load is a `FAIL`: Studio is silent until the use
 
 Known gaps:
 
-- The composition button **Sync to Live App** sends font stacks as tokens without their stylesheets. A free font used only that way is not loaded into the page unless the page or the synced overrides import it. Targeted edits in the inspector do load them.
+- Reapply cannot replay a DOM move made with **Move anyway**, and cannot place an element in a container the page no longer holds (or one that holds none of the saved elements). It stops and says why.
 - Edits made while the page is reloading are dropped.
 - Rows hold 2 to 4 leaf slots. Nested rows and JPEG assets are out of scope.
 

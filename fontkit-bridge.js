@@ -25,7 +25,8 @@
  *
  * Security (Spec §15): `design:hello` is accepted only from window.parent or
  * window.opener and, when configured, only from `allowedOrigins` (option or
- * `data-allowed-origins="a b"` on the script tag). A hello pins the Studio's
+ * `data-allowed-origins="a b"` on the script tag; compared without case, as
+ * browsers report origins in lower case). A hello pins the Studio's
  * window, origin and sessionId; every later control message must match all
  * three or it is ignored. Replies are posted to the pinned origin. If a
  * pop-out Studio (window.opener) closes, the session is dropped.
@@ -37,7 +38,9 @@
  *    auto-init; call initFontKitBridge(options) or new FontKitBridge(options).
  *  - A constructed instance claims window.__fontkitBridge when it is empty, so
  *    a later auto-init reuses it. initFontKitBridge(options) after an instance
- *    exists returns that instance and warns that the options were ignored.
+ *    exists returns that instance; like the constructor below, it applies an
+ *    `allowedOrigins` list that narrows the running policy (never one that widens
+ *    it) and warns that the other options were ignored.
  *  - Loading the script more than once keeps the first instance and the first
  *    class (window.FontKitBridge is never replaced).
  *  - `new FontKitBridge(...)` again (HMR) behaves by state. Once a Studio has talked to the
@@ -138,6 +141,7 @@
   const GOOGLE_FONTS_DISPLAY = ['auto', 'block', 'swap', 'fallback', 'optional'];
   const MAX_FONT_URL_LENGTH = 2000;
   const MAX_FONT_FAMILIES = 8;
+  const MAX_COMPOSITION_SHEETS = 16;
 
   // ---------------------------------------------------------------------------
   // Targeted patch rules (binding contract table).
@@ -366,12 +370,26 @@
     return list;
   }
 
-  // A list of origins (array or space/comma separated string) without trailing slashes; null means "any origin"
-  // (a `*` in the list).
+  // A list of origins (array or space/comma separated string) without trailing slashes, in lower case (browsers
+  // report an origin's scheme and host in lower case, so `HTTP://Studio.Test` must still match); null means "any
+  // origin" (a `*` in the list).
   function parseOriginList(list) {
     if (typeof list === 'string') list = list.split(/[\s,]+/);
-    list = Array.from(list).map((origin) => String(origin).trim().replace(/\/+$/, '')).filter(Boolean);
+    list = Array.from(list).map((origin) => String(origin).trim().replace(/\/+$/, '').toLowerCase()).filter(Boolean);
     return list.includes('*') ? null : list;
+  }
+
+  // Composition `fontStylesheets`: a list of up to MAX_COMPOSITION_SHEETS stylesheet URLs, each as strict as the
+  // per-target `fontStylesheet` key. Returns { sheets } (unique, in order) or { requested } for the first bad value.
+  function checkCompositionSheets(value) {
+    if (!Array.isArray(value)) return { requested: typeof value === 'string' ? value.slice(0, 200) : `a ${value === null ? 'null' : typeof value} value` };
+    if (value.length > MAX_COMPOSITION_SHEETS) return { requested: `${value.length} stylesheets` };
+    const sheets = [];
+    for (const url of value) {
+      if (safeFontStylesheet(url) === undefined) return { requested: typeof url === 'string' ? url.slice(0, 200) : `a ${url === null ? 'null' : typeof url} value` };
+      if (!sheets.includes(url)) sheets.push(url);
+    }
+    return { sheets };
   }
 
   // First invalid token in a composition patch, as { property, requested }, or null.
@@ -388,6 +406,27 @@
     return null;
   }
 
+  // What a later call (`new FontKitBridge(options)` or `initFontKitBridge(options)`) may still change on a bridge that is
+  // already running: an `allowedOrigins` list that narrows its policy, and nothing else. Returns the sentence for the
+  // console warning that says what was applied and what was ignored, and whether the policy actually changed.
+  function narrowRunningBridge(running, rawOptions) {
+    const given = isPlainObject(rawOptions) ? rawOptions : {};
+    const parts = [];
+    let changed = false;
+    if (given.allowedOrigins != null) {
+      const describe = () => (running.allowedOrigins === null ? 'any origin' : (running.allowedOrigins.join(' ') || 'no origin'));
+      const before = describe();
+      const outcome = running.narrowAllowedOrigins(given.allowedOrigins);
+      changed = outcome.changed;
+      const after = describe();
+      parts.push(!outcome.applied ? `allowedOrigins ignored (it would not narrow the running policy: ${before})`
+        : outcome.changed ? `allowedOrigins narrowed to ${after} (was: ${before})` : `allowedOrigins unchanged (${after})`);
+    }
+    const ignored = Object.keys(given).filter((key) => key !== 'allowedOrigins');
+    if (ignored.length) parts.push(`ignored: ${ignored.join(', ')}`);
+    return { sentence: parts.length ? `${parts.join('; ')}.` : 'Its options were ignored.', changed };
+  }
+
   class FontKitBridge {
     constructor(rawOptions) {
       // One bridge per page. When a Studio has already talked to the bridge on this page, a second
@@ -401,25 +440,14 @@
       if (typeof window !== 'undefined') {
         const running = global.__fontkitBridge;
         if (running && !running.disposed && running.everConnected && typeof running.narrowAllowedOrigins === 'function') {
-          const given = isPlainObject(rawOptions) ? rawOptions : {};
-          const parts = [];
-          if (given.allowedOrigins != null) {
-            const before = running.allowedOrigins === null ? 'any origin' : (running.allowedOrigins.join(' ') || 'no origin');
-            const outcome = running.narrowAllowedOrigins(given.allowedOrigins);
-            const after = running.allowedOrigins === null ? 'any origin' : (running.allowedOrigins.join(' ') || 'no origin');
-            parts.push(!outcome.applied ? `allowedOrigins ignored (it would not narrow the running policy: ${before})`
-              : outcome.changed ? `allowedOrigins narrowed to ${after} (was: ${before})` : `allowedOrigins unchanged (${after})`);
-          }
-          const ignored = Object.keys(given).filter((key) => key !== 'allowedOrigins');
-          if (ignored.length) parts.push(`ignored: ${ignored.join(', ')}`);
           console.warn('[FontKitBridge] A bridge already exists on this page; new FontKitBridge() returned it. '
-            + (parts.length ? `${parts.join('; ')}. ` : 'Its options were ignored. ')
+            + `${narrowRunningBridge(running, rawOptions).sentence} `
             + 'Set window.FONTKIT_BRIDGE_OPTIONS or use data-auto-init="false" to configure the first one.');
           return running;
         }
       }
       const options = isPlainObject(rawOptions) ? rawOptions : {};
-      this.initOptions = rawOptions; // compared by initFontKitBridge()
+      this.initOptions = rawOptions; // initFontKitBridge() tells a reused object from a new one
       this.protocolVersion = PROTOCOL_VERSION;
       this.revision = 0;
       this.options = {
@@ -480,6 +508,7 @@
       // Font stylesheets: url -> <link>, and which target asked for which url.
       this.fontSheets = new Map();
       this.fontRefs = new Map();
+      this.compositionSheets = new Set(); // stylesheets the latest composition update asked for (see setCompositionSheets)
 
       // SPA/HMR: overrides of removed author targets, kept so a re-render can get them back.
       this.lost = new Map(); // targetId -> {element}
@@ -604,6 +633,8 @@
             const id = record.target.getAttribute('data-design-id');
             const known = this.recordFor(record.target);
             if (isNonEmptyString(id) && !(known && known.id === id)) relevant = true;
+            // The author id was taken away: the target needs an auto id (see demote).
+            if (!isNonEmptyString(id) && known && known.stable) relevant = true;
           }
           return;
         }
@@ -880,7 +911,7 @@
           this.handleRestoreText(data);
           break;
         case 'design:select':
-          this.handleSelect(data.targetId);
+          this.handleSelect(data.targetId, data.requestId);
           break;
         case 'design:move':
           this.handleMove(data);
@@ -1094,10 +1125,24 @@
         this.reject(data.requestId, 'unsupported-value', { property: badToken.property, requested: badToken.requested });
         return;
       }
+      // The library fonts the composition sends: all-or-nothing as well, and they never reach the page unvalidated.
+      let sheets;
+      if (Object.prototype.hasOwnProperty.call(data.patch, 'fontStylesheets')) {
+        const checked = checkCompositionSheets(data.patch.fontStylesheets);
+        if (!checked.sheets) {
+          this.reject(data.requestId, 'unsupported-value', { property: 'fontStylesheets', requested: checked.requested });
+          return;
+        }
+        sheets = checked.sheets;
+      }
       this.activate();
 
       const patch = data.patch;
       const canonicalPatch = {};
+      if (sheets !== undefined) {
+        this.setCompositionSheets(sheets);
+        canonicalPatch.fontStylesheets = sheets;
+      }
 
       // 1. Global CSS tokens
       if (isPlainObject(patch.tokens)) {
@@ -1523,7 +1568,13 @@
           stable: !!author && !this.isBridgeAttr(container, 'data-design-id'),
           name: this.containerName(container),
           html: this.cleanHTML(container),
-          order: this.childElements(container).map((child) => this.nameOfElement(child))
+          order: this.childElements(container).map((child) => this.nameOfElement(child)),
+          // The same children by target id: names can repeat, ids cannot, so a saved order can be replayed.
+          orderIds: this.childElements(container).map((child) => {
+            this.registerSibling(child);
+            const record = this.recordFor(child);
+            return record ? record.id : '';
+          })
         });
       });
       return structure;
@@ -1614,8 +1665,19 @@
       this.releaseUnusedFontSheet(url);
     }
 
+    // The composition's own references: each update is the complete set it needs. A sheet stays while a target
+    // or the composition still refers to it, like any other reference.
+    setCompositionSheets(urls) {
+      const previous = this.compositionSheets;
+      this.compositionSheets = new Set(urls);
+      urls.forEach((url) => this.ensureFontLink(url));
+      previous.forEach((url) => {
+        if (!this.compositionSheets.has(url)) this.releaseUnusedFontSheet(url);
+      });
+    }
+
     releaseUnusedFontSheet(url) {
-      if (Array.from(this.fontRefs.values()).includes(url)) return;
+      if (Array.from(this.fontRefs.values()).includes(url) || this.compositionSheets.has(url)) return;
       const link = this.fontSheets.get(url);
       if (link && link.parentNode) link.parentNode.removeChild(link);
       this.fontSheets.delete(url);
@@ -1627,6 +1689,7 @@
       });
       this.fontSheets.clear();
       this.fontRefs.clear();
+      this.compositionSheets.clear();
     }
 
     // ---------------------------------------------------------------------
@@ -2080,6 +2143,30 @@
       if (this.selectedId === old.id) this.selectedId = record.id;
       if (this.hoverId === old.id) this.hoverId = record.id;
       this.reapplyLog.delete(old.id);
+      // An author id now names the element: the role and name the bridge wrote for the auto target go, so the
+      // markup is back to what the author wrote (and the leftovers are not mistaken for author hints later).
+      if (record.stable) this.dropBridgeAttrs(record.element, ['data-design-role', 'data-design-name']);
+    }
+
+    dropBridgeAttrs(el, names) {
+      const added = this.bridgeAttrs.get(el);
+      names.forEach((name) => {
+        if (!this.isBridgeAttr(el, name)) return;
+        el.removeAttribute(name);
+        added.delete(name);
+      });
+    }
+
+    // An author target lost its data-design-id (an app update removed it). The edit follows the element, as for a
+    // promotion: the originals are keyed by element and stay, the record moves to a fresh auto id, and the manifest
+    // names the author id it replaced so Studio can follow. Targets that were edited, selected by role or semantic
+    // stay ordinary targets; others are kept for arrangement only, like any other sibling.
+    demote(old) {
+      const el = old.element;
+      this.targets.delete(old.id);
+      const ordinary = !!this.authorAttr(el, 'data-design-role') || this.isSemanticElement(el) || this.isDirty(old);
+      const record = this.registerAuto(el, !ordinary);
+      this.promote(old, record);
     }
 
     // A re-render removed an author target that had overrides: remember its
@@ -2159,6 +2246,16 @@
         }
       }
 
+      // An author id the element no longer carries: the same element, now under an auto id. (A different author
+      // id is a promotion, handled by registerAuthor below.)
+      Array.from(this.targets.values()).forEach((record) => {
+        const el = record.element;
+        if (!record.stable || !el.isConnected) return;
+        if (isNonEmptyString(el.getAttribute('data-design-id')) && !this.isBridgeAttr(el, 'data-design-id')) return;
+        this.demote(record);
+        changed = true;
+      });
+
       // 1. Author data-design-id elements (highest authority)
       document.querySelectorAll('[data-design-id]').forEach((el) => {
         if (this.isBridgeAttr(el, 'data-design-id') || this.isExcluded(el)) return;
@@ -2185,6 +2282,9 @@
           }
           if (this.isExcluded(el)) return;
           if (el.hasAttribute('data-design-id') && !this.isBridgeAttr(el, 'data-design-id')) return;
+          // Matched only by a role the bridge wrote itself (an arrangement-only element that left the page and
+          // came back): not a hint. The sibling pass below registers it again if it still needs an id.
+          if (!this.authorAttr(el, 'data-design-role') && !this.isSemanticElement(el)) return;
           this.registerAuto(el);
           changed = true;
         });
@@ -2210,7 +2310,7 @@
       if (el.hasAttribute('data-design-id') && !this.isBridgeAttr(el, 'data-design-id')) return this.registerAuthor(el);
       // Only registered for arrangement (it has no author id, role or semantic
       // selector): addressable by id, but never hovered or clicked in the page.
-      const ordinary = el.hasAttribute('data-design-role') || this.isSemanticElement(el);
+      const ordinary = !!this.authorAttr(el, 'data-design-role') || this.isSemanticElement(el);
       this.registerAuto(el, !ordinary);
       return true;
     }
@@ -2690,12 +2790,15 @@
       }
     }
 
-    handleSelect(targetId) {
+    // An optional requestId (a short string) is echoed in the reply, so Studio can tell the answer to its own request
+    // from a selection the user made in the page.
+    handleSelect(targetId, requestId) {
+      const echo = isNonEmptyString(requestId, 100) ? requestId : undefined;
       if (targetId === null || targetId === undefined) {
-        this.selectRecord(null, false);
+        this.selectRecord(null, false, echo);
         return;
       }
-      this.selectRecord(this.findTarget(targetId), true);
+      this.selectRecord(this.findTarget(targetId), true, echo);
     }
 
     // Legacy: treated as design:select, with the old slot heuristics as a fallback.
@@ -2716,10 +2819,11 @@
       this.showActiveSelection(null);
     }
 
-    selectRecord(record, scroll) {
+    selectRecord(record, scroll, requestId) {
       this.clearSelection();
+      const echo = requestId === undefined ? {} : { requestId };
       if (!record) {
-        this.post({ type: 'design:selected', targetId: null });
+        this.post({ type: 'design:selected', targetId: null, ...echo });
         return;
       }
       const el = record.element;
@@ -2733,7 +2837,7 @@
       this.lastBounds = rectOf(el);
       if (this.resizeObserver) this.resizeObserver.observe(el);
       this.showActiveSelection(record);
-      this.post({ type: 'design:selected', targetId: record.id, rect: this.lastBounds, target: this.manifestFor(record) });
+      this.post({ type: 'design:selected', targetId: record.id, rect: this.lastBounds, target: this.manifestFor(record), ...echo });
     }
 
     scheduleBounds() {
@@ -3042,9 +3146,18 @@
   function initFontKitBridge(options) {
     const existing = global.__fontkitBridge;
     if (existing) {
-      if (options !== undefined && existing instanceof FontKitBridge && options !== existing.initOptions) {
-        console.warn('[FontKitBridge] initFontKitBridge(): a bridge already exists, options ignored. '
-          + 'Add data-auto-init="false" to the script tag (or set window.FONTKIT_BRIDGE_OPTIONS) to configure it.');
+      if (options !== undefined && existing instanceof FontKitBridge) {
+        // Like the constructor, only an allowedOrigins list that narrows the running policy is applied: a security
+        // option is never silently dropped, and never widens what is already allowed. The options object the bridge
+        // was built from is read again too: the bridge copied its list at construction, so a page that edited
+        // `allowedOrigins` on that object since would otherwise keep the wider policy. Narrowing is idempotent, so
+        // the plain `initFontKitBridge(window.FONTKIT_BRIDGE_OPTIONS)` changes nothing and stays quiet.
+        const reused = options === existing.initOptions;
+        const outcome = existing.disposed ? { sentence: 'Options ignored.', changed: false } : narrowRunningBridge(existing, options);
+        if (!reused || outcome.changed) {
+          console.warn('[FontKitBridge] initFontKitBridge(): a bridge already exists. ' + `${outcome.sentence} `
+            + 'Add data-auto-init="false" to the script tag (or set window.FONTKIT_BRIDGE_OPTIONS) to configure it.');
+        }
       }
       return existing;
     }
