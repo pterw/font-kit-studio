@@ -1,4 +1,4 @@
-"""Studio preview stage: width buttons never crop the preview, and --font-serif names a serif family.
+"""Studio preview stage: width buttons never crop the preview, and the sans, serif and mono tokens name a family of their own kind.
 
 Run with PYTHONPATH=tests (python -m unittest tests.test_studio_stage). Studio is served at
 http://studio.test and the fake bridge target at http://target.test, as in test_studio_live.
@@ -116,12 +116,15 @@ class PreviewWidthTests(LiveCase):
                 self.assertEqual(errors, [])
 
 
-class SerifTokenTests(LiveCase):
+class TokenFallbackTests(LiveCase):
     ROWS = {
         'sans': ('Wordmark', 'inter'),
         'serif': ('H1', 'instrument-serif'),
         'mono': ('Metadata', 'ibm-plex-mono'),
     }
+
+    # 'Metadata' and 'Caption' match the mono role pass, which would hide the tag fallback; 'Footnote' matches no role.
+    NO_ROLE_MONO = ('Footnote', 'ibm-plex-mono')
 
     def composition(self, page, text_slots):
         """Replace the preset's slots with the given (role, family) text slots; a 'row' entry is the Row slot."""
@@ -178,6 +181,51 @@ class SerifTokenTests(LiveCase):
         for engine, (tokens, errors) in self.run_case(slots).items():
             with self.subTest(engine=engine):
                 self.assertTrue(tokens['--font-serif'].startswith('"Inter"'), tokens['--font-serif'])
+                self.assertEqual(errors, [])
+
+
+    # The sans and mono tokens follow the serif rule: a role match, else the first text slot in a family with
+    # the matching tag, else no token. A Row has no family and never feeds a token.
+
+    def test_sans_token_is_the_first_sans_family_when_slot_one_is_a_row(self):
+        slots = [self.ROWS['serif'], 'row', self.NO_ROLE_MONO, self.ROWS['sans']]
+        for engine, (tokens, errors) in self.run_case(slots).items():
+            with self.subTest(engine=engine):
+                self.assertTrue(tokens['--font-sans'].startswith('"Inter"'), tokens['--font-sans'])
+                self.assertNotIn('Fraunces', tokens['--font-sans'])
+                self.assertEqual(errors, [])
+
+    def test_mono_token_is_the_first_mono_family_when_slot_three_is_a_row(self):
+        slots = [self.ROWS['sans'], self.ROWS['serif'], self.NO_ROLE_MONO, 'row']
+        for engine, (tokens, errors) in self.run_case(slots).items():
+            with self.subTest(engine=engine):
+                self.assertTrue(tokens['--font-mono'].startswith('"IBM Plex Mono"'), tokens['--font-mono'])
+                self.assertNotIn('Fraunces', tokens['--font-mono'])
+                self.assertEqual(errors, [])
+
+    def test_no_mono_token_is_sent_when_no_slot_uses_a_mono_family(self):
+        # Slot 3 holds a sans family: by index it used to become the mono token.
+        slots = [self.ROWS['sans'], self.ROWS['serif'], 'row', ('Footnote', 'inter')]
+        for engine, (tokens, errors) in self.run_case(slots).items():
+            with self.subTest(engine=engine):
+                self.assertNotIn('--font-mono', tokens)
+                self.assertIn('"Instrument Serif"', tokens['--font-serif'], 'the other tokens still travel')
+                self.assertEqual(errors, [])
+
+    def test_no_sans_token_is_sent_when_no_slot_uses_a_sans_family(self):
+        slots = [self.ROWS['serif'], 'row', self.NO_ROLE_MONO, self.NO_ROLE_MONO]
+        for engine, (tokens, errors) in self.run_case(slots).items():
+            with self.subTest(engine=engine):
+                self.assertNotIn('--font-sans', tokens)
+                self.assertIn('--font-mono', tokens)
+                self.assertEqual(errors, [])
+
+    def test_a_role_match_still_wins_the_sans_and_mono_tokens(self):
+        slots = [self.ROWS['sans'], ('Body', 'instrument-serif'), self.ROWS['mono'], ('Caption', 'inter')]
+        for engine, (tokens, errors) in self.run_case(slots).items():
+            with self.subTest(engine=engine):
+                self.assertTrue(tokens['--font-sans'].startswith('"Instrument Serif"'), tokens['--font-sans'])
+                self.assertTrue(tokens['--font-mono'].startswith('"Inter"'), tokens['--font-mono'])
                 self.assertEqual(errors, [])
 
 

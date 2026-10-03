@@ -5297,14 +5297,15 @@ if (remembered) kitId.value = remembered;
       else if (r.includes("mono") || r.includes("data") || r.includes("caption") || r.includes("code")) tokens["--font-mono"] = stack;
     });
     if (!tokens["--font-display"] && state.slots[0]) tokens["--font-display"] = cssStack(byFamily(state.slots[0].family));
-    if (!tokens["--font-sans"] && state.slots[1]) tokens["--font-sans"] = cssStack(byFamily(state.slots[1].family));
-    // The serif token is the first text slot set in a serif family (the library marks a family's category in
-    // font.tags); slots[2] is whatever the preset put third, often a Row, so the position says nothing.
-    if (!tokens["--font-serif"]) {
-      const serifSlot = state.slots.find(slot => slot.type === "text" && byFamily(slot.family).tags.includes("serif"));
-      if (serifSlot) tokens["--font-serif"] = cssStack(byFamily(serifSlot.family));
-    }
-    if (!tokens["--font-mono"] && state.slots[3]) tokens["--font-mono"] = cssStack(byFamily(state.slots[3].family));
+    // Sans, serif and mono each fall back to the first text slot set in a family of that kind (the library marks a
+    // family's category in font.tags). A slot's position says nothing: the preset's second, third or fourth slot is
+    // often a Row, which has no family. With no such slot the token is not sent.
+    ["sans", "serif", "mono"].forEach(kind => {
+      const token = "--font-" + kind;
+      if (tokens[token]) return;
+      const match = state.slots.find(slot => slot.type === "text" && byFamily(slot.family).tags.includes(kind));
+      if (match) tokens[token] = cssStack(byFamily(match.family));
+    });
 
     const slots = state.slots.map((slot, index) => {
       const payload = { id:slot.id, index, role:slot.role, type:slot.type };
