@@ -750,3 +750,76 @@ All mutants ran in private copies under `work/`. The shared tree was not edited.
 ### Round verdict
 
 **Approved.** No blocking or should-fix item is open. The gates pass (Chromium only; Firefox not run) and both sides were re-reviewed. The one open nit (R2-deviations-wording) should be fixed in the same commit as the work.
+
+## Review: composition fonts after consent (2026-10-03)
+
+Scope: the uncommitted change on head 62fcc1f. `font_kit_studio_v0.1.1.html:4948` (the `fontkit:free-fonts-allowed`
+handler now also calls `broadcastLiveState(true)`), two tests in `StudioCompositionFontTests`
+(`tests/test_studio_live.py`), and the report section "Review fix: composition fonts after consent".
+
+### Findings
+
+- **Rule 6 holds.** `broadcastLiveState` returns unless `live.ready && live.compositionLinked` (`:5256`).
+  `compositionLinked` is set only by the Sync button (`:5273`) and cleared by every session reset (`:3441`), so
+  consent alone pushes nothing into a page whose composition was not linked. A re-hello ends the link, so a
+  reconnect followed by consent sends nothing either. Mutation check: replacing the call with an ungated
+  `enqueueLiveOp` makes `test_loading_free_fonts_without_a_sync_sends_nothing_to_the_page` fail with the full
+  composition message in the diff.
+- **Dispatch paths.** `allowFreeFonts` (`:1496`) dispatches the event only on the first transition to consent
+  (`asked`, `:1497-1504`). Callers: Library and Composer Load free fonts (`:1547`, `:2218` via `loadAllFreeFonts`),
+  Kit preset "Free Google Fonts" (`:2212`), inspector library pick (`:4466`). A second click, and remembered
+  consent on page load (`:1451`, set before the listener exists), dispatch nothing, so there is no re-broadcast
+  at a surprising time and no double send. The Kit preset change does not re-render the canvas, so no debounced
+  send follows. The inspector pick sends the (linked) composition once, then its own element update; the bridge
+  keeps composition sheets and per-target sheet references separately and reference-counted
+  (`fontkit-bridge.js:1636-1670`), so the two do not release each other.
+- **Races.** The send goes through `enqueueLiveOp`. A queued composition op is replaced in place (`:3590-3593`),
+  an in-flight one is left alone, and `broadcastLiveState(true)` clears any pending debounce timer, so the
+  consent send cannot overlap or double an in-flight composition request.
+- **Rule 7, D031, D032 hold.** The ask is still only the explicit actions; Sync, import and Reapply do not count.
+  The extra send happens only after the user pressed one of them, and `compositionPatch` adds `fontStylesheets`
+  only when `freeFontsAllowed` is true (`:5210`), which `allowFreeFonts` sets before dispatching.
+- **Tests.** Mutation in a private copy (`work/leading-consent/mut`, shared tree untouched): deleting
+  `broadcastLiveState(true)` makes the resend test time out waiting for `ledger().imports` (FAIL); the no-sync
+  test passes, as expected for a characterization of the boundary, and fails under the ungated mutation above.
+  Both tests assert page state (the fake page's imports, the exact sheet list and family order, exactly one extra
+  update, an absence window for the negative case), not only sent messages.
+- **Pre-existing, not introduced here (note only).** Streaming composition updates send `compositionFontSheets()`
+  (slot fonts only) as the complete set, while Reapply sends `composedFontSheets()` (slots plus saved-token fonts).
+  A linked composition that follows a Reapply of saved library-font tokens can therefore release the token sheet
+  on any update, including this one. The consent send behaves like every other streaming update.
+
+### Required before commit
+
+- **R1 (should-fix): no real Studio + real bridge test for this boundary.** AGENTS.md "Test Quality Rules"
+  requires at least one test per boundary against the real bridge, and forbids protocol features covered only by
+  a fake counterpart. Both new tests run against the fake page (`window.fake`). `CompositionSyncTests`
+  (`tests/test_live_integration.py:553`) covers sync-after-consent and sync-without-consent, and
+  `FreeFontsAskTests` (`:647`) covers the ask for imports and Reapply, but nothing covers sync first, then Load
+  free fonts. Add to `CompositionSyncTests`: connect, Sync without consent, assert zero `link[data-fontkit-font]`
+  and no font requests; click `#loadFreeFonts`; wait until `link[data-fontkit-font]` hrefs equal `self.SHEETS`;
+  assert the four sheets were requested. Optionally add the unsynced twin: consent without Sync leaves zero links
+  in the target. The report's gate line should then name the integration module too.
+- **R2 (nit): ledger.** Add the ledger event in `docs/implementation/progress.md` in the same commit
+  (AGENTS.md, Commit Rules 1). The report states that the full suite and the frontend gate were not run by the
+  task; the results below are the evidence.
+
+Coverage note: the new tests drive only the Composer `#loadFreeFonts` path. The other paths share
+`allowFreeFonts`, so the single dispatch point is covered, but the Library button, Kit preset and inspector pick are
+not exercised for this behaviour. Acceptable.
+
+### Gates (current tree, Chromium only, Firefox not run)
+
+- `python scripts/verify.py --static-only`: PASS (88 unique IDs, inline JS syntax, 3 provenance hashes).
+- `node --check fontkit-bridge.js`: exit 0.
+- `python -m unittest discover -s tests` (PYTHONPATH=tests, FKS_ENGINES=chromium): `Ran 519 tests in 512.933s` / `OK`.
+- `python scripts/dev/frontend_gate.py --engines chromium --offline`: `SUMMARY OK: 15 of 15 planned runs finished.
+  Blocking: 7 runs, 6 passed, 0 failed, 1 skipped. Advisory: 8 runs, 0 ADVISORY lines. 140 REPORT lines, 1 SKIP
+  lines, 0 FAIL lines`. The skip is the "free fonts load" check, skipped by `--offline`. REPORT lines are
+  touch-target notes on advisory profiles.
+- Not run: `check_commit_messages.py` (nothing committed), Firefox, the online free-fonts gate check.
+
+### Verdict
+
+**Approved with fixes.** The one-line change is correct and respects Rules 6 and 7; the tests are real, and one
+is mutation-checked both ways. Add R1 (the real-bridge test) and R2 before the commit.

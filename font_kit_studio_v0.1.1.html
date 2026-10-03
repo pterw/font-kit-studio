@@ -4943,7 +4943,9 @@ if (remembered) kitId.value = remembered;
     return Object.values(live.overrides).some(patch => typeof patch.fontFamily === "string" && libraryFontForStack(patch.fontFamily))
       || Object.values(live.savedTokens).some(value => libraryFontForStack(value));
   }
-  document.addEventListener("fontkit:free-fonts-allowed", () => { renderReconnectBanner(); renderLiveCode(); });
+  // A composition the user already synced went out without its stylesheets (D031); the Composer promised they load once
+  // the user asks, so send it again. An unlinked composition stays put: consent alone never pushes state (Rule 6).
+  document.addEventListener("fontkit:free-fonts-allowed", () => { renderReconnectBanner(); renderLiveCode(); broadcastLiveState(true); });
 
   function liveCss() {
     const lines = [];

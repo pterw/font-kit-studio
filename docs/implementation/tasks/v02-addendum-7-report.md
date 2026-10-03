@@ -267,3 +267,29 @@ Fixture: `fake.priorStructure` (ledger entries listed before the page's own), do
 Gates (final tree, Chromium only): `python3 -m unittest tests.test_studio_live`: Ran 127 tests, OK.
 `python3 scripts/verify.py --static-only`: PASS (unique IDs, inline JS, 3 provenance hashes). Not run here: the full
 discover suite, the frontend gate, Firefox. No server or browser process of mine is left running.
+
+## Review fix: composition fonts after consent (2026-10-03)
+
+Finding: a user who pressed Sync to Live App before Load free fonts left the
+composition linked but sent without `fontStylesheets` (D031). Pressing Load
+free fonts only refreshed the banner and the CSS tab, so the target stayed on
+fallback fonts, against the Composer's own note (`FONTS_WAIT_NOTE`).
+
+Fix: the `fontkit:free-fonts-allowed` handler in
+`font_kit_studio_v0.1.1.html` now calls `broadcastLiveState(true)`. That
+function already returns unless `live.ready && live.compositionLinked`, so an
+unsynced composition is not sent (Rule 6: consent alone pushes nothing).
+
+Tests (`StudioCompositionFontTests`, `tests/test_studio_live.py`):
+
+- `test_loading_free_fonts_after_a_sync_resends_the_linked_composition_with_its_stylesheets`:
+  RED before the fix (the fake page never held an import; timed out waiting
+  for `ledger().imports`), GREEN after: one extra composition update with the
+  four expected sheets, and the fake page's imports equal that list.
+- `test_loading_free_fonts_without_a_sync_sends_nothing_to_the_page`: passes
+  before and after (characterization of the Rule 6 boundary; 400 ms absence
+  window, no composition update and no imports).
+
+Gates run (chromium only, Firefox not run): `tests.test_studio_live` 129 tests
+OK; `python scripts/verify.py --static-only` PASS. Full suite, frontend gate
+and commit-message check were not run by this task.

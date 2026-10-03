@@ -3706,6 +3706,39 @@ class StudioCompositionFontTests(LiveCase):
                 self.assertRegex(status, r"Load free fonts.*fallback")
                 self.assertEqual(errors, [])
 
+    def test_loading_free_fonts_after_a_sync_resends_the_linked_composition_with_its_stylesheets(self):
+        """The Composer promises the fonts load once the user presses Load free fonts; the linked composition must deliver."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors = self.open(engine)
+                self.wait_connected(page)
+                frame = self.frame(page)
+                self.sync(page)
+                self.assertEqual(self.sheets_sent(frame), [None], 'no consent yet: the first update carries no stylesheets')
+                self.assertEqual(frame.evaluate('window.fake.ledger().imports'), [])
+                page.locator('#loadFreeFonts').click()
+                frame.wait_for_function('window.fake.ledger().imports.length > 0')
+                sent = self.sheets_sent(frame)
+                self.assertEqual(len(sent), 2, 'exactly one more composition update, sent by the consent')
+                self.assertEqual([url.split('family=')[1].split(':')[0].split('&')[0] for url in sent[1]], self.EXPECTED)
+                self.assertTrue(all(self.SHEET.match(url) for url in sent[1]), sent[1])
+                self.assertEqual(frame.evaluate('window.fake.ledger().imports'), sent[1], 'the page holds the links')
+                self.assertEqual(errors, [])
+
+    def test_loading_free_fonts_without_a_sync_sends_nothing_to_the_page(self):
+        """Consent alone must not push Studio's composition into the app (Rule 6)."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors = self.open(engine)
+                self.wait_connected(page)
+                frame = self.frame(page)
+                page.locator('#loadFreeFonts').click()
+                self.assertTrue(page.evaluate('() => document.getElementById("freeFontStatus").textContent.length > 0'))
+                page.wait_for_timeout(400)                # absence window: a stray send would arrive well within it
+                self.assertEqual([u for u in self.updates(frame) if 'targetId' not in u], [])
+                self.assertEqual(frame.evaluate('window.fake.ledger().imports'), [])
+                self.assertEqual(errors, [])
+
     def test_reapply_sends_the_stylesheets_for_the_saved_token_fonts_and_the_saved_css_imports_them(self):
         for engine in ENGINES:
             with self.subTest(engine=engine):
