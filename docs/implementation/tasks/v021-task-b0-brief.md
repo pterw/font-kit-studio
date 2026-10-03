@@ -35,3 +35,44 @@ Only composition and Reapply ops are marked `importSuperseded` (`endCompositionL
 
 Studio: `importCompositionJson`, `endCompositionLink`, `endRunningReapply`, the op
 bookkeeping in `enqueueLiveOp`. `tests/test_studio_import_link.py` (append). Nothing else.
+
+## Implementer report
+
+Kerning-B0. Base `e3e07ef`. Changes left uncommitted.
+
+### What changed
+
+- `font_kit_studio_v0.1.1.html`: new `supersedeLiveOpsForImport()` (line 3050), called from
+  `importCompositionJson` (3094) right after `endRunningReapply()` / `endCompositionLink()`. It marks every
+  in-flight and timed-out op `importSuperseded` whatever its kind, drops the queue, and returns how many queued
+  user edits (not Reapply, not composition) it dropped. The import status appends
+  " N queued edit(s) that had not reached the page was/were dropped." (3119) only when N > 0.
+  Existing superseded paths (`recordCanonical`, `handleReply`, `handleLateReply`, `reconcileAfterImport`) are
+  unchanged and now also serve ordinary update, move, reset and restore ops.
+- `endCompositionLink`, `endRunningReapply` and `enqueueLiveOp` needed no change.
+- `tests/test_studio_import_link.py`: new class `LateEditReplyTests` (7 tests).
+
+### RED then GREEN
+
+RED (before the Studio change): 6 of 7 failed. Saved overrides were `{'hero.lead': {'fontSize': 21}}` instead of 30
+(linked, unlinked, timed-out cases); the rejected edit was sent twice (2 != 1); both queued-edit status tests
+failed on the missing sentence. The characterization test (no queued edits keeps the plain status) passed.
+GREEN: `LateEditReplyTests` 7/7.
+
+### Mutations (LateEditReplyTests, Chromium)
+
+- M1 remove the supersede marking: 5 fail (linked ack, unlinked ack, timeout ack, rejected edit, queued-edit
+  status test).
+- M2 report 0 dropped edits: 2 fail (both status tests).
+- M3 keep the queue: 1 fails (the queued edit is sent after the release).
+File restored after each mutation (byte-identical to the fixed copy).
+
+### Gates (Chromium only)
+
+- `unittest test_studio_import_link test_studio_live test_live_integration`: 226 tests OK.
+- `scripts/verify.py --static-only`: exit 0. `node --check fontkit-bridge.js`: exit 0.
+
+### Not verified
+
+Firefox, the full suite, the frontend gate and the commit-message check were not run. The queued-edit status
+wording is mine; the brief gave none.
