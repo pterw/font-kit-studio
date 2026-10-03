@@ -46,7 +46,8 @@ a general editor.
 ## Surfaces and order
 
 The agreed design and release order now live in
-[the typography system design](../specs/2026-10-03-typography-system-design.md). In short:
+[the typography system design](../specs/2026-10-03-typography-system-design.md); status and
+one plan per release are in [the roadmap ledger](../plans/2026-10-03-roadmap.md). In short:
 one command for Vite and React projects and a local proxy for any other dev server come
 first (R1); then the detection engine (R2), the pairing system (R3) and output and
 handoff (R4); then the browser extension for non-developers (R5). Source rewriting and
