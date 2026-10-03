@@ -1,83 +1,52 @@
-# SDD ledger — plan: docs/plans/2026-09-30-v0.1.1-responsive-rows.md
+# Implementation progress
+
+Plans: `docs/plans/2026-09-30-v0.1.1-responsive-rows.md` (complete), `docs/plans/2026-10-02-v0.2.0-live-preview-code-sync.md` (complete). Decisions and deviations: `deviations.md`. Task reports and reviews: `tasks/`.
 
 ## Current state
 
-Tasks 1–5 complete and reviewed. Final whole-branch review pending. Branch: feat/v0.1.1-responsive-rows.
+- **v0.2.0 (PR #1, open, awaiting the owner's merge).** All plan tasks, review-fix rounds and every review thread are done; check CI on the current head before relying on it. In flight: plan Addendum 7 (known-limit fixes: DOM moves restored by Reapply, reconnect banner wording, removed author ids, the wrong-element re-select, origin-list case and `initFontKitBridge` narrowing, Composer tracking and font loading). Each Addendum 7 item is reviewed before it is committed to the PR branch. Status: all seven items are implemented with failing-first tests, uncommitted, report at `tasks/v02-addendum-7-report.md`; next are the independent review, the doc changes the report lists (README, D020/D021, plan contract and checkboxes), then one commit. Composer sync does not count as asking for free fonts (D031).
+- **Next release.** The typography system design is approved: `docs/specs/2026-10-03-typography-system-design.md` (releases R1 one command, R2 engine, R3 pairing system, R4 output and handoff, R5 extension). Its R1 plan starts on a fresh branch from `main` after PR #1 merges. Open owner decisions are listed in the design's section 6 (package name, Studio file name, specimen canvas location).
+- **Evidence.** 434 tests pass in Chromium locally; Firefox runs in CI only and is advisory (D029).
 
 ## Recovery
 
-Read this ledger and deviations.md, then git log/status. Completed tasks must not be redispatched. Full briefs, reports, review packages and verdicts live in docs/implementation/tasks. Source tag supplied-v0.1.1 is the original input, not an independently verified release. No remote is configured.
+Read this record and `deviations.md`, then `git log` and `git status`. Completed tasks are not repeated. Full briefs, reports, review packages and verdicts live in `docs/implementation/tasks`. The source tag `supplied-v0.1.1` is the original input, not an independently verified release.
 
-## Preflight consistency scan
+## v0.1.1
 
-| Tasks | Producer / consumer | Finding |
-|---|---|---|
-| 1 | Factory/selection tests vs model changes | Model exists; characterize and fix defects instead of artificial RED. |
-| 2 | Grid/observer tests vs rendering | Rendering exists; test actual geometry. |
-| 3 | Inspector tests vs controls | Controls exist; test interaction and bounds. |
-| 4 | Hydration/stripping/traversal tests vs exports | Exists; validate malformed imports and assets. |
-| 5 | Structural/syntax/IDs/hash vs shipped artifact | Add real browser acceptance and final review; hashes after last change. |
-| 1 + 2 | Row model → renderer (same HTML) | Sequential writers; finite bounded values required. |
-| 1 + 3 | Selection/model → inspector | Sequential writers; one-level IDs preserved. |
-| 1 + 4 | Row factory → hydration/export | Sequential writers; same invariants at import boundary. |
-| 1 + 5 | Model/version → verification | Final evidence after all implementation. |
-| 2 + 3 | Renderer → live inspector updates | Sequential writers; resize observer independent of nominal width. |
-| 2 + 4 | Renderer → imported state | Validate imported values before rendering. |
-| 2 + 5 | Layout → browser verification | Chromium and Firefox, breakpoint boundaries. |
-| 3 + 4 | Inspector → JSON round trip | Preserve editable leaf state. |
-| 3 + 5 | Inspector → browser verification | Test real controls and child selection. |
-| 4 + 5 | Exports → final artifact checks | Round trip and recursive session stripping. |
+The supplied HTML already implemented rows, so the work characterized existing behaviour and fixed actual defects (D001). Every task was independently reviewed. The final suite is 20 browser tests in Chromium and Firefox (`verification.md`).
 
-## Events
+- **Task 1, row model and selection.** Fixed fractional row counts, hidden descendants retained after a row shrinks, and the version mismatch.
+- **Task 2, row rendering.** Fixed row alignment (start, center, end) by removing a forced child height. Weighted 2-4 column tracks, gap, source order and the container-width collapse boundaries (679/680/681) are covered; the layout follows the canvas width, not the nominal width.
+- **Task 3, row inspector.** Fixed the breakpoint field showing a value the model had clamped, and associated row labels with their controls. Covered real keyboard entry, upper bounds, leaf controls, child summary and breadcrumb, and top-level reorder.
+- **Task 4, import, export and images.** Fixed a crash on numeric roles, role/property CSS collisions, a metadata data-URL leak, acceptance of malformed slot and background data, a delayed image read updating the wrong slot, and an explicit empty kit list not round-tripping. Candidate state is validated before it is published, so a rejected import leaves the previous state intact.
+- **Task 5, final verification.** Added Library and dynamic-ID acceptance, screenshots and the verification evidence; no product fix was required.
+- **Verification tooling.** `scripts/verify.py` (static checks, provenance, full suite) and `requirements-dev.txt`.
 
-- 2026-09-30 Setup: read both supplied documents in full; direct-source baseline shows row implementation already present. Preserved original bytes/specs with SHA-256 provenance.
-- Graph: list_projects, search_graph and check_index_coverage failed with Transport closed. Tier Verify intended, project/generation unknown; all subsequent claims require direct-source or runtime evidence.
-- Chat: supplied ChatGPT conversation URL returned login page; discussion unavailable. No recalled claims invented.
-- Parallel baseline audits: baseline_rows_audit owns row/inspector report; baseline_exports_audit owns persistence report. Both read-only on app/Git.
+## v0.2.0
 
-- Task 1: brief prepared; implementation pending dispatch.
-- Task 1: implementation writer /root/implement_task_1 assigned; real-browser RED checks underway in Chromium and Firefox. HTML/tests ownership exclusive until report and review.
-- Task 1 step: implementer reproduced baseline failures in both browsers (fractional counts, retained hidden descendants, version mismatch); inherited selection/preset checks passed. Initial GREEN passed; separate fractional inspector regression and final scoped checks underway. Exact command/output will be retained in task report.
-- Task 1 steps complete: RED evidence retained; GREEN 6 tests in Chromium/Firefox, inline JS syntax and whitespace checks pass. Implementation commit cc9ebd5. Independent reviewer /root/review_task_1 is checking spec and quality before task completion.
-- Task 1 review: Spec compliant / quality Approved; no blocking findings. Minor M1: oversized finite gap/breakpoint/weight cases deferred to Task 3 tests. Recursive ID lookup source was directly checked by controller (findSlotById/selectedLocation/replaceSelectedSlot); unchanged Library/image acceptance remains assigned to Tasks 3-5, not claimed complete here.
+Every implementation task was independently reviewed. Final suite on Chromium: 201 tests (bridge 83, v0.1.1 20, integration 16, preview server 18, Studio live 64).
 
-- Task 1: complete (commits ba881ea..cc9ebd5, review clean). Report and review: docs/implementation/tasks/task-1-report.md and task-1-review.md.
+- **Task A, preview server and demo.** `scripts/serve.py` (two loopback ports, status endpoint, atomic overrides write) and an offline demo target page. Defects found and fixed: no Host-header check (DNS rebinding), an empty reply when the write failed, no socket timeout, and a path check on the raw request path. Final: 18 server tests.
+- **Task B, bridge runtime and change ledger.** Protocol v1 with origin and session pinning, validated atomic patches, revisions and a change ledger. Defects found and fixed: the restore-text crash, original text recaptured on rediscovery, click interception without a connected Studio, and no origin or session gating. Review also found script execution through legacy SVG placement (now `<img>` data URLs only), an `allowedOrigins` option defeated by auto-init, and broken base64 SVG. Final: 33 bridge tests.
+- **Task C, Studio client, Live Target inspector and code panel.** Origin and session gating, status badge, `?target=` auto-connect, select/interact modes, Studio-owned overlays, CSS/HTML/JSON tabs with copy, download and sync, JSON `live` field, reconnect banner. Defects found and fixed: spoofed `applied` messages accepted, composition broadcast on connect, `?target=javascript:` executing in Studio's origin, a keystroke size bug, auto-sync shrinking the overrides file, and composition tokens dropped after a reload. Final: 49 tests (29 Studio live, 20 v0.1.1).
+- **Task D, integration and README.** Real Studio, bridge, demo and server driven end to end, the README with logo, workflows, integration recipes and protocol tables, and the MIT license. Defects found and fixed: pop-out opened a tab instead of a window, unused `design:inspect` and `design:ping` messages, inconsistent token rules between Studio and bridge, unguarded `localStorage`, and the anti-recursion check under loopback aliases. Final: 201 tests across the suite.
+- **Task E, bridge arrangement and fonts.** `design:move` with DOM and CSS-order strategies, move guards (form owner, radio group, label/aria references, content model, framework-managed), runtime-error warnings, pop-out overlay, font stylesheets with a strict URL allow-list, SPA and HMR robustness. Defects found and fixed: quadratic bulk manifests (8.36 MB on a 718-target page, now linear), arrangement-only targets cleared on rediscovery, and hit-testing that selected whole lists. Final: 101 tests (83 bridge, 18 server).
+- **Task F, Studio arrange UI, pop-out and free fonts.** Arrange section with strategy toggle and guard messages, pop-out window with dock, 16 free OFL fonts with Adobe as opt-in, saved tokens and css-order moves in the `live` field. Defects found and fixed: Reapply dropped the font stylesheet, reset-then-replay was not transactional (a rejected follow-up emptied the overrides file), DOM-move undo was silent, and Alt+Left/Right was hijacked. Final: 182 tests at the time (the full suite later reached 201).
+- **Task G, README logo.** Light and dark outlined SVG wordmarks from OFL fonts, with licences in `docs/assets/README.md`; contrast checked on light and dark GitHub backgrounds. Docs-only asset, no tests.
+- **Task H, CI and frontend gate.** Quality Gate workflow (static checks, commit-message check, frontend gate, full suite in Chromium and Firefox) and the fontkit frontend gate: network isolation, free fonts with bounded retry, overflow, initial visibility, live edit on every profile, logo paint, contrast on v0.2 surfaces, touch targets as report-only. Fixed four contrast defects on v0.2 surfaces and made Studio silent until the user asks for free fonts. The commit check rejects AI-tool signatures and allows human co-authors. 342 tests; independently reviewed. The first CI run (Chromium and Firefox) found that the demo header overflowed a phone-width preview in Firefox, whose font metrics are wider; the header now wraps on narrow screens.
 
-- Task 2: brief prepared; implementation pending dispatch.
-- Task 2: implementation writer /root/implement_task_2 assigned; HTML/tests ownership exclusive. Acceptance includes Chromium/Firefox computed geometry and actual canvas width observer updates.
-- Task 2 step RED: unequal-height spacer geometry regression failed start/center/end in both Chromium and Firefox (6 subtests); inherited stretch passed. Writer will remove forced row-child height and verify weighted tracks, observer updates and collapse boundaries.
-- Task 2 step GREEN: one CSS height declaration removed; alignment geometry passes in both engines. Characterization passes weighted 2-4 tracks, gap, source order and container-only observer boundaries 679/680/681 while nominal width remains 960. Initial harness padding mistake corrected; final task suite/report pending.
-- Version clarification: user confirmed the received HTML is v0.1.1; preserved original tag supplied-v0.1.1, implementation target remains v0.1.1. The internal v0.1.0 title was a mismatch.
-- Task 2 final steps: full suite 8 tests OK (both browser engines), JS syntax/whitespace clean. Implementation commit 0e86c9f. Reviewer /root/review_task_2 checking spec and task quality.
-- Task 2 review Spec compliant / quality Approved, no findings. Unchanged observer source was directly read at baseline (single canvas observer); real container-only resize tests supply behavior evidence. Remaining global Library/assets/exports acceptance is tracked for Tasks 3-5.
+## v0.2.0 release-point checks
 
-- Task 2: complete (commits ab087c0..0e86c9f, review clean). Report and review: docs/implementation/tasks/task-2-report.md and task-2-review.md.
+- Sweep: `sweep-v0.2.md` (dead code, contract drift, stale docs; Must-fix items M1-M3 resolved).
+- Final whole-branch review: `final-review-v0.2.md`, "Ready with notes".
+- Gate evidence: `verification-v0.2.md` (static checks, provenance, 201 tests, bridge syntax check, Studio and demo smoke at 1440x900 and 390x844).
+- Code-review handoff: `handoff-code-review-v0.2.md`.
 
-- Task 3: brief prepared; implementation pending dispatch.
-- Task 3: /root/implement_task_3 owns HTML/tests/report. Row/leaf interaction checks and deferred M1 upper-bound coverage assigned; import/export defects remain Task 4.
-- Baseline preservation verified freshly: received Downloads HTML and Git supplied-v0.1.1 blob have identical bytes and SHA-256 cae14e847640c71f4e1b528222efe2a21372e73dfcaac0ae20c26d5cf546d949.
-- Task 3 step RED: breakpoint field shows 99999 while model exports 1600 in both engines. Writer is fixing committed numeric field reflection and associating row labels; controller called out preserving multi-digit keyboard entry as a concrete fix risk.
-- Task 3 step GREEN: focused row checks pass in both browsers, including committed value reflection, real keyboard entry (680 and 2.5), upper bounds, leaf controls, child summary/breadcrumb/type restriction and top-level reorder. Full 10-test task suite running; exact evidence pending report.
-- User steering: concurrent subagents permitted when scopes do not overlap. Documentation/verification tooling can run alongside app writers/reviewers; HTML/test writers remain exclusive because tasks share files.
-- Task 3 implementation committed a03d8ae; full 10 tests, both engines, syntax/whitespace pass. Reviewer /root/review_task_3 assigned. Parallel verification tooling brief prepared with separate README/requirements/scripts ownership and no Git mutation.
-- Task 3 review: Spec compliant / quality Approved, no findings. M1 upper-bound tests addressed. Prior Task 2 source/runtime evidence resolves actual-width/observer acceptance; Library and assets remain assigned to final/export tests. Parallel tooling writer /root/verification_tooling assigned only README/requirements/scripts/report; Git mutation reserved to controller.
-
-- Task 3: complete (commits d0496ad..a03d8ae, review clean). Report and review: docs/implementation/tasks/task-3-report.md and task-3-review.md.
-
-- Task 4: brief prepared; implementation pending dispatch.
-- Task 4 writer: /root/implement_task_2 reused with fresh Task 4 brief after new-agent capacity rejection. Task 2 is complete and must not repeat. Concurrent /root/verification_tooling has disjoint README/requirements/scripts ownership; no Git mutation by tooling worker.
-- Parallel tooling implementation DONE, no Git/app/test mutation. Static-only checks pass from both working directories; duplicate-ID and invalid-JS temp fixtures exit 1. Immutable working-file package created for independent review; commit deferred until app writer safe point.
-- Parallel tooling review: Spec compliant / quality Approved, no blockers, assigned file hashes match immutable package and installed Playwright pin. Tooling commit remains deferred until app writer completes.
-- Task 4 step RED: numeric-role CSS crash, role/property suffix collisions, metadata assetDataUrl leak, malformed slot/background acceptance and delayed FileReader wrong-slot update reproduced in both browsers. Correct PNG fixture decodes in Chromium/Firefox; PNG/SVG/JPEG acceptance behavior initially passes. Candidate-state validation and captured image target fixes underway.
-- Task 4 step GREEN: six focused import/export/image tests pass in Chromium/Firefox. Candidate state validated before publication; rejected imports preserve prior JSON and DOM. Full CSS declaration sets reserved against collisions; session data stripped recursively; async image reads bound to original target. Additional __proto__ role default lookup defect reproduced and fixed; full task checks/report underway.
-- Parallel tooling accepted and committed after independent review at app-writer safe point. App Task 4 completed ae452d6; full 17 tests in both engines, syntax/whitespace clean. Immutable app-only review package created before tooling commit.
-- Task 4 review found Important I4-1: explicit kitIds:[] retains receiving IDs, violating round trip. Fix round 1/5 assigned to original writer. Fix base is 0db4ca9 (only separate reviewed tooling differs from reviewed app head ae452d6; app/test diff empty). No Task 5 execution until scoped re-review clears issue.
-- Task 4 fix round 1/5: writer commit 40ad06d, explicit-empty kit IDs regression RED then GREEN in both browsers; legacy absent-field behavior retained. Targeted tests/syntax/whitespace pass. Scoped re-review pending, no task completion claimed.
-- Task 4 fix round 1/5 closed: I4-1 addressed, no new Critical/Important breakage; reviewer Approved at 40ad06d. Existing Library/full standalone/browser/screenshot acceptance remains Task 5; imported nested/old leaf, images, privacy and exports now covered.
-
-- Task 4: complete (commits 979fa78..40ad06d, review clean). Report and review: docs/implementation/tasks/task-4-report.md and task-4-review.md.
-
-- Task 5: brief prepared; implementation pending dispatch.
-- Task 5 writer /root/implement_task_5 assigned final verification/tests/evidence/screenshots. Reviewed verifier reused, Library and dynamic-ID acceptance added if missing. Full default verification after source/tests stop changing; final whole-branch review pending.
-
-- Task 5: complete (commits 95987ae..068b7c1, review clean). Report and review: docs/implementation/tasks/task-5-report.md and task-5-review.md.
+- **Review fixes (PR #1).** External review findings, each reproduced with a failing test first and independently reviewed:
+  - Studio and bridge state: synced CSS keeps rules for auto-discovered targets whose selectors use `>` and escaped class names, with a linear-time selector check that hostile targets cannot stall. Reapply removes target-only composition tokens (a `null` token value now removes an override) and reports success only when the target matches Studio. Every timed-out request stays tracked until its late reply, and a late rejection is shown to the user.
+  - Tooling: the dev server no longer follows symlinks out of the repository or to hidden files. The logo check's CSS/URL scans are case-insensitive and its contrast judgement honours a colour's own alpha. The commit check no longer flags human names such as "Claude Proctor" while still catching model names. An empty or unknown `FKS_ENGINES` is an error. The gate's font measurement runs under one shared 15 s deadline, so a font load that never answers counts as missing and the retry and FAIL reporting still run (worst case about 109 s per online run). Colour parsing in the contrast checks (Python and in-page) reads numbers in exponent form, which Chromium uses for tiny channels and alphas. With the studio on port 80 the dev server accepts the port-less Origin browsers send. The screenshot script polls its waits on an interval so an offscreen frame cannot stall it.
+  - Promoted targets: when an auto-discovered element gains a `data-design-id`, its edits, originals and change-order place move to the new id, and its manifest carries `previousId`. Studio re-keys a saved override under that old id without sending anything to the page; a `previousId` naming a target still on the page is ignored. Known limits (author-to-author renames carry edits with the element; removing the attribute is not noticed) are in the task report.
+  - Repeated construction: once a Studio has talked to the bridge, a second `new FontKitBridge(...)` returns it; only an `allowedOrigins` list that narrows the policy is applied, dropping a Studio that is no longer allowed. An unconnected or disposed bridge is replaced, so hot-reload options apply.
+  - Author ids with CSS-special characters keep their rules: the bridge writes `; { } < > ( ) / * !` and control characters as CSS escapes, Studio's selector grammar accepts them, and CSS comments neutralise `/*`, `*/`, `<` and `>`.
+  - 434 tests (Chromium); records in `tasks/v02-review-fixes-*.md`.

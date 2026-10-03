@@ -6,12 +6,13 @@
 <title>Font Kit Studio v0.1.1</title>
 
 <!--
-  TYPEKIT / ADOBE FONTS
-  ---------------------
-  Option A: paste your kit ID into the field at the top of the page.
-  Option B: replace YOUR_KIT_ID below and uncomment the line.
-
-  <link rel="stylesheet" href="https://use.typekit.net/YOUR_KIT_ID.css">
+  FONTS
+  -----
+  Free Google Fonts (SIL Open Font License) load from fonts.googleapis.com only after you ask
+  (Load free fonts, or choosing a library family in the inspector). Until then specimens use
+  their fallback stacks and nothing contacts Google. Your choice is remembered in this browser.
+  Adobe Fonts is opt-in and bring-your-own: paste your own kit ID into the Adobe kit field.
+  Nothing is prefilled.
 -->
 
 <style>
@@ -24,6 +25,9 @@
   --accent: #5a3aa7;
   --chip: #ece7dc;
   --shadow: 0 8px 30px rgba(38, 30, 15, .07);
+  /* v0.2 surfaces only: --muted measures 4.30:1 on --chip, so the live panels use these (>= 4.5:1 on --panel, --chip and --bg). */
+  --muted-strong: #625e56;
+  --warn-text: #9a3412;
   --sample-size: 42px;
 }
 * { box-sizing: border-box; }
@@ -44,6 +48,8 @@ body.dark {
   --accent: #b99cff;
   --chip: #272622;
   --shadow: none;
+  --muted-strong: #a7a198;
+  --warn-text: #fca5a5;
   color-scheme: dark;
 }
 button, input { font: inherit; }
@@ -662,6 +668,212 @@ footer {
   overflow-y: auto !important;
 }
 
+/* ================================================================
+   v0.2.0 — Live preview: bridge status, overlay, live inspector, code panel
+   ================================================================ */
+.bridge-badge {
+  padding: 2px 7px;
+  border-radius: 999px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  font: 10px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: nowrap;
+}
+.bridge-badge[data-state="rejected"],
+.bridge-badge[data-state="missing"],
+.bridge-badge[data-state="error"] { color: var(--warn-text); background: rgba(239, 68, 68, .14); }
+.bridge-hint {
+  margin: 7px 0 0;
+  color: var(--muted-strong);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.bridge-hint code, .live-target-id code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--ink); }
+.bridge-mode button { padding: 6px 8px; font-size: 11px; min-height: 0; }
+.live-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  color: var(--ink);
+  background: color-mix(in srgb, #f59e0b 12%, var(--panel));
+  border: 1px solid color-mix(in srgb, #f59e0b 45%, var(--line));
+  border-radius: 8px;
+  font-size: 12px;
+}
+.live-banner > div { min-width: 0; }
+.live-banner-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.live-banner-actions .btn { padding: 6px 10px; font-size: 11px; }
+.live-overlay-layer { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 2; }
+.live-overlay {
+  position: absolute;
+  border: 1px dashed var(--accent);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  pointer-events: none;
+}
+.live-overlay.is-selected {
+  border: 2px solid var(--accent);
+  background: transparent;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.live-overlay-label {
+  position: absolute;
+  left: -1px;
+  bottom: 100%;
+  max-width: min(260px, 90vw);
+  margin-bottom: 2px;
+  padding: 2px 6px;
+  overflow: hidden;
+  border-radius: 4px;
+  color: #fff;
+  background: var(--accent);
+  font: 700 10px/1.35 system-ui, sans-serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+body.dark .live-overlay-label { color: #111; }
+.live-overlay.label-below .live-overlay-label { top: 100%; bottom: auto; margin: 2px 0 0; }
+.live-code-panel {
+  margin-top: 14px;
+  padding: 12px;
+  min-width: 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.live-code-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 9px;
+}
+.live-code-head h2 { display: flex; gap: 7px; align-items: center; margin: 0; font-size: 14px; }
+.live-count {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  color: var(--muted-strong);
+  background: var(--chip);
+  font: 700 10px/1.5 system-ui, sans-serif;
+  text-align: center;
+}
+.live-code-tabs button { min-height: 30px; padding: 4px 12px; font-size: 11px; }
+.live-code-output {
+  max-height: 340px;
+  min-height: 90px;
+  margin: 0;
+  padding: 11px 12px;
+  overflow: auto;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre;
+  tab-size: 2;
+}
+.live-code-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 9px; }
+.live-code-actions .btn { padding: 7px 10px; font-size: 11px; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn:disabled:hover { border-color: var(--line); }
+.live-autosync { display: inline-flex; gap: 5px; align-items: center; color: var(--muted-strong); font-size: 11px; }
+.live-code-status { flex: 1 1 160px; min-width: 0; color: var(--muted-strong); font-size: 11px; overflow-wrap: anywhere; }
+.live-code-status[data-state="error"] { color: var(--warn-text); }
+.live-target-id { margin: -4px 0 10px; overflow-wrap: anywhere; }
+.live-target-list { display: grid; gap: 6px; }
+.live-target-list small { overflow-wrap: anywhere; }
+.inspector input[type="color"] { height: 36px; padding: 3px; cursor: pointer; }
+.inspector input[aria-invalid="true"] { border-color: #c2410c; }
+.live-banner[hidden], .live-code-panel[hidden], .live-overlay[hidden], .bridge-hint[hidden],
+.live-overlay-layer[hidden], .popout-placeholder[hidden], .bridge-warning[hidden], .live-warnings[hidden],
+.live-move-guard[hidden] { display: none !important; }
+.bridge-warning {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: center;
+  margin: 7px 0 0;
+  color: var(--warn-text);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.bridge-warning > span { min-width: 0; }
+.bridge-warning .btn { padding: 3px 8px; font-size: 10px; }
+.live-warnings { margin: 9px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 11px; color: var(--warn-text); }
+.live-warnings li { padding: 4px 8px; border: 1px solid color-mix(in srgb, #ef4444 40%, var(--line)); border-radius: 6px; overflow-wrap: anywhere; }
+#targetAppContainer:focus { outline: none; }
+#targetAppContainer.is-popout { height: auto !important; min-height: 190px; }
+.popout-placeholder {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 18px;
+  color: var(--muted-strong);
+  background: repeating-linear-gradient(135deg, var(--panel), var(--panel) 12px, color-mix(in srgb, var(--accent) 5%, var(--panel)) 12px, color-mix(in srgb, var(--accent) 5%, var(--panel)) 24px);
+  font-size: 13px;
+  text-align: center;
+}
+.popout-placeholder p { margin: 0; max-width: 46ch; overflow-wrap: anywhere; }
+.popout-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+/* Arrange (Live Target inspector) */
+.live-arrange h3 { margin: 0 0 6px; color: var(--muted-strong); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+.live-arrange .inspector-note { margin: 0 0 6px; overflow-wrap: anywhere; }
+.live-move-buttons { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 8px; }
+.live-move-buttons .btn { min-width: 0; padding: 6px 9px; font-size: 11px; }
+.live-move-strategy { margin: 4px 0 8px; }
+.live-move-strategy .segmented button { padding: 5px 9px; font-size: 11px; min-height: 0; }
+.live-sibling-list { display: grid; gap: 4px; margin: 8px 0; padding: 0; list-style: none; }
+.live-sibling {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--chip);
+  font-size: 12px;
+  cursor: grab;
+  user-select: none;
+}
+.live-sibling:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.live-sibling[aria-current="true"] { border-color: var(--accent); font-weight: 700; }
+.live-sibling.is-dragging { opacity: .45; }
+.live-sibling.drop-before { box-shadow: 0 -3px 0 var(--accent); }
+.live-sibling.drop-after { box-shadow: 0 3px 0 var(--accent); }
+.sibling-grip { color: var(--muted-strong); letter-spacing: -2px; }
+.sibling-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.live-sibling small { color: var(--muted-strong); }
+.live-move-container { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.live-move-container label { flex: 0 0 100%; }
+.live-move-container select { flex: 1 1 120px; min-width: 0; }
+.live-move-container .btn { padding: 6px 10px; font-size: 11px; }
+.live-move-guard {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, #f59e0b 55%, var(--line));
+  border-radius: 8px;
+  background: color-mix(in srgb, #f59e0b 12%, var(--panel));
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.live-move-guard p { margin: 0 0 6px; }
+.live-move-guard .btn { padding: 5px 9px; font-size: 11px; }
+@media (max-width: 680px) {
+  .live-code-output { max-height: 260px; }
+}
+
 </style>
 </head>
 
@@ -671,8 +883,8 @@ footer {
     <p class="eyebrow">Font Kit Studio · v0.1.1</p>
     <h1>Inspect the faces. Then make them live together.</h1>
     <p class="deck">
-      A local-first Adobe Fonts specimen library and flow-based brand typography composer.
-      Load a kit, audition the candidates, then assign real roles, colour, rhythm and assets
+      A local-first free-font specimen library and flow-based brand typography composer.
+      Audition the families, then assign real roles, colour, rhythm and assets
       until the family stops looking like a font list and starts behaving like an identity.
     </p>
   </div>
@@ -688,7 +900,16 @@ footer {
 <section class="controls">
   <div class="wrap controls-inner">
     <div class="field">
-      <label for="kitId">Adobe Fonts kit ID</label>
+      <label for="loadFreeFontsLibrary">Free fonts (Google Fonts, OFL)</label>
+      <div class="input-row">
+        <button id="loadFreeFontsLibrary" class="btn" type="button">Load free fonts</button>
+      </div>
+      <div id="freeFontStatus" class="status">Specimens show fallback fonts until you load the free fonts.</div>
+      <div id="libraryFontHint" class="status">Loading contacts Google Fonts and sends your IP address and the font names.</div>
+    </div>
+
+    <div class="field">
+      <label for="kitId">Adobe Fonts kit ID (optional, bring your own)</label>
       <div class="input-row">
         <input id="kitId" type="text" placeholder="e.g. abc1def" autocomplete="off" spellcheck="false">
         <button id="loadKit" class="btn" type="button">Load kit</button>
@@ -715,21 +936,18 @@ footer {
   <section class="grid" id="grid" aria-live="polite"></section>
 
   <aside class="audit">
-    <strong>Table handling:</strong>
-    the Xenara row has a spelling mismatch between the family name and copied CSS
-    (<code>Xenara</code> vs <code>xenera</code>), so this specimen tries both
-    <code>"xenara"</code> and <code>"xenera"</code> before falling back. The stray
-    <code>Ellfont-family</code> typo before Ella Roman is removed.
-    Otherwise the candidate family names, numeric weights and style combinations are
-    preserved. Generic fallbacks are chosen by visual class instead of blindly preserving
-    copied <code>sans-serif</code> fallbacks.
+    <strong>Free fonts:</strong>
+    every family here is released under the SIL Open Font License and is served by
+    Google Fonts, but only after you ask: press <em>Load free fonts</em> and all sixteen load
+    (your choice is remembered in this browser, and later visits load cards as they scroll into
+    view). Until then, and offline, the specimens use system fallback fonts and nothing breaks. Adobe Fonts is optional: paste your own kit ID above.
   </aside>
 
   <footer>
-    Research notes used for labeling: Adobe Fonts pages for Daith Variable, Ella, Xenara,
-    LTR NCND Variable, Ballinger Mono, Azo Mono, Anonymous, Orpheus, Vox Round and Mencken;
-    foundry / publisher references for Corporate A, Archer, Sentinel, Susan and FF Attribute Mono.
-    This file contains no font binaries.
+    This file contains no font binaries. Fraunces, Crimson Pro, Source Serif 4, Playfair Display,
+    Instrument Serif, Inter, Space Grotesk, DM Sans, Work Sans, IBM Plex Sans, Archivo,
+    Bricolage Grotesque, Bebas Neue, JetBrains Mono, IBM Plex Mono and Space Mono are open-source
+    fonts by their respective authors.
   </footer>
 </main>
 
@@ -743,16 +961,21 @@ footer {
         <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; min-width: 0; max-width: 100%;">
           <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
             <span style="font-weight: 750; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--accent);">Target Application Bridge</span>
-            <span id="bridgeStatusBadge" style="font-size: 10px; padding: 2px 7px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); font-family: monospace;">Ready</span>
+            <span id="bridgeStatusBadge" class="bridge-badge" data-state="idle" role="status" aria-live="polite">Idle</span>
           </div>
           <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 6px; flex: 1 1 240px; min-width: 0; max-width: 100%;">
-            <input id="targetAppUrl" type="text" value="http://localhost:8000/" placeholder="Target URL e.g. http://localhost:8000/" style="padding: 6px 8px; font-size: 12px; font-family: monospace; min-width: 100px; flex: 1 1 100px; max-width: 100%; box-sizing: border-box;" />
+            <input id="targetAppUrl" type="text" value="http://localhost:8001/demo/" placeholder="Target URL e.g. http://localhost:8001/demo/" aria-label="Target application URL" spellcheck="false" style="padding: 6px 8px; font-size: 12px; font-family: monospace; min-width: 100px; flex: 1 1 100px; max-width: 100%; box-sizing: border-box;" />
             <button id="btnConnectTarget" class="btn" type="button" style="padding: 6px 10px; font-size: 11px; font-weight: 600;">Connect Target</button>
             <button id="btnRestoreOriginalText" class="btn" type="button" style="padding: 6px 8px; font-size: 11px;" title="Restore original text in live web app">↻ Restore Page Text</button>
             <div class="segmented" style="display: inline-flex; flex-shrink: 0;">
               <button id="viewSpecimenCanvas" class="active" type="button" style="padding: 6px 8px; font-size: 11px;">Specimen</button>
               <button id="viewTargetApp" type="button" style="padding: 6px 8px; font-size: 11px;">Target App</button>
             </div>
+            <div class="segmented bridge-mode" role="group" aria-label="Preview pointer mode" style="display: inline-flex; flex-shrink: 0;">
+              <button id="bridgeModeSelect" class="active" type="button" aria-pressed="true" title="Clicks in the preview select elements for editing">Select</button>
+              <button id="bridgeModeInteract" type="button" aria-pressed="false" title="Use the app normally: links, buttons and forms work">Interact</button>
+            </div>
+            <button id="bridgePopOut" class="btn" type="button" style="padding: 6px 8px; font-size: 11px;" title="Open the target in its own window, keeping Studio beside it">Pop out</button>
             <div id="deviceViewportBar" style="display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;">
               <button id="btnDeviceDesktop" class="btn" type="button" style="padding: 5px 8px; font-size: 10px;" title="Desktop (1440px)">🖥️ 1440</button>
               <button id="btnDeviceLaptop" class="btn" type="button" style="padding: 5px 8px; font-size: 10px;" title="Laptop (1024px)">💻 1024</button>
@@ -762,20 +985,22 @@ footer {
             </div>
           </div>
         </div>
+        <p id="bridgeWarning" class="bridge-warning" role="status" hidden><span id="bridgeWarningText"></span> <button id="bridgeWarningDismiss" class="btn" type="button">Dismiss</button></p>
+        <p id="bridgeHint" class="bridge-hint" hidden>No bridge answered. Add <code>&lt;script src="fontkit-bridge.js"&gt;&lt;/script&gt;</code> to the target page (after its own scripts), reload it, then press Connect Target.</p>
       </div>
 
       <div class="c-field span-2">
         <label for="kitPreset">Kit preset</label>
         <select id="kitPreset">
-          <option value="typekit" selected>Adobe Typekit (cqu4tvx)</option>
+          <option value="google" selected>Free Google Fonts (OFL)</option>
+          <option value="adobe">Bring your own Adobe kit</option>
           <option value="custom">Custom / manual</option>
-          <option value="asteria">Asteria</option>
         </select>
       </div>
       <div class="c-field span-4">
-        <label for="composerKitIds">Adobe kit ID(s)</label>
+        <label for="composerKitIds">Adobe kit ID(s), optional: bring your own</label>
         <div class="input-row">
-          <input id="composerKitIds" type="text" value="cqu4tvx" placeholder="abc123, def456" spellcheck="false">
+          <input id="composerKitIds" type="text" value="" placeholder="abc123, def456" spellcheck="false">
           <button id="loadComposerKits" class="btn" type="button">Load</button>
         </div>
       </div>
@@ -830,17 +1055,56 @@ footer {
         <button id="exportJson" class="btn" type="button">Export JSON</button>
         <button id="importJson" class="btn" type="button">Import JSON</button>
         <button id="exportCss" class="btn" type="button">Export CSS</button>
+        <button id="loadFreeFonts" class="btn" type="button" title="Load every free Google Fonts family used by the library">Load free fonts</button>
         <button id="btnSyncToApp" class="btn primary" type="button" style="font-weight: 600;">⚡ Sync to Live App</button>
         <input id="importJsonFile" type="file" accept="application/json,.json" hidden>
       </div>
-      <div id="composerStatus" class="composer-status">Editorial — Image + Body Row preset ready. Load the kit if the fonts are not already active.</div>
+      <div id="composerStatus" class="composer-status">Editorial — Image + Body Row preset ready. Specimens show fallback fonts until you load the free fonts.</div>
+      <div id="composerFontHint" class="composer-status">Loading free fonts contacts Google Fonts and sends your IP address and the font names.</div>
     </section>
 
     <div class="composer-shell">
       <div class="canvas-stage">
         <section id="composerCanvas" class="composer-canvas" aria-label="Brand composition preview"></section>
-        <section id="targetAppContainer" style="display: none; width: 100%; height: 720px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: #fff;">
-          <iframe id="targetAppFrame" style="width: 100%; height: 100%; border: none;"></iframe>
+        <div id="liveReconnectBanner" class="live-banner" role="alert" hidden>
+          <div><strong>Target reconnected.</strong> <span id="liveReconnectText">Studio's saved overrides differ from the live target.</span></div>
+          <div class="live-banner-actions">
+            <button id="liveReapply" class="btn" type="button">Reapply Studio overrides</button>
+            <button id="liveAcceptTarget" class="btn" type="button">Accept target state</button>
+          </div>
+        </div>
+        <section id="targetAppContainer" tabindex="-1" style="display: none; position: relative; width: 100%; height: 720px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: #fff;">
+          <iframe id="targetAppFrame" title="Target application preview" style="width: 100%; height: 100%; border: none;"></iframe>
+          <div id="bridgePopoutPlaceholder" class="popout-placeholder" hidden>
+            <p id="bridgePopoutText">The target is open in its own window.</p>
+            <div class="popout-actions">
+              <button id="bridgeFocusPopout" class="btn" type="button">Focus pop-out</button>
+              <button id="bridgeDock" class="btn" type="button">Dock back</button>
+            </div>
+          </div>
+          <div class="live-overlay-layer" aria-hidden="true">
+            <div id="bridgeOverlayHover" class="live-overlay" hidden><span class="live-overlay-label"></span></div>
+            <div id="bridgeOverlaySelected" class="live-overlay is-selected" hidden><span class="live-overlay-label"></span></div>
+          </div>
+        </section>
+        <section id="liveCodePanel" class="live-code-panel" aria-label="Live changes as code" hidden>
+          <div class="live-code-head">
+            <h2>Changes <span id="liveChangeCount" class="live-count" title="Changed targets and tokens">0</span></h2>
+            <div class="segmented live-code-tabs" role="tablist" aria-label="Code format">
+              <button id="codeTabCss" class="active" type="button" role="tab" aria-selected="true">CSS</button>
+              <button id="codeTabHtml" type="button" role="tab" aria-selected="false">HTML</button>
+              <button id="codeTabJson" type="button" role="tab" aria-selected="false">JSON</button>
+            </div>
+          </div>
+          <pre id="liveCodeOutput" class="live-code-output" tabindex="0" aria-label="Generated code"></pre>
+          <div class="live-code-actions">
+            <button id="liveCodeCopy" class="btn" type="button">Copy</button>
+            <button id="liveCodeDownload" class="btn" type="button">Download</button>
+            <button id="liveCodeSync" class="btn" type="button" disabled title="Checking for the Font Kit dev server…">Sync to file</button>
+            <label class="live-autosync"><input id="liveCodeAutoSync" type="checkbox" disabled> Auto-sync</label>
+            <span id="liveCodeStatus" class="live-code-status" role="status" aria-live="polite"></span>
+          </div>
+          <ul id="liveCodeWarnings" class="live-warnings" aria-label="Runtime warnings from the target" hidden></ul>
         </section>
       </div>
       <aside id="slotInspector" class="inspector" aria-label="Selected slot inspector"></aside>
@@ -861,6 +1125,14 @@ footer {
 </dialog>
 
 <script>
+// Browsers that block site data throw when localStorage is touched; remembering a kit id is optional.
+function readStore(key) {
+  try { return window.localStorage.getItem(key); } catch (_) { return null; }
+}
+function writeStore(key, value) {
+  try { window.localStorage.setItem(key, value); } catch (_) { /* not remembered */ }
+}
+
 const BODY = `Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer vitae
 malesuada arcu. Curabitur pretium, sapien sed feugiat consequat, sem neque dictum
 nibh, vitae posuere nulla justo at erat.`;
@@ -869,201 +1141,183 @@ const GLYPHS = `ABCDEFGHIJKLMNOPQRSTUVWXYZ · abcdefghijklmnopqrstuvwxyz ·
 0123456789 · ÀÉÎÖÜ Ç Œ æ ß · & @ # % / ? ! — “ ” ‘ ’ ·
 Hamburgefontsiv · minimum · rhythm · fjord · WA To ry`;
 
+// Free, SIL Open Font License families served by Google Fonts on demand (no font binaries ship in this file).
+// `sheet` is the css2 family query; fontStylesheetUrl() builds the full stylesheet URL.
 const fonts = [
   {
-    name: "Daith Variable",
-    family: "daith-vf",
+    name: "Fraunces",
+    family: "fraunces",
+    css: "Fraunces",
+    sheet: "Fraunces:ital,opsz,wght@0,9..144,100..900;1,9..144,100..900",
+    fallback: "serif",
+    tags: ["serif", "display", "variable"],
+    note: "Soft-edged 'wonky' old-style serif with weight and optical-size axes (OFL).",
+    styles: [{label:"Regular", weight:400, style:"normal"}, {label:"Italic", weight:400, style:"italic"}],
+    variable: { wght:[100,900,400], opsz:[9,144,72] }
+  },
+  {
+    name: "Crimson Pro",
+    family: "crimson-pro",
+    css: "Crimson Pro",
+    sheet: "Crimson+Pro:ital,wght@0,200..900;1,200..900",
     fallback: "serif",
     tags: ["serif", "variable"],
-    note: "Darden Studio contemporary serif; variable weight plus optical-size axis.",
-    styles: [{label:"Variable", weight:400, style:"normal"}],
-    variable: { wght:[100,900,400], opsz:[6,144,72] }
+    note: "Classic book serif in the Garamond tradition; a variable weight axis from ExtraLight to Black (OFL).",
+    styles: [{label:"Regular", weight:400, style:"normal"}, {label:"Italic", weight:400, style:"italic"}],
+    variable: { wght:[200,900,400] }
   },
   {
-    name: "Anonymous Pro",
-    family: "anonymous-pro",
-    fallback: "monospace",
-    tags: ["mono"],
-    note: "Fixed-width family designed with coding in mind.",
-    styles: [{label:"Regular", weight:400, style:"normal"}]
-  },
-  {
-    name: "Nimbus Sans",
-    family: "nimbus-sans",
-    fallback: "sans-serif",
-    tags: ["sans"],
-    note: "Neutral grotesk workhorse.",
-    styles: [{label:"Regular", weight:400, style:"normal"}]
-  },
-  {
-    name: "Neuzeit Grotesk Condensed",
-    family: "neuzeit-grotesk-condensed",
-    fallback: "sans-serif",
-    tags: ["sans", "display"],
-    note: "Condensed grotesk candidate; this specimen uses the requested 900 / Black cut.",
-    styles: [{label:"Black", weight:900, style:"normal"}]
-  },
-  {
-    name: "Corporate A",
-    family: "corporate-a",
+    name: "Source Serif 4",
+    family: "source-serif-4",
+    css: "Source Serif 4",
+    sheet: "Source+Serif+4:ital,opsz,wght@0,8..60,200..900;1,8..60,200..900",
     fallback: "serif",
-    tags: ["serif"],
-    note: "Corporate Antiqua: serif member of Kurt Weidemann’s Corporate ASE system.",
-    styles: [
-      {label:"Regular", weight:400, style:"normal"},
-      {label:"Regular Italic", weight:400, style:"italic"}
-    ]
+    tags: ["serif", "variable"],
+    note: "Transitional serif from Adobe with optical sizes from caption to display; weight and opsz axes (OFL).",
+    styles: [{label:"Regular", weight:400, style:"normal"}, {label:"Italic", weight:400, style:"italic"}],
+    variable: { wght:[200,900,400], opsz:[8,60,24] }
   },
   {
-    name: "Xenara",
-    family: "xenara",
-    aliases: ["xenera"],
+    name: "Playfair Display",
+    family: "playfair-display",
+    css: "Playfair Display",
+    sheet: "Playfair+Display:ital,wght@0,400..900;1,400..900",
+    fallback: "serif",
+    tags: ["serif", "display", "variable"],
+    note: "High-contrast transitional display serif for headlines (OFL).",
+    styles: [{label:"Regular", weight:400, style:"normal"}, {label:"Italic", weight:400, style:"italic"}],
+    variable: { wght:[400,900,400] }
+  },
+  {
+    name: "Instrument Serif",
+    family: "instrument-serif",
+    css: "Instrument Serif",
+    sheet: "Instrument+Serif:ital@0;1",
+    fallback: "serif",
+    tags: ["serif", "display"],
+    note: "Condensed editorial display serif with a lively italic (OFL).",
+    styles: [{label:"Regular", weight:400, style:"normal"}, {label:"Italic", weight:400, style:"italic"}]
+  },
+  {
+    name: "Inter",
+    family: "inter",
+    css: "Inter",
+    sheet: "Inter:wght@100..900",
+    fallback: "sans-serif",
+    tags: ["sans", "variable"],
+    note: "Neutral screen-first grotesque; the workhorse UI face (OFL).",
+    styles: [{label:"Regular", weight:400, style:"normal"}],
+    variable: { wght:[100,900,400] }
+  },
+  {
+    name: "Space Grotesk",
+    family: "space-grotesk",
+    css: "Space Grotesk",
+    sheet: "Space+Grotesk:wght@300..700",
+    fallback: "sans-serif",
+    tags: ["sans", "technical", "variable"],
+    note: "Quirky technical grotesque derived from Space Mono (OFL).",
+    styles: [{label:"Regular", weight:400, style:"normal"}],
+    variable: { wght:[300,700,400] }
+  },
+  {
+    name: "DM Sans",
+    family: "dm-sans",
+    css: "DM Sans",
+    sheet: "DM+Sans:ital,wght@0,100..1000;1,100..1000",
+    fallback: "sans-serif",
+    tags: ["sans", "geometric", "variable"],
+    note: "Low-contrast geometric sans, friendly at text and display sizes (OFL).",
+    styles: [{label:"Regular", weight:400, style:"normal"}, {label:"Italic", weight:400, style:"italic"}],
+    variable: { wght:[100,1000,400] }
+  },
+  {
+    name: "Work Sans",
+    family: "work-sans",
+    css: "Work Sans",
+    sheet: "Work+Sans:ital,wght@0,100..900;1,100..900",
+    fallback: "sans-serif",
+    tags: ["sans", "geometric", "variable"],
+    note: "Grotesque-leaning geometric sans tuned for on-screen text (OFL).",
+    styles: [{label:"Regular", weight:400, style:"normal"}, {label:"Italic", weight:400, style:"italic"}],
+    variable: { wght:[100,900,400] }
+  },
+  {
+    name: "IBM Plex Sans",
+    family: "ibm-plex-sans",
+    css: "IBM Plex Sans",
+    sheet: "IBM+Plex+Sans:ital,wght@0,100..700;1,100..700",
     fallback: "sans-serif",
     tags: ["sans", "technical"],
-    note: "Rounded technical face inspired by 1970s calculator keys and electric typewriters.",
-    styles: [{label:"Regular", weight:400, style:"normal"}]
+    note: "Corporate-technical sans with sturdy forms; static weights from Thin to Bold (OFL).",
+    styles: [{label:"Regular", weight:400, style:"normal"}, {label:"Medium", weight:500, style:"normal"},
+             {label:"SemiBold", weight:600, style:"normal"}, {label:"Bold", weight:700, style:"normal"},
+             {label:"Italic", weight:400, style:"italic"}]
   },
   {
-    name: "Mencken Std",
-    family: "mencken-std",
-    fallback: "serif",
-    tags: ["serif"],
-    note: "American Scotch-derived family; requested standard Roman and Italic.",
-    styles: [
-      {label:"Regular", weight:400, style:"normal"},
-      {label:"Italic", weight:400, style:"italic"}
-    ]
-  },
-  {
-    name: "Century Gothic",
-    family: "century-gothic",
+    name: "Archivo",
+    family: "archivo",
+    css: "Archivo",
+    sheet: "Archivo:ital,wght@0,100..900;1,100..900",
     fallback: "sans-serif",
-    tags: ["sans", "geometric"],
-    note: "Geometric sans candidate.",
+    tags: ["sans", "variable"],
+    note: "Grotesque for headlines and text, designed for wide range of weights (OFL).",
+    styles: [{label:"Regular", weight:400, style:"normal"}, {label:"Italic", weight:400, style:"italic"}],
+    variable: { wght:[100,900,400] }
+  },
+  {
+    name: "Bricolage Grotesque",
+    family: "bricolage-grotesque",
+    css: "Bricolage Grotesque",
+    sheet: "Bricolage+Grotesque:opsz,wght@12..96,200..800",
+    fallback: "sans-serif",
+    tags: ["sans", "display", "variable"],
+    note: "Characterful grotesque with optical-size and weight axes; ink-trap details grow with size (OFL).",
+    styles: [{label:"Regular", weight:400, style:"normal"}],
+    variable: { wght:[200,800,400], opsz:[12,96,48] }
+  },
+  {
+    name: "Bebas Neue",
+    family: "bebas-neue",
+    css: "Bebas Neue",
+    sheet: "Bebas+Neue",
+    fallback: "sans-serif",
+    tags: ["sans", "display"],
+    note: "All-caps condensed display face for posters and wordmarks (OFL).",
     styles: [{label:"Regular", weight:400, style:"normal"}]
   },
   {
-    name: "FF Attribute Mono",
-    family: "attribute-mono",
+    name: "JetBrains Mono",
+    family: "jetbrains-mono",
+    css: "JetBrains Mono",
+    sheet: "JetBrains+Mono:ital,wght@0,100..800;1,100..800",
+    fallback: "monospace",
+    tags: ["mono", "technical", "variable"],
+    note: "Programmer's monospace with tall x-height and a variable weight axis (OFL).",
+    styles: [{label:"Regular", weight:400, style:"normal"}, {label:"Italic", weight:400, style:"italic"}],
+    variable: { wght:[100,800,400] }
+  },
+  {
+    name: "IBM Plex Mono",
+    family: "ibm-plex-mono",
+    css: "IBM Plex Mono",
+    sheet: "IBM+Plex+Mono:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700",
     fallback: "monospace",
     tags: ["mono", "technical"],
-    note: "Industrial/minimal mono originally conceived for code-editor use.",
-    styles: [{label:"Regular", weight:400, style:"normal"}]
+    note: "Fixed-width companion to IBM Plex Sans; seven static weights (OFL).",
+    styles: [{label:"Regular", weight:400, style:"normal"}, {label:"Medium", weight:500, style:"normal"},
+             {label:"Bold", weight:700, style:"normal"}, {label:"Italic", weight:400, style:"italic"}]
   },
   {
-    name: "Susan",
-    family: "susan",
-    fallback: "sans-serif",
-    tags: ["sans"],
-    note: "Open humanist-ish sans with soft forms and rounded, serif-like details.",
-    styles: [{label:"Book", weight:400, style:"normal"}]
-  },
-  {
-    name: "Orpheus Pro",
-    family: "orpheuspro",
-    fallback: "serif",
-    tags: ["serif", "display"],
-    note: "Classic Roman proportions filtered through late-1920s Art Deco sensibility.",
-    styles: [
-      {label:"Regular", weight:400, style:"normal"},
-      {label:"Italic", weight:400, style:"italic"},
-      {label:"Medium", weight:500, style:"normal"}
-    ]
-  },
-  {
-    name: "Vox Round",
-    family: "vox-round",
-    fallback: "sans-serif",
-    tags: ["sans", "rounded"],
-    note: "Rounded Canada Type family.",
-    styles: [{label:"Regular", weight:400, style:"normal"}]
-  },
-  {
-    name: "Prestige Elite Std",
-    family: "prestige-elite-std",
+    name: "Space Mono",
+    family: "space-mono",
+    css: "Space Mono",
+    sheet: "Space+Mono:ital,wght@0,400;0,700;1,400;1,700",
     fallback: "monospace",
     tags: ["mono", "typewriter"],
-    note: "Classic fixed-pitch typewriter voice.",
-    styles: [{label:"Regular", weight:400, style:"normal"}]
-  },
-  {
-    name: "Mencken Std Head",
-    family: "mencken-std-head",
-    fallback: "serif",
-    tags: ["serif", "display"],
-    note: "Mencken display optical cut: higher contrast and more Didot-like than the text side.",
-    styles: [{label:"Regular", weight:400, style:"normal"}]
-  },
-  {
-    name: "Azo Mono",
-    family: "azo-mono",
-    fallback: "monospace",
-    tags: ["mono", "technical"],
-    note: "Geometric/humanist mono built for data, code and deliberately machine-like settings.",
-    styles: [{label:"Regular", weight:400, style:"normal"}]
-  },
-  {
-    name: "Ella Roman",
-    family: "ella-roman",
-    fallback: "serif",
-    tags: ["serif", "display"],
-    note: "Calligraphic display family with triangular serifs; shares its lowercase with Ella’s sibling families.",
-    styles: [{label:"Regular", weight:400, style:"normal"}]
-  },
-  {
-    name: "Ella Brutalist",
-    family: "ella-brutalist",
-    fallback: "serif",
-    tags: ["serif", "display"],
-    note: "Ella sibling with Brutalist capital treatment and the same lowercase system as Roman.",
-    styles: [{label:"Regular", weight:400, style:"normal"}]
-  },
-  {
-    name: "Archer Pro",
-    family: "archer-pro",
-    fallback: "serif",
-    tags: ["serif", "slab"],
-    note: "Geometric slab serif with characteristic ball terminals; requested Medium mapped to 400.",
-    styles: [
-      {label:"Medium", weight:400, style:"normal"},
-      {label:"Medium Italic", weight:400, style:"italic"}
-    ]
-  },
-  {
-    name: "Gotham",
-    family: "gotham",
-    fallback: "sans-serif",
-    tags: ["sans", "geometric"],
-    note: "Geometric sans; requested Book and Book Italic at 400.",
-    styles: [
-      {label:"Book", weight:400, style:"normal"},
-      {label:"Book Italic", weight:400, style:"italic"}
-    ]
-  },
-  {
-    name: "Sentinel",
-    family: "sentinel",
-    fallback: "serif",
-    tags: ["serif", "slab"],
-    note: "Contemporary slab serif designed to work in both text and display settings.",
-    styles: [{label:"Book", weight:400, style:"normal"}]
-  },
-  {
-    name: "LTR NCND Variable",
-    family: "ltr-ncnd-variable",
-    fallback: "monospace",
-    tags: ["mono", "variable", "typewriter"],
-    note: "Variable monospaced digital typewriter face descended from the design associated with The X-Files.",
-    styles: [{label:"Variable", weight:400, style:"normal"}],
-    variable: { wght:[250,900,400] }
-  },
-  {
-    name: "Ballinger Mono",
-    family: "ballinger-mono",
-    fallback: "monospace",
-    tags: ["mono"],
-    note: "Sturdy fixed-width design with generous x-height, open apertures and large counters.",
-    styles: [{label:"Regular", weight:400, style:"normal"}]
+    note: "Geometric monospace with retro-futurist quirks (OFL).",
+    styles: [{label:"Regular", weight:400, style:"normal"}, {label:"Bold", weight:700, style:"normal"},
+             {label:"Italic", weight:400, style:"italic"}]
   }
 ];
 
@@ -1080,7 +1334,7 @@ const kitStatus = document.getElementById("kitStatus");
 let activeFilter = "all";
 
 function cssStack(f) {
-  const names = [f.family, ...(f.aliases || [])].map(name => `"${name}"`);
+  const names = [f.css || f.family, ...(f.aliases || [])].map(name => `"${name}"`);
   return `${names.join(", ")}, ${f.fallback}`;
 }
 
@@ -1088,6 +1342,7 @@ function renderCard(font, index) {
   const card = document.createElement("article");
   card.className = "card";
   card.dataset.tags = font.tags.join(" ");
+  card._font = font;
 
   const styleButtons = font.styles.map((s, i) =>
     `<button type="button" class="style-chip ${i === 0 ? "active" : ""}"
@@ -1187,7 +1442,104 @@ function renderCard(font, index) {
   return card;
 }
 
+/* ---- free font loading: silent until the user asks, then one stylesheet <link> per family, added once ----
+   Nothing is requested from Google Fonts until the person presses Load free fonts, picks a library
+   family in the Live Target inspector or switches the Kit preset to Free Google Fonts. That consent is remembered in this
+   browser (guarded storage) so later visits load cards as they scroll into view. Until then specimens
+   render in their fallback stacks, and the families they wanted are queued, not requested. */
+const FREE_FONTS_KEY = "fontkit-free-fonts";
+let freeFontsAllowed = readStore(FREE_FONTS_KEY) === "yes";
+const deferredFonts = new Map();
+const fontLinks = new Map();
+function fontStylesheetUrl(font) {
+  return font && font.sheet ? `https://fonts.googleapis.com/css2?family=${font.sheet}&display=swap` : "";
+}
+
+// Never throws and never blocks: a blocked or offline network only fires `error` on the link.
+function ensureFontStylesheet(font, { retry = false } = {}) {
+  const href = fontStylesheetUrl(font);
+  if (!href) return null;
+  if (!freeFontsAllowed) { deferredFonts.set(font.family, font); return null; }
+  let link = fontLinks.get(font.family);
+  if (link && retry && link.dataset.state === "error") { link.remove(); fontLinks.delete(font.family); link = null; }
+  if (link) return link;
+  link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = href;
+  link.dataset.studioFont = font.family;
+  link.dataset.state = "loading";
+  link.addEventListener("load", () => { link.dataset.state = "loaded"; });
+  link.addEventListener("error", () => { link.dataset.state = "error"; });
+  fontLinks.set(font.family, link);
+  try { document.head.appendChild(link); } catch (_) { link.dataset.state = "error"; }
+  return link;
+}
+
+// Hint text for both views, by consent state. The status line under the Library button is
+// overwritten by load progress, so the hint is a separate element that always tells the truth.
+function updateFontHints() {
+  const contact = "Loading contacts Google Fonts and sends your IP address and the font names.";
+  const hints = {
+    libraryFontHint: freeFontsAllowed ? "Free fonts are on in this browser. " + contact : contact,
+    composerFontHint: freeFontsAllowed
+      ? "Free fonts are on in this browser. " + contact
+      : "Specimens use fallback fonts until you load the free fonts. " + contact
+  };
+  Object.entries(hints).forEach(([id, text]) => { const el = document.getElementById(id); if (el) el.textContent = text; });
+}
+
+// The user asked for free fonts: remember it, update the hints and request whatever was waiting.
+function allowFreeFonts() {
+  if (!freeFontsAllowed) {
+    freeFontsAllowed = true;
+    writeStore(FREE_FONTS_KEY, "yes");
+  }
+  updateFontHints();
+  const waiting = [...deferredFonts.values()];
+  deferredFonts.clear();
+  waiting.forEach(font => ensureFontStylesheet(font));
+  // The "shown in a fallback font" and "choosing loads it" notes are only true before consent.
+  document.querySelectorAll("[data-fallback-note], [data-load-note]").forEach(el => el.remove());
+}
+updateFontHints();
+if (freeFontsAllowed) document.getElementById("freeFontStatus").textContent = "Families load as their cards scroll into view.";
+
+function loadAllFreeFonts(report) {
+  allowFreeFonts();
+  const total = fonts.length;
+  const links = fonts.map(font => ensureFontStylesheet(font, { retry:true }));
+  const count = state => links.filter(link => link && link.dataset.state === state).length;
+  const summarise = timedOut => {
+    const loaded = count("loaded");
+    const failed = count("error");
+    if (loaded === total) report(`Loaded ${loaded}/${total} free font stylesheets from Google Fonts.`);
+    else if (loaded + failed === total) report(`Loaded ${loaded}/${total} free font stylesheets; ${failed} could not load (offline or blocked), so system fallbacks are shown.`);
+    else if (timedOut) report(`Still waiting for Google Fonts (${loaded}/${total} loaded); system fallbacks are shown meanwhile.`);
+    else report(`Loading ${total} free font stylesheets…`);
+    return loaded + failed === total;
+  };
+  let finished = summarise(false);
+  if (finished) return;
+  links.forEach(link => ["load", "error"].forEach(type => link?.addEventListener(type, () => { if (!finished) finished = summarise(false); })));
+  setTimeout(() => { if (!finished) summarise(true); }, 8000);
+}
+
 fonts.forEach((font, index) => grid.appendChild(renderCard(font, index)));
+
+// Cards ask for their stylesheet only once they are on screen.
+if (typeof IntersectionObserver === "function") {
+  const fontObserver = new IntersectionObserver(entries => entries.forEach(entry => {
+    if (!entry.isIntersecting) return;
+    fontObserver.unobserve(entry.target);
+    ensureFontStylesheet(entry.target._font);
+  }));
+  grid.querySelectorAll(".card").forEach(card => fontObserver.observe(card));
+} else {
+  fonts.forEach(font => ensureFontStylesheet(font));
+}
+document.getElementById("loadFreeFontsLibrary")?.addEventListener("click", () => {
+  loadAllFreeFonts(text => { document.getElementById("freeFontStatus").textContent = text; });
+});
 
 const tagSet = ["all", ...new Set(fonts.flatMap(f => f.tags))];
 tagSet.forEach(tag => {
@@ -1266,7 +1618,7 @@ function loadAdobeKit() {
   };
   document.head.appendChild(link);
   kitStatus.textContent = `Loading kit ${id}…`;
-  localStorage.setItem("typekit-specimen-kit", id);
+  writeStore("typekit-specimen-kit", id);
 }
 
 loadKit.addEventListener("click", loadAdobeKit);
@@ -1274,7 +1626,7 @@ kitId.addEventListener("keydown", e => {
   if (e.key === "Enter") loadAdobeKit();
 });
 
-const remembered = localStorage.getItem("typekit-specimen-kit");
+const remembered = readStore("typekit-specimen-kit");
 if (remembered) kitId.value = remembered;
 
 /* ================================================================
@@ -1586,12 +1938,6 @@ if (remembered) kitId.value = remembered;
     "Asteria Vesper": "#909dd0"
   };
 
-  const KIT_PRESETS = {
-    typekit: ["cqu4tvx"],
-    asteria: ["cqu4tvx"],
-    custom: []
-  };
-
   const ROLE_DEFAULTS = {
     Wordmark: { element:"div", text:"BRAND", size:24, lineHeight:1, tracking:.32, align:"center", transform:"uppercase" },
     Display: { element:"div", text:"Every life is a night sky.", size:72, lineHeight:.95, tracking:-.03, align:"left", transform:"none" },
@@ -1615,10 +1961,23 @@ if (remembered) kitId.value = remembered;
   const ALIGNMENTS = ["left", "center", "right", "justify"];
   const TRANSFORMS = ["none", "uppercase", "lowercase", "capitalize"];
 
-  const byName = name => fonts.find(f => f.name === name) || fonts[0];
-  const byFamily = family => fonts.find(f => f.family === family) || fonts[0];
+  const DEFAULT_FAMILY = "inter";
+  // Compositions exported before the free-font library carry Adobe family keys; they map to a free look-alike.
+  const LEGACY_FAMILIES = {
+    "daith-vf": "fraunces", "anonymous-pro": "ibm-plex-mono", "nimbus-sans": "inter",
+    "neuzeit-grotesk-condensed": "bebas-neue", "corporate-a": "source-serif-4", "xenara": "space-grotesk",
+    "mencken-std": "crimson-pro", "century-gothic": "dm-sans", "attribute-mono": "jetbrains-mono",
+    "susan": "archivo", "orpheuspro": "playfair-display", "vox-round": "bricolage-grotesque",
+    "prestige-elite-std": "space-mono", "mencken-std-head": "playfair-display", "azo-mono": "ibm-plex-mono",
+    "ella-roman": "instrument-serif", "ella-brutalist": "instrument-serif", "archer-pro": "crimson-pro",
+    "gotham": "work-sans", "sentinel": "source-serif-4", "ltr-ncnd-variable": "jetbrains-mono",
+    "ballinger-mono": "jetbrains-mono"
+  };
+  const byFamily = family => fonts.find(f => f.family === family)
+    || (typeof family === "string" && Object.hasOwn(LEGACY_FAMILIES, family) ? fonts.find(f => f.family === LEGACY_FAMILIES[family]) : null)
+    || fonts[0];
 
-  const makeTextSlot = (role="Body", family="gotham", overrides={}) => {
+  const makeTextSlot = (role="Body", family=DEFAULT_FAMILY, overrides={}) => {
     const def = Object.hasOwn(ROLE_DEFAULTS, role) ? ROLE_DEFAULTS[role] : ROLE_DEFAULTS.Custom;
     const font = byFamily(family);
     const first = font.styles[0];
@@ -1683,11 +2042,11 @@ if (remembered) kitId.value = remembered;
       return leaf;
     }) : [
       makeGenericSlot("image"),
-      makeTextSlot("Body", "gotham")
+      makeTextSlot("Body", DEFAULT_FAMILY)
     ];
-    while (children.length < 2) children.push(makeTextSlot("Custom", "gotham"));
+    while (children.length < 2) children.push(makeTextSlot("Custom", DEFAULT_FAMILY));
     const count = rowNumber(overrides.childCount, children.length || 2, 2, 4, true);
-    while (children.length < count) children.push(makeTextSlot("Custom", "gotham"));
+    while (children.length < count) children.push(makeTextSlot("Custom", DEFAULT_FAMILY));
     children.length = count;
     const ratios = Array.isArray(overrides.ratios) ? overrides.ratios.slice(0, count) : [];
     while (ratios.length < count) ratios.push(ratios.length === 1 ? 2 : 1);
@@ -1711,11 +2070,11 @@ if (remembered) kitId.value = remembered;
       background: { source:"custom", hex:"#030409", family:"slate", shade:"950", saved:"Asteria Void" },
       width: "960",
       slots: [
-        makeTextSlot("Wordmark", "daith-vf", { weight:500, variables:{wght:500, opsz:24}, colorHex:"#e6c88d" }),
-        makeTextSlot("H1", "ella-roman", { size:64, colorHex:"#eef2ff" }),
-        makeTextSlot("Accent", "orpheuspro", { styleIndex:1, weight:400, fontStyle:"italic", size:30, colorHex:"#b8a2da" }),
-        makeTextSlot("Body", "gotham", { size:16, colorHex:"#98a3c5" }),
-        makeTextSlot("Metadata", "ltr-ncnd-variable", { weight:700, variables:{wght:700}, size:11, colorHex:"#e6c88d" })
+        makeTextSlot("Wordmark", "fraunces", { weight:500, variables:{wght:500, opsz:24}, colorHex:"#e6c88d" }),
+        makeTextSlot("H1", "instrument-serif", { size:64, colorHex:"#eef2ff" }),
+        makeTextSlot("Accent", "playfair-display", { styleIndex:1, weight:400, fontStyle:"italic", size:30, colorHex:"#b8a2da" }),
+        makeTextSlot("Body", "inter", { size:16, colorHex:"#98a3c5" }),
+        makeTextSlot("Metadata", "jetbrains-mono", { weight:700, variables:{wght:700}, size:11, colorHex:"#e6c88d" })
       ]
     },
     blank: {
@@ -1723,11 +2082,11 @@ if (remembered) kitId.value = remembered;
       background: { source:"custom", hex:"#f5f1e8", family:"stone", shade:"100", saved:"Asteria Starlight" },
       width: "960",
       slots: [
-        makeTextSlot("Wordmark", "gotham", { colorHex:"#181714" }),
-        makeTextSlot("H1", "ella-roman", { colorHex:"#181714" }),
-        makeTextSlot("H2", "sentinel", { colorHex:"#181714" }),
-        makeTextSlot("Body", "gotham", { colorHex:"#3f3b35" }),
-        makeTextSlot("Metadata", "azo-mono", { colorHex:"#6f6b63" })
+        makeTextSlot("Wordmark", "inter", { colorHex:"#181714" }),
+        makeTextSlot("H1", "instrument-serif", { colorHex:"#181714" }),
+        makeTextSlot("H2", "source-serif-4", { colorHex:"#181714" }),
+        makeTextSlot("Body", "inter", { colorHex:"#3f3b35" }),
+        makeTextSlot("Metadata", "ibm-plex-mono", { colorHex:"#6f6b63" })
       ]
     },
     rowdemo: {
@@ -1735,16 +2094,16 @@ if (remembered) kitId.value = remembered;
       background: { source:"custom", hex:"#f5f1e8", family:"stone", shade:"100", saved:"Asteria Starlight" },
       width: "960",
       slots: [
-        makeTextSlot("Wordmark", "daith-vf", { weight:500, variables:{wght:500, opsz:24}, colorHex:"#181714" }),
-        makeTextSlot("H1", "ella-roman", { text:"Image and prose, finally allowed to speak sideways.", size:58, colorHex:"#181714" }),
+        makeTextSlot("Wordmark", "fraunces", { weight:500, variables:{wght:500, opsz:24}, colorHex:"#181714" }),
+        makeTextSlot("H1", "instrument-serif", { text:"Image and prose, finally allowed to speak sideways.", size:58, colorHex:"#181714" }),
         makeRowSlot({
           gap:32, collapseAt:700, alignItems:"center", ratios:[1,2],
           children:[
             { ...makeGenericSlot("image"), imageWidth:220, colorHex:"#6f6b63" },
-            makeTextSlot("Body", "gotham", { size:17, colorHex:"#3f3b35", text:"Drop a PNG or SVG into the left child, then tune the ratio, gap and breakpoint on the row itself. The right child remains a normal typography slot with every existing control." })
+            makeTextSlot("Body", "inter", { size:17, colorHex:"#3f3b35", text:"Drop a PNG or SVG into the left child, then tune the ratio, gap and breakpoint on the row itself. The right child remains a normal typography slot with every existing control." })
           ]
         }),
-        makeTextSlot("Metadata", "azo-mono", { colorHex:"#6f6b63" })
+        makeTextSlot("Metadata", "ibm-plex-mono", { colorHex:"#6f6b63" })
       ]
     }
   };
@@ -1754,6 +2113,20 @@ if (remembered) kitId.value = remembered;
     canvasWidth: "960",
     background: { source:"custom", hex:"#f5f1e8", family:"stone", shade:"100", saved:"Asteria Starlight" },
     slots: []
+  };
+
+  // Live preview session (Design Bridge Protocol v1). Kept outside `state` so the
+  // composition JSON shape is unchanged; persisted only through the optional `live` field.
+  const live = {
+    url: "", expectedOrigin: null, sessionId: null, ready: false, revision: 0,
+    noBridgeTimer: null, timedOut: new Map(), targetMeta: {}, savedTokens: {},
+    targets: new Map(), changes: { tokens: {}, targets: [], structure: [], imports: [] },
+    reapply: null, reapplyError: "", popup: null, popoutMode: false, popupTimer: null, warnings: [], moveGuard: null, strategyChoice: new Map(), dragId: null,
+    overrides: {}, canonicalRevision: 0, canonicalTarget: "", conflict: false,
+    selectedId: null, selectedRect: null, hoverId: null, hoverRect: null, hoverName: "",
+    mode: "select", viewActive: false, codeTab: "css",
+    queue: [], inFlight: null, requestSeq: 0, requestTimer: null, compositionLinked: false,
+    syncAvailable: false, syncPath: "", syncBusy: false, syncQueued: false, syncTimer: null
   };
 
   const q = id => document.getElementById(id);
@@ -1807,7 +2180,7 @@ if (remembered) kitId.value = remembered;
     const ids = normalizeKitIds(composerKitIds.value);
     document.querySelectorAll('link[data-composer-kit="true"]').forEach(el => el.remove());
     if (!ids.length) {
-      composerStatus.textContent = "No kit IDs supplied.";
+      composerStatus.textContent = "No Adobe kit IDs supplied. Adobe Fonts is optional; the free Google Fonts need no kit.";
       return;
     }
     let loaded = 0;
@@ -1823,13 +2196,18 @@ if (remembered) kitId.value = remembered;
       link.onerror = () => { composerStatus.textContent = `Could not load kit ${id}. Check the ID / project settings.`; };
       document.head.appendChild(link);
     });
-    localStorage.setItem("font-kit-studio-kit-ids", ids.join(","));
+    writeStore("font-kit-studio-kit-ids", ids.join(","));
   }
 
+  const reportComposerFonts = text => { composerStatus.textContent = text; };
   kitPreset.addEventListener("change", () => {
-    const ids = KIT_PRESETS[kitPreset.value] || [];
-    if (ids.length) composerKitIds.value = ids.join(", ");
+    if (kitPreset.value === "google") loadAllFreeFonts(reportComposerFonts);
+    else if (kitPreset.value === "adobe") {
+      composerStatus.textContent = "Adobe Fonts is bring-your-own: paste your own kit ID(s) and press Load. Nothing is prefilled.";
+      composerKitIds.focus();
+    }
   });
+  q("loadFreeFonts")?.addEventListener("click", () => loadAllFreeFonts(reportComposerFonts));
   loadComposerKits.addEventListener("click", loadComposerKitStyles);
   composerKitIds.addEventListener("keydown", e => { if (e.key === "Enter") loadComposerKitStyles(); });
 
@@ -1849,9 +2227,9 @@ if (remembered) kitId.value = remembered;
       }
       const rawChildren = Array.isArray(raw.children) ? raw.children.slice(0, 4) : [];
       const children = rawChildren.map(child => hydrateSlot(child, 1)).filter(child => child.type !== "row");
-      while (children.length < 2) children.push(makeTextSlot("Custom", "gotham"));
+      while (children.length < 2) children.push(makeTextSlot("Custom", DEFAULT_FAMILY));
       const count = rowNumber(raw.childCount, children.length, 2, 4, true);
-      while (children.length < count) children.push(makeTextSlot("Custom", "gotham"));
+      while (children.length < count) children.push(makeTextSlot("Custom", DEFAULT_FAMILY));
       children.length = count;
       const row = makeRowSlot({ ...raw, children, childCount:count });
       row.id = freshId();
@@ -1860,7 +2238,7 @@ if (remembered) kitId.value = remembered;
     }
     const type = LEAF_SLOT_TYPES.includes(requested) ? requested : "text";
     const role = typeof raw.role === "string" && raw.role.trim() ? raw.role : "Custom";
-    const base = type === "text" ? makeTextSlot(role, typeof raw.family === "string" ? raw.family : "gotham") : makeGenericSlot(type);
+    const base = type === "text" ? makeTextSlot(role, typeof raw.family === "string" ? raw.family : DEFAULT_FAMILY) : makeGenericSlot(type);
     const { children:discardedChildren, ...leaf } = raw || {};
     const slot = { ...base, ...leaf, type, id:freshId(), assetDataUrl:"" };
     // Imported known fields must keep the same scalar shapes as editable leaves.
@@ -1980,7 +2358,7 @@ if (remembered) kitId.value = remembered;
 
   function setSlotCount(nextCount) {
     const n = Math.max(1, Math.min(8, Number(nextCount) || 1));
-    while (state.slots.length < n) state.slots.push(makeTextSlot("Custom", "gotham"));
+    while (state.slots.length < n) state.slots.push(makeTextSlot("Custom", DEFAULT_FAMILY));
     if (state.slots.length > n) state.slots.length = n;
     if (!state.slots.some(s => s.id === state.selectedId)) state.selectedId = state.slots[0]?.id || null;
     slotCount.value = n;
@@ -1995,6 +2373,7 @@ if (remembered) kitId.value = remembered;
 
   function applyTextSlotStyles(el, slot) {
     const { font, style } = styleForSlot(slot);
+    ensureFontStylesheet(font);
     el.style.fontFamily = cssStack(font);
     el.style.fontWeight = String(slot.weight ?? style.weight);
     el.style.fontStyle = slot.fontStyle || style.style;
@@ -2144,10 +2523,7 @@ if (remembered) kitId.value = remembered;
     if (target < 0 || target >= state.slots.length) return;
     [state.slots[index], state.slots[target]] = [state.slots[target], state.slots[index]];
     renderComposer();
-    if (typeof broadcastLiveState === "function") {
-      broadcastLiveState(true);
-      highlightSlotInTarget(state.slots[target].id, target, state.slots[target].role);
-    }
+    if (typeof broadcastLiveState === "function") broadcastLiveState(true);
   }
 
   function renderCanvas() {
@@ -2257,6 +2633,7 @@ if (remembered) kitId.value = remembered;
   }
 
   function renderInspector() {
+    if (live.viewActive) { renderLiveInspector(); return; }
     const loc = selectedLocation();
     const slot = loc?.slot;
     if (!slot) {
@@ -2287,7 +2664,7 @@ if (remembered) kitId.value = remembered;
       body += `
         <div class="inspector-field"><label>Role</label><select data-bind="role">${optionsHtml(ROLES, slot.role)}</select></div>
         <div class="inspector-field"><label>Element</label><select data-bind="element">${optionsHtml(ELEMENTS, slot.element)}</select></div>
-        <div class="inspector-field full"><label>Family</label><select data-bind="family">${fonts.map(f => `<option value="${escapeAttr(f.family)}"${f.family === slot.family ? " selected" : ""}>${escapeAttr(f.name)}</option>`).join("")}</select></div>
+        <div class="inspector-field full"><label>Family</label><select data-bind="family">${fonts.map(f => `<option value="${escapeAttr(f.family)}"${f.family === slot.family ? " selected" : ""}>${escapeAttr(f.name)}</option>`).join("")}</select>${freeFontsAllowed ? "" : '<p class="inspector-note" data-fallback-note>Shown in a fallback font until you load the free fonts.</p>'}</div>
         <div class="inspector-field full"><label>Style / cut</label><select data-bind="styleIndex">${styleLabels.map(v => { const [i,label] = v.split("|"); return `<option value="${i}"${Number(i) === Number(slot.styleIndex) ? " selected" : ""}>${escapeAttr(label)}</option>`; }).join("")}</select></div>
         <div class="inspector-field full"><div class="value-line"><label>Size</label><output>${formatSize(slot.size)}</output></div><input type="range" data-bind="size" min="8" max="86" step="1" value="${slot.size}"></div>
         <div class="inspector-field"><label>Line height</label><input data-bind="lineHeight" type="number" min="0.7" max="3" step="0.05" value="${slot.lineHeight}"></div>
@@ -2331,9 +2708,9 @@ if (remembered) kitId.value = remembered;
       let replacement;
       if (typeSelect.value === "row" && !isRowChild(current)) {
         const preserved = { ...clone(current), id:freshId() };
-        replacement = makeRowSlot({ children:[preserved, makeTextSlot("Body", "gotham")], ratios:[1,2] });
+        replacement = makeRowSlot({ children:[preserved, makeTextSlot("Body", DEFAULT_FAMILY)], ratios:[1,2] });
       } else if (typeSelect.value === "text") {
-        replacement = makeTextSlot("Custom", "gotham");
+        replacement = makeTextSlot("Custom", DEFAULT_FAMILY);
       } else {
         replacement = makeGenericSlot(typeSelect.value);
       }
@@ -2347,7 +2724,7 @@ if (remembered) kitId.value = remembered;
         const row = selectedSlot();
         if (!row || row.type !== "row") return;
         const next = rowNumber(childCount.value, 2, 2, 4, true);
-        while (row.children.length < next) row.children.push(makeTextSlot("Custom", "gotham"));
+        while (row.children.length < next) row.children.push(makeTextSlot("Custom", DEFAULT_FAMILY));
         row.children.length = next;
         while (row.ratios.length < next) row.ratios.push(1);
         row.ratios.length = next;
@@ -2479,10 +2856,7 @@ if (remembered) kitId.value = remembered;
           current.assetDataUrl = String(reader.result || "");
           renderComposer();
           composerStatus.textContent = `${file.name} loaded for this session.`;
-          if (typeof broadcastLiveState === "function") {
-            broadcastLiveState(true);
-            highlightSlotInTarget(current.id, 0, current.role || "Image");
-          }
+          if (typeof broadcastLiveState === "function") broadcastLiveState(true);
         };
         reader.readAsDataURL(file);
       });
@@ -2534,7 +2908,13 @@ if (remembered) kitId.value = remembered;
 
   function serializableState() {
     const clean = stripSessionAssets(state);
-    return { version:"0.1.1", app:"Font Kit Studio", kitIds:normalizeKitIds(composerKitIds.value), composition:clean };
+    const doc = { version:"0.1.1", app:"Font Kit Studio", kitIds:normalizeKitIds(composerKitIds.value), composition:clean };
+    const savedTokens = Object.keys(live.savedTokens).length;
+    if (Object.keys(live.overrides).length || savedTokens) {
+      doc.live = { target:live.canonicalTarget, revision:live.canonicalRevision, overrides:JSON.parse(JSON.stringify(live.overrides)) };
+      if (savedTokens) doc.live.tokens = JSON.parse(JSON.stringify(live.savedTokens));
+    }
+    return doc;
   }
 
   function showExport(title, text, filename, mime) {
@@ -2603,6 +2983,8 @@ if (remembered) kitId.value = remembered;
         const data = JSON.parse(String(reader.result || "{}"));
         if (!data || !data.composition || !Array.isArray(data.composition.slots)) throw new Error("Missing composition.slots array.");
         const incoming = data.composition;
+        // Optional v0.2 live overrides are validated with the protocol key rules before anything is published.
+        const liveCandidate = Object.hasOwn(data, "live") ? parseLiveField(data.live) : null;
         if (incoming.background !== undefined && (!incoming.background || typeof incoming.background !== "object" || Array.isArray(incoming.background))) {
           throw new Error("Composition background must be an object.");
         }
@@ -2612,7 +2994,7 @@ if (remembered) kitId.value = remembered;
         if (!["custom", "tailwind", "saved"].includes(background.source)) background.source = defaults.source;
         if (!CSS.supports("color", background.hex)) background.hex = defaults.hex;
         const slots = incoming.slots.slice(0,8).map(raw => hydrateSlot(raw, 0));
-        if (!slots.length) slots.push(makeTextSlot("Custom", "gotham"));
+        if (!slots.length) slots.push(makeTextSlot("Custom", DEFAULT_FAMILY));
         const width = String(incoming.canvasWidth || "960");
         const kitIds = Array.isArray(data.kitIds) ? normalizeKitIds(data.kitIds.filter(id => typeof id === "string").join(", ")) : [];
         // Only publish a fully hydrated candidate; failed validation leaves live state intact.
@@ -2620,6 +3002,7 @@ if (remembered) kitId.value = remembered;
           background, slots, selectedId:slots[0].id });
         // Legacy documents without kitIds retain the receiving selection; explicit IDs replace it, even when empty.
         if (Object.hasOwn(data, "kitIds")) composerKitIds.value = kitIds.join(", ");
+        if (liveCandidate) adoptImportedLive(liveCandidate);
         familyOptions(canvasBgFamily, state.background.family);
         populateSavedColors(canvasSavedColor, state.background.saved);
         syncCompositionControls();
@@ -2651,239 +3034,1890 @@ if (remembered) kitId.value = remembered;
 
   
   // ==========================================
-  // Design Bridge Protocol v1 Live Visual Editor Runtime
+  // Design Bridge Protocol v1 — Studio protocol client (v0.2.0)
+  // Contract: docs/plans/2026-10-02-v0.2.0-live-preview-code-sync.md
   // ==========================================
-  const targetAppUrlInput = document.getElementById("targetAppUrl");
-  const btnConnectTarget = document.getElementById("btnConnectTarget");
-  const viewSpecimenBtn = document.getElementById("viewSpecimenCanvas");
-  const viewTargetBtn = document.getElementById("viewTargetApp");
-  const composerCanvasEl = document.getElementById("composerCanvas");
-  const targetAppContainerEl = document.getElementById("targetAppContainer");
-  const targetAppFrameEl = document.getElementById("targetAppFrame");
-  const bridgeStatusBadge = document.getElementById("bridgeStatusBadge");
-  const syncBtnEl = document.getElementById("btnSyncToApp");
+  const DEFAULT_TARGET_URL = "http://localhost:8001/demo/";
+  const NO_BRIDGE_MS = 4000;
+  const REQUEST_TIMEOUT_MS = 8000;
+  const AUTO_SYNC_MS = 400;
+  // "order" is Studio-only saved state for CSS-order moves (design:move strategy css-order); it is never sent as a patch key.
+  const LIVE_KEYS = ["fontFamily", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "color", "textAlign", "textTransform", "text", "order"];
+  const FRAMEWORKS = ["react", "vue", "svelte", "unknown"];
+  const POPOUT_NAME = "fontkit-target";
+  const POPOUT_POLL_MS = 500;
+  const MAX_WARNINGS = 5;
+  // The same rules as the bridge (fontkit-bridge.js), so Studio never accepts what the bridge would refuse.
+  // Percent-escapes are limited to space, plus, comma, colon, semicolon and at.
+  const GOOGLE_SHEET_VALUE = /^(?:[A-Za-z0-9+:;,@.\-_~]|%(?:20|2[Bb]|2[Cc]|3[Aa]|3[Bb]|40))+$/;
+  const GOOGLE_SHEET_DISPLAY = ["auto", "block", "swap", "fallback", "optional"];
+  const MAX_SHEET_FAMILIES = 8;
+  const CUSTOM_PROPERTY = /^--[a-z0-9-]{1,120}$/;
+  // Text that goes into CSS: the bridge's UNSAFE_CSS_STRING, plus line breaks, comment markers and !important,
+  // because Studio writes these values into a file.
+  const UNSAFE_CSS_TEXT = /[;{}<>\\\n\r]|url\(|expression\(|\/\*|\*\/|!important/i;
+  // Selectors have their own grammar: exactly what the bridge generates (tag, #id, .class, [data-design-id="..."],
+  // :nth-of-type(n), joined by " > "). An identifier is plain characters or CSS escapes, so utility classes such as
+  // `.sm\:flex`, `.\31 0` and `.\[\&\>\*\]\:p-4` work: a backslash plus a non-hex character is that character,
+  // and a backslash plus hex digits is a code point (6 digits, or fewer when no hex digit follows, then one optional space).
+  // Those alternatives start differently and the hex forms differ in length, so every text matches in only one way and
+  // checking it takes linear time: a hostile selector from a target cannot stall Studio. The quoted attribute value
+  // allows `\"`, `\\` and hex escapes (`\3b `, with the one space that ends it); unescaped `{ } ; < >`, other backslashes, line breaks, comment markers and `url(` are refused.
+  const SELECTOR_IDENT = /(?:[\w\u00A0-\uFFFF-]|\\(?:[0-9a-f]{6}|[0-9a-f]{1,5}(?![0-9a-f])) ?|\\[^0-9a-f\r\n\f])+/i.source;
+  const SELECTOR_PART = `#${SELECTOR_IDENT}|\\.${SELECTOR_IDENT}|\\[data-design-id="(?:[^"\\\\{};<>\\r\\n]|\\\\["\\\\]|\\\\(?:[0-9a-f]{6}|[0-9a-f]{1,5}(?![0-9a-f]))(?: |(?! )))*"\\]|:nth-of-type\\(\\d{1,4}\\)`;
+  const SELECTOR_STEP = `(?:(?:[a-z][a-z0-9-]*|\\*)(?:${SELECTOR_PART})*|(?:${SELECTOR_PART})+)`;
+  const SELECTOR_GRAMMAR = new RegExp(`^${SELECTOR_STEP}(?: > ${SELECTOR_STEP})*$`, "i");
+  // An id of 300 characters can need five characters per escape, so selectors may be longer than declaration values.
+  const MAX_SELECTOR_LENGTH = 2000;
+  const UNSAFE_SELECTOR_TEXT = /url\(|expression\(|\/\*|\*\/|!important/i;
+  const unsafeCssText = (text, { selector = false } = {}) => selector
+    ? UNSAFE_SELECTOR_TEXT.test(text) || !SELECTOR_GRAMMAR.test(text)
+    : UNSAFE_CSS_TEXT.test(text);
+  const TYPEKIT_SHEET = /^https:\/\/use\.typekit\.net\/[A-Za-z0-9]{6,10}\.css$/;
+  const LIVE_ALIGN = ["left", "center", "right", "justify", "start", "end"];
+  const LIVE_TRANSFORM = ["none", "uppercase", "lowercase", "capitalize"];
+  const LIVE_COLOR = /^(#[0-9a-f]{3}|#[0-9a-f]{6}|#[0-9a-f]{8}|(rgb|rgba|hsl|hsla)\([0-9.%,/ ]*\))$/i;
+  const LIVE_CSS = { fontFamily:"font-family", fontSize:"font-size", fontWeight:"font-weight", lineHeight:"line-height",
+    letterSpacing:"letter-spacing", color:"color", textAlign:"text-align", textTransform:"text-transform", order:"order" };
+  const LIVE_FROM_CSS = Object.fromEntries(Object.entries(LIVE_CSS).map(([key, prop]) => [prop, key]));
+  const LIVE_CONTROL = { fontFamily:"liveFontFamily", fontSize:"liveFontSize", fontWeight:"liveFontWeight", lineHeight:"liveLineHeight",
+    letterSpacing:"liveLetterSpacing", color:"liveColorHex", textAlign:"liveTextAlign", textTransform:"liveTextTransform", text:"liveText" };
+  const BRIDGE_TYPES = new Set(["design:bridge-ready", "design:ready", "design:applied", "design:rejected",
+    "design:hover", "design:selected", "design:bounds", "design:targets", "design:warning"]);
 
-  let connectedTargetWindow = null;
-  let targetRevision = 1;
-  let liveSyncDebounceTimer = null;
+  const targetAppUrlInput = q("targetAppUrl");
+  const btnConnectTarget = q("btnConnectTarget");
+  const viewSpecimenBtn = q("viewSpecimenCanvas");
+  const viewTargetBtn = q("viewTargetApp");
+  const composerCanvasEl = q("composerCanvas");
+  const targetAppContainerEl = q("targetAppContainer");
+  const targetAppFrameEl = q("targetAppFrame");
+  const bridgeStatusBadge = q("bridgeStatusBadge");
+  const bridgeHint = q("bridgeHint");
+  const syncBtnEl = q("btnSyncToApp");
+  const bridgeModeSelect = q("bridgeModeSelect");
+  const bridgeModeInteract = q("bridgeModeInteract");
+  const overlayHover = q("bridgeOverlayHover");
+  const overlaySelected = q("bridgeOverlaySelected");
+  const reconnectBanner = q("liveReconnectBanner");
+  const reconnectText = q("liveReconnectText");
+  const liveCodePanel = q("liveCodePanel");
+  const liveCodeOutput = q("liveCodeOutput");
+  const liveChangeCount = q("liveChangeCount");
+  const liveCodeSync = q("liveCodeSync");
+  const liveCodeAutoSync = q("liveCodeAutoSync");
+  const liveCodeStatus = q("liveCodeStatus");
+  const codeTabs = { css:q("codeTabCss"), html:q("codeTabHtml"), json:q("codeTabJson") };
+  const popOutBtn = q("bridgePopOut");
+  const popoutPlaceholder = q("bridgePopoutPlaceholder");
+  const popoutText = q("bridgePopoutText");
+  const bridgeWarning = q("bridgeWarning");
+  const bridgeWarningText = q("bridgeWarningText");
+  const liveCodeWarnings = q("liveCodeWarnings");
 
-  function setBridgeStatus(text, isConnected = true) {
-    if (bridgeStatusBadge) {
-      bridgeStatusBadge.textContent = text;
-      bridgeStatusBadge.style.color = isConnected ? "var(--accent)" : "#ef4444";
-      bridgeStatusBadge.style.background = isConnected ? "color-mix(in srgb, var(--accent) 15%, transparent)" : "rgba(239, 68, 68, 0.15)";
+  // ---- small helpers ----------------------------------------------------
+  const isPlainObject = value => Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  const roundTo = (value, places) => Math.round(value * 10 ** places) / 10 ** places;
+  function setOwn(obj, key, value) {
+    Object.defineProperty(obj, key, { value, enumerable:true, writable:true, configurable:true });
+    return obj;
+  }
+
+  // Same validation/canonicalisation rules as the bridge's targeted patch table.
+  function canonicalLiveValue(key, value) {
+    if (value === null) return { ok:true, value:null };
+    const num = typeof value === "number" && Number.isFinite(value);
+    switch (key) {
+      case "fontFamily": {
+        if (typeof value !== "string") return { ok:false };
+        const trimmed = value.trim();
+        return trimmed && trimmed.length <= 300 && !unsafeCssText(trimmed) ? { ok:true, value:trimmed } : { ok:false };
+      }
+      case "fontSize": return num && value >= 4 && value <= 400 ? { ok:true, value:roundTo(value, 2) } : { ok:false };
+      case "fontWeight": return num && value >= 1 && value <= 1000 ? { ok:true, value:Math.round(value) } : { ok:false };
+      case "lineHeight": return num && value >= .5 && value <= 5 ? { ok:true, value:roundTo(value, 3) } : { ok:false };
+      case "letterSpacing": return num && value >= -.5 && value <= 2 ? { ok:true, value:roundTo(value, 4) } : { ok:false };
+      case "color": return typeof value === "string" && LIVE_COLOR.test(value.trim()) ? { ok:true, value:value.trim().toLowerCase() } : { ok:false };
+      case "textAlign": return LIVE_ALIGN.includes(value) ? { ok:true, value } : { ok:false };
+      case "textTransform": return LIVE_TRANSFORM.includes(value) ? { ok:true, value } : { ok:false };
+      case "text": return typeof value === "string" && value.length <= 5000 ? { ok:true, value } : { ok:false };
+      case "order": return Number.isInteger(value) && value >= -9999 && value <= 9999 ? { ok:true, value } : { ok:false };
+      default: return { ok:false };
     }
+  }
+
+  // Only http(s) targets may be framed (file: only when Studio itself runs from file:).
+  // javascript:, data:, blob: and friends would run in, or be controlled from, Studio's origin.
+  function safeTargetUrl(raw) {
+    let url;
+    try { url = new URL(String(raw ?? "").trim(), location.href); } catch { return null; }
+    const allowed = url.protocol === "http:" || url.protocol === "https:" || (url.protocol === "file:" && location.protocol === "file:");
+    return allowed ? url : null;
+  }
+
+  function parseLiveField(raw) {
+    if (!isPlainObject(raw)) throw new Error("live must be an object with target, revision and overrides.");
+    if (typeof raw.target !== "string" || raw.target.length > 2048) throw new Error("live.target must be a URL string.");
+    if (raw.target && (!/^[a-z][a-z0-9+.-]*:/i.test(raw.target) || !safeTargetUrl(raw.target))) {
+      throw new Error("live.target must be an absolute http(s) URL.");
+    }
+    if (!Number.isInteger(raw.revision) || raw.revision < 0) throw new Error("live.revision must be a non-negative integer.");
+    if (!isPlainObject(raw.overrides)) throw new Error("live.overrides must be an object keyed by target id.");
+    const overrides = {};
+    Object.entries(raw.overrides).forEach(([id, patch]) => {
+      if (!id || id.length > 300) throw new Error("live.overrides target ids must be 1–300 characters.");
+      if (!isPlainObject(patch)) throw new Error(`live.overrides["${id}"] must be an object.`);
+      const canonical = {};
+      Object.entries(patch).forEach(([key, value]) => {
+        if (!LIVE_KEYS.includes(key)) throw new Error(`live override property "${key}" is not supported.`);
+        const result = canonicalLiveValue(key, value);
+        const cssProperty = key === "fontFamily" ? "font-family" : key === "color" ? "color" : null;
+        if (!result.ok || result.value === null || (cssProperty && !CSS.supports(cssProperty, result.value))) {
+          throw new Error(`live override ${id}.${key} has an unsupported value.`);
+        }
+        canonical[key] = result.value;
+      });
+      if (Object.keys(canonical).length) setOwn(overrides, id, canonical);
+    });
+    return { target:raw.target, revision:raw.revision, overrides, tokens:parseLiveTokens(raw.tokens) };
+  }
+
+  // D017: the saved composition tokens (CSS custom properties) travel in the same validated live field.
+  function parseLiveTokens(raw) {
+    const tokens = {};
+    if (raw === undefined) return tokens;
+    if (!isPlainObject(raw)) throw new Error("live.tokens must be an object of CSS custom properties.");
+    const entries = Object.entries(raw);
+    if (entries.length > 64) throw new Error("live.tokens may hold at most 64 custom properties.");
+    entries.forEach(([name, value]) => {
+      if (!CUSTOM_PROPERTY.test(name)) throw new Error(`live token name "${name.slice(0, 40)}" is not a CSS custom property the bridge accepts (lower-case letters, digits and hyphens).`);
+      const text = typeof value === "string" ? value.trim() : "";
+      if (!text || text.length > 300 || unsafeCssText(text)) {
+        throw new Error(`live token ${name.slice(0, 40)} has an unsupported value.`);
+      }
+      setOwn(tokens, name, text);
+    });
+    return tokens;
+  }
+
+  function stableOverrides(overrides) {
+    const ids = Object.keys(overrides || {}).filter(id => Object.keys(overrides[id] || {}).length).sort();
+    return JSON.stringify(ids.map(id => [id, Object.keys(overrides[id]).sort().map(key => {
+      const value = overrides[id][key];
+      return [key, typeof value === "number" ? roundTo(value, 4) : key === "text" ? String(value).trim() : value];
+    })]));
+  }
+  const overridesEqual = (a, b) => stableOverrides(a) === stableOverrides(b);
+
+  function safeCssText(value, max = 500, options) {
+    const text = String(value ?? "");
+    return text.length <= max && !unsafeCssText(text, options) ? text : null;
+  }
+  // Text that goes into a CSS comment: no way to close or reopen the comment, no line break, and no `<` or `>`
+  // (so the file can be pasted into a <style> element), whatever the id or name the target reported.
+  const commentText = value => String(value ?? "").replace(/\*(?=\/)|\/(?=\*)/g, "$& ").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/[\n\r]+/g, " ");
+  const htmlCommentText = value => String(value ?? "").replace(/--/g, "- -").replace(/[\n\r]+/g, " ");
+
+  // Same allow-list as the bridge's fontStylesheet key: Google Fonts css2 (1 to 8 families, at most one display and
+  // one text parameter) or a Typekit kit stylesheet.
+  function safeFontStylesheet(url) {
+    if (typeof url !== "string" || !url || url.length > 2000) return "";
+    if (TYPEKIT_SHEET.test(url)) return url;
+    const prefix = "https://fonts.googleapis.com/css2?";
+    if (!url.startsWith(prefix)) return "";
+    let families = 0, displays = 0, texts = 0;
+    for (const param of url.slice(prefix.length).split("&")) {
+      const at = param.indexOf("=");
+      if (at < 1) return "";
+      const key = param.slice(0, at), value = param.slice(at + 1);
+      if (key === "family") { families += 1; if (!GOOGLE_SHEET_VALUE.test(value)) return ""; }
+      else if (key === "display") { displays += 1; if (!GOOGLE_SHEET_DISPLAY.includes(value)) return ""; }
+      else if (key === "text") { texts += 1; if (!GOOGLE_SHEET_VALUE.test(value) || value.length > 600) return ""; }
+      else return "";
+    }
+    return families >= 1 && families <= MAX_SHEET_FAMILIES && displays <= 1 && texts <= 1 ? url : "";
+  }
+
+  function libraryFontForStack(value) {
+    const text = String(value ?? "").trim();
+    return fonts.find(f => text === cssStack(f)) || null;
+  }
+
+  function normalizeLedger(raw) {
+    const ledger = { tokens:{}, targets:[], structure:[], imports:[] };
+    if (!isPlainObject(raw)) return ledger;
+    (Array.isArray(raw.imports) ? raw.imports : []).forEach(url => {
+      const safe = safeFontStylesheet(url);
+      if (safe && !ledger.imports.includes(safe)) ledger.imports.push(safe);
+    });
+    (Array.isArray(raw.structure) ? raw.structure : []).forEach(entry => {
+      if (!isPlainObject(entry) || typeof entry.containerKey !== "string" || !entry.containerKey) return;
+      ledger.structure.push({
+        containerKey: entry.containerKey,
+        selector: typeof entry.selector === "string" ? entry.selector : "",
+        stable: entry.stable === true,
+        name: typeof entry.name === "string" && entry.name ? entry.name : entry.containerKey,
+        html: typeof entry.html === "string" ? entry.html : "",
+        order: (Array.isArray(entry.order) ? entry.order : []).filter(name => typeof name === "string").slice(0, 500)
+      });
+    });
+    if (isPlainObject(raw.tokens)) {
+      Object.entries(raw.tokens).forEach(([name, value]) => {
+        if (CUSTOM_PROPERTY.test(name) && (typeof value === "string" || typeof value === "number")) ledger.tokens[name] = String(value);
+      });
+    }
+    (Array.isArray(raw.targets) ? raw.targets : []).forEach(entry => {
+      if (!isPlainObject(entry) || typeof entry.targetId !== "string" || !entry.targetId) return;
+      const declarations = {};
+      if (isPlainObject(entry.declarations)) {
+        Object.entries(entry.declarations).forEach(([prop, value]) => {
+          if (/^[a-z-]{1,60}$/.test(prop) && (typeof value === "string" || typeof value === "number")) declarations[prop] = String(value);
+        });
+      }
+      noteTargetMeta(entry);
+      ledger.targets.push({
+        targetId: entry.targetId,
+        selector: typeof entry.selector === "string" ? entry.selector : "",
+        stable: entry.stable === true,
+        name: typeof entry.name === "string" && entry.name ? entry.name : entry.targetId,
+        role: typeof entry.role === "string" ? entry.role : "",
+        declarations,
+        text: typeof entry.text === "string" ? entry.text : null,
+        originalText: typeof entry.originalText === "string" ? entry.originalText : "",
+        html: typeof entry.html === "string" ? entry.html : ""
+      });
+    });
+    return ledger;
+  }
+
+  function ledgerToOverrides(ledger) {
+    const result = {};
+    ledger.targets.forEach(entry => {
+      const patch = {};
+      Object.entries(entry.declarations).forEach(([prop, raw]) => {
+        const key = LIVE_FROM_CSS[prop];
+        if (!key) return;
+        const value = ["fontSize", "fontWeight", "lineHeight", "letterSpacing", "order"].includes(key) ? parseFloat(raw) : raw;
+        const canonical = canonicalLiveValue(key, value);
+        if (canonical.ok && canonical.value !== null) patch[key] = canonical.value;
+      });
+      if (entry.text !== null) patch.text = entry.text;
+      if (Object.keys(patch).length) setOwn(result, entry.targetId, patch);
+    });
+    return result;
+  }
+
+  function cssColorToHex(value) {
+    const text = String(value || "").trim().toLowerCase();
+    if (/^#[0-9a-f]{6}([0-9a-f]{2})?$/.test(text)) return text;
+    if (/^#[0-9a-f]{3,4}$/.test(text)) return "#" + [...text.slice(1)].map(c => c + c).join("");
+    const match = text.match(/^rgba?\(([^)]+)\)$/);
+    if (!match) return "";
+    const parts = match[1].split(/[\s,/]+/).filter(Boolean);
+    if (parts.length < 3) return "";
+    const channel = part => Math.max(0, Math.min(255, Math.round(part.endsWith("%") ? parseFloat(part) * 2.55 : parseFloat(part))));
+    const hex = parts.slice(0, 3).map(part => channel(part).toString(16).padStart(2, "0")).join("");
+    let alpha = parts[3] === undefined ? 1 : parts[3].endsWith("%") ? parseFloat(parts[3]) / 100 : parseFloat(parts[3]);
+    if (!Number.isFinite(alpha)) alpha = 1;
+    return alpha >= 1 ? `#${hex}` : `#${hex}${Math.round(alpha * 255).toString(16).padStart(2, "0")}`;
+  }
+  const colorInputValue = value => (cssColorToHex(value) || "#000000").slice(0, 7);
+
+  // ---- status -------------------------------------------------------------
+  function setBridgeStatus(text, kind = "connected", hint = false) {
+    bridgeStatusBadge.textContent = text;
+    bridgeStatusBadge.dataset.state = kind;
+    bridgeStatusBadge.title = hint ? "Add fontkit-bridge.js to the target page." : "";
+    if (bridgeHint) bridgeHint.hidden = !hint;
+  }
+
+  // ---- transport ------------------------------------------------------------
+  function newSessionId() {
+    const bytes = new Uint8Array(8);
+    crypto.getRandomValues(bytes);
+    return "fks-" + [...bytes].map(b => b.toString(16).padStart(2, "0")).join("");
+  }
+
+  // Posts only to the connected iframe, only at the expected origin, always session-stamped.
+  // The expected window is the iframe, or the named pop-out window while popped out.
+  function targetWindow() {
+    return live.popoutMode ? live.popup : targetAppFrameEl?.contentWindow;
   }
 
   function sendDesignMessage(msg) {
-    if (connectedTargetWindow) {
-      try { connectedTargetWindow.postMessage(msg, "*"); } catch(e){}
-    }
-    
-  // Anti-recursion guard: If Studio itself is embedded inside an iframe (Modality B),
-  // hide the recursive Target Bridge connector bar and target iframe container.
-  if (window.self !== window.top) {
-    const bridgeBar = document.getElementById("targetAppBridgeBar");
-    if (bridgeBar) bridgeBar.style.display = "none";
-    if (targetAppContainerEl) targetAppContainerEl.style.display = "none";
-    if (viewTargetBtn) viewTargetBtn.style.display = "none";
-    if (viewSpecimenBtn) viewSpecimenBtn.style.display = "none";
+    const win = targetWindow();
+    if (!win || win.closed || !live.expectedOrigin || !live.sessionId) return false;
+    const targetOrigin = live.expectedOrigin === "null" ? "*" : live.expectedOrigin;
+    try { win.postMessage({ ...msg, protocolVersion:1, sessionId:live.sessionId }, targetOrigin); return true; } catch (e) { return false; }
   }
 
-  if (window.parent && window.parent !== window) {
-      try { window.parent.postMessage(msg, "*"); } catch(e){}
-    }
-    if (window.opener) {
-      try { window.opener.postMessage(msg, "*"); } catch(e){}
-    }
+  function acceptBridgeMessage(event) {
+    const win = targetWindow();
+    if (!live.expectedOrigin || !win || event.source !== win) return null;
+    if (event.origin !== live.expectedOrigin) return null;
+    const data = event.data;
+    if (!isPlainObject(data) || data.protocolVersion !== 1 || !BRIDGE_TYPES.has(data.type)) return null;
+    if (data.type !== "design:bridge-ready" && (!live.sessionId || data.sessionId !== live.sessionId)) return null;
+    return data;
   }
 
-  function highlightSlotInTarget(slotId, slotIndex, role) {
-    sendDesignMessage({
-      type: "design:highlight",
-      targetId: slotId,
-      slotIndex: slotIndex ?? 0,
-      role: role || "Slot"
+  function resetSessionState() {
+    live.ready = false;
+    live.queue = [];
+    live.inFlight = null;
+    live.timedOut.clear();
+    clearTimeout(live.requestTimer);
+    live.compositionLinked = false;
+    live.selectedId = null;
+    live.selectedRect = null;
+    live.hoverId = null;
+    live.hoverRect = null;
+    live.moveGuard = null;
+    live.strategyChoice = new Map();
+    live.warnings = [];
+    live.reapply = null;   // an interrupted Reapply leaves saved state alone; the next ready recomputes the conflict
+  }
+
+  // The target is gone (no bridge, closed pop-out, new pop-out): forget the session and its targets.
+  function detachSession() {
+    resetSessionState();
+    live.sessionId = null;
+    live.targets = new Map();
+  }
+
+  function startHandshake() {
+    resetSessionState();
+    live.sessionId = newSessionId();
+    sendDesignMessage({ type:"design:hello" });
+    renderLivePanels();
+  }
+
+  // Armed on connect and on every iframe load; design:bridge-ready and design:ready clear it.
+  function armNoBridgeTimer() {
+    clearTimeout(live.noBridgeTimer);
+    live.noBridgeTimer = setTimeout(() => {
+      live.noBridgeTimer = null;
+      if (!live.expectedOrigin) return;
+      detachSession();
+      setBridgeStatus("No bridge detected", "missing", true);
+      renderLivePanels();
+    }, NO_BRIDGE_MS);
+  }
+
+  // Only Studio's own document counts, whatever its query string or fragment; other URLs may mention the name.
+  // On loopback, "localhost", "127.0.0.1" and "[::1]" on Studio's port are the same server, and the path is compared
+  // without case or a trailing slash (a case-insensitive file system serves the same file).
+  const LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
+  function isStudioDocument(url) {
+    const withoutQuery = href => href.split(/[?#]/)[0].replace(/\/$/, "");
+    if (withoutQuery(url.href) === withoutQuery(location.href)) return true;
+    const path = value => value.toLowerCase().replace(/\/$/, "");
+    return LOOPBACK_HOSTS.includes(location.hostname) && LOOPBACK_HOSTS.includes(url.hostname)
+      && url.protocol === location.protocol && url.port === location.port && path(url.pathname) === path(location.pathname);
+  }
+
+  // One URL gate for the iframe and the pop-out: http(s) only (file: only from file:), never Studio itself.
+  function resolveTarget(raw) {
+    const resolved = safeTargetUrl(raw);
+    if (!resolved) { setBridgeStatus("Invalid target URL", "error"); return null; }
+    // Anti-recursion: never embed Font Kit Studio inside itself.
+    if (isStudioDocument(resolved)) {
+      setBridgeStatus("Recursion blocked", "error");
+      console.warn("[FontKitStudio] Blocked recursive self-embedding:", resolved.href);
+      if (targetAppUrlInput) targetAppUrlInput.value = DEFAULT_TARGET_URL;
+      return null;
+    }
+    return resolved;
+  }
+
+  function connectTargetApp(url) {
+    if (!targetAppFrameEl) return;
+    const raw = String(url || targetAppUrlInput.value || DEFAULT_TARGET_URL).trim();
+    const resolved = resolveTarget(raw);
+    if (!resolved) return false;
+    leavePopout(true);
+    resetSessionState();
+    live.sessionId = null;
+    live.url = resolved.href;
+    live.expectedOrigin = resolved.origin;
+    setBridgeStatus("Connecting…", "connecting");
+    armNoBridgeTimer();
+    targetAppFrameEl.src = resolved.href;
+    renderLivePanels();
+    return true;
+  }
+
+  // Every iframe load is a possibly new document: never skip it. Mark the session not ready,
+  // greet with the current session id (a same-source re-hello replaces the session on the bridge)
+  // and wait for design:ready; design:bridge-ready still starts a fresh handshake.
+  targetAppFrameEl?.addEventListener("load", () => {
+    if (live.popoutMode || !live.expectedOrigin || !targetAppFrameEl.getAttribute("src")) return;
+    live.ready = false;
+    live.inFlight = null;
+    clearTimeout(live.requestTimer);
+    live.selectedRect = null;
+    live.hoverId = null;
+    live.hoverRect = null;
+    if (!live.sessionId) live.sessionId = newSessionId();
+    setBridgeStatus("Connecting…", "connecting");
+    sendDesignMessage({ type:"design:hello" });
+    armNoBridgeTimer();
+    renderOverlays();
+  });
+
+  // ---- request queue: one in flight, per-target coalescing --------------------
+  function pendingPatch(targetId) {
+    const merged = {};
+    const ops = live.inFlight ? [live.inFlight, ...live.queue] : live.queue;
+    ops.forEach(op => { if (op.kind === "update" && op.targetId === targetId) Object.assign(merged, op.patch); });
+    return merged;
+  }
+
+  function enqueueLiveOp(op) {
+    if (!live.ready && !(live.sessionId && live.targets.size)) return false;
+    if (op.reapply) {
+      live.queue.push(op);
+      pumpLiveQueue();
+      return true;
+    }
+    if (op.kind === "update") {
+      for (let index = live.queue.length - 1; index >= 0; index -= 1) {
+        const queued = live.queue[index];
+        if (queued.kind === "update" && queued.targetId === op.targetId) { Object.assign(queued.patch, op.patch); pumpLiveQueue(); return true; }
+        if (queued.kind === "restore" || (queued.kind === "reset" && (!queued.targetId || queued.targetId === op.targetId))) break;
+      }
+    } else if (op.kind === "composition") {
+      const queued = live.queue.find(item => item.kind === "composition");
+      if (queued) { queued.patch = op.patch; return true; }
+    }
+    live.queue.push(op);
+    pumpLiveQueue();
+    return true;
+  }
+
+  function pumpLiveQueue() {
+    if (live.inFlight || !live.ready || !live.queue.length) return;
+    dispatchLiveOp(live.queue.shift());
+  }
+
+  function dispatchLiveOp(op) {
+    op.requestId = `fks-req-${++live.requestSeq}`;
+    const base = { requestId:op.requestId, baseRevision:live.revision };
+    let message;
+    if (op.kind === "update") message = { type:"design:update", ...base, targetId:op.targetId, patch:op.patch };
+    else if (op.kind === "composition") message = { type:"design:update", ...base, patch:op.patch };
+    else if (op.kind === "reset") message = op.targetId ? { type:"design:reset", ...base, targetId:op.targetId } : { type:"design:reset", ...base };
+    else if (op.kind === "move") {
+      message = { type:"design:move", ...base, targetId:op.targetId, to:{ ...op.to }, strategy:op.strategy };
+      if (op.force === true) message.force = true;
+    }
+    else message = { type:"design:restore-text", ...base };
+    live.inFlight = op;
+    clearTimeout(live.requestTimer);
+    live.requestTimer = setTimeout(() => {
+      if (live.inFlight !== op) return;
+      live.inFlight = null;
+      live.timedOut.set(op.requestId, op);   // stays tracked until its late reply arrives or the session ends
+      setBridgeStatus("No response from target", "error");
+      reapplyDone(op, false, "no response from the target");
+      reseedLiveControls();
+      pumpLiveQueue();
+    }, REQUEST_TIMEOUT_MS);
+    sendDesignMessage(message);
+  }
+
+  function recordCanonical(op, data) {
+    const targetId = typeof data.targetId === "string" && data.targetId !== "global" ? data.targetId : op.targetId;
+    if (op.kind === "update" && targetId) {
+      const entry = { ...(live.overrides[targetId] || {}) };
+      Object.entries(isPlainObject(data.canonicalPatch) ? data.canonicalPatch : {}).forEach(([key, value]) => {
+        if (!LIVE_KEYS.includes(key)) return;
+        const canonical = canonicalLiveValue(key, value);
+        if (!canonical.ok) return;
+        if (canonical.value === null) delete entry[key]; else entry[key] = canonical.value;
+      });
+      // Text the ledger does not report as changed (typed back to the original) is not an override.
+      if (typeof entry.text === "string" && data.changes) {
+        const ledgerEntry = live.changes.targets.find(item => item.targetId === targetId);
+        if (!ledgerEntry || ledgerEntry.text === null) delete entry.text;
+      }
+      if (Object.keys(entry).length) setOwn(live.overrides, targetId, entry); else delete live.overrides[targetId];
+    } else if (op.kind === "move") {
+      if (op.strategy === "css-order") syncOrderFromLedger(siblingIds(op, data));
+    } else if (op.kind === "reset") {
+      // A reset sent by Reapply only clears the target's CSS order group; Studio's saved state changes
+      // only when the replayed values themselves are acknowledged.
+      if (op.reapply) { /* saved state untouched */ }
+      else if (op.targetId) {
+        delete live.overrides[op.targetId];
+        syncOrderFromLedger(siblingIds(op, data));
+      } else live.overrides = {};
+    } else if (op.kind === "restore") {
+      Object.keys(live.overrides).forEach(id => {
+        delete live.overrides[id].text;
+        if (!Object.keys(live.overrides[id]).length) delete live.overrides[id];
+      });
+    }
+    // Acknowledged composition tokens (from ⚡ Sync, or cleared by a global reset) are saved state too;
+    // a later target reload that loses them is a reconnect conflict, not a smaller overrides file.
+    if (op.kind === "composition" && op.reapply) {
+      // Reapply never replaces Studio's saved tokens with the target's. When the target now holds exactly the saved
+      // names, its canonical values are the acknowledged ones; otherwise finishReapply reports the mismatch.
+      const names = Object.keys(live.changes.tokens);
+      if (names.length === Object.keys(live.savedTokens).length && names.every(name => Object.hasOwn(live.savedTokens, name))) {
+        live.savedTokens = { ...live.changes.tokens };
+      }
+    } else if (op.kind === "composition" || (op.kind === "reset" && !op.targetId)) live.savedTokens = { ...live.changes.tokens };
+    live.canonicalRevision = live.revision;
+    live.canonicalTarget = live.url;
+  }
+
+  // CSS-order moves assign `order` to every sibling; Studio's saved overrides mirror what the target acknowledged
+  // for that sibling group only, so other saved state (and an open reconnect conflict) is untouched.
+  function siblingIds(op, data) {
+    const ids = new Set(op.groupBefore || []);
+    ids.add(op.targetId);
+    const arrangement = normalizeArrangement(data.target?.arrangement) || arrangementOf(op.targetId);
+    (arrangement?.siblings || []).forEach(sibling => ids.add(sibling.id));
+    return [...ids];
+  }
+
+  function syncOrderFromLedger(ids) {
+    const group = new Set(ids);
+    group.forEach(id => {
+      if (!live.overrides[id]) return;
+      const entry = { ...live.overrides[id] };
+      delete entry.order;
+      if (Object.keys(entry).length) setOwn(live.overrides, id, entry); else delete live.overrides[id];
+    });
+    live.changes.targets.forEach(entry => {
+      if (!group.has(entry.targetId)) return;
+      const canonical = canonicalLiveValue("order", parseFloat(entry.declarations.order));
+      if (canonical.ok && canonical.value !== null) setOwn(live.overrides, entry.targetId, { ...(live.overrides[entry.targetId] || {}), order:canonical.value });
     });
   }
 
-  function broadcastLiveState(immediate = false) {
-    if (liveSyncDebounceTimer) {
-      clearTimeout(liveSyncDebounceTimer);
-      liveSyncDebounceTimer = null;
+  function acceptApplied(op, data) {
+    if (isPlainObject(data.target) && typeof data.target.id === "string") {
+      live.targets.set(data.target.id, data.target);
+      noteTargetMeta(data.target);
     }
+    if (data.changes) live.changes = normalizeLedger(data.changes);
+    recordCanonical(op, data);
+  }
 
-    const runSync = () => {
-      // 1. Compute CSS font stacks
-      const tokens = {};
-      state.slots.forEach(slot => {
-        if (slot.type !== "text") return;
-        const font = byFamily(slot.family);
-        const stack = cssStack(font);
-        const r = (slot.role || "").toLowerCase();
-        if (r.includes("title") || r.includes("display") || r.includes("hero")) {
-          tokens["--font-display"] = stack;
-        } else if (r.includes("lead") || r.includes("body") || r.includes("deck")) {
-          tokens["--font-sans"] = stack;
-        } else if (r.includes("editorial") || r.includes("quote") || r.includes("narrative") || r.includes("serif")) {
-          tokens["--font-serif"] = stack;
-        } else if (r.includes("mono") || r.includes("data") || r.includes("caption") || r.includes("code")) {
-          tokens["--font-mono"] = stack;
-        }
-      });
+  function afterApplied(op, data) {
+    if (op.kind === "move" || op.kind === "reset") op.groupBefore = (arrangementOf(op.targetId)?.siblings || []).map(sibling => sibling.id);
+    acceptApplied(op, data);
+    setBridgeStatus(`Live · rev ${live.revision}`, "live");
+    if (op.kind === "move") {
+      live.moveGuard = null;
+      // Moving a sibling leaves the selected element's own arrangement stale: ask the target again.
+      if (live.selectedId && (op.targetId !== live.selectedId || !isPlainObject(data.target))) {
+        sendDesignMessage({ type:"design:select", targetId:live.selectedId });
+      }
+      refreshLiveInspector();
+    }
+    if (op.kind === "update") reflectCanonical(op.targetId, data.canonicalPatch);
+    if ((op.kind === "reset" || op.kind === "restore") && live.selectedId) {
+      sendDesignMessage({ type:"design:select", targetId:live.selectedId });
+    }
+    renderLiveCode();
+    scheduleAutoSync();
+    reapplyDone(op, true);
+  }
 
-      if (!tokens["--font-display"] && state.slots[0]) tokens["--font-display"] = cssStack(byFamily(state.slots[0].family));
-      if (!tokens["--font-sans"] && state.slots[1]) tokens["--font-sans"] = cssStack(byFamily(state.slots[1].family));
-      if (!tokens["--font-serif"] && state.slots[2]) tokens["--font-serif"] = cssStack(byFamily(state.slots[2].family));
-      if (!tokens["--font-mono"] && state.slots[3]) tokens["--font-mono"] = cssStack(byFamily(state.slots[3].family));
+  // Every request that timed out stays in `live.timedOut` (by request id), so a late acknowledgement is applied
+  // however many later requests timed out after it. A late rejection changed nothing, but it is reported like any
+  // rejection (the status says why and the controls show what the page really has); it is not retried, because the
+  // user moved on while the target was silent.
+  function handleLateReply(data, applied) {
+    const op = typeof data.requestId === "string" ? live.timedOut.get(data.requestId) : undefined;
+    if (!op) return;
+    live.timedOut.delete(data.requestId);
+    if (Number.isInteger(data.revision) && data.revision > live.revision) live.revision = data.revision;
+    if (applied) { afterApplied(op, data); return; }
+    const reason = typeof data.reason === "string" ? data.reason.slice(0, 60) : "invalid-message";
+    setBridgeStatus(`Rejected: ${reason}`, "rejected");
+    if (op.kind === "move") noteMoveRejection(op, data, reason); else reseedLiveControls(op.targetId);
+  }
 
-      // 2. Structured Slots Payload for live content, typography, and SVG/PNG assets
-      const slotPayloads = state.slots.map((slot, index) => {
-        const payload = {
-          id: slot.id,
-          targetId: slot.targetId,
-          index,
-          role: slot.role,
-          type: slot.type
-        };
-
-        if (slot.type === "text") {
-          const font = byFamily(slot.family);
-          payload.fontFamily = cssStack(font);
-          payload.familyRaw = slot.family;
-          payload.weight = slot.weight;
-          payload.size = slot.size;
-          payload.lineHeight = slot.lineHeight;
-          payload.tracking = slot.tracking;
-          payload.align = slot.align;
-          payload.colorHex = resolvedColor(slot);
-          payload.transform = slot.transform;
-          payload.text = slot.text;
-          payload.textTouched = Boolean(slot.textTouched);
-        } else if (slot.type === "image") {
-          payload.imageName = slot.imageName;
-          payload.assetDataUrl = slot.assetDataUrl;
-          payload.imageWidth = slot.imageWidth;
-          payload.opacity = slot.opacity;
-        } else if (slot.type === "rule") {
-          payload.ruleWidth = slot.ruleWidth;
-          payload.ruleThickness = slot.ruleThickness;
-          payload.colorHex = resolvedColor(slot);
-        } else if (slot.type === "spacer") {
-          payload.spacerHeight = slot.spacerHeight;
-        } else if (slot.type === "row") {
-          payload.children = (slot.children || []).map(child => ({
-            id: child.id,
-            role: child.role,
-            type: child.type,
-            fontFamily: child.family ? cssStack(byFamily(child.family)) : undefined,
-            text: child.text,
-            assetDataUrl: child.assetDataUrl,
-            imageWidth: child.imageWidth
-          }));
-        }
-
-        return payload;
-      });
-
-      // 3. Dispatch Live Design Update
-      sendDesignMessage({
-        type: "design:update",
-        requestId: `req-${Date.now()}`,
-        baseRevision: targetRevision,
-        patch: {
-          tokens,
-          slots: slotPayloads,
-          layout: {
-            order: slotPayloads.map(s => ({ id: s.id, role: s.role, index: s.index })),
-            canvasWidth: state.canvasWidth,
-            backgroundHex: state.background?.hex
-          }
-        }
-      });
-    };
-
-    if (immediate) {
-      runSync();
+  function handleReply(data, applied) {
+    const op = live.inFlight;
+    if (!op || data.requestId !== op.requestId) { handleLateReply(data, applied); return; }
+    clearTimeout(live.requestTimer);
+    live.inFlight = null;
+    if (Number.isInteger(data.revision) && data.revision >= 0) live.revision = data.revision;
+    if (applied) {
+      afterApplied(op, data);
     } else {
-      liveSyncDebounceTimer = setTimeout(runSync, 20);
+      const reason = typeof data.reason === "string" ? data.reason.slice(0, 60) : "invalid-message";
+      if (reason === "revision-conflict" && !op.retried) {
+        op.retried = true;
+        dispatchLiveOp(op);
+        return;
+      }
+      setBridgeStatus(`Rejected: ${reason}`, "rejected");
+      if (op.kind === "move") noteMoveRejection(op, data, reason); else reseedLiveControls(op.targetId);
+      reapplyDone(op, false, `the target rejected it: ${reason}`);
+    }
+    pumpLiveQueue();
+  }
+
+  // The bridge ledger reports text trimmed and omits text equal to the original, so a
+  // saved text override equal to the target's original text is no override at all.
+  function originalTextFor(targetId) {
+    const entry = live.changes.targets.find(item => item.targetId === targetId);
+    if (entry) return entry.originalText;
+    const text = live.targets.get(targetId)?.text;
+    return typeof text === "string" ? text : null;
+  }
+
+  function effectiveOverrides(overrides) {
+    const result = {};
+    Object.entries(overrides).forEach(([id, patch]) => {
+      const copy = { ...patch };
+      if (typeof copy.text === "string") {
+        const original = originalTextFor(id);
+        if (original !== null && copy.text.trim() === original.trim()) delete copy.text;
+      }
+      if (Object.keys(copy).length) setOwn(result, id, copy);
+    });
+    return result;
+  }
+
+  // ---- reconnect reconciliation (Spec §16) ----------------------------------
+  const tokensEqual = (a, b) => JSON.stringify(Object.entries(a || {}).sort()) === JSON.stringify(Object.entries(b || {}).sort());
+
+  function reconcileSavedOverrides() {
+    const targetState = ledgerToOverrides(live.changes);
+    if (!Object.keys(live.overrides).length && !Object.keys(live.savedTokens).length) {
+      live.overrides = targetState;
+      live.savedTokens = { ...live.changes.tokens };
+      live.canonicalRevision = live.revision;
+      live.canonicalTarget = live.url;
+      live.conflict = false;
+    } else {
+      live.conflict = !overridesEqual(effectiveOverrides(live.overrides), targetState)
+        || !tokensEqual(live.savedTokens, live.changes.tokens);
+    }
+    renderReconnectBanner();
+  }
+
+  function adoptImportedLive(candidate) {
+    live.overrides = candidate.overrides;
+    live.savedTokens = candidate.tokens;
+    live.canonicalRevision = candidate.revision;
+    live.canonicalTarget = candidate.target;
+    if (!live.url && candidate.target && safeTargetUrl(candidate.target) && targetAppUrlInput) targetAppUrlInput.value = candidate.target;
+    if (live.ready) reconcileSavedOverrides();
+    renderLivePanels();
+  }
+
+  // Targets whose CSS order exists on the target but not in Studio's saved state. The bridge can only clear an
+  // order by resetting the element (which clears its whole sibling group), so Reapply resets one per group.
+  function staleOrderResets(saved, targetState) {
+    const byGroup = new Map();
+    Object.keys(targetState).forEach(id => {
+      if (!Number.isInteger(targetState[id].order) || Number.isInteger(saved[id]?.order)) return;
+      const key = arrangementOf(id)?.containerKey || `target:${id}`;
+      if (!byGroup.has(key)) byGroup.set(key, id);
+    });
+    return byGroup;
+  }
+
+  // Reapply is transactional: Studio's saved state is only replaced by acknowledged replayed values. The conflict
+  // (and with it the banner and the auto-sync hold) stays open until every step is acknowledged; any rejection,
+  // timeout or reload keeps the saved state and says so.
+  function reapplyStudioOverrides() {
+    const targetState = ledgerToOverrides(live.changes);
+    const saved = effectiveOverrides(live.overrides);
+    const ids = new Set([...Object.keys(targetState), ...Object.keys(saved)]);
+    const resets = staleOrderResets(saved, targetState);
+    const resetIds = new Set(resets.values());
+    const run = { ops:new Set() };
+    live.reapply = run;
+    live.reapplyError = "";
+    const track = op => {
+      op.reapply = true;
+      run.ops.add(op);
+      if (!enqueueLiveOp(op)) run.ops.delete(op);
+    };
+    ids.forEach(id => {
+      const want = saved[id] || {};
+      const have = targetState[id] || {};
+      if (overridesEqual({ [id]:want }, { [id]:have })) return;
+      const reset = resetIds.has(id);
+      if (reset) track({ kind:"reset", targetId:id });
+      const patch = { ...want };
+      if (!reset) Object.keys(have).forEach(key => { if (!(key in want)) patch[key] = null; });
+      delete patch.order;   // saved order is restored below through design:move, not as a patch key
+      // The family travels with its stylesheet, as when it was chosen: library families bring theirs, others release it.
+      if ("fontFamily" in patch) {
+        const font = typeof patch.fontFamily === "string" ? libraryFontForStack(patch.fontFamily) : null;
+        patch.fontStylesheet = font ? fontStylesheetUrl(font) : null;
+      }
+      if (Object.keys(patch).length) track({ kind:"update", targetId:id, patch });
+    });
+    reapplyOrders(saved, targetState, new Set(resets.keys()), track);
+    // Tokens go back through a tokens-only composition update (no slots/layout).
+    const tokenPatch = reapplyTokenPatch();
+    if (tokenPatch) track({ kind:"composition", patch:{ tokens:tokenPatch } });
+    if (!run.ops.size) finishReapply();
+    else renderReconnectBanner();
+  }
+
+  // Makes the target's composition tokens equal Studio's saved set: saved tokens are sent, and a token only the
+  // target holds is removed with null (a composition update never deletes an omitted token).
+  function reapplyTokenPatch() {
+    if (tokensEqual(live.savedTokens, live.changes.tokens)) return null;
+    const patch = { ...live.savedTokens };
+    Object.keys(live.changes.tokens).forEach(name => { if (!Object.hasOwn(live.savedTokens, name)) patch[name] = null; });
+    return patch;
+  }
+
+  // Success is only reported when the target's ledger tokens equal the saved set.
+  function finishReapply() {
+    if (!tokensEqual(live.savedTokens, live.changes.tokens)) {
+      const extra = Object.keys(live.changes.tokens).filter(name => !Object.hasOwn(live.savedTokens, name));
+      failReapply(extra.length
+        ? `the target still has composition tokens Studio does not save (${extra.slice(0, 3).join(", ")}${extra.length > 3 ? ", …" : ""})`
+        : "the target's composition tokens do not match the saved tokens");
+      return;
+    }
+    live.reapply = null;
+    live.reapplyError = "";
+    live.conflict = false;
+    renderReconnectBanner();
+    scheduleAutoSync();
+  }
+
+  // Called when a Reapply step is acknowledged (ok) or fails; other operations are ignored.
+  function reapplyDone(op, ok, reason = "") {
+    const run = live.reapply;
+    if (!run || !run.ops.has(op)) return;
+    run.ops.delete(op);
+    if (ok) { if (!run.ops.size) finishReapply(); return; }
+    failReapply(reason);
+  }
+
+  function failReapply(reason) {
+    const run = live.reapply;
+    live.reapply = null;
+    if (run) live.queue = live.queue.filter(item => !run.ops.has(item));
+    live.reapplyError = `Reapply stopped (${reason}). Studio's saved overrides were kept and nothing was written to the overrides file. `
+      + "Fix the cause, or press Reapply again.";
+    setCodeStatus(live.reapplyError, "error");
+    renderReconnectBanner();
+  }
+
+  // Replays saved CSS-order arrangements: for each sibling group, move its members into their saved order one by one.
+  // A group whose order the reset just cleared is always replayed, even if its saved members matched before.
+  function reapplyOrders(saved, targetState, resetGroups, track) {
+    const groups = new Map();
+    Object.entries(saved).forEach(([id, patch]) => {
+      if (!Number.isInteger(patch.order)) return;
+      const arrangement = arrangementOf(id);
+      if (!arrangement || !arrangement.cssOrderAvailable) return;
+      if (!groups.has(arrangement.containerKey)) groups.set(arrangement.containerKey, []);
+      groups.get(arrangement.containerKey).push({ id, order:patch.order });
+    });
+    groups.forEach((list, key) => {
+      if (!resetGroups.has(key) && list.every(item => targetState[item.id]?.order === item.order)) return;
+      list.sort((a, b) => a.order - b.order).forEach((item, index) => {
+        track({ kind:"move", targetId:item.id, to:{ index }, strategy:"css-order" });
+      });
+    });
+  }
+
+  // Explicit resolution: Studio's saved overrides are replaced by the target's live state.
+  // Auto-sync is switched off so the overrides file is only rewritten by a deliberate Sync.
+  function acceptTargetState() {
+    live.overrides = ledgerToOverrides(live.changes);
+    live.savedTokens = { ...live.changes.tokens };
+    live.canonicalRevision = live.revision;
+    live.canonicalTarget = live.url;
+    live.conflict = false;
+    live.reapply = null;
+    live.reapplyError = "";
+    clearTimeout(live.syncTimer);
+    live.syncTimer = null;
+    const autoWasOn = Boolean(liveCodeAutoSync?.checked);
+    if (liveCodeAutoSync) liveCodeAutoSync.checked = false;
+    const count = Object.keys(live.overrides).length;
+    setCodeStatus(`Saved overrides and composition tokens replaced by the target's state (${count} target${count === 1 ? "" : "s"}). `
+      + `The overrides file is unchanged until you press Sync to file${autoWasOn ? "; auto-sync was turned off" : ""}.`);
+    renderReconnectBanner();
+    renderLiveCode();
+  }
+
+  // Reapply clears a leftover CSS order by resetting the element; say so, and say when that also undoes a DOM move.
+  function resetNotice() {
+    const resets = staleOrderResets(effectiveOverrides(live.overrides), ledgerToOverrides(live.changes));
+    if (!resets.size) return "";
+    const moved = [...resets.values()].some(id => live.changes.structure.some(entry => entry.containerKey === arrangementOf(id)?.containerKey));
+    return ` Reapply will also reset the arrangement of ${resets.size === 1 ? "one sibling group" : `${resets.size} sibling groups`}`
+      + ` (a leftover CSS order can only be cleared that way)${moved ? ", which also undoes the DOM moves in them (see the HTML tab's structure blocks)" : ""}.`;
+  }
+
+  function renderReconnectBanner() {
+    if (!reconnectBanner) return;
+    reconnectBanner.hidden = !(live.conflict && live.ready && live.viewActive);
+    if (reconnectText) {
+      const count = Object.keys(live.overrides).length;
+      const plural = n => `${n} target${n === 1 ? "" : "s"}`;
+      const targetCount = Object.keys(ledgerToOverrides(live.changes)).length;
+      const tokenCount = n => `${n} composition token${n === 1 ? "" : "s"}`;
+      const savedTokens = Object.keys(live.savedTokens).length;
+      const targetTokens = Object.keys(live.changes.tokens).length;
+      reconnectText.textContent = `Studio has saved overrides for ${plural(count)} and ${tokenCount(savedTokens)}; `
+        + `the live target has ${plural(targetCount)} changed and ${tokenCount(targetTokens)}. `
+        + "Nothing was applied automatically. Reapply sends Studio's overrides and tokens to the target; "
+        + "Accept target state replaces Studio's saved overrides and composition tokens with the target's state, "
+        + "and the overrides file only changes when you sync."
+        + resetNotice();
+      if (live.reapplyError) reconnectText.textContent = `${live.reapplyError} ${reconnectText.textContent}`;
     }
   }
 
-  function syncToLiveApp() {
-    broadcastLiveState(true);
-    const loc = selectedLocation();
-    if (loc && loc.slot) {
-      highlightSlotInTarget(loc.slot.id, loc.index, loc.slot.role);
+  // ---- incoming messages --------------------------------------------------
+  window.addEventListener("message", event => {
+    const data = acceptBridgeMessage(event);
+    if (!data) return;
+    switch (data.type) {
+      case "design:bridge-ready":
+        clearTimeout(live.noBridgeTimer);
+        setBridgeStatus("Bridge detected", "detected");
+        startHandshake();
+        break;
+      case "design:ready": {
+        const targets = Array.isArray(data.targets) ? data.targets.filter(t => isPlainObject(t) && typeof t.id === "string" && t.id) : [];
+        live.ready = true;
+        clearTimeout(live.noBridgeTimer);
+        live.revision = Number.isInteger(data.revision) && data.revision >= 0 ? data.revision : 0;
+        live.targets = new Map(targets.map(t => [t.id, t]));
+        targets.forEach(noteTargetMeta);
+        followPromotedTargets(targets);
+        live.changes = normalizeLedger(data.changes);
+        // Sibling-only registrations (arrangementOnly) serve the Arrange list; they are not editing targets.
+        const listed = targets.filter(t => t.arrangementOnly !== true).length;
+        setBridgeStatus(`Connected (${listed} target${listed === 1 ? "" : "s"})`, "connected");
+        if (live.mode !== "select" || live.popoutMode) sendMode();
+        if (live.selectedId && !live.targets.has(live.selectedId)) live.selectedId = null;
+        // A kept selection (re-hello after a load) is re-sent so the bridge reports fresh bounds.
+        if (live.selectedId && !live.selectedRect) sendDesignMessage({ type:"design:select", targetId:live.selectedId });
+        reconcileSavedOverrides();
+        renderOverlays();
+        renderLiveCode();
+        refreshLiveInspector();
+        fetchFullArrangement();
+        pumpLiveQueue();
+        break;
+      }
+      case "design:applied": handleReply(data, true); break;
+      case "design:rejected": handleReply(data, false); break;
+      case "design:hover": {
+        const target = typeof data.targetId === "string" ? live.targets.get(data.targetId) : null;
+        live.hoverId = typeof data.targetId === "string" ? data.targetId : null;
+        live.hoverRect = live.hoverId ? data.rect : null;
+        live.hoverName = typeof data.name === "string" && data.name ? data.name : target?.name || live.hoverId || "";
+        renderOverlays();
+        break;
+      }
+      case "design:selected":
+        if (isPlainObject(data.target) && typeof data.target.id === "string") {
+          live.targets.set(data.target.id, data.target);
+          noteTargetMeta(data.target);
+        }
+        live.selectedId = typeof data.targetId === "string" ? data.targetId : null;
+        live.selectedRect = live.selectedId ? data.rect : null;
+        if (live.moveGuard && live.moveGuard.targetId !== live.selectedId) live.moveGuard = null;
+        // A click inside the iframe leaves keyboard focus in the target; bring it back so Alt+Arrow keeps working.
+        if (live.selectedId && document.activeElement === targetAppFrameEl) targetAppContainerEl.focus({ preventScroll:true });
+        renderOverlays();
+        refreshLiveInspector();
+        break;
+      case "design:warning": noteWarning(data); break;
+      case "design:bounds":
+        if (data.targetId === live.selectedId) { live.selectedRect = data.rect; renderOverlays(); }
+        break;
+      case "design:targets":
+        // The message carries the full list: replace, so removed targets disappear.
+        if (Array.isArray(data.targets)) {
+          const list = data.targets.filter(t => isPlainObject(t) && typeof t.id === "string" && t.id);
+          live.targets = new Map(list.map(t => [t.id, t]));
+          list.forEach(noteTargetMeta);
+          if (followPromotedTargets(list)) { renderLiveCode(); scheduleAutoSync(); }
+          if (live.selectedId && !live.targets.has(live.selectedId)) { live.selectedId = null; live.selectedRect = null; }
+          if (live.hoverId && !live.targets.has(live.hoverId)) { live.hoverId = null; live.hoverRect = null; }
+          renderOverlays();
+          refreshLiveInspector();
+          fetchFullArrangement();
+        }
+        break;
     }
+  });
+
+  // ---- Studio-owned overlay ------------------------------------------------
+  function validRect(rect) {
+    return isPlainObject(rect) && ["x", "y", "width", "height"].every(k => typeof rect[k] === "number" && Number.isFinite(rect[k]))
+      && rect.width >= 0 && rect.height >= 0;
+  }
+  function placeOverlay(el, rect, label) {
+    if (!el) return;
+    if (!live.viewActive || !live.ready || live.popoutMode || !validRect(rect)) { el.hidden = true; return; }
+    el.hidden = false;
+    el.style.left = `${rect.x}px`;
+    el.style.top = `${rect.y}px`;
+    el.style.width = `${rect.width}px`;
+    el.style.height = `${rect.height}px`;
+    el.classList.toggle("label-below", rect.y < 20);
+    const labelEl = el.querySelector(".live-overlay-label");
+    if (labelEl) labelEl.textContent = label;
+  }
+  function renderOverlays() {
+    const selected = live.selectedId ? live.targets.get(live.selectedId) : null;
+    const showHover = live.mode === "select" && live.hoverId && live.hoverId !== live.selectedId;
+    placeOverlay(overlayHover, showHover ? live.hoverRect : null, live.hoverName);
+    placeOverlay(overlaySelected, live.selectedId ? live.selectedRect : null, selected?.name || live.selectedId || "");
+  }
+
+  // ---- Live Target inspector -----------------------------------------------
+  function liveSeed(target) {
+    const c = isPlainObject(target?.computed) ? target.computed : {};
+    const size = parseFloat(c.fontSize) || 16;
+    const lineRaw = String(c.lineHeight || "");
+    const lineNum = parseFloat(lineRaw);
+    const spacingRaw = String(c.letterSpacing || "");
+    const spacingNum = parseFloat(spacingRaw);
+    const weightRaw = String(c.fontWeight || "");
+    const weight = weightRaw === "bold" ? 700 : weightRaw === "normal" ? 400 : Math.round(parseFloat(weightRaw)) || 400;
+    return {
+      fontFamily: typeof c.fontFamily === "string" ? c.fontFamily : "",
+      fontSize: roundTo(size, 2),
+      fontWeight: weight,
+      lineHeight: !Number.isFinite(lineNum) ? 1.2 : lineRaw.endsWith("px") ? roundTo(lineNum / size, 3) : roundTo(lineNum, 3),
+      letterSpacing: !Number.isFinite(spacingNum) ? 0 : spacingRaw.endsWith("px") ? roundTo(spacingNum / size, 4) : roundTo(spacingNum, 4),
+      color: cssColorToHex(c.color) || String(c.color || ""),
+      textAlign: typeof c.textAlign === "string" && c.textAlign ? c.textAlign : "start",
+      textTransform: typeof c.textTransform === "string" && c.textTransform ? c.textTransform : "none",
+      text: typeof target?.text === "string" ? target.text : ""
+    };
+  }
+
+  // Rendered state from the manifest, then Studio's acknowledged overrides (unless a reconnect
+  // conflict is open, when the target's rendering is shown), then anything still pending.
+  function liveValues(targetId) {
+    const values = liveSeed(live.targets.get(targetId));
+    const saved = live.conflict ? null : live.overrides[targetId];
+    return { ...values, ...(saved || {}), ...pendingPatch(targetId) };
+  }
+
+  function ensureOption(select, value, label) {
+    if (![...select.options].some(option => option.value === value)) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label || value;
+      select.prepend(option);
+    }
+    select.value = value;
+  }
+
+  // A focused control belongs to the user: it is only reseeded when forced (on blur).
+  function setLiveControl(key, value, force = false) {
+    if (!LIVE_CONTROL[key]) return;
+    const el = q(LIVE_CONTROL[key]);
+    if (!el || value === undefined || value === null) return;
+    const editable = node => node && (force || node !== document.activeElement);
+    if (key === "color") {
+      if (editable(el)) el.value = String(value);
+      const picker = q("liveColor");
+      if (picker && editable(picker)) picker.value = colorInputValue(value);
+      return;
+    }
+    if (!editable(el)) return;
+    el.removeAttribute("aria-invalid");
+    if (key === "fontFamily") { ensureOption(el, String(value), `Current — ${value}`); return; }
+    if (key === "textAlign" || key === "textTransform") { ensureOption(el, String(value)); return; }
+    if (el.value !== String(value)) el.value = String(value);
+  }
+
+  function refreshLiveInspector() {
+    if (!live.viewActive) return;
+    const shown = q("liveTargetName")?.dataset.targetId;
+    if (live.ready && live.selectedId && shown === live.selectedId && live.targets.has(live.selectedId)) { reseedLiveControls(); refreshArrange(); }
+    else renderLiveInspector();
+  }
+
+  function reflectCanonical(targetId, canonicalPatch) {
+    if (!live.viewActive || targetId !== live.selectedId || !isPlainObject(canonicalPatch)) return;
+    const pending = pendingPatch(targetId);
+    const seed = liveSeed(live.targets.get(targetId));
+    Object.entries(canonicalPatch).forEach(([key, value]) => {
+      if (key in pending) return;
+      setLiveControl(key, value === null ? seed[key] : value);
+    });
+  }
+
+  function reseedLiveControls(targetId = live.selectedId) {
+    if (!live.viewActive || !live.selectedId || targetId !== live.selectedId) return;
+    const values = liveValues(live.selectedId);
+    Object.keys(LIVE_CONTROL).forEach(key => setLiveControl(key, values[key]));
+  }
+
+  // Controls are bound to the target they were rendered for; events from a replaced
+  // inspector (e.g. a change fired while its field is removed) never patch another target.
+  function queueLivePatch(targetId, key, value, extra = {}) {
+    if (!targetId || targetId !== live.selectedId) return;
+    const pending = pendingPatch(targetId);
+    const last = key in pending ? pending[key] : live.conflict ? undefined : live.overrides[targetId]?.[key];
+    if (last !== undefined && last === value) return;
+    enqueueLiveOp({ kind:"update", targetId, patch:{ [key]:value, ...extra } });
+  }
+
+  function renderLiveInspector() {
+    slotInspector.setAttribute("aria-label", "Live target inspector");
+    if (!live.ready) {
+      const message = live.expectedOrigin
+        ? "Waiting for the target's bridge. Controls appear once it answers the handshake."
+        : "Enter the URL of a localhost app that loads fontkit-bridge.js, then press Connect Target.";
+      slotInspector.innerHTML = `<div class="inspector-title-row"><h2>Target App</h2><span class="inspector-index">${escapeAttr(bridgeStatusBadge.textContent)}</span></div><p class="empty-inspector">${escapeAttr(message)}</p>`;
+      return;
+    }
+    const target = live.selectedId ? live.targets.get(live.selectedId) : null;
+    if (!target) {
+      const listedTargets = [...live.targets.values()].filter(t => t.arrangementOnly !== true);
+      const items = listedTargets.map(t => `<button type="button" class="row-child-jump" data-live-target="${escapeAttr(t.id)}"><span>${escapeAttr(t.name || t.id)}</span><small>${escapeAttr(t.id)}</small></button>`).join("");
+      slotInspector.innerHTML = `
+        <div class="inspector-title-row"><h2>Target App</h2><span class="inspector-index">${listedTargets.length} TARGETS</span></div>
+        <p class="empty-inspector">${live.mode === "select" ? "Click an element in the preview, or pick a target below." : "Interact mode: the preview behaves normally. Switch to Select to pick elements."}</p>
+        <div class="live-target-list">${items || '<p class="inspector-note">The target exposed no editable elements.</p>'}</div>`;
+      slotInspector.querySelectorAll("[data-live-target]").forEach(button => {
+        button.addEventListener("click", () => sendDesignMessage({ type:"design:select", targetId:button.dataset.liveTarget }));
+      });
+      return;
+    }
+    const editable = isPlainObject(target.editable) ? target.editable : {};
+    const values = liveValues(target.id);
+    const weights = Array.isArray(target.constraints?.fontWeights) ? target.constraints.fontWeights.filter(Number.isFinite) : [];
+    const familyOptions = fonts.map(f => `<option value="${escapeAttr(cssStack(f))}">${escapeAttr(f.name)}</option>`).join("");
+    let body = `
+      <div class="inspector-title-row"><h2 id="liveTargetName" data-target-id="${escapeAttr(target.id)}">${escapeAttr(target.name || target.id)}</h2><span class="inspector-index">${escapeAttr([target.role, target.tag].filter(Boolean).join(" · ").toUpperCase())}</span></div>
+      <p class="inspector-note live-target-id"><code>${escapeAttr(target.id)}</code>${target.stable === false ? " · auto-discovered — add data-design-id for a stable selector" : ""}</p>
+      <div class="inspector-grid">`;
+    if (editable.typography) {
+      body += `
+        <div class="inspector-field full"><label for="liveFontFamily">Family</label><select id="liveFontFamily">${familyOptions}</select>${freeFontsAllowed ? "" : '<p class="inspector-note" data-load-note>Choosing a library family loads it from Google Fonts.</p>'}</div>
+        <div class="inspector-field"><label for="liveFontSize">Size (px)</label><input id="liveFontSize" type="number" min="4" max="400" step="1" inputmode="decimal"></div>
+        <div class="inspector-field"><label for="liveFontWeight">Weight</label><input id="liveFontWeight" type="number" min="1" max="1000" step="${weights.length ? 100 : 1}" inputmode="numeric"></div>
+        ${weights.length ? `<p id="liveWeightNote" class="inspector-note inspector-field full">Allowed weights: ${weights.map(Number).join(" · ")} — the target snaps to the nearest.</p>` : ""}
+        <div class="inspector-field"><label for="liveLineHeight">Line height</label><input id="liveLineHeight" type="number" min="0.5" max="5" step="0.05" inputmode="decimal"></div>
+        <div class="inspector-field"><label for="liveLetterSpacing">Tracking (em)</label><input id="liveLetterSpacing" type="number" min="-0.5" max="2" step="0.005" inputmode="decimal"></div>
+        <div class="inspector-field full"><label for="liveTextTransform">Transform</label><select id="liveTextTransform">${optionsHtml(LIVE_TRANSFORM, values.textTransform)}</select></div>`;
+    }
+    if (editable.alignment) {
+      body += `<div class="inspector-field full"><label for="liveTextAlign">Alignment</label><select id="liveTextAlign">${optionsHtml(LIVE_ALIGN, values.textAlign)}</select></div>`;
+    }
+    if (editable.color) {
+      body += `
+        <div class="inspector-field full"><label for="liveColorHex">Colour</label><div class="color-grid"><input id="liveColorHex" type="text" spellcheck="false" aria-label="Colour value"><input id="liveColor" type="color" aria-label="Pick colour"></div></div>`;
+    }
+    if (editable.text && target.kind === "text") {
+      body += `<div class="inspector-field full"><label for="liveText">Text</label><textarea id="liveText" spellcheck="true"></textarea></div>`;
+    }
+    const arrangement = normalizeArrangement(target.arrangement);
+    if (arrangement) body += `<div id="liveArrange" class="inspector-field full live-arrange">${arrangeHtml(target.id, arrangement)}</div>`;
+    body += `
+        <div class="inspector-field full"><button id="liveResetTarget" class="btn" type="button">Reset this element</button>
+          <p class="inspector-note">Edits apply live in the preview; only values the target acknowledges are kept and synced.</p></div>
+        <div class="inspector-field full"><button type="button" class="btn" data-live-back>All targets</button></div>
+      </div>`;
+    slotInspector.innerHTML = body;
+    Object.keys(LIVE_CONTROL).forEach(key => setLiveControl(key, values[key]));
+    bindArrange(target.id);
+
+    // Partial keystrokes ("2" on the way to "24") that fail the contract's rules are not
+    // requests: they are flagged locally and never sent, so no rejection can rewrite the field.
+    const bindNumber = (id, key) => q(id)?.addEventListener("input", event => {
+      const raw = event.target.value;
+      const value = Number(raw);
+      const valid = raw !== "" && Number.isFinite(value) && canonicalLiveValue(key, value).ok;
+      if (valid) event.target.removeAttribute("aria-invalid"); else event.target.setAttribute("aria-invalid", "true");
+      if (valid) queueLivePatch(target.id, key, value);
+    });
+    bindNumber("liveFontSize", "fontSize");
+    bindNumber("liveFontWeight", "fontWeight");
+    bindNumber("liveLineHeight", "lineHeight");
+    bindNumber("liveLetterSpacing", "letterSpacing");
+    q("liveFontFamily")?.addEventListener("change", event => {
+      // A library family brings its Google Fonts stylesheet along so the target can render it; any other family releases it (null).
+      const font = libraryFontForStack(event.target.value);
+      if (font) { allowFreeFonts(); ensureFontStylesheet(font); }
+      queueLivePatch(target.id, "fontFamily", event.target.value, { fontStylesheet:font ? fontStylesheetUrl(font) : null });
+    });
+    q("liveTextAlign")?.addEventListener("change", event => queueLivePatch(target.id, "textAlign", event.target.value));
+    q("liveTextTransform")?.addEventListener("change", event => queueLivePatch(target.id, "textTransform", event.target.value));
+    q("liveColor")?.addEventListener("input", event => {
+      const hex = q("liveColorHex");
+      if (hex) hex.value = event.target.value;
+      queueLivePatch(target.id, "color", event.target.value);
+    });
+    q("liveColorHex")?.addEventListener("change", event => {
+      const value = event.target.value.trim();
+      if (value) queueLivePatch(target.id, "color", value);
+    });
+    q("liveText")?.addEventListener("input", event => queueLivePatch(target.id, "text", event.target.value));
+    // Leaving a field shows the acknowledged (canonical) value, e.g. 550 → 600 or a rejected entry.
+    Object.entries(LIVE_CONTROL).forEach(([key, id]) => {
+      const reseed = () => { if (live.selectedId === target.id) setLiveControl(key, liveValues(target.id)[key], true); };
+      q(id)?.addEventListener("blur", reseed);
+      if (key === "color") q("liveColor")?.addEventListener("blur", reseed);
+    });
+    q("liveResetTarget")?.addEventListener("click", () => enqueueLiveOp({ kind:"reset", targetId:target.id }));
+    slotInspector.querySelector("[data-live-back]")?.addEventListener("click", () => {
+      live.selectedId = null;
+      live.selectedRect = null;
+      sendDesignMessage({ type:"design:select", targetId:null });
+      renderOverlays();
+      renderLiveInspector();
+    });
+  }
+
+  // ---- Arrange: move the selected element among its siblings ------------------------------------
+  // Everything below treats target-supplied names as text: they only reach the DOM through escapeAttr().
+  const FRAMEWORK_GUARDS = new Set(["framework-managed"]);
+
+  function normalizeArrangement(raw) {
+    if (!isPlainObject(raw) || typeof raw.containerKey !== "string" || !raw.containerKey) return null;
+    const text = (value, fallback, max) => (typeof value === "string" && value ? value : fallback).slice(0, max);
+    // Bulk manifests omit `siblings` and `containers` entirely (Addendum 3): missing means "not carried", not "none".
+    const siblings = (Array.isArray(raw.siblings) ? raw.siblings : []).slice(0, 500).filter(item => isPlainObject(item) && typeof item.id === "string" && item.id)
+      .map(item => ({ id:item.id.slice(0, 300), name:text(item.name, item.id, 200), tag:text(item.tag, "", 40) }));
+    const total = Number.isInteger(raw.count) && raw.count > 0 ? Math.min(raw.count, 100000) : siblings.length;
+    if (!total) return null;
+    const containers = (Array.isArray(raw.containers) ? raw.containers : []).slice(0, 200)
+      .filter(item => isPlainObject(item) && typeof item.key === "string" && item.key)
+      .map(item => ({ key:item.key.slice(0, 300), name:text(item.name, item.key, 200) }));
+    const index = Number.isInteger(raw.index) && raw.index >= 0 ? raw.index : 0;
+    return {
+      containerKey: raw.containerKey.slice(0, 300),
+      containerName: text(raw.containerName, raw.containerKey, 200),
+      index: Math.min(index, total - 1),
+      count: Math.max(total, siblings.length),
+      siblings, containers,
+      complete: Array.isArray(raw.siblings) && raw.siblings.length > 0 && Array.isArray(raw.containers),
+      cssOrderAvailable: raw.cssOrderAvailable === true,
+      frameworkManaged: FRAMEWORKS.includes(raw.frameworkManaged) ? raw.frameworkManaged : null
+    };
+  }
+
+  const selectedArrangement = () => (live.selectedId ? arrangementOf(live.selectedId) : null);
+
+  // Bulk manifests (design:ready / design:targets) omit siblings and containers for very large groups
+  // (Addendum 3); the Arrange UI only trusts design:selected / design:applied, so ask for the selection again.
+  function fetchFullArrangement() {
+    const arrangement = selectedArrangement();
+    if (arrangement && arrangement.count > 0 && !arrangement.complete) {
+      sendDesignMessage({ type:"design:select", targetId:live.selectedId });
+    }
+  }
+
+  const arrangementOf = targetId => normalizeArrangement(live.targets.get(targetId)?.arrangement);
+
+  // DOM order unless the user chose CSS order; framework-managed parents default to CSS order (it leaves the DOM alone).
+  function moveStrategy(arrangement) {
+    if (!arrangement.cssOrderAvailable) return "dom";
+    return live.strategyChoice.get(arrangement.containerKey) || (arrangement.frameworkManaged ? "css-order" : "dom");
+  }
+
+  function arrangeHtml(targetId, arrangement) {
+    const strategy = moveStrategy(arrangement);
+    const last = arrangement.count - 1;
+    const button = (id, label, title, disabled) =>
+      `<button id="${id}" class="btn" type="button" title="${escapeAttr(title)}"${disabled ? " disabled" : ""}>${label}</button>`;
+    const items = arrangement.siblings.map(sibling =>
+      `<li class="live-sibling" tabindex="0" draggable="true" data-sibling-id="${escapeAttr(sibling.id)}"${sibling.id === targetId ? ' aria-current="true"' : ""}>`
+      + `<span class="sibling-grip" aria-hidden="true">⋮⋮</span><span class="sibling-name">${escapeAttr(sibling.name)}</span><small>${escapeAttr(sibling.tag)}</small></li>`).join("");
+    const destinations = arrangement.containers.filter(item => item.key !== arrangement.containerKey);
+    const hint = arrangement.frameworkManaged
+      ? `This subtree is managed by ${arrangement.frameworkManaged}: CSS order leaves its markup alone.`
+      : strategy === "css-order" ? "Keeps the markup and sets CSS order on the siblings instead." : "Reorders the element in the page markup; the HTML tab shows the result.";
+    const toggle = arrangement.cssOrderAvailable ? `
+      <div class="live-move-strategy"><span class="inspector-note">Move strategy</span>
+        <div class="segmented" role="group" aria-label="Move strategy">
+          <button id="liveMoveStrategyDom" type="button" class="${strategy === "dom" ? "active" : ""}" aria-pressed="${strategy === "dom"}">DOM order</button>
+          <button id="liveMoveStrategyCss" type="button" class="${strategy === "css-order" ? "active" : ""}" aria-pressed="${strategy === "css-order"}">CSS order</button>
+        </div>
+        <p class="inspector-note">${escapeAttr(hint)}</p>
+      </div>` : "";
+    const guard = live.moveGuard && arrangement.siblings.some(sibling => sibling.id === live.moveGuard.targetId) ? live.moveGuard : null;
+    const guardHtml = guard
+      ? `<p><strong>Move blocked${guard.guard ? ` (${escapeAttr(guard.guard)})` : ""}.</strong> ${escapeAttr(guard.message)}</p>`
+        + (guard.canForce ? '<button id="liveMoveForce" class="btn" type="button">Move anyway</button>' : "")
+      : "";
+    return `
+      <h3>Arrange</h3>
+      <p id="liveArrangeInfo" class="inspector-note">Position ${arrangement.index + 1} of ${arrangement.count} in <strong>${escapeAttr(arrangement.containerName)}</strong></p>
+      <div class="live-move-buttons" role="group" aria-label="Move among siblings">
+        ${button("liveMoveFirst", "⇤ First", "Move to the first position (Alt+Shift+Up)", arrangement.index <= 0)}
+        ${button("liveMovePrev", "↑ Earlier", "Move one position earlier (Alt+Up)", arrangement.index <= 0)}
+        ${button("liveMoveNext", "↓ Later", "Move one position later (Alt+Down)", arrangement.index >= last)}
+        ${button("liveMoveLast", "Last ⇥", "Move to the last position (Alt+Shift+Down)", arrangement.index >= last)}
+      </div>${toggle}
+      <ol id="liveSiblingList" class="live-sibling-list" aria-label="Siblings in order. Drag an item, or focus it and press Alt+Up or Alt+Down, to move it.">${items}</ol>
+      <div class="live-move-container">
+        <label for="liveMoveContainer">Move into another container</label>
+        <select id="liveMoveContainer"${destinations.length ? "" : " disabled"}>${destinations.length
+          ? destinations.map(item => `<option value="${escapeAttr(item.key)}">${escapeAttr(item.name)}</option>`).join("")
+          : "<option>No other containers</option>"}</select>
+        <button id="liveMoveInto" class="btn" type="button"${destinations.length ? "" : " disabled"}>Move into</button>
+      </div>
+      <div id="liveMoveGuard" class="live-move-guard" role="alert"${guardHtml ? "" : " hidden"}>${guardHtml}</div>`;
+  }
+
+  // Re-renders only the Arrange section, keeping keyboard focus on the same item or button.
+  function refreshArrange() {
+    const box = q("liveArrange");
+    const targetId = q("liveTargetName")?.dataset.targetId;
+    const arrangement = targetId ? arrangementOf(targetId) : null;
+    if (!box || !arrangement) return;
+    const active = document.activeElement;
+    const inside = active && box.contains(active) ? active : null;
+    const focusSibling = inside?.dataset?.siblingId;
+    const focusId = inside && !focusSibling ? inside.id : "";
+    box.innerHTML = arrangeHtml(targetId, arrangement);
+    bindArrange(targetId);
+    let next = null;
+    if (focusSibling) next = [...box.querySelectorAll("[data-sibling-id]")].find(item => item.dataset.siblingId === focusSibling);
+    else if (focusId) next = q(focusId);
+    if (next && !next.disabled) next.focus();
+  }
+
+  function pendingMove() {
+    return [live.inFlight, ...live.queue].some(op => op?.kind === "move");
+  }
+
+  // One move at a time: the siblings' positions are only known again once the target acknowledged the last one.
+  function requestMove(targetId, to, options = {}) {
+    if (!live.ready) return false;
+    const arrangement = options.arrangement || arrangementOf(targetId);
+    if (!arrangement || pendingMove()) return false;
+    const op = { kind:"move", targetId, to, strategy:options.strategy || moveStrategy(arrangement) };
+    if (options.force === true) op.force = true;
+    live.moveGuard = null;
+    refreshArrange();
+    return enqueueLiveOp(op);
+  }
+
+  function moveSelectedBy(kind) {
+    const arrangement = selectedArrangement();
+    if (!arrangement) return false;
+    const last = arrangement.count - 1;
+    const index = kind === "first" ? 0 : kind === "last" ? last : arrangement.index + (kind === "prev" ? -1 : 1);
+    if (index < 0 || index > last || index === arrangement.index) return false;
+    return requestMove(live.selectedId, { index }, { arrangement });
+  }
+
+  function moveSiblingBy(siblingId, step) {
+    const arrangement = selectedArrangement();
+    if (!arrangement) return false;
+    const from = arrangement.siblings.findIndex(sibling => sibling.id === siblingId);
+    const index = from + step;
+    if (from < 0 || index < 0 || index >= arrangement.count) return false;
+    return requestMove(siblingId, { index }, { arrangement });
+  }
+
+  function setMoveStrategy(strategy) {
+    const arrangement = selectedArrangement();
+    if (!arrangement || !arrangement.cssOrderAvailable) return;
+    live.strategyChoice.set(arrangement.containerKey, strategy);
+    live.moveGuard = null;
+    refreshArrange();
+  }
+
+  function noteMoveRejection(op, data, reason) {
+    const detail = isPlainObject(data.detail) ? data.detail : {};
+    const guard = typeof detail.guard === "string" ? detail.guard.slice(0, 40) : "";
+    const message = typeof detail.message === "string" && detail.message ? detail.message
+      : `The target refused the move (${typeof detail.reason === "string" && detail.reason ? detail.reason : reason}).`;
+    // Only the framework guard is overridable, and only when the bridge says so; every other guard protects form
+    // ownership, radio groups or label/aria references and offers no override.
+    live.moveGuard = { targetId:op.targetId, to:op.to, strategy:op.strategy, guard, message:message.slice(0, 300),
+      canForce: FRAMEWORK_GUARDS.has(guard) && detail.overridable !== false && op.force !== true };
+    refreshArrange();
+  }
+
+  function forceGuardedMove() {
+    const guard = live.moveGuard;
+    if (!guard || !guard.canForce) return;
+    requestMove(guard.targetId, guard.to, { strategy:guard.strategy, force:true, arrangement:selectedArrangement() });
+  }
+
+  function clearDropMarks() {
+    document.querySelectorAll(".live-sibling.drop-before, .live-sibling.drop-after, .live-sibling.is-dragging")
+      .forEach(item => item.classList.remove("drop-before", "drop-after", "is-dragging"));
+  }
+
+  function bindSibling(item) {
+    const id = item.dataset.siblingId;
+    item.addEventListener("keydown", event => {
+      const items = [...item.parentElement.querySelectorAll("[data-sibling-id]")];
+      const at = items.indexOf(item);
+      const step = { ArrowUp:-1, ArrowLeft:-1, ArrowDown:1, ArrowRight:1 }[event.key];
+      if (step && event.altKey) { event.preventDefault(); event.stopPropagation(); moveSiblingBy(id, step); return; }
+      if (step) { event.preventDefault(); items[at + step]?.focus(); return; }
+      if (event.key === "Home") { event.preventDefault(); items[0]?.focus(); return; }
+      if (event.key === "End") { event.preventDefault(); items[items.length - 1]?.focus(); return; }
+      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); sendDesignMessage({ type:"design:select", targetId:id }); }
+    });
+    // HTML5 drag and drop: the upper half of an item drops before it, the lower half after it.
+    item.addEventListener("dragstart", event => {
+      live.dragId = id;
+      item.classList.add("is-dragging");
+      try { event.dataTransfer.setData("text/plain", id); event.dataTransfer.effectAllowed = "move"; } catch (_) { /* optional */ }
+    });
+    item.addEventListener("dragend", () => { live.dragId = null; clearDropMarks(); });
+    const half = event => { const rect = item.getBoundingClientRect(); return event.clientY > rect.top + rect.height / 2; };
+    item.addEventListener("dragover", event => {
+      if (!live.dragId || live.dragId === id) return;
+      event.preventDefault();
+      try { event.dataTransfer.dropEffect = "move"; } catch (_) { /* optional */ }
+      const after = half(event);
+      item.classList.toggle("drop-before", !after);
+      item.classList.toggle("drop-after", after);
+    });
+    item.addEventListener("dragleave", () => item.classList.remove("drop-before", "drop-after"));
+    item.addEventListener("drop", event => {
+      event.preventDefault();
+      const dragged = live.dragId;
+      const after = half(event);
+      live.dragId = null;
+      clearDropMarks();
+      if (!dragged || dragged === id) return;
+      const arrangement = selectedArrangement();
+      if (!arrangement || !arrangement.siblings.some(sibling => sibling.id === dragged)) return;
+      requestMove(dragged, after ? { after:id } : { before:id }, { arrangement });
+    });
+  }
+
+  function bindArrange(targetId) {
+    if (!q("liveArrange")) return;
+    [["liveMoveFirst", "first"], ["liveMovePrev", "prev"], ["liveMoveNext", "next"], ["liveMoveLast", "last"]]
+      .forEach(([id, kind]) => q(id)?.addEventListener("click", () => moveSelectedBy(kind)));
+    q("liveMoveStrategyDom")?.addEventListener("click", () => setMoveStrategy("dom"));
+    q("liveMoveStrategyCss")?.addEventListener("click", () => setMoveStrategy("css-order"));
+    q("liveMoveInto")?.addEventListener("click", () => {
+      const key = q("liveMoveContainer")?.value;
+      // Re-parenting is a DOM move; CSS order cannot leave the container.
+      if (key) requestMove(targetId, { container:key }, { strategy:"dom" });
+    });
+    q("liveMoveForce")?.addEventListener("click", forceGuardedMove);
+    q("liveSiblingList")?.querySelectorAll("[data-sibling-id]").forEach(bindSibling);
+  }
+
+  // Alt+Arrow moves the selected element while the Target App view has focus; text fields and the
+  // sibling list keep Alt+Arrow for themselves. Add Shift for first/last.
+  const typingTarget = node => {
+    if (!(node instanceof Element)) return false;
+    if (node.isContentEditable || node.tagName === "TEXTAREA" || node.tagName === "SELECT") return true;
+    return node.tagName === "INPUT" && !["button", "checkbox", "radio", "color", "range", "submit", "reset", "file", "image"].includes(node.type);
+  };
+  document.addEventListener("keydown", event => {
+    if (!event.altKey || event.ctrlKey || event.metaKey || event.defaultPrevented) return;
+    // Up/Down only: Alt+Left/Right remain the browser's Back/Forward.
+    const step = { ArrowUp:-1, ArrowDown:1 }[event.key];
+    if (!step || !live.viewActive || !live.ready || composerView.hidden || !live.selectedId || exportDialog.open) return;
+    if (typingTarget(event.target) || event.target.closest?.("#liveSiblingList")) return;
+    event.preventDefault();
+    moveSelectedBy(event.shiftKey ? (step < 0 ? "first" : "last") : (step < 0 ? "prev" : "next"));
+  });
+
+  // ---- runtime warnings from the target (design:warning) --------------------------------------------
+  function noteWarning(data) {
+    const message = typeof data.message === "string" ? data.message.trim().slice(0, 300) : "";
+    if (data.kind !== "runtime-error" || !message) return;
+    live.warnings.push({ message, targetId: typeof data.targetId === "string" ? data.targetId.slice(0, 300) : "" });
+    if (live.warnings.length > MAX_WARNINGS) live.warnings.shift();
+    renderWarnings();
+  }
+
+  function warningLabel(warning) {
+    return warning.targetId && warning.targetId !== "global" ? (live.targetMeta[warning.targetId]?.name || warning.targetId) : "";
+  }
+
+  // textContent only: the message comes from the (untrusted) page under edit.
+  function renderWarnings() {
+    if (!bridgeWarning || !liveCodeWarnings) return;
+    const latest = live.warnings[live.warnings.length - 1];
+    bridgeWarning.hidden = !latest;
+    if (latest) {
+      const label = warningLabel(latest);
+      bridgeWarningText.textContent = `Runtime error in the target${label ? ` after changing ${label}` : ""}: ${latest.message}`;
+    }
+    liveCodeWarnings.hidden = !live.warnings.length;
+    liveCodeWarnings.replaceChildren(...live.warnings.map(warning => {
+      const item = document.createElement("li");
+      const label = warningLabel(warning);
+      item.textContent = `${label ? `${label}: ` : ""}${warning.message}`;
+      return item;
+    }));
+  }
+  q("bridgeWarningDismiss")?.addEventListener("click", () => { live.warnings = []; renderWarnings(); });
+
+  // ---- pop-out window ---------------------------------------------------------------------------------
+  // The target opens in a named window that Studio accepts as the expected source (same origin rules as the
+  // iframe). The iframe is unloaded so only one copy of the app runs, and the bridge draws its own outline.
+  function renderPopoutState() {
+    const on = live.popoutMode;
+    if (targetAppFrameEl) targetAppFrameEl.hidden = on;
+    if (popoutPlaceholder) popoutPlaceholder.hidden = !on;
+    targetAppContainerEl?.classList.toggle("is-popout", on);
+    const layer = targetAppContainerEl?.querySelector(".live-overlay-layer");
+    if (layer) layer.hidden = on;
+    if (popoutText) {
+      popoutText.textContent = live.popup && !live.popup.closed
+        ? `The target is open in its own window ("${POPOUT_NAME}"). Pick elements there; the inspector here edits them.`
+        : "The pop-out window was closed. Dock back to the preview, or pop it out again.";
+    }
+  }
+
+  function watchPopup() {
+    if (live.popup && !live.popup.closed) return;
+    clearInterval(live.popupTimer);
+    live.popupTimer = null;
+    clearTimeout(live.noBridgeTimer);
+    live.popup = null;
+    detachSession();
+    setBridgeStatus("Disconnected (window closed)", "missing");
+    renderLivePanels();
+  }
+
+  function leavePopout(closeWindow) {
+    if (!live.popoutMode) return;
+    clearInterval(live.popupTimer);
+    live.popupTimer = null;
+    const win = live.popup;
+    live.popoutMode = false;
+    live.popup = null;
+    if (closeWindow) { try { if (win && !win.closed) win.close(); } catch (_) { /* already gone */ } }
+    renderPopoutState();
+  }
+
+  // Window features make browsers open a separate window instead of a tab. The size is capped by the screen,
+  // and the window is offset from Studio so the two are not stacked exactly on top of each other.
+  function popoutFeatures() {
+    const clamp = (value, min, max) => Math.max(min, Math.min(max, Math.round(value)));
+    const room = (size, fallback) => (Number.isFinite(size) && size > 0 ? size : fallback);
+    const width = clamp(room(window.screen?.availWidth, 1280) - 80, 600, 1280);
+    const height = clamp(room(window.screen?.availHeight, 860) - 80, 400, 860);
+    const left = clamp((window.screenX || 0) + 40, 0, 20000);
+    const top = clamp((window.screenY || 0) + 40, 0, 20000);
+    return `popup=yes,width=${width},height=${height},left=${left},top=${top}`;
+  }
+
+  function popOutTarget() {
+    if (live.popoutMode && live.popup && !live.popup.closed) { try { live.popup.focus(); } catch (_) { /* ignore */ } return; }
+    const resolved = resolveTarget(String(targetAppUrlInput.value || live.url || DEFAULT_TARGET_URL).trim());
+    if (!resolved) return;
+    let win = null;
+    try { win = window.open(resolved.href, POPOUT_NAME, popoutFeatures()); } catch (_) { win = null; }
+    if (!win) { setBridgeStatus("Pop-up blocked: allow pop-ups for Studio, then try again", "error"); return; }
+    clearTimeout(live.noBridgeTimer);
+    clearInterval(live.popupTimer);
+    detachSession();
+    live.popup = win;
+    live.popoutMode = true;
+    live.url = resolved.href;
+    live.expectedOrigin = resolved.origin;
+    if (targetAppFrameEl) targetAppFrameEl.src = "about:blank";
+    setBridgeStatus("Connecting…", "connecting");
+    armNoBridgeTimer();
+    live.popupTimer = setInterval(watchPopup, POPOUT_POLL_MS);
+    switchToTargetView();
+    renderLivePanels();
+  }
+
+  function dockTarget() {
+    const url = live.url;
+    leavePopout(true);
+    if (url) connectTargetApp(url); else renderLivePanels();
+  }
+
+  popOutBtn?.addEventListener("click", popOutTarget);
+  q("bridgeDock")?.addEventListener("click", dockTarget);
+  q("bridgeFocusPopout")?.addEventListener("click", () => {
+    if (live.popup && !live.popup.closed) { try { live.popup.focus(); } catch (_) { /* ignore */ } }
+    else setBridgeStatus("Disconnected (window closed)", "missing");
+  });
+
+  // ---- code panel -----------------------------------------------------------
+  // Selector/name/stability per target id, remembered from manifests and ledgers so the
+  // persisted CSS can be generated from Studio's saved overrides even after a reload.
+  function noteTargetMeta(source) {
+    const id = typeof source?.id === "string" ? source.id : source?.targetId;
+    if (typeof id !== "string" || !id) return;
+    const meta = live.targetMeta[id] || {};
+    setOwn(live.targetMeta, id, {
+      selector: typeof source.selector === "string" && source.selector ? source.selector : meta.selector || "",
+      name: typeof source.name === "string" && source.name ? source.name : meta.name || id,
+      stable: typeof source.stable === "boolean" ? source.stable : meta.stable
+    });
+  }
+
+  // A target that got an author data-design-id reports the id it replaced (manifest `previousId`, an additive v0.2
+  // field). The saved override follows the element to the new id, so the edit is neither lost nor reported as a
+  // conflict. True when something was re-keyed.
+  // An id that is still a live target in the same list was not replaced, so it is never re-keyed.
+  function followPromotedTargets(list) {
+    let moved = false;
+    const liveIds = new Set(list.map(target => target.id));
+    list.forEach(target => {
+      const previous = target.previousId;
+      if (typeof previous !== "string" || !previous || previous === target.id || liveIds.has(previous)) return;
+      if (live.selectedId === previous) live.selectedId = target.id;
+      if (!Object.hasOwn(live.overrides, previous)) return;
+      const current = Object.hasOwn(live.overrides, target.id) ? live.overrides[target.id] : {};
+      setOwn(live.overrides, target.id, { ...live.overrides[previous], ...current });
+      delete live.overrides[previous];
+      delete live.targetMeta[previous];
+      moved = true;
+    });
+    return moved;
+  }
+
+  // The bridge's `[data-design-id="..."]` form for an id (same escaping as fontkit-bridge.js): `"` and `\` with a
+  // backslash, characters special in CSS or HTML as hex escapes, so no raw `; { } < >` reaches the stylesheet.
+  function designIdSelector(id) {
+    const value = String(id).replace(/["\\]|[\u0000-\u001f\u007f;{}<>()/*!]/g,
+      ch => (ch === '"' || ch === "\\" ? `\\${ch}` : `\\${ch.codePointAt(0).toString(16)} `));
+    return `[data-design-id="${value}"]`;
+  }
+
+  function cssDeclaration(key, value) {
+    if (key === "fontSize") return `${value}px`;
+    if (key === "letterSpacing") return `${value}em`;
+    return String(value);
+  }
+
+  // The persisted stylesheet: Studio's canonical (acknowledged) overrides, not the session ledger.
+  // Font stylesheets: what the target acknowledged, plus the library families Studio's saved overrides use,
+  // so the persisted CSS still loads them after the target (and its ledger) was reloaded.
+  function liveImports() {
+    const urls = [...live.changes.imports];
+    Object.values(live.overrides).forEach(patch => {
+      const font = typeof patch.fontFamily === "string" ? libraryFontForStack(patch.fontFamily) : null;
+      const url = font ? safeFontStylesheet(fontStylesheetUrl(font)) : "";
+      if (url && !urls.includes(url)) urls.push(url);
+    });
+    return urls;
+  }
+
+  function liveCss() {
+    const lines = [];
+    const imports = liveImports();
+    // @import rules must precede every other rule, so they come first.
+    imports.forEach(url => lines.push(`@import url("${url}");`));
+    if (imports.length) lines.push("");
+    lines.push(`/* Font Kit Studio live overrides${live.url ? ` for ${commentText(live.url)}` : ""} */`);
+    if (live.changes.structure.length) {
+      lines.push("", "/* Structural DOM moves (reordered or re-parented elements) are not CSS: see the HTML tab. CSS-order moves appear below as order declarations. */");
+    }
+    const tokens = Object.entries(live.savedTokens).filter(([, value]) => safeCssText(value) !== null);
+    if (tokens.length) {
+      lines.push("", ":root {");
+      tokens.forEach(([name, value]) => lines.push(`  ${name}: ${value} !important;`));
+      lines.push("}");
+    }
+    let rules = 0;
+    Object.entries(live.overrides).forEach(([targetId, patch]) => {
+      const declarations = Object.entries(patch).filter(([key]) => LIVE_CSS[key])
+        .map(([key, value]) => [LIVE_CSS[key], cssDeclaration(key, value)])
+        .filter(([, value]) => safeCssText(value) !== null);
+      if (!declarations.length) return;
+      const meta = live.targetMeta[targetId] || {};
+      const name = meta.name || targetId;
+      const assumed = !meta.selector;
+      const selector = meta.selector ? safeCssText(meta.selector, MAX_SELECTOR_LENGTH, { selector:true }) : designIdSelector(targetId);
+      lines.push("");
+      if (!selector || safeCssText(selector, MAX_SELECTOR_LENGTH, { selector:true }) === null) {
+        lines.push(`/* ${commentText(name)} (${commentText(targetId)}) — skipped: the target reported no safe selector */`);
+        return;
+      }
+      const note = meta.stable === false ? " — auto-discovered — add data-design-id for a stable selector"
+        : assumed ? " — selector assumed from the id; connect the target to confirm" : "";
+      lines.push(`/* ${commentText(name)} (${commentText(targetId)})${note} */`, `${selector} {`);
+      declarations.forEach(([prop, value]) => lines.push(`  ${prop}: ${value} !important;`));
+      lines.push("}");
+      rules += 1;
+    });
+    if (!tokens.length && !rules) lines.push("/* No live style overrides yet. */");
+    return lines.join("\n");
+  }
+
+  function liveHtml() {
+    const blocks = live.changes.structure.map(entry =>
+      `<!-- Structure: ${htmlCommentText(entry.name)} ${htmlCommentText(entry.selector)} — child order: ${entry.order.map(htmlCommentText).join(", ")} -->\n${entry.html}`);
+    live.changes.targets.filter(entry => entry.text !== null).forEach(entry => {
+      blocks.push(`<!-- ${htmlCommentText(entry.name)} (${htmlCommentText(entry.targetId)}) -->\n${entry.html}`);
+    });
+    return blocks.length ? blocks.join("\n\n") : "<!-- No text changes yet. -->";
+  }
+
+  function liveJson() {
+    return JSON.stringify({ target:live.url, revision:live.revision, overrides:live.overrides }, null, 2);
+  }
+
+  const CODE_FORMATS = {
+    css: { build:liveCss, label:"CSS", file:"fontkit-overrides.css", mime:"text/css" },
+    html: { build:liveHtml, label:"HTML", file:"fontkit-changes.html", mime:"text/html" },
+    json: { build:liveJson, label:"JSON", file:"fontkit-overrides.json", mime:"application/json" }
+  };
+
+  function renderLiveCode() {
+    if (!liveCodeOutput) return;
+    liveCodeOutput.textContent = CODE_FORMATS[live.codeTab].build();
+    if (liveChangeCount) liveChangeCount.textContent = String(Object.keys(live.overrides).length + Object.keys(live.savedTokens).length + live.changes.structure.length);
+    Object.entries(codeTabs).forEach(([key, button]) => {
+      button?.classList.toggle("active", key === live.codeTab);
+      button?.setAttribute("aria-selected", String(key === live.codeTab));
+    });
+  }
+
+  function setCodeStatus(text, kind = "") {
+    if (!liveCodeStatus) return;
+    liveCodeStatus.textContent = text;
+    liveCodeStatus.dataset.state = kind;
+  }
+
+  Object.entries(codeTabs).forEach(([key, button]) => button?.addEventListener("click", () => { live.codeTab = key; renderLiveCode(); }));
+
+  q("liveCodeCopy")?.addEventListener("click", async () => {
+    const text = liveCodeOutput.textContent;
+    const label = CODE_FORMATS[live.codeTab].label;
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard API unavailable");
+      await navigator.clipboard.writeText(text);
+      setCodeStatus(`Copied ${label} to the clipboard.`);
+    } catch {
+      const scratch = document.createElement("textarea");
+      scratch.value = text;
+      scratch.setAttribute("readonly", "");
+      scratch.style.cssText = "position:fixed;left:-9999px;top:0;opacity:0";
+      document.body.appendChild(scratch);
+      scratch.select();
+      let copied = false;
+      try { copied = document.execCommand("copy"); } catch { copied = false; }
+      scratch.remove();
+      setCodeStatus(copied ? `Copied ${label} to the clipboard.` : "Copy failed: select the code and copy it manually.", copied ? "" : "error");
+    }
+  });
+
+  q("liveCodeDownload")?.addEventListener("click", () => {
+    const format = CODE_FORMATS[live.codeTab];
+    const blob = new Blob([liveCodeOutput.textContent], { type:format.mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = format.file; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+    setCodeStatus(`Downloaded ${format.file}.`);
+  });
+
+  // ---- dev-server sync ------------------------------------------------------
+  function setSyncAvailability(available, title) {
+    live.syncAvailable = available;
+    if (liveCodeSync) { liveCodeSync.disabled = !available; liveCodeSync.title = title; }
+    if (liveCodeAutoSync) {
+      liveCodeAutoSync.disabled = !available;
+      liveCodeAutoSync.title = title;
+      if (!available) liveCodeAutoSync.checked = false;
+    }
+  }
+
+  async function detectDevServerSync() {
+    if (location.protocol === "file:") {
+      setSyncAvailability(false, "Sync to file needs the dev server (python scripts/serve.py); it is unavailable when Studio is opened from file://.");
+      return;
+    }
+    try {
+      const response = await fetch(new URL("/__fontkit/status", location.href), { cache:"no-store" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const status = await response.json();
+      if (status && status.sync === true) {
+        live.syncPath = typeof status.overrides === "string" ? status.overrides : "the overrides stylesheet";
+        setSyncAvailability(true, `Writes ${live.syncPath} through the Font Kit dev server.`);
+      } else {
+        setSyncAvailability(false, "The Font Kit dev server is running with sync disabled (--no-sync).");
+      }
+      const queryTarget = new URLSearchParams(location.search).get("target");
+      if (status && typeof status.target === "string" && safeTargetUrl(status.target) && !queryTarget && !live.url
+          && targetAppUrlInput && targetAppUrlInput.value === DEFAULT_TARGET_URL) {
+        targetAppUrlInput.value = status.target;
+      }
+    } catch {
+      setSyncAvailability(false, "No Font Kit dev server answered /__fontkit/status. Run python scripts/serve.py to enable Sync to file.");
+    }
+  }
+
+  async function writeOverrides() {
+    if (!live.syncAvailable) return;
+    if (live.syncBusy) { live.syncQueued = true; return; }
+    live.syncBusy = true;
+    try {
+      do {
+        live.syncQueued = false;
+        const css = liveCss();
+        setCodeStatus("Saving…", "saving");
+        try {
+          const response = await window.fetch(new URL("/__fontkit/overrides.css", location.href), {
+            method:"PUT", headers:{ "Content-Type":"text/css" }, body:css, cache:"no-store" });
+          const info = await response.json().catch(() => ({}));
+          if (!response.ok || info.ok !== true) throw new Error(info.error || `HTTP ${response.status}`);
+          if (!live.syncTimer && !live.syncQueued) setCodeStatus(`Saved ${info.bytes ?? css.length} bytes to ${info.path || live.syncPath}.`, "saved");
+        } catch (error) {
+          setCodeStatus(`Sync failed: ${error.message}`, "error");
+        }
+      } while (live.syncQueued);
+    } finally {
+      live.syncBusy = false;
+      if (live.syncTimer) setCodeStatus("Sync pending…", "pending");
+    }
+  }
+
+  function scheduleAutoSync() {
+    // Never while a request is pending or queued (saved state may be mid-change), or an unresolved conflict
+    // (which includes a Reapply that has not finished).
+    if (!liveCodeAutoSync?.checked || !live.syncAvailable || live.conflict || live.inFlight || live.queue.length) return;
+    clearTimeout(live.syncTimer);
+    setCodeStatus("Sync pending…", "pending");
+    live.syncTimer = setTimeout(() => { live.syncTimer = null; writeOverrides(); }, AUTO_SYNC_MS);
+  }
+
+  liveCodeSync?.addEventListener("click", () => writeOverrides());
+  liveCodeAutoSync?.addEventListener("change", () => { if (liveCodeAutoSync.checked) scheduleAutoSync(); });
+
+  // ---- panels -----------------------------------------------------------------
+  function renderLivePanels() {
+    renderOverlays();
+    renderPopoutState();
+    renderWarnings();
+    renderReconnectBanner();
+    renderLiveCode();
+    if (live.viewActive) renderLiveInspector();
+  }
+
+  q("liveReapply")?.addEventListener("click", reapplyStudioOverrides);
+  q("liveAcceptTarget")?.addEventListener("click", acceptTargetState);
+
+  // overlay:true only while popped out: the pop-out cannot be overlaid by Studio, so the bridge outlines elements itself.
+  function sendMode() {
+    sendDesignMessage({ type:"design:mode", mode:live.mode, overlay:live.popoutMode });
+  }
+
+  function setLiveMode(mode) {
+    live.mode = mode === "interact" ? "interact" : "select";
+    [[bridgeModeSelect, "select"], [bridgeModeInteract, "interact"]].forEach(([button, value]) => {
+      button?.classList.toggle("active", live.mode === value);
+      button?.setAttribute("aria-pressed", String(live.mode === value));
+    });
+    if (live.mode === "interact") { live.hoverId = null; live.hoverRect = null; }
+    if (live.ready) sendMode();
+    renderOverlays();
+    if (live.viewActive && !live.selectedId) renderLiveInspector();
+  }
+  bridgeModeSelect?.addEventListener("click", () => setLiveMode("select"));
+  bridgeModeInteract?.addEventListener("click", () => setLiveMode("interact"));
+
+  // ---- explicit composition sync (legacy composition design:update) ---------------
+  function compositionPatch() {
+    const tokens = {};
+    state.slots.forEach(slot => {
+      if (slot.type !== "text") return;
+      const stack = cssStack(byFamily(slot.family));
+      const r = (slot.role || "").toLowerCase();
+      if (r.includes("title") || r.includes("display") || r.includes("hero")) tokens["--font-display"] = stack;
+      else if (r.includes("lead") || r.includes("body") || r.includes("deck")) tokens["--font-sans"] = stack;
+      else if (r.includes("editorial") || r.includes("quote") || r.includes("narrative") || r.includes("serif")) tokens["--font-serif"] = stack;
+      else if (r.includes("mono") || r.includes("data") || r.includes("caption") || r.includes("code")) tokens["--font-mono"] = stack;
+    });
+    if (!tokens["--font-display"] && state.slots[0]) tokens["--font-display"] = cssStack(byFamily(state.slots[0].family));
+    if (!tokens["--font-sans"] && state.slots[1]) tokens["--font-sans"] = cssStack(byFamily(state.slots[1].family));
+    if (!tokens["--font-serif"] && state.slots[2]) tokens["--font-serif"] = cssStack(byFamily(state.slots[2].family));
+    if (!tokens["--font-mono"] && state.slots[3]) tokens["--font-mono"] = cssStack(byFamily(state.slots[3].family));
+
+    const slots = state.slots.map((slot, index) => {
+      const payload = { id:slot.id, index, role:slot.role, type:slot.type };
+      if (slot.type === "text") {
+        Object.assign(payload, { fontFamily:cssStack(byFamily(slot.family)), weight:slot.weight, size:slot.size,
+          lineHeight:slot.lineHeight, tracking:slot.tracking, align:slot.align, colorHex:resolvedColor(slot), transform:slot.transform,
+          text:slot.text, textTouched:Boolean(slot.textTouched) });
+      } else if (slot.type === "image") {
+        Object.assign(payload, { imageName:slot.imageName, assetDataUrl:slot.assetDataUrl, imageWidth:slot.imageWidth, opacity:slot.opacity });
+      } else if (slot.type === "rule") {
+        Object.assign(payload, { ruleWidth:slot.ruleWidth, ruleThickness:slot.ruleThickness, colorHex:resolvedColor(slot) });
+      } else if (slot.type === "spacer") {
+        payload.spacerHeight = slot.spacerHeight;
+      } else if (slot.type === "row") {
+        payload.children = (slot.children || []).map(child => ({ id:child.id, role:child.role, type:child.type,
+          fontFamily:child.family ? cssStack(byFamily(child.family)) : undefined, text:child.text,
+          assetDataUrl:child.assetDataUrl, imageWidth:child.imageWidth }));
+      }
+      return payload;
+    });
+    return { tokens, slots, layout:{ order:slots.map(s => ({ id:s.id, role:s.role, index:s.index })) } };
+  }
+
+  let liveSyncDebounceTimer = null;
+  // Streams composition changes only after the user explicitly synced in this session.
+  function broadcastLiveState(immediate = false) {
+    clearTimeout(liveSyncDebounceTimer);
+    liveSyncDebounceTimer = null;
+    if (!live.ready || !live.compositionLinked) return;
+    const run = () => enqueueLiveOp({ kind:"composition", patch:compositionPatch() });
+    if (immediate) run(); else liveSyncDebounceTimer = setTimeout(run, 20);
+  }
+
+  function syncToLiveApp() {
+    if (!live.ready) {
+      composerStatus.textContent = "Connect a bridge-instrumented target app before syncing the composition.";
+      return;
+    }
+    live.compositionLinked = true;
+    broadcastLiveState(true);
+    composerStatus.textContent = "Composition sent to the live app. Specimen edits keep streaming until the target reconnects.";
     if (syncBtnEl) {
       syncBtnEl.textContent = "✓ Synced!";
       setTimeout(() => { syncBtnEl.textContent = "⚡ Sync to Live App"; }, 1400);
     }
   }
-
   if (syncBtnEl) syncBtnEl.addEventListener("click", syncToLiveApp);
 
-  function connectTargetApp(url) {
-    if (!targetAppFrameEl) return;
-    const targetUrl = url || targetAppUrlInput.value || "http://localhost:8000/";
-
-    // Anti-recursion guard: Never embed Font Kit Studio inside itself
-    if (/font_kit_studio|font-kit-studio/i.test(targetUrl) || targetUrl.replace(/\/$/, "") === window.location.href.replace(/\/$/, "")) {
-      setBridgeStatus("Recursion Blocked", false);
-      console.warn("[FontKitStudio] Blocked recursive self-embedding:", targetUrl);
-      if (targetAppUrlInput) targetAppUrlInput.value = "http://localhost:8000/";
-      return;
-    }
-
-    targetAppFrameEl.src = targetUrl;
-    setBridgeStatus("Connecting…", true);
-
-    targetAppFrameEl.onload = () => {
-      connectedTargetWindow = targetAppFrameEl.contentWindow;
-      setTimeout(() => {
-        sendDesignMessage({
-          type: "design:hello",
-          protocolVersion: 1,
-          sessionId: "fks-" + Date.now()
-        });
-      }, 250);
-    };
-  }
-
-  
-  const btnRestoreOriginalText = document.getElementById("btnRestoreOriginalText");
+  const btnRestoreOriginalText = q("btnRestoreOriginalText");
   if (btnRestoreOriginalText) {
     btnRestoreOriginalText.addEventListener("click", () => {
+      if (!live.ready) { composerStatus.textContent = "Connect a target app before restoring its text."; return; }
       state.slots.forEach(slot => { slot.textTouched = false; });
-      sendDesignMessage({ type: "design:restore-text" });
-      setBridgeStatus("Original Text Restored", true);
+      enqueueLiveOp({ kind:"restore" });
       btnRestoreOriginalText.textContent = "✓ Restored!";
       setTimeout(() => { btnRestoreOriginalText.textContent = "↻ Restore Page Text"; }, 1500);
     });
   }
 
-  
   // Device Viewport & Theater Fullscreen Controller
   const composerShellEl = document.querySelector(".composer-shell");
-  const btnToggleFullscreen = document.getElementById("btnToggleFullscreen");
-  const btnDeviceDesktop = document.getElementById("btnDeviceDesktop");
-  const btnDeviceLaptop = document.getElementById("btnDeviceLaptop");
-  const btnDeviceMobile = document.getElementById("btnDeviceMobile");
-  const btnDeviceFluid = document.getElementById("btnDeviceFluid");
+  const btnToggleFullscreen = q("btnToggleFullscreen");
+  const btnDeviceDesktop = q("btnDeviceDesktop");
+  const btnDeviceLaptop = q("btnDeviceLaptop");
+  const btnDeviceMobile = q("btnDeviceMobile");
+  const btnDeviceFluid = q("btnDeviceFluid");
   const allDeviceBtns = [btnDeviceDesktop, btnDeviceLaptop, btnDeviceMobile, btnDeviceFluid].filter(Boolean);
 
   function setDeviceWidth(width, activeBtn) {
     allDeviceBtns.forEach(btn => btn.classList.remove("active"));
     if (activeBtn) activeBtn.classList.add("active");
     if (targetAppContainerEl) {
-      if (width === "100%") {
-        targetAppContainerEl.style.maxWidth = "100%";
-        targetAppContainerEl.style.width = "100%";
-      } else {
-        targetAppContainerEl.style.maxWidth = width;
-        targetAppContainerEl.style.width = width;
-      }
+      targetAppContainerEl.style.maxWidth = width;
+      targetAppContainerEl.style.width = width;
     }
   }
 
@@ -2922,12 +4956,21 @@ if (remembered) kitId.value = remembered;
       switchToTargetView();
     });
   }
+  targetAppUrlInput?.addEventListener("keydown", event => {
+    if (event.key === "Enter") { connectTargetApp(targetAppUrlInput.value); switchToTargetView(); }
+  });
 
   function switchToSpecimenView() {
     if (viewSpecimenBtn) viewSpecimenBtn.classList.add("active");
     if (viewTargetBtn) viewTargetBtn.classList.remove("active");
     if (composerCanvasEl) composerCanvasEl.style.display = "";
     if (targetAppContainerEl) targetAppContainerEl.style.display = "none";
+    live.viewActive = false;
+    if (liveCodePanel) liveCodePanel.hidden = true;
+    slotInspector.setAttribute("aria-label", "Selected slot inspector");
+    renderOverlays();
+    renderReconnectBanner();
+    renderInspector();
   }
 
   function switchToTargetView() {
@@ -2935,124 +4978,67 @@ if (remembered) kitId.value = remembered;
     if (viewSpecimenBtn) viewSpecimenBtn.classList.remove("active");
     if (composerCanvasEl) composerCanvasEl.style.display = "none";
     if (targetAppContainerEl) targetAppContainerEl.style.display = "block";
-    if (!targetAppFrameEl.src || targetAppFrameEl.src === "about:blank") {
-      connectTargetApp(targetAppUrlInput.value);
-    } else {
-      broadcastLiveState(true);
-    }
+    live.viewActive = true;
+    if (liveCodePanel) liveCodePanel.hidden = false;
+    if (!targetAppFrameEl.getAttribute("src")) connectTargetApp(targetAppUrlInput.value);
+    renderLivePanels();
   }
 
   if (viewSpecimenBtn) viewSpecimenBtn.addEventListener("click", switchToSpecimenView);
   if (viewTargetBtn) viewTargetBtn.addEventListener("click", switchToTargetView);
 
-  window.addEventListener("message", (event) => {
-    const data = event.data;
-    if (!data || typeof data !== "object") return;
-
-    if (data.type === "design:bridge-ready") {
-      setBridgeStatus("Target Bridge Detected");
-      sendDesignMessage({
-        type: "design:hello",
-        protocolVersion: 1,
-        sessionId: "fks-" + Date.now()
-      });
-    } else if (data.type === "design:ready") {
-      const targetCount = data.targets ? data.targets.length : 0;
-      setBridgeStatus(`Connected (${targetCount} targets)`, true);
-      broadcastLiveState(true);
-    } else if (data.type === "design:applied") {
-      targetRevision = data.revision;
-      setBridgeStatus(`Live Synced (rev ${targetRevision})`, true);
-    } else if (data.type === "design:select-slot") {
-      // Target webapp clicked an element -> select corresponding slot in composer
-      const targetId = data.targetId;
-      const roleLower = (data.role || "").toLowerCase();
-      const idLower = (data.targetId || "").toLowerCase();
-
-      let matched = state.slots.find(s => s.targetId === targetId || s.id === targetId);
-      if (!matched) {
-        // Map by semantic role
-        matched = state.slots.find(s => {
-          const sr = (s.role || "").toLowerCase();
-          if (idLower.includes("title") || roleLower.includes("display")) return sr === "h1" || sr === "title" || sr === "hero";
-          if (idLower.includes("tagline") || roleLower.includes("editorial")) return sr === "accent" || sr === "editorial" || sr === "tagline";
-          if (idLower.includes("wordmark") || roleLower.includes("brand")) return sr === "wordmark";
-          if (idLower.includes("deck") || roleLower.includes("body")) return sr === "body";
-          if (idLower.includes("mark") || idLower.includes("graphic") || roleLower.includes("image")) return sr === "image";
-          if (idLower.includes("stat") || idLower.includes("badge") || roleLower.includes("metric")) return sr === "metadata";
-          return false;
-        });
-      }
-
-      if (!matched && state.slots.length > 0) {
-        matched = state.slots[0];
-      }
-
-      if (matched) {
-        matched.targetId = targetId;
-        state.selectedId = matched.id;
-        if (!matched.textTouched && data.currentText) {
-          matched.text = data.currentText;
-        }
-        if (data.name) {
-          matched.role = data.name;
-        }
-        if (data.computed && data.computed.fontSize) {
-          const parsed = Math.round(parseFloat(data.computed.fontSize));
-          if (parsed > 8 && parsed < 200) {
-            matched.size = parsed;
-          }
-        }
-        renderComposer();
-        setBridgeStatus(`Selected: ${data.name || data.role} (${matched.size}px)`, true);
-      }
-    }
-  });
-
-  // Streaming live hook into renderCanvas for real-time live typing and slider adjustments
+  // Streaming hooks: composition changes reach the target only after an explicit Sync to Live App.
   const originalRenderCanvas = renderCanvas;
   renderCanvas = function() {
     originalRenderCanvas();
-    if (typeof broadcastLiveState === "function") {
-      broadcastLiveState(false);
-    }
+    broadcastLiveState(false);
   };
 
-  // Streaming live hook into applyCompositionPreset
   const originalApplyCompositionPreset = applyCompositionPreset;
   applyCompositionPreset = function(name) {
     originalApplyCompositionPreset(name);
-    if (typeof broadcastLiveState === "function") {
-      broadcastLiveState(true);
-    }
+    broadcastLiveState(true);
   };
 
-  
-  // Anti-recursion guard: If Studio itself is embedded inside an iframe (Modality B),
-  // hide the recursive Target Bridge connector bar and target iframe container.
-  if (window.self !== window.top) {
-    const bridgeBar = document.getElementById("targetAppBridgeBar");
+  // Anti-recursion guard (the only one): if Studio itself is embedded in an iframe,
+  // hide the Target Bridge connector and preview so Studio never nests itself.
+  const studioEmbedded = window.self !== window.top;
+  if (studioEmbedded) {
+    const bridgeBar = q("targetAppBridgeBar");
     if (bridgeBar) bridgeBar.style.display = "none";
     if (targetAppContainerEl) targetAppContainerEl.style.display = "none";
     if (viewTargetBtn) viewTargetBtn.style.display = "none";
     if (viewSpecimenBtn) viewSpecimenBtn.style.display = "none";
   }
 
-  if (window.parent && window.parent !== window) {
-    window.parent.postMessage({ type: "design:hello", protocolVersion: 1, sessionId: "fks-" + Date.now() }, "*");
-  }
+  renderLiveCode();
+  detectDevServerSync();
 
-  const rememberedComposerKits = localStorage.getItem("font-kit-studio-kit-ids");
+  const rememberedComposerKits = readStore("font-kit-studio-kit-ids");
   if (rememberedComposerKits) {
     composerKitIds.value = rememberedComposerKits;
-    kitPreset.value = "custom";
+    kitPreset.value = "adobe";
   } else {
-    composerKitIds.value = "cqu4tvx";
-    kitPreset.value = "typekit";
+    composerKitIds.value = "";
+    kitPreset.value = "google";
   }
 
   applyCompositionPreset("rowdemo");
   if (compositionPreset) compositionPreset.value = "rowdemo";
+
+  // ?target=<url>: prefill the connector, open Composer → Target App and connect.
+  const initialTarget = new URLSearchParams(location.search).get("target");
+  if (initialTarget && !studioEmbedded) {
+    switchMode("composer");
+    if (safeTargetUrl(initialTarget)) {
+      targetAppUrlInput.value = initialTarget;
+      connectTargetApp(initialTarget);
+      switchToTargetView();
+    } else {
+      setBridgeStatus("Invalid target URL", "error");
+      composerStatus.textContent = "Ignored ?target=: only http(s) target URLs can be previewed.";
+    }
+  }
 })();
 
 </script>

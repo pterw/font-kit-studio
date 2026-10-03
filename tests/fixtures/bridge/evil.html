@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Hostile sibling frame</title>
+</head>
+<body>
+<!--
+  Hostile sibling frame for tests/test_bridge_runtime.py, served at
+  http://evil.test. Tests evaluate inside this frame to post spoofed control
+  messages to the target frame (parent.frames[0]) and record any replies.
+-->
+<script>
+  window.received = [];
+  window.addEventListener('message', (event) => window.received.push({ origin: event.origin, data: event.data }));
+  window.sendToTarget = (msg) => window.parent.frames[0].postMessage(msg, '*');
+</script>
+</body>
+</html>

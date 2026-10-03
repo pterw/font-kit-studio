@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bridge test target (global options)</title>
+<!--
+  Auto-init picks up window.FONTKIT_BRIDGE_OPTIONS. Used by tests/test_bridge_runtime.py.
+-->
+<script>window.FONTKIT_BRIDGE_OPTIONS = { allowedOrigins: ['http://studio.test'] };</script>
+</head>
+<body>
+<main>
+  <h1 data-design-id="options.title">Options target</h1>
+</main>
+<script src="/fontkit-bridge.js"></script>
+</body>
+</html>

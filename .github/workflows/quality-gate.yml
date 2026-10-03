@@ -1,0 +1,140 @@
+name: Quality Gate
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  # Manual escape hatch for re-running the gate on any ref. Note this trigger
+  # only becomes usable once the workflow file is on the default branch.
+  workflow_dispatch:
+
+# The gate only reads the repository. No token scope beyond that, no secrets.
+permissions:
+  contents: read
+
+# A newer push to the same branch or pull request makes the older run
+# pointless, so it is cancelled instead of queueing behind it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+    # A hung browser would otherwise hold a runner for six hours.
+    timeout-minutes: 30
+
+    steps:
+      # Full history and tags on purpose: scripts/verify.py checks the original
+      # v0.1.1 file against the `supplied-v0.1.1` tag, and a shallow clone has
+      # no tag to compare, so provenance would be skipped instead of verified.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements-dev.txt
+
+      # Only for `node --check fontkit-bridge.js`. Studio and the bridge have
+      # no runtime dependencies and no build step, so nothing else uses Node.
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      # Cheapest checks first: these two finish in a second or two and need no
+      # browser, so a duplicate id, a syntax error or a drifted provenance
+      # hash is reported before any browser is installed.
+      - name: Static checks (ids, inline JS, provenance)
+        run: python scripts/verify.py --static-only
+
+      - name: Syntax-check the bridge
+        run: node --check fontkit-bridge.js
+
+      # History carries product changes only: no session links, AI co-author
+      # trailers or "Generated with" banners (see CONTRIBUTING.md). Stdlib only,
+      # so it costs nothing and reports before any browser is installed. The
+      # full-history checkout above is what makes the base ref available.
+      # Values go through env, never interpolated into the script text.
+      - name: Check commit messages
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+        run: |
+          case "$EVENT" in
+            pull_request) python scripts/dev/check_commit_messages.py --range "origin/${BASE_REF}..HEAD" ;;
+            push)
+              # A new branch reports an all-zero "before", and a force-push can
+              # leave a "before" that no longer exists: check the last commit then.
+              if git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+                python scripts/dev/check_commit_messages.py --range "${BEFORE}..${SHA}"
+              else
+                python scripts/dev/check_commit_messages.py
+              fi ;;
+            # Manual run: everything this ref adds over main when main is
+            # available, otherwise (or on main itself) the last commit.
+            *)            python scripts/dev/check_commit_messages.py --base origin/main ;;
+          esac
+
+      # Browsers are the expensive part, so they come after every cheaper
+      # gate. --with-deps installs the system libraries Chromium and Firefox
+      # need on a bare runner. Both are installed: Chromium blocks, Firefox is
+      # advisory but still worth seeing (see README "Firefox status").
+      - name: Install Playwright browsers
+        run: python -m playwright install --with-deps chromium firefox
+
+      # Font Kit Studio is desktop-first (README "Frontend gate"): only
+      # Chromium at the desktop profile can fail the gate. The same command
+      # also runs Firefox and the phone and wide-touch profiles; under the
+      # default `--enforce chromium:desktop` their findings print as ADVISORY
+      # lines and can never change the exit code, so this step needs no
+      # continue-on-error. It takes seconds per engine and covers layout,
+      # contrast, privacy and the live edit flow, so it runs before the
+      # multi-minute suite. It needs no secrets and starts its own server on
+      # loopback ports.
+      - name: Run frontend gate (Chromium desktop blocks; the rest is advisory)
+        run: python scripts/dev/frontend_gate.py --engines chromium,firefox
+
+      # Blocking: the full suite on Chromium. Runs even when the gate failed,
+      # so one run reports both. The slowest steps come last (several minutes
+      # per engine).
+      - name: Run tests (Chromium, blocking)
+        if: ${{ !cancelled() }}
+        env:
+          FKS_ENGINES: chromium
+        run: python -m unittest discover -s tests -v
+
+      # Advisory: the same suite on Firefox. continue-on-error keeps a
+      # Firefox-only failure from failing the job, and the step's own failure
+      # mark and log stay visible so it can be read.
+      - name: Run tests (Firefox, advisory - never fails the build)
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        env:
+          FKS_ENGINES: firefox
+        run: python -m unittest discover -s tests -v
+
+      # The gate saves a screenshot of every failing or advisory run here
+      # (work/ is git-ignored scratch). Nothing is uploaded when there are none.
+      - name: Upload gate screenshots
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-gate-screenshots
+          path: work/frontend-gate/
+          if-no-files-found: ignore
+          retention-days: 14

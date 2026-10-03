@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bridge test target (manual init)</title>
+<!--
+  Auto-init disabled with data-auto-init="false"; the page initialises the
+  bridge itself with allowedOrigins. Used by tests/test_bridge_runtime.py.
+-->
+</head>
+<body>
+<main>
+  <h1 data-design-id="manual.title">Manual target</h1>
+</main>
+<script src="/fontkit-bridge.js" data-auto-init="false"></script>
+<script>window.__mine = initFontKitBridge({ allowedOrigins: ['http://studio.test'] });</script>
+</body>
+</html>

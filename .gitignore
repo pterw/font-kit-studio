@@ -2,3 +2,6 @@ __pycache__/
 *.pyc
 .superpowers/
 work/
+demo/fontkit-overrides.css
+.*.css.*.tmp
+.ruff_cache/

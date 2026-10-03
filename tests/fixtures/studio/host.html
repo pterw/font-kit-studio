@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Studio embedding host</title></head>
+<body>
+<script>
+// Test fixture: embeds Studio and records every message Studio posts to its parent.
+window.__fromStudio = [];
+window.addEventListener("message", event => {
+  window.__fromStudio.push({ origin: event.origin, type: event.data && event.data.type });
+});
+const frame = document.createElement("iframe");
+frame.id = "studioFrame";
+frame.style.width = "1200px";
+frame.style.height = "900px";
+frame.src = new URLSearchParams(location.search).get("studio");
+document.body.appendChild(frame);
+</script>
+</body>
+</html>

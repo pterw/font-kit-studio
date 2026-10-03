@@ -1,0 +1,578 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fake bridge target</title>
+<style>
+  body { margin: 0; font-family: Georgia, serif; color: rgb(17, 34, 51); background: #fff; }
+  h1 { margin: 40px 20px 10px; font-size: 32px; font-weight: 700; line-height: 38.4px; letter-spacing: 1.6px; }
+  p { margin: 10px 20px; font-size: 16px; line-height: 24px; }
+  .stat { display: inline-block; margin: 10px 20px; font-size: 20px; font-weight: 400; }
+  h2 { margin: 10px 20px; font-size: 24px; }
+  .mark { width: 40px; height: 40px; margin: 10px 20px; }
+  .spacer { height: 1600px; }
+  .cards { display: flex; gap: 8px; margin: 10px 20px; }
+  .card { padding: 6px 10px; border: 1px solid #999; font-size: 14px; }
+  .sidebar { display: block; margin: 10px 20px; }
+</style>
+</head>
+<body>
+<h1 data-design-id="hero.title" data-design-name="Hero title" data-design-role="display">Hello world</h1>
+<p data-design-id="hero.lead" data-design-name="Lead" data-design-role="body">Lead copy for the page.</p>
+<span class="stat" data-design-id="stat.badge" data-design-name="Stat badge" data-design-role="metric" data-design-weights="400 600 800">42</span>
+<h2 id="features">Features</h2>
+<div class="mark" data-design-id="brand.mark" data-design-name="Brand mark" data-design-role="image"><svg width="40" height="40"><rect width="40" height="40" fill="#123"/></svg></div>
+<a id="nextLink" href="#next">Next</a>
+<div class="spacer"></div>
+<script>
+// Deterministic fake implementing the bridge side of the v0.2.0 protocol contract
+// (docs/plans/2026-10-02-v0.2.0-live-preview-code-sync.md). Test fixture only.
+(function () {
+  const received = [];
+  window.__received = received;
+  let pinned = null;
+  let revision = 0;
+  let mode = "select";
+  let overlay = false;
+  let held = [];
+  // The Studio window is the parent when framed and the opener when this page is a pop-out window.
+  const studio = () => (window.parent !== window ? window.parent : window.opener);
+  const hostileLedger = {
+    tokens: { "--ok-font": "Georgia, serif", "--url": "url(https://evil.example/a)", "--expr": "expression(alert(1))",
+      "--back": "a\\b", "--Upper": "1", "--under_score": "1" },
+    imports: [
+      "https://fonts.googleapis.com/css2?" + [0, 1, 2, 3, 4, 5].map(i => `family=Family${i}:wght@400;700`).join("&") + "&display=swap",
+      "https://fonts.googleapis.com/css2?" + [0, 1, 2, 3, 4, 5, 6, 7, 8].map(i => `family=F${i}`).join("&"),
+      "https://fonts.googleapis.com/css2?family=A~B:wght@400&text=Hi%20there",
+      "https://fonts.googleapis.com/css2?family=Inter&text=%E2%82%AC"]
+  };
+  // ignoreBaseRevision: a target that applies requests queued while it was busy, whatever revision they were based on.
+  // keepNullTokens: an older bridge that does not know that a null token removes the override.
+  const fake = window.fake = { hold: false, conflictAlways: false, rejectNext: null, warnNext: null,
+    framework: {}, guards: {}, bulk: false, ignoreBaseRevision: false, keepNullTokens: false,
+    get mode() { return mode; }, get overlay() { return overlay; }, get revision() { return revision; } };
+  const params = new URLSearchParams(location.search);
+  fake.bulk = params.has("bulk");
+
+  // ?arrange adds a flex "cards" container (4 targets) and a block "sidebar" container (2 targets).
+  if (params.has("arrange")) {
+    const spacer = document.querySelector(".spacer");
+    const cards = document.createElement("section");
+    cards.className = "cards";
+    cards.id = "cards";
+    cards.setAttribute("data-design-id", "cards");
+    cards.setAttribute("data-design-name", "Cards");
+    cards.setAttribute("data-design-order-container", "true");
+    ["a", "b", "c", "d"].forEach(letter => {
+      const card = document.createElement("article");
+      card.className = "card";
+      card.setAttribute("data-design-id", `card.${letter}`);
+      card.setAttribute("data-design-name", `Card ${letter.toUpperCase()}`);
+      card.textContent = `Card ${letter.toUpperCase()}`;
+      cards.appendChild(card);
+    });
+    const side = document.createElement("section");
+    side.className = "sidebar";
+    side.setAttribute("data-design-name", "Sidebar");
+    side.setAttribute("data-design-order-container", "true");
+    ["x", "y"].concat(params.has("only") ? ["z"] : []).forEach(letter => {
+      const item = document.createElement("div");
+      item.setAttribute("data-design-id", `side.${letter}`);
+      item.setAttribute("data-design-name", `Side ${letter.toUpperCase()}`);
+      item.textContent = `Side ${letter.toUpperCase()}`;
+      side.appendChild(item);
+    });
+    spacer.before(cards, side);
+  }
+
+  const DEFS = [
+    { id: "hero.title", el: document.querySelector('[data-design-id="hero.title"]'), kind: "text", stable: true },
+    { id: "hero.lead", el: document.querySelector('[data-design-id="hero.lead"]'), kind: "text", stable: true },
+    { id: "stat.badge", el: document.querySelector('[data-design-id="stat.badge"]'), kind: "text", stable: true, weights: [400, 600, 800] },
+    { id: "auto.h2.1", el: document.getElementById("features"), kind: "text", stable: false, selector: "#features", name: "Features heading", role: "title" },
+    { id: "brand.mark", el: document.querySelector('[data-design-id="brand.mark"]'), kind: "image", stable: true }
+  ];
+  if (params.has("arrange")) {
+    document.querySelectorAll("#cards > [data-design-id], .sidebar > [data-design-id]").forEach(el => {
+      // ?only: Side Z is registered only because it is a sibling (arrangementOnly, Addendum 3).
+      DEFS.push({ id: el.getAttribute("data-design-id"), el, kind: "text", stable: true, arrangementOnly: el.getAttribute("data-design-id") === "side.z" });
+    });
+  }
+  const byId = new Map(DEFS.map(def => [def.id, def]));
+  const byEl = new Map(DEFS.map(def => [def.el, def]));
+  DEFS.forEach(def => {
+    def.originalStyle = def.el.getAttribute("style");
+    def.originalText = def.el.textContent;
+    def.originalParent = def.el.parentElement;
+    def.originalFollowers = [];
+    for (let n = def.el.nextElementSibling; n; n = n.nextElementSibling) def.originalFollowers.push(n);
+  });
+  const registeredChildren = parent => [...parent.children].filter(child => byEl.has(child)).map(child => byEl.get(child));
+  const originalOrder = new Map();
+  DEFS.forEach(def => { if (!originalOrder.has(def.originalParent)) originalOrder.set(def.originalParent, registeredChildren(def.originalParent).map(d => d.id)); });
+  document.querySelectorAll('[data-design-order-container="true"]').forEach(el => {
+    if (!originalOrder.has(el)) originalOrder.set(el, registeredChildren(el).map(d => d.id));
+  });
+  const structTouched = [];
+  const containerKeys = new Map();
+  let containerSeq = 0;
+  const overrides = {};   // id -> {key: canonical}
+  const texts = {};       // id -> current text override
+  const order = [];       // first-change order
+  const tokens = {};
+  const sheets = new Map(); // target id -> font stylesheet it references (the bridge keeps only referenced imports)
+
+  const CSS = { fontFamily: "font-family", fontSize: "font-size", fontWeight: "font-weight", lineHeight: "line-height",
+    letterSpacing: "letter-spacing", color: "color", textAlign: "text-align", textTransform: "text-transform", order: "order" };
+  const ALIGN = ["left", "center", "right", "justify", "start", "end"];
+  const TRANSFORM = ["none", "uppercase", "lowercase", "capitalize"];
+  const COLOR = /^(#[0-9a-f]{3}|#[0-9a-f]{6}|#[0-9a-f]{8}|(rgb|rgba|hsl|hsla)\([0-9.%,/ ]*\))$/i;
+
+  function rect(el) { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; }
+  function selector(def) { return def.selector || `[data-design-id="${def.id}"]`; }
+  // A target may report any selector (the real bridge reports ` > ` paths for auto-discovered targets).
+  window.fake.setSelector = (id, value) => { byId.get(id).selector = value; };
+  function name(def) { return def.name || def.el.dataset.designName || def.id; }
+  function role(def) { return def.role || def.el.dataset.designRole || ""; }
+  function computed(el) {
+    const cs = getComputedStyle(el);
+    return { fontFamily: cs.fontFamily, fontSize: cs.fontSize, fontWeight: cs.fontWeight, lineHeight: cs.lineHeight,
+      letterSpacing: cs.letterSpacing, color: cs.color, textAlign: cs.textAlign, textTransform: cs.textTransform };
+  }
+
+  // ---- arrangement (Addendum 1 and 2) ----------------------------------------
+  function containerKey(el) {
+    const id = el.getAttribute("data-design-id");
+    if (id) return id;
+    if (!containerKeys.has(el)) containerKeys.set(el, `container:${++containerSeq}`);
+    return containerKeys.get(el);
+  }
+  function containerName(el) {
+    return el.getAttribute("data-design-name") || el.id || el.tagName.toLowerCase();
+  }
+  function containerSelector(el) {
+    const id = el.getAttribute("data-design-id");
+    if (id) return `[data-design-id="${id}"]`;
+    return el.id ? `#${el.id}` : el.tagName.toLowerCase();
+  }
+  const orderOf = def => Number(getComputedStyle(def.el).order) || 0;
+  // Siblings in visual order (CSS order, then DOM order), like the real manifest.
+  function visualSiblings(parent) {
+    return registeredChildren(parent).map((def, dom) => ({ def, dom, order: orderOf(def) }))
+      .sort((a, b) => a.order - b.order || a.dom - b.dom).map(item => item.def);
+  }
+  function containers() {
+    const found = new Map();
+    document.querySelectorAll('[data-design-order-container="true"]').forEach(el => found.set(el, true));
+    const counts = new Map();
+    DEFS.forEach(def => counts.set(def.el.parentElement, (counts.get(def.el.parentElement) || 0) + 1));
+    counts.forEach((count, el) => { if (count >= 2) found.set(el, true); });
+    return [...found.keys()].map(el => ({ key: containerKey(el), name: containerName(el), el }));
+  }
+  const containerByKey = key => containers().find(item => item.key === key) || null;
+  const flexOrGrid = el => /^(inline-)?(flex|grid)$/.test(getComputedStyle(el).display);
+  // bulk: design:ready / design:targets manifests of very large groups omit siblings and containers (Addendum 3).
+  function arrangement(def, bulk) {
+    const parent = def.el.parentElement;
+    const sibs = visualSiblings(parent);
+    if (bulk) {
+      // Addendum 3 amendment: bulk manifests omit `siblings` and `containers` entirely.
+      return { containerKey: containerKey(parent), containerName: containerName(parent), containerSelector: containerSelector(parent),
+        index: sibs.indexOf(def), count: sibs.length, cssOrderAvailable: flexOrGrid(parent),
+        frameworkManaged: fake.framework[containerKey(parent)] || null };
+    }
+    return { containerKey: containerKey(parent), containerName: containerName(parent), containerSelector: containerSelector(parent),
+      index: sibs.indexOf(def), count: sibs.length, siblings: sibs.map(d => ({ id: d.id, name: name(d), tag: d.el.tagName.toLowerCase() })),
+      containers: containers().map(({ key, name: label }) => ({ key, name: label })),
+      cssOrderAvailable: flexOrGrid(parent), frameworkManaged: fake.framework[containerKey(parent)] || null };
+  }
+  function manifest(def, bulk) {
+    const text = def.kind === "text";
+    const m = { id: def.id, role: role(def), name: name(def), kind: def.kind, tag: def.el.tagName.toLowerCase(), stable: def.stable,
+      selector: selector(def), editable: { text, typography: text, color: true, alignment: text },
+      text: def.el.textContent.trim().slice(0, 200), computed: computed(def.el), arrangement: arrangement(def, bulk) };
+    if (def.arrangementOnly) m.arrangementOnly = true;
+    if ("previousId" in def) m.previousId = def.previousId;
+    if (def.weights) m.constraints = { fontWeights: def.weights.slice() };
+    return m;
+  }
+  function cssValue(key, value) {
+    if (key === "fontSize") return `${value}px`;
+    if (key === "letterSpacing") return `${value}em`;
+    return String(value);
+  }
+  function cleanedClone(el) {
+    const clone = el.cloneNode(true);
+    [clone, ...clone.querySelectorAll("[data-design-id]")].forEach(node => {
+      const def = byId.get(node.getAttribute("data-design-id"));
+      if (!def) return;
+      if (def.originalStyle == null) node.removeAttribute("style"); else node.setAttribute("style", def.originalStyle);
+    });
+    return clone;
+  }
+  function structure() {
+    return structTouched.map(parent => {
+      const current = registeredChildren(parent).map(d => d.id);
+      const original = originalOrder.get(parent) || [];
+      if (JSON.stringify(current) === JSON.stringify(original)) return null;
+      return { containerKey: containerKey(parent), selector: containerSelector(parent), stable: parent.hasAttribute("data-design-id"),
+        name: containerName(parent), html: cleanedClone(parent).outerHTML, order: visualSiblings(parent).map(name) };
+    }).filter(Boolean);
+  }
+  function ledger() {
+    const targets = [];
+    order.forEach(id => {
+      const def = byId.get(id);
+      const declarations = {};
+      Object.entries(overrides[id] || {}).forEach(([key, value]) => { declarations[CSS[key]] = cssValue(key, value); });
+      const current = def.el.textContent;
+      const textChanged = current.trim() !== def.originalText.trim();
+      if (!Object.keys(declarations).length && !textChanged) return;
+      const clone = def.el.cloneNode(true);
+      if (def.originalStyle == null) clone.removeAttribute("style"); else clone.setAttribute("style", def.originalStyle);
+      targets.push({ targetId: id, selector: selector(def), stable: def.stable, name: name(def), role: role(def), declarations,
+        text: textChanged ? current.trim() : null, originalText: def.originalText, html: clone.outerHTML });
+    });
+    // ?hostile: the ledger also carries values a Studio must not trust (shared-rules tests).
+    const extra = params.has("hostile") ? hostileLedger : { tokens: {}, imports: [] };
+    return { tokens: { ...tokens, ...extra.tokens }, targets, structure: structure(), imports: [...new Set([...sheets.values(), ...extra.imports])] };
+  }
+  function post(msg) {
+    if (!pinned) return;
+    const full = { protocolVersion: 1, sessionId: pinned.sessionId, ...msg };
+    if (fake.hold && (msg.type === "design:applied" || msg.type === "design:rejected")) { held.push(full); return; }
+    pinned.source.postMessage(full, pinned.origin === "null" ? "*" : pinned.origin);
+  }
+  fake.release = function () {
+    const next = held.shift();
+    if (next && pinned) pinned.source.postMessage(next, pinned.origin === "null" ? "*" : pinned.origin);
+    return held.length;
+  };
+  fake.heldCount = () => held.length;
+  fake.bumpRevision = () => { revision += 1; return revision; };
+  fake.select = function (id) {
+    const def = byId.get(id);
+    post({ type: "design:selected", targetId: id, rect: rect(def.el), target: manifest(def) });
+  };
+  fake.hover = function (id) {
+    if (id == null) { post({ type: "design:hover", targetId: null }); return; }
+    const def = byId.get(id);
+    post({ type: "design:hover", targetId: id, rect: rect(def.el), name: name(def), role: role(def) });
+  };
+  fake.emitTargets = function (ids) {
+    post({ type: "design:targets", targets: DEFS.filter(def => ids.includes(def.id)).map(def => manifest(def, fake.bulk)) });
+  };
+  fake.bounds = function (id) { post({ type: "design:bounds", targetId: id, rect: rect(byId.get(id).el) }); };
+  fake.warn = function (message, targetId, requestId) {
+    post({ type: "design:warning", requestId, targetId, kind: "runtime-error", message: String(message).slice(0, 300) });
+  };
+  fake.ledger = ledger;
+  // Hostile or buggy manifests: any previousId value, announced with the full target list.
+  fake.setPreviousId = (id, value) => { byId.get(id).previousId = value; };
+  fake.emitAll = () => post({ type: "design:targets", targets: DEFS.map(d => manifest(d, fake.bulk)) });
+  // An auto-discovered target gets an author data-design-id (an app update): same element, edits and place in the
+  // change order move to the new id, the manifest names the id it replaced and the full list is announced.
+  fake.promote = (id, newId) => {
+    const def = byId.get(id);
+    byId.delete(id);
+    Object.assign(def, { id: newId, previousId: id, stable: true, selector: `[data-design-id="${newId}"]` });
+    byId.set(newId, def);
+    def.el.setAttribute("data-design-id", newId);
+    if (overrides[id]) { overrides[newId] = overrides[id]; delete overrides[id]; }
+    const at = order.indexOf(id);
+    if (at >= 0) order[at] = newId;
+    if (sheets.has(id)) { sheets.set(newId, sheets.get(id)); sheets.delete(id); }
+    post({ type: "design:targets", targets: DEFS.map(d => manifest(d, fake.bulk)) });
+  };
+  // Tokens another editor (an earlier Studio session on the same page) left on the target.
+  fake.setTokens = values => Object.entries(values).forEach(([name, value]) => {
+    tokens[name] = String(value);
+    document.documentElement.style.setProperty(name, String(value));
+  });
+  fake.bulkOmitsKeys = () => { const a = manifest(DEFS[0], true).arrangement; return !('siblings' in a) && !('containers' in a); };
+  fake.styleOf = id => computed(byId.get(id).el);
+  fake.textOf = id => byId.get(id).el.textContent;
+  fake.arrangementOf = id => arrangement(byId.get(id));
+  // Registered children of a container (by key) in DOM order / visual order.
+  fake.domOrder = key => registeredChildren(containerByKey(key).el).map(d => d.id);
+  fake.visualOrder = key => visualSiblings(containerByKey(key).el).map(d => d.id);
+
+  function canonical(key, value, def) {
+    if (value === null) return { value: null };
+    const num = typeof value === "number" && Number.isFinite(value);
+    switch (key) {
+      case "fontFamily": {
+        if (typeof value !== "string") return null;
+        const s = value.trim();
+        return s && s.length <= 300 && !/[;{}<>\\]|url\(/i.test(s) ? { value: s } : null;
+      }
+      case "fontSize": return num && value >= 4 && value <= 400 ? { value: Math.round(value * 100) / 100 } : null;
+      case "fontWeight": {
+        if (!num || value < 1 || value > 1000) return null;
+        let w = Math.round(value);
+        if (def.weights) w = def.weights.reduce((best, cand) => Math.abs(cand - w) < Math.abs(best - w) ? cand : best);
+        return { value: w };
+      }
+      case "lineHeight": return num && value >= 0.5 && value <= 5 ? { value: Math.round(value * 1000) / 1000 } : null;
+      case "letterSpacing": return num && value >= -0.5 && value <= 2 ? { value: Math.round(value * 10000) / 10000 } : null;
+      case "color": return typeof value === "string" && COLOR.test(value.trim()) ? { value: value.trim().toLowerCase() } : null;
+      case "textAlign": return ALIGN.includes(value) ? { value } : null;
+      case "textTransform": return TRANSFORM.includes(value) ? { value } : null;
+      case "text": return typeof value === "string" && value.length <= 5000 && def.kind === "text" ? { value } : null;
+      case "fontStylesheet": return typeof value === "string" && FONT_SHEET.test(value) && value.length <= 2000 ? { value } : null;
+      default: return null;
+    }
+  }
+  function touch(id) { if (!order.includes(id)) order.push(id); }
+  function applyCanonical(def, patch) {
+    touch(def.id);
+    overrides[def.id] ||= {};
+    Object.entries(patch).forEach(([key, value]) => {
+      if (key === "text") {
+        def.el.textContent = value === null ? def.originalText : value;
+        return;
+      }
+      if (key === "fontStylesheet") {
+        // Ledger imports list only stylesheets some target still references; null releases (Task E report).
+        sheets.delete(def.id);
+        if (value) sheets.set(def.id, value);
+        return;
+      }
+      if (value === null) {
+        delete overrides[def.id][key];
+        def.el.style.removeProperty(CSS[key]);
+      } else {
+        overrides[def.id][key] = value;
+        def.el.style.setProperty(CSS[key], cssValue(key, value), "important");
+      }
+    });
+  }
+  // Removes the css-order group of a parent (all registered siblings).
+  function clearOrder(parent) {
+    registeredChildren(parent).forEach(def => {
+      if (overrides[def.id]) delete overrides[def.id].order;
+      def.el.style.removeProperty("order");
+      if (def.originalStyle == null && !def.el.getAttribute("style")) def.el.removeAttribute("style");
+    });
+  }
+  function restoreDom(def) {
+    const parent = def.originalParent;
+    const anchor = def.originalFollowers.find(node => node.parentElement === parent) || null;
+    parent.insertBefore(def.el, anchor);
+  }
+  function resetTarget(def) {
+    delete overrides[def.id];
+    sheets.delete(def.id);
+    clearOrder(def.el.parentElement);
+    if (def.originalStyle == null) def.el.removeAttribute("style"); else def.el.setAttribute("style", def.originalStyle);
+    def.el.textContent = def.originalText;
+    restoreDom(def);
+  }
+  function reject(d, reason, detail) {
+    post({ type: "design:rejected", requestId: d.requestId, revision, targetId: d.targetId, reason, detail });
+  }
+  function conflict(d) {
+    if (fake.ignoreBaseRevision) return false;
+    if (fake.conflictAlways) { revision += 1; reject(d, "revision-conflict", { baseRevision: d.baseRevision, revision }); return true; }
+    if (typeof d.baseRevision === "number" && d.baseRevision !== revision) {
+      reject(d, "revision-conflict", { baseRevision: d.baseRevision, revision });
+      return true;
+    }
+    return false;
+  }
+  // After an applied update/move the real bridge reports runtime errors for a second; the fake reports one on demand.
+  function afterApplied(d, targetId) {
+    if (fake.warnNext) { const message = fake.warnNext; fake.warnNext = null; fake.warn(message, targetId, d.requestId); }
+  }
+
+  // ---- design:move -----------------------------------------------------------
+  const isStr = v => typeof v === "string" && v.length > 0;
+  function guardDetail(guard, overridable, message, extra) {
+    return { property: "move", guard, overridable, message, ...(extra || {}) };
+  }
+  function handleMove(d) {
+    const to = d.to;
+    const invalid = field => { reject(d, "invalid-message", { field }); };
+    if (!isStr(d.targetId)) return invalid("targetId");
+    if (!to || typeof to !== "object" || Array.isArray(to)) return invalid("to");
+    const forms = ["index", "before", "after", "container"].filter(key => key in to);
+    const onlyContainer = forms.length === 2 && "container" in to && "index" in to;
+    if (forms.length !== 1 && !onlyContainer) return invalid("to");
+    if ("index" in to && !(Number.isInteger(to.index))) return invalid("to.index");
+    if ("before" in to && !isStr(to.before)) return invalid("to.before");
+    if ("after" in to && !isStr(to.after)) return invalid("to.after");
+    if ("container" in to && !isStr(to.container)) return invalid("to.container");
+    if (d.strategy !== undefined && typeof d.strategy !== "string") return invalid("strategy");
+    if (d.force !== undefined && typeof d.force !== "boolean") return invalid("force");
+    const def = byId.get(d.targetId);
+    if (!def) return reject(d, "unknown-target", { targetId: d.targetId });
+    if (d.strategy !== undefined && d.strategy !== "dom" && d.strategy !== "css-order") {
+      return reject(d, "unsupported-value", { property: "strategy", requested: d.strategy });
+    }
+    if (conflict(d)) return;
+    const strategy = d.strategy || "dom";
+    const currentParent = def.el.parentElement;
+    let destParent = currentParent;
+    let index;
+    if ("before" in to || "after" in to) {
+      const ref = byId.get(to.before || to.after);
+      if (!ref) return reject(d, "unknown-target", { targetId: to.before || to.after });
+      if (ref === def) return reject(d, "unsupported-value", { reason: "relative-to-self" });
+      if (def.el.contains(ref.el)) return reject(d, "unsupported-value", { reason: "into-descendant" });
+      destParent = ref.el.parentElement;
+      const list = visualSiblings(destParent).filter(x => x !== def);
+      index = list.indexOf(ref) + ("after" in to ? 1 : 0);
+    } else if ("container" in to) {
+      const dest = containerByKey(to.container);
+      if (!dest) return reject(d, "unsupported-value", { reason: "unknown-container" });
+      if (dest.el === def.el) return reject(d, "unsupported-value", { reason: "into-self" });
+      if (def.el.contains(dest.el)) return reject(d, "unsupported-value", { reason: "into-descendant" });
+      destParent = dest.el;
+      const list = visualSiblings(destParent).filter(x => x !== def);
+      index = "index" in to ? to.index : list.length;
+      if (index < 0 || index > list.length) return reject(d, "unsupported-value", { reason: "index-out-of-range" });
+    } else {
+      const count = visualSiblings(currentParent).length;
+      index = to.index;
+      if (index < 0 || index > count - 1) return reject(d, "unsupported-value", { reason: "index-out-of-range" });
+    }
+    const sameParent = destParent === currentParent;
+    if (strategy === "css-order") {
+      if (!flexOrGrid(currentParent)) {
+        return reject(d, "unsupported-value", guardDetail("css-order", false, "CSS order only works inside flex or grid containers.", { property: "strategy" }));
+      }
+      if (!sameParent) {
+        return reject(d, "unsupported-value", guardDetail("css-order", false, "CSS order cannot move an element into another container.", { property: "strategy" }));
+      }
+    } else {
+      const guard = fake.guards[def.id];
+      if (guard && !(guard.overridable === true && d.force === true)) return reject(d, "unsupported-value", guardDetail(guard.guard, guard.overridable === true, guard.message || `Guard ${guard.guard}`));
+      const framework = fake.framework[containerKey(currentParent)] || fake.framework[containerKey(destParent)];
+      if (framework && d.force !== true) {
+        return reject(d, "unsupported-value", guardDetail("framework-managed", true,
+          `This subtree is managed by ${framework}; a DOM move may be undone on the next render.`, { framework }));
+      }
+    }
+
+    if (strategy === "css-order") {
+      const list = visualSiblings(currentParent).filter(x => x !== def);
+      list.splice(index, 0, def);
+      list.forEach((sibling, position) => {
+        touch(sibling.id);
+        overrides[sibling.id] ||= {};
+        overrides[sibling.id].order = position;
+        sibling.el.style.setProperty("order", String(position), "important");
+      });
+    } else {
+      [currentParent, destParent].forEach(parent => { if (!structTouched.includes(parent)) structTouched.push(parent); });
+      const list = registeredChildren(destParent).filter(x => x !== def);
+      if (index < list.length) destParent.insertBefore(def.el, list[index].el);
+      else if (list.length) list[list.length - 1].el.after(def.el);
+      else destParent.appendChild(def.el);
+    }
+    revision += 1;
+    const now = arrangement(def);
+    post({ type: "design:applied", requestId: d.requestId, revision, targetId: def.id,
+      canonicalPatch: { move: { container: now.containerKey, index: now.index } }, target: manifest(def), changes: ledger() });
+    afterApplied(d, def.id);
+  }
+
+  // ?late: announce the bridge only after the load event (a bridge injected late).
+  const announce = () => { const win = studio(); if (win) win.postMessage({ type: "design:bridge-ready", protocolVersion: 1 }, "*"); };
+  fake.reannounce = announce;
+  if (params.has("late")) addEventListener("load", () => setTimeout(announce, 60));
+  else announce();
+
+  const FONT_SHEET = /^(https:\/\/fonts\.googleapis\.com\/css2\?family=[A-Za-z0-9+:@;.,_-]+(&family=[A-Za-z0-9+:@;.,_-]+)*(&display=(auto|block|swap|fallback|optional))?|https:\/\/use\.typekit\.net\/[A-Za-z0-9]{6,10}\.css)$/;
+
+  window.addEventListener("message", event => {
+    const d = event.data;
+    let copy;
+    try { copy = JSON.parse(JSON.stringify(d)); } catch (e) { copy = String(d); }
+    received.push({ origin: event.origin, fromParent: event.source === studio(), data: copy });
+    if (!d || typeof d !== "object" || d.protocolVersion !== 1) return;
+    if (d.type === "design:hello") {
+      if (event.source !== studio() || typeof d.sessionId !== "string") return;
+      pinned = { source: event.source, origin: event.origin, sessionId: d.sessionId };
+      mode = "select";
+      overlay = false;
+      post({ type: "design:ready", revision,
+        capabilities: { inspect: true, patch: true, typography: true, text: true, tokens: true, reset: true },
+        viewport: { width: innerWidth, height: innerHeight }, tokens: { css: {} },
+        targets: DEFS.map(def => manifest(def, fake.bulk)), changes: ledger() });
+      return;
+    }
+    if (!pinned || event.source !== pinned.source || event.origin !== pinned.origin || d.sessionId !== pinned.sessionId) return;
+    if (d.type === "design:update") {
+      if (!d.patch || typeof d.patch !== "object" || Array.isArray(d.patch)) { reject(d, "invalid-message"); return; }
+      if (d.targetId === undefined) {
+        if (conflict(d)) return;
+        Object.entries(d.patch.tokens || {}).forEach(([name, value]) => {
+          if (value === null) {
+            // Addendum 6: null removes Studio's override; an unknown name is ignored.
+            if (fake.keepNullTokens || !(name in tokens)) return;
+            delete tokens[name];
+            document.documentElement.style.removeProperty(name);
+            return;
+          }
+          tokens[name] = String(value);
+          document.documentElement.style.setProperty(name, String(value));
+        });
+        revision += 1;
+        post({ type: "design:applied", requestId: d.requestId, revision, targetId: "global", canonicalPatch: {}, changes: ledger() });
+        return;
+      }
+      const def = byId.get(d.targetId);
+      if (!def) { reject(d, "unknown-target"); return; }
+      if (conflict(d)) return;
+      if (fake.rejectNext) { const reason = fake.rejectNext; fake.rejectNext = null; reject(d, reason, { property: Object.keys(d.patch)[0] }); return; }
+      const result = {};
+      for (const [key, value] of Object.entries(d.patch)) {
+        if ((!(key in CSS) || key === "order") && key !== "text" && key !== "fontStylesheet") { reject(d, "unsupported-property", { property: key }); return; }
+        const c = canonical(key, value, def);
+        if (!c) { reject(d, "unsupported-value", { property: key, requested: value }); return; }
+        result[key] = c.value;
+      }
+      applyCanonical(def, result);
+      revision += 1;
+      post({ type: "design:applied", requestId: d.requestId, revision, targetId: def.id, canonicalPatch: result,
+        target: manifest(def), changes: ledger() });
+      afterApplied(d, def.id);
+    } else if (d.type === "design:move") {
+      handleMove(d);
+    } else if (d.type === "design:select" || d.type === "design:highlight") {
+      const def = byId.get(d.targetId);
+      if (!def) { post({ type: "design:selected", targetId: null }); return; }
+      post({ type: "design:selected", targetId: def.id, rect: rect(def.el), target: manifest(def) });
+    } else if (d.type === "design:mode") {
+      if (d.mode === "select" || d.mode === "interact") mode = d.mode;
+      if (typeof d.overlay === "boolean") overlay = d.overlay;
+    } else if (d.type === "design:reset") {
+      if (conflict(d)) return;
+      if (d.targetId) {
+        const def = byId.get(d.targetId);
+        if (!def) { reject(d, "unknown-target"); return; }
+        resetTarget(def);
+      } else {
+        // Restore the last-moved first so every anchor is back in place.
+        [...DEFS].reverse().forEach(def => { restoreDom(def); });
+        DEFS.forEach(def => { delete overrides[def.id]; clearOrder(def.el.parentElement); def.el.textContent = def.originalText;
+          if (def.originalStyle == null) def.el.removeAttribute("style"); else def.el.setAttribute("style", def.originalStyle); });
+        Object.keys(tokens).forEach(name => { document.documentElement.style.removeProperty(name); delete tokens[name]; });
+        sheets.clear();
+        order.length = 0;
+      }
+      revision += 1;
+      post({ type: "design:applied", requestId: d.requestId, revision, targetId: d.targetId || "global", canonicalPatch: {},
+        reset: true, changes: ledger() });
+    } else if (d.type === "design:restore-text") {
+      if (conflict(d)) return;
+      DEFS.forEach(def => { def.el.textContent = def.originalText; });
+      revision += 1;
+      post({ type: "design:applied", requestId: d.requestId, revision, targetId: "global", canonicalPatch: {}, changes: ledger() });
+    }
+  });
+})();
+</script>
+</body>
+</html>
