@@ -284,6 +284,9 @@ Each release has its own plan, branch and pull request from `main`, after PR #1 
    (`@pterw/fontkit`, run as `npx @pterw/fontkit`) or a distinct name (for example
    `fontkit-studio`, if free when checked). The product name may also be worth revisiting,
    since search results for "fontkit" are dominated by that engine.
+   Owner proposal (2026-10-03): `fontkitstudio`, run as `npx fontkitstudio`. It and
+   `fontkit-studio` were both unregistered on npm that day. Confirm, and register the
+   name, when the R1 plan is written.
 2. **Where the specimen canvas lives** once the pairing system replaces the Composer's
    main view: a tab inside the Composer, or a separate "Specimen" mode.
 3. **Studio's file name and version label.** R1 bundles Studio in the package, which is

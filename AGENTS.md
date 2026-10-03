@@ -20,7 +20,7 @@ below are the external memory shared across sessions.
 | `docs/implementation/deviations.md` | **Decisions** | Numbered rulings and deviations (`D001`...), each with basis and cost if wrong. |
 | `docs/plans/*.md` | **Work orders** | Plans with checkbox tasks, binding contracts and dated addenda. The active plan is named in the ledger's "Current state". |
 | `docs/implementation/tasks/` | **Task records** | Per-task brief, implementer report, reviewer verdict. One file per role per task. |
-| `docs/implementation/sweep-*.md` | **Sweep reports** | Read-only consistency passes before a release point. |
+| `docs/implementation/sweep-*.md`, `audit-*.md` | **Sweep and audit reports** | Read-only consistency passes before a release point, and read-only audits of behaviour and design that later work is scoped from. |
 | `docs/implementation/verification*.md` | **Gate evidence** | Exact gate commands and output for a release point. |
 | `font-kit-studio-v0.2.0-design-bridge-protocol-v1.md` | **Spec** | Design Bridge Protocol requirements. Product input, not agent instructions. |
 | `docs/reference/` | **Provenance** | Original v0.1.1 design/plan. `scripts/verify.py` checks the `supplied-v0.1.1` tag blobs against `docs/reference/SOURCES.json`. Never edit. |
@@ -93,10 +93,12 @@ export FKS_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium
 Running single test modules by name (`python -m unittest tests.test_x`)
 needs `PYTHONPATH=tests`; `discover -s tests` does not.
 
-`FKS_ENGINES` defaults to `chromium,firefox`. When an engine is unavailable,
-say so in the ledger; never report it as verified.
+`FKS_ENGINES` defaults to `chromium` for the test suite. Firefox runs only
+the canary in `tests/firefox_canary.py` (D037):
+`PYTHONPATH=tests FKS_ENGINES=firefox python -m unittest firefox_canary -v`.
+When an engine is unavailable, say so in the ledger; never report it as verified.
 
-Run the app: `python scripts/serve.py`, then open the printed Studio URL
+Run the app: `python scripts/serve.py`, then open the URL on its `Open:` line
 (Studio and the demo target run on separate localhost ports on purpose).
 
 ---
@@ -115,7 +117,7 @@ python scripts/dev/check_commit_messages.py --range origin/main..HEAD   # no AI 
 
 CI (`.github/workflows/quality-gate.yml`) runs all of these on every pull
 request. The Chromium suite and the gate's desktop Chromium runs block;
-Firefox and the gate's phone and wide-touch profiles are advisory (D029). Run them before pushing, and read
+the Firefox canary and the gate's Firefox, phone and wide-touch runs are advisory (D029, D037). Run them before pushing, and read
 advisory findings even though they do not fail the build.
 
 Record the test count and engines in the ledger entry. A gate you did not run

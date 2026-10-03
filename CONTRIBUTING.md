@@ -6,7 +6,7 @@ Thanks for helping. This page covers what you need to open a good pull request.
 
 ```bash
 python -m pip install -r requirements-dev.txt
-python -m playwright install chromium firefox   # Firefox is optional (advisory)
+python -m playwright install chromium firefox   # Firefox is optional (advisory canary)
 python scripts/serve.py          # Studio and the demo app on localhost
 ```
 
@@ -16,14 +16,16 @@ python scripts/serve.py          # Studio and the demo app on localhost
 git fetch origin tag supplied-v0.1.1      # once; the provenance check needs it
 python scripts/verify.py --static-only    # HTML IDs, inline script syntax, provenance
 node --check fontkit-bridge.js
-python -m unittest discover -s tests -v   # browser tests (Chromium and Firefox)
+python -m unittest discover -s tests -v   # browser tests (Chromium)
+PYTHONPATH=tests FKS_ENGINES=firefox python -m unittest firefox_canary -v   # Firefox canary
 python scripts/dev/frontend_gate.py       # layout, contrast, privacy and live-edit checks
 python scripts/dev/check_commit_messages.py --range origin/main..HEAD
 ```
 
 CI runs the same checks on every pull request. Font Kit Studio is a desktop
 tool, so the Chromium test suite and the desktop Chromium gate block a merge.
-Firefox, and the gate's phone and touch layouts, are checked too and
+Firefox runs a short canary (`tests/firefox_canary.py`) and the gate's
+Firefox profiles; those, and the gate's phone and touch layouts, are
 reported as advisory. (The Chromium suite keeps a few 390px layout tests
 for the Composer, and those still block.)
 

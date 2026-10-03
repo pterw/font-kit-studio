@@ -92,8 +92,8 @@ jobs:
 
       # Browsers are the expensive part, so they come after every cheaper
       # gate. --with-deps installs the system libraries Chromium and Firefox
-      # need on a bare runner. Both are installed: Chromium blocks, Firefox is
-      # advisory but still worth seeing (see README "Firefox status").
+      # need on a bare runner. Both are installed: Chromium blocks, Firefox runs
+      # an advisory canary (see README "Firefox status", D037).
       - name: Install Playwright browsers
         run: python -m playwright install --with-deps chromium firefox
 
@@ -110,23 +110,30 @@ jobs:
         run: python scripts/dev/frontend_gate.py --engines chromium,firefox
 
       # Blocking: the full suite on Chromium. Runs even when the gate failed,
-      # so one run reports both. The slowest steps come last (several minutes
-      # per engine).
+      # so one run reports both. The slowest step comes last (several minutes).
       - name: Run tests (Chromium, blocking)
         if: ${{ !cancelled() }}
         env:
           FKS_ENGINES: chromium
         run: python -m unittest discover -s tests -v
 
-      # Advisory: the same suite on Firefox. continue-on-error keeps a
-      # Firefox-only failure from failing the job, and the step's own failure
-      # mark and log stay visible so it can be read.
-      - name: Run tests (Firefox, advisory - never fails the build)
+      # Advisory: a short Firefox canary, not the full suite (D037). The whole
+      # suite on Gecko took about twice as long as on Chromium and pushed the
+      # job toward its timeout, which would fail the blocking check. The list
+      # lives in tests/firefox_canary.py: the bridge's trust boundary, real
+      # Studio against the real bridge, and Studio's own rendering.
+      # continue-on-error keeps a Firefox-only failure from failing the job,
+      # and the step's own failure mark and log stay visible so it can be read.
+      - name: Run Firefox canary (advisory - never fails the build)
         if: ${{ !cancelled() }}
         continue-on-error: true
+        # A hung Gecko run stops here, as an advisory failure, instead of
+        # running into the job timeout, which would fail the blocking check.
+        timeout-minutes: 10
         env:
           FKS_ENGINES: firefox
-        run: python -m unittest discover -s tests -v
+          PYTHONPATH: tests
+        run: python -m unittest firefox_canary -v
 
       # The gate saves a screenshot of every failing or advisory run here
       # (work/ is git-ignored scratch). Nothing is uploaded when there are none.

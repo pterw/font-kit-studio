@@ -35,7 +35,7 @@ Studio also still has the **Library** (a specimen browser for 16 free fonts) and
 
 ## Quickstart
 
-You need Python 3. It was developed and tested on Python 3.11, and nothing else is installed: the server uses only the standard library. If `python` is not found, use `python3`.
+You need Python 3. It was developed and tested on Python 3.11, and nothing else is installed: the server uses only the standard library. If `python` is not found, use `python3`. On Windows, `python` may be the Microsoft Store stub that opens the Store instead of running; use `py -3` or `python3` there.
 
 ```bash
 git clone https://github.com/pterw/font-kit-studio
@@ -43,13 +43,21 @@ cd font-kit-studio
 python scripts/serve.py
 ```
 
-1. Open the **Studio URL** the command prints. It looks like `http://localhost:8000/font_kit_studio_v0.1.1.html?target=http://localhost:8001/demo/`.
+1. Open the URL on the line that starts with **`Open:`**, the last line the command prints. It looks like `http://localhost:8000/font_kit_studio_v0.1.1.html?target=http://localhost:8001/demo/`. The `Target:` line is the demo app on its own port; you do not open it yourself. To have the command open the browser for you, run `python scripts/serve.py --open`.
 2. Wait for the badge to say **Connected (N targets)**. The demo app, "Halyard", is already instrumented.
 3. **Click** the big headline in the preview. Change its size, colour or text in the panel on the right.
 4. Watch the **Changes** panel under the preview. Press **Copy**, or press **Sync to file** to write the CSS to `demo/fontkit-overrides.css`, which the demo already links.
 5. Reload the preview. The style stays, because it now comes from the stylesheet. Studio asks whether to reapply the rest (see [Reconnect banner](#reconnect-banner)).
 
 To use your own app, add the one script tag from [Add fontkit to your app](#add-fontkit-to-your-app) and put your app's address in the **Target URL** box.
+
+A few things Studio tells you on the way in:
+
+- The **Target URL** box starts empty, and **Connect Target** stays disabled with "Enter your app's URL" until you type one. A URL needs `http://` or `https://`.
+- When Studio is served by the dev server and opened without `?target=`, it prefills the demo address and the button reads **Connect to the demo**. It never connects on its own.
+- If nothing answers within 4 seconds, the badge says `No bridge answered at <origin> within 4 s.` and the hint names both causes: nothing is running there, or the page does not load `fontkit-bridge.js`. Opened from disk, the hint adds how to start the dev server.
+- If Studio is hosted on the web and your app is on `localhost`, Chromium may block the reach; after 4 seconds with no answer, Studio says so. Open Studio from the dev server or from the file on disk instead.
+- Fullscreen no longer connects as a side effect; press **Connect Target** when you are ready.
 
 ### Open the Studio HTML file directly
 
@@ -65,13 +73,15 @@ What does **not** work from a file: **Sync to file** and **Auto-sync** are switc
 | `--target-port` | `8001` | Port for the demo and any file in this repo. Studio and the target use different ports on purpose, so they stay separate origins. |
 | `--overrides` | `demo/fontkit-overrides.css` | The one file Sync may write. It must be a `.css` file inside this repo. |
 | `--no-sync` | off | Refuses all writes. |
+| `--open` | off | Opens the `Open:` URL in your default browser once both ports are listening. |
 | `--host` | `127.0.0.1` | Interface to listen on (loopback by default). See the notes below. |
 | `--quiet` | off | Turn off the per-request log. |
 
 Two things to know:
 
 - **A different `--overrides` path is written, but the demo does not link it.** The demo always links `demo/fontkit-overrides.css`. For your own app, add `<link rel="stylesheet" href="http://localhost:8001/<your overrides path>">` after your own CSS (in development), or just use Copy.
-- **`--host 0.0.0.0` does not give your LAN access.** By default the server listens on loopback only. It accepts `localhost`, `127.0.0.1` and the exact name you pass to `--host`. A phone or another computer that uses your machine's IP address gets `421 Misdirected Request`. This blocks DNS-rebinding attacks. To allow one address, pass it explicitly, for example `--host 192.168.1.20`.
+- **`--host 0.0.0.0` does not give your LAN access.** By default the server listens on loopback only. It accepts `localhost`, `127.0.0.1` and the exact name you pass to `--host`. A phone or another computer that uses your machine's IP address gets `421 Misdirected Request`. This blocks DNS-rebinding attacks. A browser sees a short page that names the accepted addresses and says to pass `--host`. To allow one address, pass it explicitly, for example `--host 192.168.1.20`.
+- **A busy port stops the server with a message that names it**, for example `--studio-port 8000 is in use; pick another with --studio-port <port>`. Pass a free port with that flag (and `--target-port` for the demo port).
 
 ## Workflows
 
@@ -103,7 +113,7 @@ Values come back from the page, not from Studio. If the page snaps `550` to `600
 
 Elements with a `data-design-id` have stable names. Others are discovered automatically (headings, paragraphs in sections, links in nav, buttons, images, badges and so on). Their selectors are built from the page structure, so the CSS tab marks them "auto-discovered, add data-design-id for a stable selector". If you add the attribute while editing, the target keeps its edits and moves to the new name; the next sync writes the stable selector. If you remove an author `data-design-id` while editing, the edit moves to an automatic id (the target's manifest carries `previousId`, naming the id you removed), and the unstable-selector hint comes back.
 
-The badge shows where you are: `Idle`, `Connecting…`, `Bridge detected`, `Connected (N targets)`, `Live · rev N`, `Rejected: <reason>`, `No bridge detected` (after 4 seconds, with a hint), `Disconnected (window closed)`.
+The badge shows where you are: `Idle`, `Connecting…`, `Bridge detected`, `Connected (N targets)`, `Live · rev N`, `Rejected: <reason>`, `No bridge answered at <origin> within 4 s.` (with a hint that says what to check), `Disconnected (window closed)`.
 
 ### Select vs Interact
 
@@ -218,7 +228,8 @@ Both work with or without a target app:
 - **Composer**: build flow layouts from 2 to 4 leaf slots per row, with PNG/SVG brand marks, rules and spacers. Export JSON or CSS, and import it again.
 - **Specimen / Target App** switches the Composer between its own canvas and your live app. **Sync to Live App** is the explicit button that sends the Composer's composition to the page. It sets the page's font tokens and each text slot's tracking, and once you have asked for free fonts it also loads the stylesheets of the library fonts the composition uses (before that it sends the font stacks only, and says so). It also reorders the page's main sections by slot order and adds a short CSS `transition` to them. That reordering does not show in the Changes panel. Reload the preview to undo it.
 - **Restore Page Text** (in the bar above the preview) puts every changed text back and keeps the styles.
-- Device buttons (390 / 1024 / 1440 / Fluid) set the preview width. **Fullscreen** uses the whole window (`Esc` leaves).
+- Device buttons (390 / 1024 / 1440 / Fluid) set the preview width. A preview wider than the window scrolls sideways under its own scrollbar and is never scaled, so the inspector's measurements stay true to the page. **Fullscreen** uses the whole window; leave it with the **Exit** button in the top-left of the preview or with `Esc`.
+- Importing a composition JSON while the Composer is linked to the page keeps the imported tokens and ends the link: nothing is sent, the status says so, and the reconnect banner appears if the page differs. Press **Sync to Live App** to send the import and link again.
 
 Exported JSON stays at version `0.1.1`. It can carry an optional `live` field with your saved overrides, tokens and DOM order (`live.structure`). Older files without it still import.
 
@@ -423,7 +434,7 @@ Separate several origins with spaces or commas. Origins are compared without reg
 
 For a page where you cannot add the tag, you can inject the bridge by hand. A bookmarklet cannot run inside Studio's iframe, so use it in a **pop-out**:
 
-1. In Studio, enter the page's URL and press **Connect Target**. It says `No bridge detected`.
+1. In Studio, enter the page's URL and press **Connect Target**. It says `No bridge answered at <origin> within 4 s.`
 2. Press **Pop out**. The page opens in its own window.
 3. In that window, run the bookmarklet below. Create a bookmark whose URL is that line, and click the bookmark. Or open the DevTools console and paste only the part after `javascript:` (Chrome asks you to type `allow pasting` first). Browsers remove `javascript:` from text pasted into the address bar, so pasting the whole line there does nothing.
 
@@ -522,6 +533,7 @@ python -m playwright install chromium firefox     # on your own machine
 python scripts/verify.py --static-only            # unique IDs, inline JS syntax, provenance hashes
 node --check fontkit-bridge.js
 python -m unittest discover -s tests -v           # all suites; or: python scripts/verify.py
+PYTHONPATH=tests FKS_ENGINES=firefox python -m unittest firefox_canary -v   # Firefox canary
 python scripts/dev/frontend_gate.py               # browser gate: phone, desktop, touch, dark mode, logos
 ```
 
@@ -531,7 +543,7 @@ python scripts/dev/frontend_gate.py               # browser gate: phone, desktop
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `FKS_ENGINES` | `chromium,firefox` | Comma list of engines to run. |
+| `FKS_ENGINES` | `chromium` for the test suite; `chromium,firefox` for the frontend gate | Comma list of engines to run. The full suite runs on Chromium; Firefox runs the short canary in `tests/firefox_canary.py`. |
 | `FKS_CHROMIUM_EXECUTABLE` | unset | Path to a Chromium binary to use instead of Playwright's download. |
 | `FKS_FIREFOX_EXECUTABLE` | unset | Same, for Firefox. |
 
@@ -591,9 +603,9 @@ A Google Fonts request on first load is a `FAIL`: Studio is silent until the use
 
 **Commit messages.** `python scripts/dev/check_commit_messages.py [--range origin/main..HEAD]` (stdlib only) fails on a `*-Session:` trailer with a URL or `session_<id>`, a `Co-authored-by` trailer for an AI assistant (judged by vendor email domain or exact assistant name, so people named Claude or Devin are fine), or a "Generated with/by" banner that names an AI tool. The rule is explained in [CONTRIBUTING.md](CONTRIBUTING.md); CI runs the check on every push, pull request and manual run.
 
-**CI.** `.github/workflows/quality-gate.yml` runs on pushes to `main`, on pull requests and on manual dispatch, with read-only permissions and no secrets. Cheapest first: `scripts/verify.py --static-only`, `node --check fontkit-bridge.js` (Node 22), the commit-message check, then it installs Chromium and Firefox and runs the frontend gate on both engines (only Chromium at desktop can fail it), the Chromium test suite (`FKS_ENGINES=chromium`, blocking) and the Firefox test suite (`FKS_ENGINES=firefox`, in a separate step marked `continue-on-error`, so it is visible but never fails the build). It uploads gate screenshots when there are any. It checks out full history and tags, because provenance compares against the `supplied-v0.1.1` tag.
+**CI.** `.github/workflows/quality-gate.yml` runs on pushes to `main`, on pull requests and on manual dispatch, with read-only permissions and no secrets. Cheapest first: `scripts/verify.py --static-only`, `node --check fontkit-bridge.js` (Node 22), the commit-message check, then it installs Chromium and Firefox and runs the frontend gate on both engines (only Chromium at desktop can fail it), the Chromium test suite (`FKS_ENGINES=chromium`, blocking) and a short Firefox canary (`tests/firefox_canary.py`, in a separate step marked `continue-on-error`, so it is visible but never fails the build). It uploads gate screenshots when there are any. It checks out full history and tags, because provenance compares against the `supplied-v0.1.1` tag.
 
-**Firefox status.** The tests run on Chromium and Firefox when both are installed. Firefox was **not installed** in the environment where v0.2.0 was built, so the v0.2.0 tests ran on Chromium only. Treat Firefox as unverified for the live preview, arrange and pop-out features until the Firefox steps of the Quality Gate workflow have run clean; they are advisory and do not block merging.
+**Firefox status.** The full test suite runs on Chromium only. Firefox runs a canary: the bridge's trust boundary (hostile frames, forged sessions, handshake, origin list, session lifecycle, targeted updates), real Studio editing a real page through the bridge (edit, code panel, sync, reload) and Studio's own rendering, listed in `tests/firefox_canary.py`, plus the frontend gate's Firefox runs. Both are advisory and do not block merging. Features outside the canary (arrange, pop-out, the Composer link, import) are not checked on Firefox.
 
 Known gaps:
 
