@@ -3767,10 +3767,18 @@ if (remembered) kitId.value = remembered;
   // after it was sent, so a click in the page that lands within one round trip of it is never overridden.
   // An entry waits for its echo. A target that does not echo requestId (an older bridge) never answers any of them, and
   // that must not pile up or stand in the way of a realign: entries are bounded (the oldest go past 20), cleared on
-  // every handshake, and dropped when a later request is answered (see the design:selected handler).
+  // every handshake, and dropped when a later request is answered (see the design:selected handler). A reply whose entry
+  // is gone is still recognised by its id (ownRequestSeq): it is never taken for the user's choice.
+  const SELECT_ID_PREFIX = "fks-sel-";
+  // The sequence number of a request id Studio itself issued (so far), else null.
+  function ownRequestSeq(id) {
+    if (typeof id !== "string" || !id.startsWith(SELECT_ID_PREFIX) || !/^\d+$/.test(id.slice(SELECT_ID_PREFIX.length))) return null;
+    const seq = Number(id.slice(SELECT_ID_PREFIX.length));
+    return seq >= 1 && seq <= live.selectSeq ? seq : null;
+  }
   function sendTrackedSelection(targetId) {
     const seq = ++live.selectSeq;
-    const requestId = `fks-sel-${seq}`;
+    const requestId = `${SELECT_ID_PREFIX}${seq}`;
     // Nothing was sent (no session): nothing will answer, so nothing is tracked.
     if (!sendDesignMessage({ type:"design:select", targetId, requestId })) return;
     live.refreshes.set(requestId, { targetId, seq, superseded:false });
@@ -4558,10 +4566,12 @@ if (remembered) kitId.value = remembered;
         const listed = targets.filter(t => t.arrangementOnly !== true).length;
         setBridgeStatus(`Connected (${listed} target${listed === 1 ? "" : "s"})`, "connected");
         if (live.mode !== "select" || live.popoutMode) sendMode();
-        live.refreshes.clear();   // a new handshake: nothing asked earlier will be answered
+        live.refreshes.clear();   // a new handshake: earlier requests are no longer tracked (a late reply is still told apart by its id)
         if (live.selectedId && !live.targets.has(live.selectedId)) { live.selectedId = null; live.intent = null; }
-        // A kept selection (re-hello after a load) is re-sent so the bridge reports fresh bounds.
-        if (live.selectedId && !live.selectedRect) { live.intent = live.selectedId; refreshSelection(); }
+        // A kept selection (re-hello after a load) is re-sent so the bridge reports fresh bounds. What the user picked
+        // last stays their intent: only a missing one falls back to the kept selection (refreshSelection sends nothing
+        // when the two differ).
+        if (live.selectedId && !live.selectedRect) { if (live.intent === null) live.intent = live.selectedId; refreshSelection(); }
         reconcileSavedOverrides();
         renderOverlays();
         renderLiveCode();
@@ -4585,7 +4595,13 @@ if (remembered) kitId.value = remembered;
           live.targets.set(data.target.id, data.target);
           noteTargetMeta(data.target);
         }
-        const answerTo = typeof data.requestId === "string" ? live.refreshes.get(data.requestId) : undefined;
+        const picked = typeof data.targetId === "string" ? data.targetId : null;
+        let answerTo = typeof data.requestId === "string" ? live.refreshes.get(data.requestId) : undefined;
+        // A handshake forgets what was asked before it, and a long run of requests pushes the oldest out; a reply to
+        // one of those is still the answer to Studio's request, never the user's choice. It counts as superseded
+        // when it names a target other than the one the user last picked.
+        const ownSeq = answerTo ? null : ownRequestSeq(data.requestId);
+        if (ownSeq !== null) answerTo = { seq:ownSeq, superseded:picked !== live.intent };
         if (answerTo) {
           live.refreshes.delete(data.requestId);
           // The target answers requests in the order it received them, so an older one still waiting was never echoed
@@ -4599,7 +4615,6 @@ if (remembered) kitId.value = remembered;
           refreshLiveInspector();
           break;
         }
-        const picked = typeof data.targetId === "string" ? data.targetId : null;
         live.intent = picked;
         // Anything else the target selects is the user's choice: older requests no longer apply.
         if (!answerTo) live.refreshes.forEach(entry => { entry.superseded = true; });
