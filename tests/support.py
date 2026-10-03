@@ -2,7 +2,8 @@
 
 Environment:
   FKS_ENGINES                comma list of engines to run: chromium, firefox, webkit
-                             (default: chromium,firefox). An empty or unknown list is an
+                             (default: chromium; Firefox runs the canary in
+                             firefox_canary.py, D037). An empty or unknown list is an
                              error at import: a loop over no engines passes without a browser.
   FKS_CHROMIUM_EXECUTABLE    optional explicit Chromium binary
   FKS_FIREFOX_EXECUTABLE     optional explicit Firefox binary
@@ -30,7 +31,7 @@ def parse_engines(value):
     return names
 
 
-ENGINES = parse_engines(os.environ.get('FKS_ENGINES', 'chromium,firefox'))
+ENGINES = parse_engines(os.environ.get('FKS_ENGINES', 'chromium'))
 
 
 def launch(runtime, engine, **options):

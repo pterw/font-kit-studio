@@ -44,9 +44,41 @@ class EngineSelectionTest(unittest.TestCase):
                 result = import_support(value)
                 self.assertEqual((result.returncode, result.stdout.strip()), (0, expected), result.stderr)
 
-    def test_the_default_is_chromium_and_firefox(self):
+    def test_the_default_is_chromium_only(self):
+        # The full suite runs on Chromium; Firefox runs the canary in firefox_canary.py (D037).
         result = import_support(None)
-        self.assertEqual((result.returncode, result.stdout.strip()), (0, 'chromium,firefox'), result.stderr)
+        self.assertEqual((result.returncode, result.stdout.strip()), (0, 'chromium'), result.stderr)
+
+
+class CanaryListTest(unittest.TestCase):
+    # CI runs firefox_canary.py on Gecko in an advisory step, where a name that no longer
+    # loads would go unnoticed. Resolving the list here makes that fail the Chromium suite.
+    def test_every_canary_name_is_a_test_class_with_tests(self):
+        # loadTestsFromName does not raise for a missing name; it returns a placeholder test
+        # that errors only when run. Resolve each name to the class itself instead.
+        import importlib
+        import firefox_canary
+        self.assertTrue(firefox_canary.CANARY)
+        for name in firefox_canary.CANARY:
+            with self.subTest(name=name):
+                module_name, _, class_name = name.partition('.')
+                cls = getattr(importlib.import_module(module_name), class_name, None)
+                self.assertTrue(isinstance(cls, type) and issubclass(cls, unittest.TestCase), name)
+                self.assertGreater(unittest.TestLoader().loadTestsFromTestCase(cls).countTestCases(), 0)
+
+    def test_the_canary_is_not_collected_by_discover(self):
+        # The canary loads tests from other modules, so collecting it would run those tests
+        # twice under the same ids.
+        stack = [unittest.TestLoader().discover(str(TESTS))]
+        ids = []
+        while stack:
+            item = stack.pop()
+            if isinstance(item, unittest.TestSuite):
+                stack.extend(item)
+            else:
+                ids.append(item.id())
+        self.assertEqual(len(ids), len(set(ids)))
+        self.assertIn('test_support.CanaryListTest.test_the_canary_is_not_collected_by_discover', ids)
 
 
 if __name__ == '__main__':

@@ -533,6 +533,7 @@ python -m playwright install chromium firefox     # on your own machine
 python scripts/verify.py --static-only            # unique IDs, inline JS syntax, provenance hashes
 node --check fontkit-bridge.js
 python -m unittest discover -s tests -v           # all suites; or: python scripts/verify.py
+PYTHONPATH=tests FKS_ENGINES=firefox python -m unittest firefox_canary -v   # Firefox canary
 python scripts/dev/frontend_gate.py               # browser gate: phone, desktop, touch, dark mode, logos
 ```
 
@@ -542,7 +543,7 @@ python scripts/dev/frontend_gate.py               # browser gate: phone, desktop
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `FKS_ENGINES` | `chromium,firefox` | Comma list of engines to run. |
+| `FKS_ENGINES` | `chromium` for the test suite; `chromium,firefox` for the frontend gate | Comma list of engines to run. The full suite runs on Chromium; Firefox runs the short canary in `tests/firefox_canary.py`. |
 | `FKS_CHROMIUM_EXECUTABLE` | unset | Path to a Chromium binary to use instead of Playwright's download. |
 | `FKS_FIREFOX_EXECUTABLE` | unset | Same, for Firefox. |
 
@@ -602,9 +603,9 @@ A Google Fonts request on first load is a `FAIL`: Studio is silent until the use
 
 **Commit messages.** `python scripts/dev/check_commit_messages.py [--range origin/main..HEAD]` (stdlib only) fails on a `*-Session:` trailer with a URL or `session_<id>`, a `Co-authored-by` trailer for an AI assistant (judged by vendor email domain or exact assistant name, so people named Claude or Devin are fine), or a "Generated with/by" banner that names an AI tool. The rule is explained in [CONTRIBUTING.md](CONTRIBUTING.md); CI runs the check on every push, pull request and manual run.
 
-**CI.** `.github/workflows/quality-gate.yml` runs on pushes to `main`, on pull requests and on manual dispatch, with read-only permissions and no secrets. Cheapest first: `scripts/verify.py --static-only`, `node --check fontkit-bridge.js` (Node 22), the commit-message check, then it installs Chromium and Firefox and runs the frontend gate on both engines (only Chromium at desktop can fail it), the Chromium test suite (`FKS_ENGINES=chromium`, blocking) and the Firefox test suite (`FKS_ENGINES=firefox`, in a separate step marked `continue-on-error`, so it is visible but never fails the build). It uploads gate screenshots when there are any. It checks out full history and tags, because provenance compares against the `supplied-v0.1.1` tag.
+**CI.** `.github/workflows/quality-gate.yml` runs on pushes to `main`, on pull requests and on manual dispatch, with read-only permissions and no secrets. Cheapest first: `scripts/verify.py --static-only`, `node --check fontkit-bridge.js` (Node 22), the commit-message check, then it installs Chromium and Firefox and runs the frontend gate on both engines (only Chromium at desktop can fail it), the Chromium test suite (`FKS_ENGINES=chromium`, blocking) and a short Firefox canary (`tests/firefox_canary.py`, in a separate step marked `continue-on-error`, so it is visible but never fails the build). It uploads gate screenshots when there are any. It checks out full history and tags, because provenance compares against the `supplied-v0.1.1` tag.
 
-**Firefox status.** The tests run on Chromium and Firefox when both are installed. Firefox was **not installed** in the environment where v0.2.0 was built, so the v0.2.0 tests ran on Chromium only. Treat Firefox as unverified for the live preview, arrange and pop-out features until the Firefox steps of the Quality Gate workflow have run clean; they are advisory and do not block merging.
+**Firefox status.** The full test suite runs on Chromium only. Firefox runs a canary: the bridge's trust boundary (hostile frames, forged sessions, handshake, origin list, session lifecycle, targeted updates), real Studio editing a real page through the bridge (edit, code panel, sync, reload) and Studio's own rendering, listed in `tests/firefox_canary.py`, plus the frontend gate's Firefox runs. Both are advisory and do not block merging. Features outside the canary (arrange, pop-out, the Composer link, import) are not checked on Firefox.
 
 Known gaps:
 
