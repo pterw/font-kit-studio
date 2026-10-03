@@ -471,6 +471,105 @@ class OriginListTests(BridgeCase):
                 self.assertIn('ignored', result['seen'][0])
                 self.assertEqual(self.errors(frame), [])
 
+    # The options object a bridge was built from can be edited and handed back to initFontKitBridge(). The bridge
+    # copies the list at construction, so the edit only takes effect when init reads it again.
+    BUILD = """(origins) => {
+        window.__opts = { allowedOrigins: origins };
+        window.__mine = new FontKitBridge(window.__opts);
+        return window.__mine === window.__fontkitBridge;
+    }"""
+    EDIT = """(mode) => {
+        const opts = window.__opts;
+        if (mode === 'replace') opts.allowedOrigins = ['http://other.test'];
+        else if (mode === 'in place') opts.allowedOrigins.splice(0, 1);
+        else if (mode === 'string') opts.allowedOrigins = 'http://other.test';
+        else if (mode === 'wider') opts.allowedOrigins = ['http://studio.test', 'http://other.test', 'http://evil.test'];
+        else if (mode === 'any') opts.allowedOrigins = ['*'];
+    }"""
+    REINIT = """(name) => {
+        const seen = [];
+        const warn = console.warn;
+        console.warn = (...args) => seen.push(args.join(' '));
+        const first = window.__fontkitBridge;
+        let again;
+        try {
+            again = initFontKitBridge(window[name]);
+        } finally {
+            console.warn = warn;
+        }
+        return { same: again === first, seen, origins: first.allowedOrigins, session: first.sessionId };
+    }"""
+
+    def test_init_with_the_options_object_the_bridge_was_built_from_applies_its_edited_subset(self):
+        for engine in ENGINES:
+            for mode in ('replace', 'in place', 'string'):
+                with self.subTest(engine=engine, mode=mode):
+                    page, frame = self.open(engine)
+                    self.assertTrue(frame.evaluate(self.BUILD, ['http://studio.test', 'http://other.test']))
+                    self.hello(page)
+                    self.applied(page, TITLE, {'fontSize': 55})
+                    frame.evaluate(self.EDIT, mode)
+                    result = frame.evaluate(self.REINIT, '__opts')
+                    self.assertTrue(result['same'])
+                    self.assertEqual(result['origins'], ['http://other.test'])
+                    self.assertIsNone(result['session'], 'the Studio at the removed origin loses its session')
+                    self.assertEqual(len(result['seen']), 1, 'a changed policy is announced')
+                    self.assertIn('allowedOrigins narrowed to http://other.test', result['seen'][0])
+                    # Hostile case: the removed origin is refused, for the old session and for a new hello.
+                    self.assertEqual(self.update(page, TITLE, {'fontSize': 70})['type'], 'timeout')
+                    self.assertEqual(page.evaluate('() => hello("s2")')['type'], 'timeout')
+                    self.assertEqual(self.computed(frame, TITLE, 'fontSize'), '55px', 'no patch from the removed origin applies')
+                    self.assertEqual(len(self.messages(page, 'design:ready')), 1)
+                    self.assertEqual(self.errors(frame), [])
+
+    def test_init_with_the_options_object_the_bridge_was_built_from_never_widens_it(self):
+        for engine in ENGINES:
+            for mode in ('wider', 'any'):
+                with self.subTest(engine=engine, mode=mode):
+                    page, frame = self.open(engine, host=EVIL)
+                    self.assertTrue(frame.evaluate(self.BUILD, ['http://studio.test', 'http://other.test']))
+                    frame.evaluate(self.EDIT, mode)
+                    result = frame.evaluate(self.REINIT, '__opts')
+                    self.assertTrue(result['same'])
+                    self.assertEqual(result['origins'], ['http://studio.test', 'http://other.test'])
+                    # Hostile case: the origin the edit tried to add is still refused.
+                    self.assertEqual(page.evaluate('() => hello("s1")')['type'], 'timeout')
+                    self.assertEqual(self.messages(page, 'design:ready'), [])
+                    self.assertEqual(self.errors(frame), [])
+
+    def test_init_with_an_unchanged_options_object_is_quiet_and_changes_nothing(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.assertTrue(frame.evaluate(self.BUILD, ['http://studio.test', 'http://other.test']))
+                self.hello(page)
+                self.applied(page, TITLE, {'fontSize': 55})
+                for _ in range(2):
+                    result = frame.evaluate(self.REINIT, '__opts')
+                    self.assertTrue(result['same'])
+                    self.assertEqual(result['seen'], [])
+                    self.assertEqual(result['origins'], ['http://studio.test', 'http://other.test'])
+                    self.assertEqual(result['session'], 's1')
+                self.assertEqual(self.applied(page, TITLE, {'fontSize': 60})['revision'], 2)
+                # A different object is still announced, as before.
+                result = frame.evaluate(self.INIT, {'allowedOrigins': ['http://studio.test', 'http://other.test']})
+                self.assertEqual(len(result['seen']), 1)
+
+    def test_init_with_the_page_global_options_object_stays_quiet_until_it_is_edited(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, target=OPTIONS_PAGE)
+                self.hello(page)
+                result = frame.evaluate(self.REINIT, 'FONTKIT_BRIDGE_OPTIONS')
+                self.assertTrue(result['same'])
+                self.assertEqual((result['seen'], result['origins'], result['session']), ([], ['http://studio.test'], 's1'))
+                frame.evaluate("() => { window.FONTKIT_BRIDGE_OPTIONS.allowedOrigins = []; }")
+                result = frame.evaluate(self.REINIT, 'FONTKIT_BRIDGE_OPTIONS')
+                self.assertEqual((result['origins'], result['session']), ([], None))
+                self.assertEqual(len(result['seen']), 1)
+                self.assertEqual(self.update(page, 'options.title', {'fontSize': 70})['type'], 'timeout')
+                self.assertEqual(self.errors(frame), [])
+
 
 class SessionLifecycleTests(BridgeCase):
     def test_closed_opener_studio_stops_click_interception(self):

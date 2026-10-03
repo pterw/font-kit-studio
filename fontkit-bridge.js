@@ -408,21 +408,23 @@
 
   // What a later call (`new FontKitBridge(options)` or `initFontKitBridge(options)`) may still change on a bridge that is
   // already running: an `allowedOrigins` list that narrows its policy, and nothing else. Returns the sentence for the
-  // console warning that says what was applied and what was ignored.
+  // console warning that says what was applied and what was ignored, and whether the policy actually changed.
   function narrowRunningBridge(running, rawOptions) {
     const given = isPlainObject(rawOptions) ? rawOptions : {};
     const parts = [];
+    let changed = false;
     if (given.allowedOrigins != null) {
       const describe = () => (running.allowedOrigins === null ? 'any origin' : (running.allowedOrigins.join(' ') || 'no origin'));
       const before = describe();
       const outcome = running.narrowAllowedOrigins(given.allowedOrigins);
+      changed = outcome.changed;
       const after = describe();
       parts.push(!outcome.applied ? `allowedOrigins ignored (it would not narrow the running policy: ${before})`
         : outcome.changed ? `allowedOrigins narrowed to ${after} (was: ${before})` : `allowedOrigins unchanged (${after})`);
     }
     const ignored = Object.keys(given).filter((key) => key !== 'allowedOrigins');
     if (ignored.length) parts.push(`ignored: ${ignored.join(', ')}`);
-    return parts.length ? `${parts.join('; ')}.` : 'Its options were ignored.';
+    return { sentence: parts.length ? `${parts.join('; ')}.` : 'Its options were ignored.', changed };
   }
 
   class FontKitBridge {
@@ -439,13 +441,13 @@
         const running = global.__fontkitBridge;
         if (running && !running.disposed && running.everConnected && typeof running.narrowAllowedOrigins === 'function') {
           console.warn('[FontKitBridge] A bridge already exists on this page; new FontKitBridge() returned it. '
-            + `${narrowRunningBridge(running, rawOptions)} `
+            + `${narrowRunningBridge(running, rawOptions).sentence} `
             + 'Set window.FONTKIT_BRIDGE_OPTIONS or use data-auto-init="false" to configure the first one.');
           return running;
         }
       }
       const options = isPlainObject(rawOptions) ? rawOptions : {};
-      this.initOptions = rawOptions; // compared by initFontKitBridge()
+      this.initOptions = rawOptions; // initFontKitBridge() tells a reused object from a new one
       this.protocolVersion = PROTOCOL_VERSION;
       this.revision = 0;
       this.options = {
@@ -3144,12 +3146,18 @@
   function initFontKitBridge(options) {
     const existing = global.__fontkitBridge;
     if (existing) {
-      if (options !== undefined && existing instanceof FontKitBridge && options !== existing.initOptions) {
+      if (options !== undefined && existing instanceof FontKitBridge) {
         // Like the constructor, only an allowedOrigins list that narrows the running policy is applied: a security
-        // option is never silently dropped, and never widens what is already allowed.
-        const outcome = existing.disposed ? 'Options ignored.' : narrowRunningBridge(existing, options);
-        console.warn('[FontKitBridge] initFontKitBridge(): a bridge already exists. ' + `${outcome} `
-          + 'Add data-auto-init="false" to the script tag (or set window.FONTKIT_BRIDGE_OPTIONS) to configure it.');
+        // option is never silently dropped, and never widens what is already allowed. The options object the bridge
+        // was built from is read again too: the bridge copied its list at construction, so a page that edited
+        // `allowedOrigins` on that object since would otherwise keep the wider policy. Narrowing is idempotent, so
+        // the plain `initFontKitBridge(window.FONTKIT_BRIDGE_OPTIONS)` changes nothing and stays quiet.
+        const reused = options === existing.initOptions;
+        const outcome = existing.disposed ? { sentence: 'Options ignored.', changed: false } : narrowRunningBridge(existing, options);
+        if (!reused || outcome.changed) {
+          console.warn('[FontKitBridge] initFontKitBridge(): a bridge already exists. ' + `${outcome.sentence} `
+            + 'Add data-auto-init="false" to the script tag (or set window.FONTKIT_BRIDGE_OPTIONS) to configure it.');
+        }
       }
       return existing;
     }
