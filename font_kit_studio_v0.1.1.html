@@ -3041,11 +3041,35 @@ if (remembered) kitId.value = remembered;
     live.reapplyError = "";
   }
 
-  // What Studio saved before an import made while linked: the page may still hold it after the import dropped it
-  // (reconcileImportedLinked). Kept across imports until the user resolves the difference or syncs.
-  function rememberSavedBeforeImport() {
+  // An import that carries a `live` field replaces Studio's overrides (D035), so an edit made before it must not
+  // become saved state after it. Every request already sent (in flight or timed out) is marked, whatever its kind,
+  // so its reply only redoes the comparison with the page (recordCanonical, handleReply, handleLateReply). An edit
+  // still queued was never sent and would restyle the page with what the import replaced, so it is dropped; the
+  // count goes in the import status (never silent). Queued composition edits are already gone with the link and
+  // are not counted: the composition is what the import replaced. Returns the count and the sent user edits, whose
+  // values the page may still come to hold (rememberSavedBeforeImport). An import without `live` replaces no
+  // overrides: ordinary edits keep their normal path, and only the composition and Reapply ops end with the link.
+  function supersedeLiveOpsForImport(replacesOverrides) {
+    if (!replacesOverrides) return { dropped:0, sent:[] };
+    const sent = [live.inFlight, ...live.timedOut.values()].filter(Boolean);
+    sent.forEach(op => { op.importSuperseded = true; });
+    // States intent: endRunningReapply and endCompositionLink have already removed Reapply and composition ops.
+    const dropped = live.queue.filter(op => !op.reapply && op.kind !== "composition").length;
+    live.queue = [];
+    return { dropped, sent:sent.filter(op => op.kind === "update" && !op.reapply) };
+  }
+
+  // What Studio saved before an import made while linked, and the values of the user edits sent before it and not
+  // yet acknowledged: the page may hold them after the import dropped them (reconcileImportedLinked). A patch
+  // value of null releases a property, so it is not a value the page can hold. Kept across imports until the user
+  // resolves the difference or syncs.
+  function rememberSavedBeforeImport(sentEdits = []) {
     const kept = live.importDropped || { overrides:{}, structure:[] };
     Object.entries(effectiveOverrides(live.overrides)).forEach(([id, patch]) => setOwn(kept.overrides, id, { ...(kept.overrides[id] || {}), ...patch }));
+    sentEdits.forEach(op => {
+      const values = Object.fromEntries(Object.entries(op.patch || {}).filter(([key, value]) => LIVE_KEYS.includes(key) && value !== null));
+      if (op.targetId && Object.keys(values).length) setOwn(kept.overrides, op.targetId, { ...(kept.overrides[op.targetId] || {}), ...values });
+    });
     live.structure.forEach(entry => {
       if (!kept.structure.some(item => item.selector === entry.selector && sameIds(item.ids, entry.ids))) kept.structure.push({ selector:entry.selector, ids:[...entry.ids] });
     });
@@ -3077,7 +3101,9 @@ if (remembered) kitId.value = remembered;
         // streams it to the page and no later acknowledgement from the page replaces it.
         const wasLinked = live.compositionLinked;
         endRunningReapply();
-        if (wasLinked) { endCompositionLink(); rememberSavedBeforeImport(); }
+        if (wasLinked) endCompositionLink();
+        const { dropped:droppedEdits, sent:sentEdits } = supersedeLiveOpsForImport(liveCandidate !== null);
+        if (wasLinked) rememberSavedBeforeImport(sentEdits);
         live.importLinked = wasLinked;
         // Only publish a fully hydrated candidate; failed validation leaves live state intact.
         Object.assign(state, { canvasWidth:width === "100%" ? width : String(rowNumber(width, 960, 240, 2400)),
@@ -3099,9 +3125,10 @@ if (remembered) kitId.value = remembered;
         populateSavedColors(canvasSavedColor, state.background.saved);
         syncCompositionControls();
         renderComposer();
-        composerStatus.textContent = wasLinked
+        composerStatus.textContent = (wasLinked
           ? "Imported; the link to the page is off. Press Sync to Live App to send this composition."
-          : "Composition imported. Image assets must be reselected in v0.1.1.";
+          : "Composition imported. Image assets must be reselected in v0.1.1.")
+          + (droppedEdits ? ` ${droppedEdits} queued edit${droppedEdits === 1 ? " that had" : "s that had"} not reached the page ${droppedEdits === 1 ? "was" : "were"} dropped.` : "");
       } catch (err) {
         composerStatus.textContent = `Import failed: ${err.message}`;
       }
@@ -3814,7 +3841,11 @@ if (remembered) kitId.value = remembered;
   function recordCanonical(op, data) {
     // Sent before the user imported (D035): what the page acknowledged is not the user's saved state, whatever the
     // request was. The ledger is already updated; only the comparison with the page is redone, so the banner follows it.
-    if (op.importSuperseded) { reconcileAfterImport(); return; }
+    if (op.importSuperseded) {
+      if (live.importLinked && op.kind === "move" && !op.reapply) rememberMoveHeldByPage(op, data);
+      reconcileAfterImport();
+      return;
+    }
     const targetId = typeof data.targetId === "string" && data.targetId !== "global" ? data.targetId : op.targetId;
     if (op.kind === "update" && targetId) {
       const entry = { ...(live.overrides[targetId] || {}) };
@@ -3867,6 +3898,32 @@ if (remembered) kitId.value = remembered;
     }
     live.canonicalRevision = live.revision;
     live.canonicalTarget = live.url;
+  }
+
+  // A move the user sent before a linked import and the page acknowledged after it: the page now holds an order the
+  // import does not save, so it is remembered the way rememberSavedBeforeImport remembers what the import dropped, and
+  // reconcileImportedLinked raises the banner. Reads the ledger the reply already refreshed (the same sources as
+  // syncOrderFromLedger and syncStructureFromLedger, which a superseded move does not run): the siblings' CSS order
+  // values for a css-order move, the touched containers' order for a DOM move.
+  function rememberMoveHeldByPage(op, data) {
+    const kept = live.importDropped || { overrides:{}, structure:[] };
+    if (op.strategy === "css-order") {
+      const group = new Set(siblingIds(op, data));
+      live.changes.targets.forEach(entry => {
+        if (!group.has(entry.targetId)) return;
+        const canonical = canonicalLiveValue("order", parseFloat(entry.declarations.order));
+        if (canonical.ok && canonical.value !== null) setOwn(kept.overrides, entry.targetId, { ...(kept.overrides[entry.targetId] || {}), order:canonical.value });
+      });
+    } else {
+      const fromLedger = savedStructureFrom(live.changes.structure);
+      const touched = structureTouchedBy(op, data, fromLedger);
+      fromLedger.forEach(entry => {
+        if (touched.has(entry.selector) && !kept.structure.some(item => item.selector === entry.selector && sameIds(item.ids, entry.ids))) {
+          kept.structure.push({ selector:entry.selector, ids:[...entry.ids] });
+        }
+      });
+    }
+    live.importDropped = kept;
   }
 
   // CSS-order moves assign `order` to every sibling; Studio's saved overrides mirror what the target acknowledged

@@ -267,6 +267,7 @@ fails if `package.json` gains a runtime dependency (D030).
 ## 5. Build order (approved)
 
 Each release has its own plan, branch and pull request from `main`, after PR #1 merges.
+Status and plan links per release: [roadmap ledger](../plans/2026-10-03-roadmap.md).
 
 | Release | Scope | Why this position |
 |---|---|---|
