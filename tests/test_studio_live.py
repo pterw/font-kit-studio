@@ -787,6 +787,50 @@ class StudioPersistenceTests(LiveCase):
                 self.assertNotRegex(tokens, r'0 live edits')
                 self.assertEqual(errors, [])
 
+    def banner_after_saved_edit_and_reload(self, page, edits):
+        """Saves the edits (a list of (selector, value) fill steps on hero.title), reloads the target, returns the banner."""
+        self.wait_connected(page)
+        frame = self.frame(page)
+        self.select(page, frame, 'hero.title')
+        for number, (selector, value) in enumerate(edits, start=1):
+            page.locator(selector).fill(value)
+            self.wait_badge(page, rf'^Live · rev {number}$')
+        frame.evaluate('location.reload()')
+        banner = page.locator('#liveReconnectBanner')
+        banner.wait_for(state='visible')
+        self.wait_connected(page)
+        return ' '.join(banner.inner_text().split())
+
+    def test_a_saved_text_only_edit_is_not_promised_to_shrink_the_file_or_to_already_style_the_page(self):
+        # The overrides file holds CSS declarations only: Studio keeps a text edit, but a Sync never writes it.
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors = self.open(engine, sync=True)
+                text = self.banner_after_saved_edit_and_reload(page, [('#liveText', 'New headline')])
+                self.assertIn('Studio has saved overrides for 1 target', text)
+                self.assertIn('the live target has 0 targets changed', text)
+                self.assertIn(self.ACCEPT, text)
+                # Accept drops the saved text, but the file has no text to lose: the next Sync does not write less.
+                self.assertNotRegex(text, r'smaller file')
+                # The file does not style the page with that text either, so "it can look right" would be false.
+                self.assertNotRegex(text, r'already styles the page')
+                self.assertNotRegex(text, r'0 live edits')
+                self.assertEqual(errors, [])
+
+    def test_a_saved_text_and_font_size_edit_still_promises_a_smaller_file(self):
+        # The font size is a declaration in the file, so Accept really does shrink it, and the file really does style the page.
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors = self.open(engine, sync=True)
+                text = self.banner_after_saved_edit_and_reload(
+                    page, [('#liveFontSize', '70'), ('#liveText', 'New headline')])
+                self.assertIn('Studio has saved overrides for 1 target', text)
+                self.assertIn(self.ACCEPT, text)
+                self.assertRegex(text, r'next Sync writes a smaller file')
+                self.assertRegex(text, r'overrides file already styles the page')
+                self.assertRegex(text, r'0 live edits')
+                self.assertEqual(errors, [])
+
     def test_live_field_export_import_round_trip_and_transactional_rejection(self):
         for engine in ENGINES:
             with self.subTest(engine=engine):
@@ -3029,6 +3073,7 @@ class StudioDomMovePersistenceTests(ArrangeCase):
                 banner.wait_for(state='visible')
                 frame = self.wait_ready(page, 11)
                 self.assertRegex(banner.inner_text(), r'(?i)DOM order')
+                self.assertEqual(page.locator('#liveReconnectHeading').inner_text(), 'Target reconnected.')
                 # Restoring a move stays an explicit choice.
                 page.wait_for_timeout(300)
                 self.assertEqual(self.moves(frame), [])
@@ -3115,6 +3160,136 @@ class StudioDomMovePersistenceTests(ArrangeCase):
                 self.assertEqual(self.dom(frame, 'cards'), ['card.a', 'card.b', 'card.c', 'card.d'])
                 self.assertEqual(errors, [])
 
+    # ---- a page that changes a saved container in session: never adopted or dropped by another target's reset ------
+    CARDS_AS_SAVED = ['card.c', 'card.a', 'card.b', 'card.d']
+
+    def restore_cards_in_the_page(self, frame):
+        """The app puts Cards back in its own order (a re-render): no message reaches Studio."""
+        frame.evaluate("""() => { const cards = document.getElementById('cards');
+            ['card.a', 'card.b', 'card.c', 'card.d'].forEach(id => cards.appendChild(cards.querySelector('[data-design-id="' + id + '"]'))); }""")
+
+    def test_a_reset_of_an_unrelated_target_keeps_a_saved_order_the_page_changed_in_session(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors = self.open(engine, target=ARRANGE, sync=True)
+                frame = self.wait_ready(page, 11)
+                page.wait_for_function('() => !document.querySelector("#liveCodeSync").disabled')
+                with page.expect_response(lambda response: response.request.method == 'PUT'):
+                    page.locator('#liveCodeAutoSync').check()               # auto-sync writes once when switched on
+                self.move_first(page, frame)
+                saved = self.export(page)['live']['structure']
+                self.assertEqual(saved, self.saved_cards(self.CARDS_AS_SAVED))
+                banner = page.locator('#liveReconnectBanner')
+                self.assertFalse(banner.is_visible())
+                frame.evaluate('window.fake.reverse("cards")')       # the app reorders Cards itself, in session
+                self.assertEqual(self.dom(frame), ['card.d', 'card.b', 'card.a', 'card.c'])
+                self.select(page, frame, 'side.x')
+                page.locator('#liveResetTarget').click()
+                self.wait_badge(page, r'^Live · rev 2$')
+                self.assertEqual(self.export(page)['live']['structure'], saved, 'the saved order is what the user saved, not the page\'s')
+                banner.wait_for(state='visible')
+                self.assertIn('the live target holds 0 of them', ' '.join(banner.inner_text().split()))
+                self.assertEqual(self.dom(frame), ['card.d', 'card.b', 'card.a', 'card.c'], 'Studio did not touch the page')
+                page.wait_for_timeout(1000)                                # absence check: auto-sync waits 400 ms
+                self.assertEqual(len(self.puts), 1, 'an open mismatch blocks auto-sync')
+                self.assertEqual(errors, [])
+
+    def test_a_reset_of_an_unrelated_target_does_not_drop_a_saved_container_the_page_put_back(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors, frame = self.open_arrange(engine)
+                self.move_first(page, frame)
+                saved = self.export(page)['live']['structure']
+                self.restore_cards_in_the_page(frame)
+                self.assertEqual(self.dom(frame), ['card.a', 'card.b', 'card.c', 'card.d'])
+                self.select(page, frame, 'side.x')
+                page.locator('#liveResetTarget').click()
+                self.wait_badge(page, r'^Live · rev 2$')
+                self.assertEqual(self.export(page).get('live', {}).get('structure'), saved)
+                page.locator('#liveReconnectBanner').wait_for(state='visible')
+                self.assertEqual(self.dom(frame), ['card.a', 'card.b', 'card.c', 'card.d'])
+                # The mismatch is the user's choice to resolve: Reapply puts the saved order back.
+                page.locator('#liveReapply').click()
+                page.locator('#liveReconnectBanner').wait_for(state='hidden')
+                self.assertEqual(self.dom(frame), self.CARDS_AS_SAVED)
+                self.assertEqual(self.export(page)['live']['structure'], saved)
+                self.assertEqual(errors, [])
+
+    def test_a_reset_of_one_saved_element_does_not_drop_another_saved_container_the_page_had_put_back(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors, frame = self.open_arrange(engine)
+                self.move_first(page, frame)
+                self.select(page, frame, 'side.y')
+                page.locator('#liveMoveFirst').click()
+                self.wait_badge(page, r'^Live · rev 2$')
+                saved = {entry['name']: entry['ids'] for entry in self.export(page)['live']['structure']}
+                self.assertEqual(saved, {'Cards': self.CARDS_AS_SAVED, 'Sidebar': ['side.y', 'side.x']})
+                self.restore_cards_in_the_page(frame)
+                # An acknowledged edit tells Studio what the page holds now: Cards is no longer reordered.
+                self.select(page, frame, 'hero.title')
+                self.set_value(page, '#liveFontSize', 70)
+                self.wait_badge(page, r'^Live · rev 3$')
+                self.select(page, frame, 'side.y')
+                page.locator('#liveResetTarget').click()
+                self.wait_badge(page, r'^Live · rev 4$')
+                # Resetting Side Y puts the Sidebar back, so that saved order goes; Cards is not the reset's to drop.
+                self.assertEqual(self.export(page).get('live', {}).get('structure'), self.saved_cards(self.CARDS_AS_SAVED))
+                page.locator('#liveReconnectBanner').wait_for(state='visible')
+                self.assertEqual(self.dom(frame, 'cards'), ['card.a', 'card.b', 'card.c', 'card.d'])
+                self.assertEqual(errors, [])
+
+    def test_a_reset_that_names_its_container_does_not_drop_a_saved_container_the_page_put_back_since_the_last_reply(self):
+        """The real bridge names the element's container in a targeted reset's reply, so the reply already says which
+        saved container the reset changed; a saved container missing from the ledger is then the page's doing."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors, frame = self.open_arrange(engine)
+                frame.evaluate('window.fake.resetNamesTarget = true')
+                self.move_first(page, frame)
+                self.select(page, frame, 'side.y')
+                page.locator('#liveMoveFirst').click()
+                self.wait_badge(page, r'^Live · rev 2$')
+                saved = {entry['name']: entry['ids'] for entry in self.export(page)['live']['structure']}
+                self.assertEqual(saved, {'Cards': self.CARDS_AS_SAVED, 'Sidebar': ['side.y', 'side.x']})
+                self.restore_cards_in_the_page(frame)       # no acknowledged edit follows: Studio has not heard of it
+                self.select(page, frame, 'side.y')
+                page.locator('#liveResetTarget').click()
+                self.wait_badge(page, r'^Live · rev 3$')
+                self.assertEqual(self.received(frame, 'design:reset')[-1]['data']['targetId'], 'side.y')
+                # The reset put the Sidebar back, so that saved order goes. Cards is not the reset's to drop.
+                self.assertEqual(self.export(page).get('live', {}).get('structure'), self.saved_cards(self.CARDS_AS_SAVED))
+                banner = page.locator('#liveReconnectBanner')
+                banner.wait_for(state='visible')
+                self.assertIn('the live target holds 0 of them', ' '.join(banner.inner_text().split()))
+                self.assertEqual(page.locator('#liveReconnectHeading').inner_text(), 'The page changed a saved DOM order.')
+                self.assertEqual(self.dom(frame, 'cards'), ['card.a', 'card.b', 'card.c', 'card.d'], 'Studio did not touch the page')
+                self.assertEqual(self.dom(frame, frame.evaluate('window.fake.arrangementOf("side.x").containerKey')), ['side.x', 'side.y'])
+                # The mismatch is the user's choice to resolve: Reapply puts the saved order back.
+                page.locator('#liveReapply').click()
+                banner.wait_for(state='hidden')
+                self.assertEqual(self.dom(frame, 'cards'), self.CARDS_AS_SAVED)
+                self.assertEqual(self.export(page)['live']['structure'], self.saved_cards(self.CARDS_AS_SAVED))
+                self.assertEqual(errors, [])
+
+    def test_resetting_a_moved_element_drops_both_saved_containers_when_the_reply_names_where_it_went_back_to(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors, frame = self.open_arrange(engine)
+                frame.evaluate('window.fake.resetNamesTarget = true')
+                self.select(page, frame, 'card.a')
+                options = page.locator('#liveMoveContainer option').evaluate_all('els => els.map(el => [el.value, el.textContent])')
+                page.locator('#liveMoveContainer').select_option(next(value for value, name in options if name == 'Sidebar'))
+                page.locator('#liveMoveInto').click()
+                self.wait_badge(page, r'^Live · rev 1$')
+                self.assertEqual(len(self.export(page)['live']['structure']), 2)
+                page.locator('#liveResetTarget').click()
+                self.wait_badge(page, r'^Live · rev 2$')
+                self.assertNotIn('live', self.export(page))
+                self.assertEqual(self.dom(frame, 'cards'), ['card.a', 'card.b', 'card.c', 'card.d'])
+                self.assertFalse(page.locator('#liveReconnectBanner').is_visible(), 'both saved containers went back, so nothing differs')
+                self.assertEqual(errors, [])
+
     def test_accept_target_state_drops_saved_dom_moves(self):
         for engine in ENGINES:
             with self.subTest(engine=engine):
@@ -3164,6 +3339,7 @@ class StudioDomMovePersistenceTests(ArrangeCase):
                 self.assertEqual(self.export(page)['live']['structure'], good)
                 banner = page.locator('#liveReconnectBanner')
                 banner.wait_for(state='visible')
+                self.assertEqual(page.locator('#liveReconnectHeading').inner_text(), 'Imported state differs from the target.')
                 page.wait_for_timeout(300)
                 self.assertEqual(self.moves(frame), [], 'an import never moves the page by itself')
                 page.locator('#liveReapply').click()
@@ -3252,6 +3428,78 @@ class StudioDomMovePersistenceTests(ArrangeCase):
                     self.assertEqual(names, ['Cards'] if saved else [])
                     self.assertIn('Composition imported.', self.import_document(page, self.export(page)))
                     self.assertEqual(errors, [])
+
+    def assert_the_move_is_not_saved(self, status):
+        self.assertRegex(status, r'(?i)this move is not saved')
+        self.assertNotRegex(status, r'(?i)kept in Studio')
+        self.assertNotRegex(status, r'(?i)Reapply puts it back')
+
+    def test_a_move_made_while_a_conflict_is_open_is_not_saved_when_it_would_name_an_element_twice(self):
+        """Saved Cards [b c d] and Sidebar [x y a] stand while the page was reloaded; moving card.d would merge a new
+        Cards [d a b c] beside the saved Sidebar, which names card.a again."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors, frame = self.open_arrange(engine)
+                self.select(page, frame, 'card.a')
+                options = page.locator('#liveMoveContainer option').evaluate_all('els => els.map(el => [el.value, el.textContent])')
+                page.locator('#liveMoveContainer').select_option(next(value for value, name in options if name == 'Sidebar'))
+                page.locator('#liveMoveInto').click()
+                self.wait_badge(page, r'^Live · rev 1$')
+                saved = self.export(page)['live']['structure']
+                self.assertEqual({entry['name']: entry['ids'] for entry in saved},
+                                 {'Cards': ['card.b', 'card.c', 'card.d'], 'Sidebar': ['side.x', 'side.y', 'card.a']})
+                frame.evaluate('location.reload()')
+                banner = page.locator('#liveReconnectBanner')
+                banner.wait_for(state='visible')
+                frame = self.wait_ready(page, 11)
+                self.assertEqual(self.dom(frame), ['card.a', 'card.b', 'card.c', 'card.d'])
+                self.select(page, frame, 'card.d')
+                page.locator('#liveMoveFirst').click()
+                self.wait_badge(page, r'^Live · rev 1$')
+                self.assertEqual(self.dom(frame), ['card.d', 'card.a', 'card.b', 'card.c'], 'the page has the move')
+                self.assertEqual(page.locator('#liveReconnectHeading').inner_text(), 'Target reconnected.',
+                                 'an open conflict keeps the cause it was raised with')
+                exported = self.export(page)
+                ids = [item for entry in exported['live']['structure'] for item in entry['ids']]
+                self.assertEqual(len(ids), len(set(ids)), 'no element in two saved containers')
+                self.assertEqual(exported['live']['structure'], saved, 'Studio keeps what it saved')
+                status = page.locator('#liveCodeStatus').inner_text()
+                self.assert_the_move_is_not_saved(status)
+                self.assertRegex(status, r'(?i)another container')
+                self.assertIn('Composition imported.', self.import_document(page, exported), 'Studio imports what it exported')
+                self.assertEqual(self.export(page)['live']['structure'], saved)
+                self.assertTrue(banner.is_visible(), 'the choice to Reapply or Accept is still open')
+                self.assertEqual(errors, [])
+
+    def test_a_move_made_while_a_conflict_is_open_is_not_saved_past_the_container_limit(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors, frame = self.open_arrange(engine)
+                hundred = [{'selector': f'#p{index}', 'name': f'P{index}', 'ids': [f'p.{index}']} for index in range(100)]
+                self.import_structure(page, hundred)
+                self.move_first(page, frame)
+                self.assertEqual(self.dom(frame), ['card.c', 'card.a', 'card.b', 'card.d'], 'the page has the move')
+                exported = self.export(page)
+                self.assertEqual(exported['live']['structure'], hundred, 'Studio keeps what it saved')
+                status = page.locator('#liveCodeStatus').inner_text()
+                self.assert_the_move_is_not_saved(status)
+                self.assertRegex(status, r'(?i)100 containers')
+                self.assertIn('Composition imported.', self.import_document(page, exported))
+                self.assertEqual(self.export(page)['live']['structure'], hundred)
+                self.assertTrue(page.locator('#liveReconnectBanner').is_visible())
+                self.assertEqual(errors, [])
+
+    def test_a_move_that_fits_is_still_saved_beside_a_conflict_the_user_has_not_resolved(self):
+        """The guard refuses only what could not be exported: a move into a different container stays saved."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors, frame = self.open_arrange(engine)
+                self.import_structure(page, [{'selector': '#nowhere', 'name': 'Ghost', 'ids': ['ghost.a', 'ghost.b']}])
+                self.move_first(page, frame)
+                saved = {entry['name']: entry['ids'] for entry in self.export(page)['live']['structure']}
+                self.assertEqual(saved, {'Ghost': ['ghost.a', 'ghost.b'], 'Cards': self.CARDS_AS_SAVED})
+                self.assertRegex(page.locator('#liveCodeStatus').inner_text(), r'(?i)kept in Studio')
+                self.assertEqual(errors, [])
 
     def test_a_long_author_name_on_the_container_is_clamped_in_the_real_flow(self):
         for engine in ENGINES:
@@ -3609,6 +3857,149 @@ class StudioSelectionOrderTests(ArrangeCase):
                 self.assertEqual(self.shown(page), 'card.a')
                 self.assertEqual(errors, [])
 
+    # ---- picks Studio sends for the user (target list, "All targets") ------------------------------------------
+    # The target may handle such a pick after a newer click in the page already reached Studio. Its late answer is
+    # then an old request's answer, not a new choice by the user.
+
+    def wait_shown(self, page, target_id):
+        page.wait_for_function('(id) => document.querySelector("#liveTargetName")?.dataset.targetId === id', arg=target_id, timeout=4000)
+
+    # An older target that never echoes requestId is played by the fake itself: a script added before the fake's own
+    # listener removes the id from the first `drop_echo` selects, as a target that never read it would see them.
+    drop_echo = 0
+    DROP_ECHO = """(() => {
+        window.__selectIds = [];
+        let drop = %d;
+        window.addEventListener('message', (event) => {
+            const data = event.data;
+            if (!data || data.type !== 'design:select') return;
+            window.__selectIds.push(typeof data.requestId === 'string' ? data.requestId : null);
+            if (drop > 0) { drop -= 1; delete data.requestId; }
+        });
+    })();"""
+
+    def context(self, *args, **kwargs):
+        context = super().context(*args, **kwargs)
+        if self.drop_echo:
+            context.add_init_script(self.DROP_ECHO % self.drop_echo)
+        return context
+
+    def test_a_list_pick_answered_after_a_newer_page_click_does_not_replace_the_click(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors, frame = self.open_arrange(engine)
+                self.watch_handled(page)
+                frame.evaluate('window.fake.holdAll = true')
+                page.locator('[data-live-target="card.a"]').click()      # the user picks Card A in Studio (older) ...
+                self.wait_held(frame, 1)                                 # ... the target answers, but the answer is held
+                frame.evaluate('window.fake.select("card.b", true)')    # the click on Card B in the page reached Studio first
+                self.wait_held(frame, 2)
+                self.release_all(page, frame)
+                self.wait_shown(page, 'card.b')
+                self.assertEqual(self.shown(page), 'card.b')
+                # The answer to the older pick is not a new choice: the page is put back on the click.
+                self.assertEqual([item['targetId'] for item in self.selects(frame)], ['card.a', 'card.b'])
+                self.assertTrue(all(isinstance(item.get('requestId'), str) for item in self.selects(frame)),
+                                'every select Studio sends for the user can be told apart when it is answered')
+                self.assert_next_edit_goes_to(page, frame, 'card.b', 'card.a')
+                self.assertEqual(errors, [])
+
+    def test_all_targets_answered_after_a_newer_page_click_does_not_close_the_inspector(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors, frame = self.open_arrange(engine)
+                self.select(page, frame, 'card.a')
+                self.watch_handled(page)
+                frame.evaluate('window.fake.holdAll = true')
+                page.locator('[data-live-back]').click()                 # "All targets" (older) ...
+                self.wait_held(frame, 1)
+                frame.evaluate('window.fake.select("card.b", true)')    # ... then a click on Card B in the page
+                self.wait_held(frame, 2)
+                self.release_all(page, frame)
+                self.wait_shown(page, 'card.b')
+                self.assertEqual(self.shown(page), 'card.b')
+                self.assertEqual([item['targetId'] for item in self.selects(frame)], [None, 'card.b'])
+                self.assert_next_edit_goes_to(page, frame, 'card.b', 'card.a')
+                self.assertEqual(errors, [])
+
+    def test_a_page_click_that_comes_after_the_answer_to_a_list_pick_still_wins(self):
+        """Characterization: the target's replies arrive in the order they happened."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors, frame = self.open_arrange(engine)
+                self.watch_handled(page)
+                frame.evaluate('window.fake.holdAll = true')
+                page.locator('[data-live-target="card.a"]').click()
+                self.wait_held(frame, 1)
+                frame.evaluate('window.fake.select("card.b")')          # the click comes after the answer
+                self.wait_held(frame, 2)
+                self.release_all(page, frame)
+                self.wait_shown(page, 'card.b')
+                self.assertEqual([item['targetId'] for item in self.selects(frame)], ['card.a'], 'nothing needed realigning')
+                self.assert_next_edit_goes_to(page, frame, 'card.b', 'card.a')
+                self.assertEqual(errors, [])
+
+    def test_a_list_pick_made_after_a_page_click_wins_over_the_older_all_targets_answer(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors, frame = self.open_arrange(engine)
+                self.select(page, frame, 'card.b')                       # a click in the page
+                self.watch_handled(page)
+                frame.evaluate('window.fake.holdAll = true')
+                page.locator('[data-live-back]').click()                 # All targets (its answer is held) ...
+                self.wait_held(frame, 1)
+                page.locator('[data-live-target="card.c"]').click()      # ... then the user picks Card C
+                self.wait_held(frame, 2)
+                self.release_all(page, frame)
+                self.wait_shown(page, 'card.c')
+                self.assertEqual([item['targetId'] for item in self.selects(frame)], [None, 'card.c'], 'nothing needed realigning')
+                self.assert_next_edit_goes_to(page, frame, 'card.c', 'card.b')
+                self.assertEqual(errors, [])
+
+    def test_a_target_that_never_echoes_the_request_id_still_follows_every_pick(self):
+        """An older target replies without requestId: its answers are read as the user's choices, as before."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                self.drop_echo = 10_000
+                page, errors, frame = self.open_arrange(engine)
+                page.locator('[data-live-target="card.a"]').click()
+                self.wait_shown(page, 'card.a')
+                page.locator('[data-live-back]').click()
+                page.locator('[data-live-target="card.b"]').click()
+                self.wait_shown(page, 'card.b')
+                frame.evaluate('window.fake.select("card.c")')           # a click in the page
+                self.wait_shown(page, 'card.c')
+                page.locator('[data-live-back]').click()
+                page.wait_for_selector('[data-live-target="card.d"]')
+                page.locator('[data-live-target="card.d"]').click()
+                self.wait_shown(page, 'card.d')
+                ids = frame.evaluate('window.__selectIds')
+                self.assertTrue(len(ids) >= 5 and all(isinstance(item, str) for item in ids), ids)   # Studio still tagged them
+                self.assertTrue(all('requestId' not in item['data'] for item in self.received(frame, 'design:select')),
+                                'the target never saw an id, so it cannot echo one')
+                self.assert_next_edit_goes_to(page, frame, 'card.d', 'card.c')
+                self.assertEqual(errors, [])
+
+    def test_a_request_the_target_never_answered_does_not_block_realigning_the_page(self):
+        """The first select is never echoed. It must not stay in the way of the realign that a later stale answer needs."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                self.drop_echo = 1
+                page, errors, frame = self.open_arrange(engine)
+                page.locator('[data-live-target="card.a"]').click()      # answered without requestId
+                self.wait_shown(page, 'card.a')
+                self.watch_handled(page)
+                frame.evaluate('window.fake.holdAll = true')
+                page.locator('[data-live-back]').click()                 # All targets: answered with its id, but the answer is held
+                self.wait_held(frame, 1)
+                frame.evaluate('window.fake.select("card.b", true)')    # the click in the page reached Studio first
+                self.wait_held(frame, 2)
+                self.release_all(page, frame)
+                self.wait_shown(page, 'card.b')
+                self.assertEqual(self.selects(frame)[-1]['targetId'], 'card.b', 'the page is put back on the click')
+                self.assert_next_edit_goes_to(page, frame, 'card.b', 'card.a')
+                self.assertEqual(errors, [])
+
 
 class StudioFreeFontGateTests(LiveCase):
     """Importing or applying a document is not asking for free fonts (D032): only Load free fonts or an inspector pick is."""
@@ -3841,6 +4232,93 @@ class StudioCompositionFontTests(LiveCase):
                 self.assertEqual(sorted(reapply[0]['fontStylesheets']), sorted(synced), 'the same complete set a Sync sends')
                 self.assertNotIn('--extra-font', frame.evaluate('window.fake.ledger().tokens'))
                 self.assertEqual(sorted(frame.evaluate('window.fake.ledger().imports')), sorted(synced), 'no sheet was released')
+                self.assertEqual(errors, [])
+
+    # A library font no default slot uses, held by a saved token: only the token keeps its sheet on the page.
+    BRAND = {'--font-brand': '"Space Mono", monospace'}
+
+    def streamed(self, frame):
+        """The composition updates that carry slots (a Sync and every linked edit); Reapply's update is tokens-only."""
+        return [u['patch'] for u in self.updates(frame) if 'targetId' not in u and 'slots' in u['patch']]
+
+    def wait_streamed(self, frame, count):
+        # Polling by timer, not by animation frame: the specimen view hides the target frame, and a hidden frame gets none.
+        frame.wait_for_function(
+            '(n) => window.__received.filter(i => i.data && i.data.type === "design:update" && i.data.targetId === undefined'
+            ' && i.data.patch && i.data.patch.slots).length >= n', arg=count, polling=50)
+
+    def pick_first_slot_family(self, page, family):
+        """A linked composition edit: the specimen canvas holds the slots, and the family pick re-renders the canvas."""
+        page.locator('#viewSpecimenCanvas').click()
+        page.locator('#composerCanvas > .flow-slot').first.click(position={'x': 3, 'y': 3})
+        page.locator('#slotInspector [data-bind="family"]').select_option(family)
+
+    def test_a_sync_and_a_linked_edit_after_reapply_keep_the_sheet_only_a_saved_token_names(self):
+        """The bridge treats every update's sheet list as the complete set, so each one must carry the token fonts too."""
+        brand = FREE_URLS['space-mono']
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors = self.open(engine)
+                self.wait_connected(page)
+                frame = self.frame(page)
+                page.locator('#loadFreeFonts').click()    # the user asks for free fonts
+                self.import_saved_tokens(page, self.BRAND)
+                page.locator('#liveReapply').click()
+                page.locator('#liveReconnectBanner').wait_for(state='hidden')
+                self.assertIn(brand, frame.evaluate('window.fake.ledger().imports'), 'Reapply loaded the token font')
+                # Sync links the composition: its update carries the slots' sheets and the token's.
+                before = len(self.streamed(frame))
+                page.locator('#btnSyncToApp').click()
+                self.wait_streamed(frame, before + 1)
+                slots = [FREE_URLS[key] for key in ('fraunces', 'instrument-serif', 'inter', 'ibm-plex-mono')]
+                self.assertEqual(sorted(self.streamed(frame)[-1]['fontStylesheets']), sorted(slots + [brand]))
+                self.assertEqual(sorted(frame.evaluate('window.fake.ledger().imports')), sorted(slots + [brand]),
+                                 'the Sync did not release the token font')
+                # A linked edit that changes a slot font: the new font's sheet arrives and the token's stays.
+                self.pick_first_slot_family(page, 'space-grotesk')
+                frame.wait_for_function('window.fake.ledger().imports.some(url => url.includes("Space+Grotesk"))', polling=50)
+                sent = self.streamed(frame)[-1]['fontStylesheets']
+                imports = frame.evaluate('window.fake.ledger().imports')
+                self.assertEqual(sorted(imports), sorted(sent), 'the page holds exactly the set the edit sent')
+                self.assertEqual(len(set(sent)), len(sent), 'no sheet twice')
+                for url in (brand, FREE_URLS['space-grotesk'], FREE_URLS['instrument-serif'], FREE_URLS['inter'], FREE_URLS['ibm-plex-mono']):
+                    self.assertIn(url, imports)
+                self.assertEqual(errors, [])
+
+    def test_a_sync_releases_the_sheet_of_a_token_it_replaces(self):
+        """The set follows the tokens the page will hold: a saved token this update overwrites no longer keeps its font."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors = self.open(engine)
+                self.wait_connected(page)
+                frame = self.frame(page)
+                page.locator('#loadFreeFonts').click()
+                self.import_saved_tokens(page, {'--font-display': '"Space Mono", monospace'})
+                page.locator('#liveReapply').click()
+                page.locator('#liveReconnectBanner').wait_for(state='hidden')
+                self.assertIn(FREE_URLS['space-mono'], frame.evaluate('window.fake.ledger().imports'), 'the saved token loaded its font')
+                page.locator('#btnSyncToApp').click()
+                self.wait_streamed(frame, 1)
+                self.assertEqual(frame.evaluate('window.fake.ledger().tokens["--font-display"]'), '"Fraunces", serif', 'the Sync replaced the token')
+                self.assertNotIn(FREE_URLS['space-mono'], frame.evaluate('window.fake.ledger().imports'))
+                self.assertEqual(errors, [])
+
+    def test_without_the_ask_a_synced_and_edited_composition_never_carries_a_stylesheet_key(self):
+        """Saved tokens naming library fonts add no sheet to a streamed update before the user asks (D031, D032)."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors = self.open(engine)
+                self.wait_connected(page)
+                frame = self.frame(page)
+                self.import_saved_tokens(page, self.BRAND)
+                page.locator('#btnSyncToApp').click()
+                self.wait_streamed(frame, 1)
+                self.pick_first_slot_family(page, 'space-grotesk')
+                self.wait_streamed(frame, 2)
+                frame.wait_for_function('window.fake.ledger().tokens["--font-display"] === "\\"Space Grotesk\\", sans-serif"', polling=50)
+                for patch in self.streamed(frame):
+                    self.assertNotIn('fontStylesheets', patch)
+                self.assertEqual(frame.evaluate('window.fake.ledger().imports'), [])
                 self.assertEqual(errors, [])
 
     def test_a_typed_tracking_value_with_float_noise_is_rounded_before_it_is_sent(self):

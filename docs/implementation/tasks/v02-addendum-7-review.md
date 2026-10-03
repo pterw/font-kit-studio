@@ -823,3 +823,256 @@ not exercised for this behaviour. Acceptable.
 
 **Approved with fixes.** The one-line change is correct and respects Rules 6 and 7; the tests are real, and one
 is mutation-checked both ways. Add R1 (the real-bridge test) and R2 before the commit.
+
+## Review: Copilot findings C1-C5 and the composition sheet set (2026-10-03)
+
+Scope: the staged diff on head 1ffce91 (`font_kit_studio_v0.1.1.html`, `fontkit-bridge.js`, three test modules; 821
+insertions, 63 deletions). Five fixes written in parallel worktrees, merged. The unstaged `README.md` edit was read
+only for claims about the staged behaviour. The original findings are the six review threads on PR #2.
+
+### Verdict
+
+**Approved with fixes.** Every finding is fixed and the fixes do not conflict with each other. One required code fix
+(R1) is a sibling of C1 that the merge left open, with a one-line change and a test to write first. Two required
+non-code items (R2 wording, R3 records). Gaps (a) and (b) are ruled below: (a) is a recorded limit; (b) is required
+when the reply names its container (the real bridge always does) and a recorded limit when it does not.
+
+### Each finding, re-run against the merged code
+
+| Id | Result | Evidence |
+|----|--------|----------|
+| C1 | Fixed | The verifier's probes (`work/verify-copilot/copy/tests/test_probe_copilot.py`, run in `work/leading-pr2/copy`): after an in-session reorder and an unrelated reset, `live.structure` equals what the user saved and the banner is visible (fake page and real bridge). Code: `syncStructureFromLedger` (`font_kit_studio_v0.1.1.html:3722`) keeps an untouched saved entry (`:3727`), `structureTouchedBy` (`:3748`) names what an op may change, and `structureHeld` raises `live.conflict` (`:3738`). |
+| C2 | Fixed | Both probes: the duplicate id (Cards [b c d] + Sidebar [x y a], then moving card.d) leaves the saved list as it was, and 100 saved containers plus a move stay at 100; both exports import again. `structureRefusal` (`:3764`) runs on the merged list before `live.structure` is replaced (`:3736-3737`); `domMoveNotice` says "This move is not saved" and why (`:3818-3823`). |
+| C3 | Fixed | Probe: the object the bridge was built from, edited and passed back to `initFontKitBridge`, narrows (`['a','b']` to `['a']`; also in place, string and replace modes in the new tests). `fontkit-bridge.js:3146-3162` drops the identity check from the decision and keeps it only for the warning. |
+| C4 | Fixed | Probes: a text-only saved edit no longer says "smaller file"; text plus font size still does. `cssOnlyOverrides` (`:4183`) feeds `acceptShrinksFile` (`:4196`) and the "0 live edits" sentence (`:4232`). Every `LIVE_CSS` key counts, `order` included, so a saved CSS-order edit still counts as in the file. |
+| C5 | Fixed | Probe: a list pick handled by the real bridge after a newer page click ends with the inspector and `bridge.selectedId` both on the click. `requestSelection` (`:3547`) goes through the only `design:select` sender (`sendTrackedSelection`, `:3568`); the bridge echoes `requestId` for found and null targets (`fontkit-bridge.js:2795-2826`). |
+| Sheet set | Fixed | `withCompositionSheets` (`:5293`) is the only builder; Sync and linked edits (via `compositionPatch`, `:5279`), the consent re-send (`broadcastLiveState(true)`) and Reapply's token update (`:3989`) all go through it. `compositionFontSheets` and `composedFontSheets` have no remaining reference outside review records. |
+
+### Required before commit
+
+**R1 (required, code): a reset that names its container must not use the stale-ledger heuristic.** Gap (b), wider than
+the implementer wrote.
+
+- Where: `structureTouchedBy`, `font_kit_studio_v0.1.1.html:3756-3758`. The comment (`:3744-3747`) says the heuristic is
+  for a reply that does not name the container (`target` is optional). The code applies it to every reset.
+- Why it matters: the real bridge always sends `target` for a targeted reset (`fontkit-bridge.js:1207`), so
+  `containerBefore` and `after` already identify the containers the reset touched. The heuristic then adds "a saved
+  container the last ledger listed and this one does not". When the app put another saved container back by itself
+  since the last acknowledgement, that container is dropped with no banner. That is C1 again (a saved container the
+  op did not touch is lost to an in-session page change), and Rule 6 outranks Rule 8.
+- Reproduced (private copy, shared tree untouched): Cards [c a b d] and Sidebar [y x] saved by two DOM moves; the app
+  restores Cards; reset of side.y with no acknowledged edit between. Result with the fake's reply extended to carry
+  `target` (as the real bridge's does): `live.structure` is empty and the banner is hidden. Same result without
+  `target`. The existing test `test_a_reset_of_one_saved_element_does_not_drop_another_saved_container_the_page_had_put_back`
+  passes only because an acknowledged edit (rev 3) refreshes the ledger before the reset; its own comment says so.
+- Exact change: `if (op.kind === "reset" && !after) {` at `:3756`, and reword the comment to say the heuristic is for
+  a reply that names no container.
+- Verified in `work/leading-pr2/fixb`: with that change the probe keeps Cards and shows the banner (Sidebar goes, as
+  the reset put it back); a cross-container reset that names its container still drops both containers (probe
+  result: no saved structure, no banner); `StudioDomMovePersistenceTests` and `StructureReplayTests` (34 tests) pass.
+- Failing test to write first, in `StudioDomMovePersistenceTests` next to the test named above:
+  `test_a_reset_that_names_its_container_does_not_drop_a_saved_container_the_page_put_back_since_the_last_reply`.
+  Fixture: in `tests/fixtures/studio/fake-target.html:615` the reset reply gains
+  `...(d.targetId && fake.resetNamesTarget ? { target: manifest(byId.get(d.targetId)) } : {})`. Steps: open the
+  arrange target, set `window.fake.resetNamesTarget = true`; DOM-move card.c first (rev 1); DOM-move side.y first
+  (rev 2); `restore_cards_in_the_page`; select side.y and press Reset (rev 3), with no edit in between. Assert: the
+  export's `live.structure` equals `saved_cards(CARDS_AS_SAVED)`; the banner is visible and says "the live target holds
+  0 of them"; the page DOM of Cards is the restored order (Studio did not touch it); Reapply then puts
+  `CARDS_AS_SAVED` back and hides the banner. Add a companion that passes today (characterization, not manufactured
+  RED): with `resetNamesTarget`, DOM-move card.a into Sidebar, reset card.a, assert both saved containers are gone.
+
+**R2 (required, wording): the README over-promises gap (a).** Unstaged `README.md` (Live edits section, new bullet): "If the
+page itself changes the order of a container Studio saved ..., Studio keeps its saved order and raises the reconnect
+banner". The banner is raised when the next DOM move or reset is acknowledged, and at reconnect; an acknowledged edit
+does not raise it (ruling (a)). Say so, in the same sentence. Also, in the Accept row, "a smaller CSS file only when the
+page holds fewer style edits" leaves out tokens (`acceptShrinksFile` counts them) and carries a doubled parenthesis.
+
+**R3 (required, records), per Commit Rules 1:** a ledger event in `docs/implementation/progress.md` for these fixes (scope,
+tests added, the evidence below, engines), and one decision entry in `deviations.md` for the two rulings below. The
+staged diff holds neither. Not run by this review: the full suite and the frontend gate (the baseline run was
+using the machine), Firefox, `check_commit_messages.py`. Record them as not run, not as passed.
+
+### Rulings on the two gaps
+
+**(a) An acknowledged edit after an in-session reorder raises no banner: recorded limit, not required.**
+
+- Nothing is overwritten or dropped: Studio's saved order stays as saved, and every path that reads it (move, reset,
+  Reapply, export, reconnect) is now correct. Probe: reorder in session, acknowledged font-size edit: banner hidden,
+  saved order unchanged; after a reload the banner appears.
+- The signal cannot be complete anyway: with no acknowledgement at all, an in-session reorder is also invisible. A check in
+  `acceptApplied` would make the banner depend on which message came next, and it would fire during a Reapply run (the
+  page does not yet hold the saved order) and after a user's own Sync that reorders a saved container.
+- Copilot's sentence ("surface any mismatch when processing the new ledger") is met where the ledger is processed for
+  the structure: `syncStructureFromLedger`. Record in `deviations.md`: the mismatch is raised at the next acknowledged DOM
+  move or reset and at reconnect; cost if wrong: the banner can come late, never a lost order.
+
+**(b) A reset whose reply omits `target`, after the app restored another saved container: recorded limit.** For a reply
+that names no container, Studio cannot tell the container the reset put back from one the app restored; the heuristic
+(`:3756-3758`) is the only source, and the existing test `test_resetting_a_moved_element_that_came_from_another_container_drops_both_saved_containers`
+needs it (mutation: removing the line fails that test and no other in `StudioDomMovePersistenceTests`). Any acknowledgement between refreshes the
+ledger and avoids the loss. The bundled bridge always names the container, and R1 closes the real case. Record the
+limit beside (a).
+
+### Interactions between the merged fixes
+
+| Pair | Finding |
+|------|---------|
+| C1 conflict and C4 banner | A structure-only mismatch gives `acceptShrinksFile() === false` (no "smaller file" promise) and no "0 live edits" sentence (the page has edits in session; the sentence also needs `!live.changes.structure.length`). No clash. The banner heading is still the static "Target reconnected." (`:1070`), now also shown for a mismatch raised in session. Nit N1. |
+| C1 conflict and auto-sync | An open conflict holds auto-sync (`scheduleAutoSync`, `:5200`), so a structure-only mismatch also holds CSS auto-sync until Reapply or Accept. The new test pins it (one PUT only). This is the existing conflict rule and the conservative side of Rule 2; noted so the owner knows. |
+| C1 and C2 | A refused move still raises the conflict when the page differs from what is saved (`structureHeld` is false), so the user sees the banner and the status. Exception, by design: 100 saved containers that the page holds, and a move in a 101st: status line only, no banner. |
+| C5 and the structure code | The move and reset paths re-select through `refreshSelection` (tracked, `:3556-3560`); `requestSelection` supersedes them; the in-order prune (`:4301`) drops older unanswered entries so they cannot block a realign. A bridge that never echoes `requestId` still follows every pick (test with the echo removed). `sendDesignMessage` returns false without a session, so nothing is tracked then. |
+| Sheet set and the consent re-send | One builder. Without the ask the key is absent (mutation: ungated builder killed). With it, the set is slots, then `{...savedTokens, ...patch.tokens}` fonts, capped at 16; a replaced token's font is released (mutation killed). The consent send, Sync, linked edits and Reapply send the same kind of set, which resolves the note in the previous review. |
+| C3 | Independent of the Studio fixes. |
+
+### Rules and decisions
+
+- Rule 5: Studio sends only through `sendDesignMessage` (pinned origin, `:3418-3423`); the echoed `requestId` is a
+  bounded string; narrowing never widens (test `...never_widens_it`).
+- Rule 6: C1 and C2 stop the silent adoption and the unexportable merge, except R1. A refused move is announced
+  ("This move is not saved ..."), not dropped quietly.
+- Rule 7, D031, D032: unchanged. No stylesheet key without the ask; the Composer and imported-JSON paths still wait.
+- Anti-pattern 12 (class, not instance): R1 is the sibling of C1 that was left. Anti-pattern 11: R2.
+- No new fixed sleeps. Two short absence windows (400 ms and 1000 ms) prove that nothing was sent; that is the allowed
+  exception. All 27 added tests assert rendered or page state (shown target and the next edit's destination, DOM
+  order, exported structure, imports and `link` elements in the target, banner and status text).
+
+### Evidence
+
+Every command ran in `work/leading-pr2/copy` (a private copy of the staged tree), `PYTHONPATH=tests`,
+`FKS_ENGINES=chromium`.
+
+| Run | Result |
+|-----|--------|
+| Verifier probes (9, `test_probe_copilot.py`) | All scenarios behave as fixed (the C3 probe asserts `1 == 0` on purpose and prints the allow-lists). |
+| The 27 tests added by the five fixes | Ran 27 tests in 64.164s, OK. |
+| Affected classes: `StudioSelectionOrderTests`, `StudioPersistenceTests`, `StudioCompositionFontTests`, `StudioDomMovePersistenceTests`, `OriginListTests`, integration `SelectionOrderTests`, `StructureReplayTests`, `CompositionSyncTests`, `FreeFontsAskTests` | Ran 85 tests in 152.596s, OK. |
+| `python scripts/verify.py --static-only`, `node --check fontkit-bridge.js`, `git diff --cached --check` | PASS, exit 0, no whitespace errors. |
+| Gap (a) and (b) probes (`test_probe_leading.py`) | (a): banner hidden after an acknowledged edit, saved order unchanged, banner after reload. (b): Cards dropped, no banner, with and without `target`; with the R1 change Cards is kept and the banner shows. |
+
+Mutations (each in its own copy, one test run per line):
+
+| Mutant | Killed by |
+|--------|-----------|
+| C1: untouched saved entries adopted again (drop `:3727`) | the three unrelated-reset tests (Studio x2, real bridge) |
+| C1: no conflict raised (`:3738-3741` removed) | the same three, plus the duplicate-id test |
+| C1: stale-ledger line removed (`:3757`) | `test_resetting_a_moved_element_that_came_from_another_container_drops_both_saved_containers` only |
+| C2: duplicate-id check removed; limit check removed; "elsewhere" wording removed | the matching C2 test each |
+| C3: identity check restored; warning always printed | the edited-subset tests (three modes), the page-global test; the two quiet tests |
+| C4: no `cssOnlyOverrides` in `acceptShrinksFile`; "0 live edits" sentence on `count` again | `test_a_saved_text_only_edit_is_not_promised_...` each |
+| C5: `requestSelection` untracked; prune removed; supersede removed | the two Studio and two integration ordering tests; `test_a_request_the_target_never_answered_...`; `test_back_while_the_refresh_is_in_flight_...` |
+| Sheet set: token fonts left out; saved (not merged) tokens; ask gate removed | the two token tests; the replaced-token test; the no-ask test |
+
+All killed. Nothing survived.
+
+### Nits (not blocking)
+
+- N1: the banner heading "Target reconnected." (`:1070`) is false for a mismatch raised in session. A neutral heading
+  ("Target and Studio differ.") needs a screenshot refresh in the README, so it can follow in its own change.
+- N2: `README.md:420` says a console warning always reports what `initFontKitBridge` applied or ignored; the call with the
+  object the bridge was built from is now quiet unless it narrowed. Add that clause.
+- N3: the refusal for C2 is covered only against the fake page. The real bridge covers C1 and C5; adding a C2 case needs
+  two reorderable saved containers in the demo page. Acceptable now.
+
+## Re-review: R1 reset heuristic, banner headings, docs (2026-10-03)
+
+Scope: the unstaged diff on top of the staged tree (`font_kit_studio_v0.1.1.html` +30/-11 unstaged, fake target
+fixture, `tests/test_studio_live.py` +53, `README.md`, `deviations.md` D034, `progress.md` event). Branch
+`ccr-9eab25c9-mgatzt`, HEAD `1ffce91`; no git state touched. Probes and mutants ran in private copies under
+`work/leading-pr2b/` (`copy`, `mut-*`); the gates ran once on the shared tree after the probes.
+
+### Verdict
+
+**Approved with fixes.** R1 is closed and the heading cannot go stale. Two small required items, neither a code
+change: one test assertion (a mutant of the new heading code survives) and the test count in the ledger.
+
+### R1: closed
+
+- The guard is `if (op.kind === "reset" && !after)` at `font_kit_studio_v0.1.1.html:3761`, and the comment above it
+  (`:3746-3751`) now says the guess is for a reply that names no container. Siblings: `structureBefore` is read only
+  here (`:3761-3762`, set at `:3794`); no other path uses the stale-ledger guess.
+- My earlier probe (Cards [c a b d] and Sidebar [y x] saved, the app restores Cards, reset of side.y with no
+  acknowledged edit between), run against the current tree with the fake's reply extended by `resetNamesTarget`:
+  `live.structure` keeps Cards, the Sidebar goes (the reset put it back), the banner is visible.
+- With `target` omitted the probe still drops Cards with no banner. That is the limit recorded as D034 (b), and
+  `test_resetting_a_moved_element_that_came_from_another_container_drops_both_saved_containers` (default fake, no
+  `target`) is what needs the guess.
+- Against the real bridge (`test_probe_r1_real.py` in the copy; the demo has two reorderable containers, `.actions`
+  and the hero): CTA moved next, `landing.hero.lead` moved, the app restores `.actions` in session, reset of the lead.
+  Result: `.actions` stays saved, the hero entry goes, banner visible, heading "The page changed a saved DOM order."
+  The bundled bridge does name the container for every attached element (`fontkit-bridge.js:1207`, `:2619-2627`),
+  so D034 (b)'s "always names it" holds.
+- Tests: `test_a_reset_that_names_its_container_does_not_drop_a_saved_container_the_page_put_back_since_the_last_reply`
+  (`tests/test_studio_live.py:3242`) asserts exported structure, banner text, heading, page DOM (Studio did not touch
+  it) and that Reapply restores the order. The companion (`:3275`) is a characterization that passes without the fix
+  and asserts both containers go and no banner shows. Fixture switch at `fake-target.html:58-60`, `:619`, default off.
+
+### Banner heading: cannot go stale; one test gap
+
+State: `live.conflictCause` (`:2133`). It is set in exactly two places. `reconcileSavedOverrides(cause)` (`:3903-3904`)
+sets it on every call, before it recomputes `live.conflict`: `design:ready` passes the default "reconnect", an import
+while the target is ready passes "import" (`:3928`). `syncStructureFromLedger` (`:3739-3743`) sets "page" only when no
+conflict is open. `live.conflict` becomes true only in those two places; it becomes false only in Reapply (`:4024`),
+Accept (`:4159`) and a reconcile that finds no difference. `renderReconnectBanner` writes the heading on every render
+(`:4234`).
+
+| Scenario | Result (probe, private copy) |
+|----------|------------------------------|
+| page conflict, Reapply, reload | banner "Target reconnected." (reconcile overwrites the old cause) |
+| page conflict, Accept, a new in-session reorder and reset | "The page changed a saved DOM order." (conflict was closed, so the new cause is set) |
+| page conflict open, then an import | "Imported state differs from the target." (the import replaced the saved state, so it is the new cause) |
+| import conflict open, then an in-session reorder and reset | stays "Imported state differs from the target." |
+| import conflict, then a reload | "Target reconnected." |
+| fresh reload (existing test `:3076`) | "Target reconnected." (default cause) |
+
+The three heading assertions (`:3076`, `:3265`, `:3342`) read rendered text. The wording is true for each cause and the
+text after it still says "Nothing was applied automatically" and offers Reapply or Accept (Rule 6). A refused move in a
+conflict that is already open keeps that conflict's heading. The screenshots in `docs/assets/screenshots/` show the
+reconnect heading, which is unchanged.
+
+Mutants (own copy each, `StudioDomMovePersistenceTests`, 32 tests, Chromium):
+
+| Mutant | Result |
+|--------|--------|
+| R1 guard: `&& !after` removed | killed by the new R1 test only |
+| "page" cause never set | killed by the new R1 test |
+| `reconcileSavedOverrides("import")` without the cause | killed by the import test |
+| `live.conflictCause = cause;` removed | killed by the import test |
+| heading line removed (static text) | killed by the R1 test and the import test |
+| **`if (!live.conflict)` dropped: an open conflict is relabelled "page"** | **survives** |
+
+**F1 (required, test only).** The last mutant is the rule that an open conflict keeps the cause it was raised with
+(`:3741`, comment at `:3740`). Nothing pins it. Add one assertion to
+`test_a_move_made_while_a_conflict_is_open_is_not_saved_when_it_would_name_an_element_twice`, after the line
+`self.assertEqual(self.dom(frame), ['card.d', 'card.a', 'card.b', 'card.c'], 'the page has the move')` (`:3459`):
+
+```python
+self.assertEqual(page.locator('#liveReconnectHeading').inner_text(), 'Target reconnected.', 'an open conflict keeps its cause')
+```
+
+Verified: it passes on the current tree and fails on the mutant ("The page changed a saved DOM order." != "Target
+reconnected."). No code change.
+
+### Docs, ledger and decision against the code
+
+| Item | Result |
+|------|--------|
+| README `:137` (page changes a saved container) | Matches `:3657-3665` and `:3741`: the banner comes at the next DOM move (not a CSS-order move, not a Reapply step) or targeted reset, and at reconnect; an acknowledged style edit does not raise it (D034 a). Nit, not blocking: "While that banner is open" is incomplete for the 100-container limit, where 100 saved containers that the page holds raise no banner and the move is still not saved with a status line. |
+| README `:198` (Accept) | Matches `acceptShrinksFile` (`:4196-4210`): CSS keys only (order included), tokens counted, text excluded. Nit: "text edits are not in the CSS file, and the banner says when" reads as if the banner announces dropped text edits; it announces the smaller file. Optional reorder. |
+| README `:420` | Matches `fontkit-bridge.js:3146-3162` (quiet only for the original object when nothing narrowed). |
+| D034 (a), (b) | Match my two rulings and the code (`:3741`, `:3761`); product terms only (anti-pattern 15 clear). |
+| Ledger event (`progress.md`) | Bullets match the code and tests, except the count below. |
+
+**F2 (required, record).** `docs/implementation/progress.md:69` says "546 tests". The tree holds 548 (HEAD 519, the
+five fixes 27, the two R1 tests 2). Collected and run: 548. Change it to 548 (anti-patterns 11 and 14).
+
+### Gates (full current tree, staged and unstaged; Chromium only; Firefox is not installed here and was not run)
+
+- `python scripts/verify.py --static-only`: PASS (89 unique IDs, inline JS syntax, 3 provenance hashes), exit 0.
+- `node --check fontkit-bridge.js`: exit 0. `git diff --check` and `git diff --cached --check`: clean.
+- `python -m unittest discover -s tests -v` (`PYTHONPATH=tests`, `FKS_ENGINES=chromium`, log
+  `work/leading-pr2b/suite.log`): `Ran 548 tests in 549.991s` / `OK`. No failure, nothing re-run.
+- `python scripts/dev/frontend_gate.py --engines chromium --offline`: `SUMMARY OK: 15 of 15 planned runs finished.
+  Blocking: 7 runs, 6 passed, 0 failed, 1 skipped. Advisory: 8 runs, 0 ADVISORY lines. 140 REPORT lines, 1 SKIP lines,
+  0 FAIL lines` (the skip is the online free-fonts check; the REPORT lines are touch-target notes).
+- Not run: `check_commit_messages.py` (nothing committed), Firefox, the online free-fonts check.
+- Processes: the suite (PID 20967) and the probe and mutant runs have exited; nothing of mine is left running.

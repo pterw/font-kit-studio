@@ -494,10 +494,21 @@ class SelectionOrderTests(LiveIntegrationCase):
   window.__release = () => { const next = pipe.shift(); if (next) send.call(next[0], next[1]); return pipe.length; };
 })();
 """
+    # Test-only: the bridge can be told to keep the design:select messages it receives and handle them later, so a pick
+    # Studio sent for the user can be handled after a newer click in the page (a busy page does exactly that).
+    STASH = """
+;(function () {
+  const proto = window.FontKitBridge.prototype, handle = proto.handleSelect, stash = [];
+  window.__defer = false;
+  proto.handleSelect = function (id, requestId) { if (window.__defer) stash.push([this, id, requestId]); else handle.call(this, id, requestId); };
+  window.__stashed = () => stash.length;
+  window.__runStashed = () => { stash.splice(0).forEach(([bridge, id, requestId]) => handle.call(bridge, id, requestId)); };
+})();
+"""
     LEAD = '[data-design-id="landing.hero.lead"]'
 
     def open(self, engine, viewport=None, query=True):
-        bridge = (REPO / 'fontkit-bridge.js').read_text(encoding='utf-8') + self.PIPE
+        bridge = (REPO / 'fontkit-bridge.js').read_text(encoding='utf-8') + self.PIPE + self.STASH
         self.runtime_context_hook = lambda context: context.route(
             f'http://localhost:{self.target_port}/fontkit-bridge.js',
             lambda route: route.fulfill(status=200, content_type='application/javascript', body=bridge))
@@ -547,6 +558,71 @@ class SelectionOrderTests(LiveIntegrationCase):
                 self.assertEqual(self.style(frame, TITLE, 'fontSize'), title_before)
                 self.assertNotEqual(lead_before, '31px')
                 self.assertEqual(page.locator('#liveTargetName').text_content(), 'Hero lead')
+                self.assertEqual(page.errors, [])
+
+    # ---- picks Studio sends for the user, handled by the bridge later than a newer click in the page ----------
+    def assert_selected_everywhere(self, page, frame, target_id):
+        """The inspector and the bridge's own selection both end on `target_id` (the realign needs a round trip)."""
+        try:
+            frame.wait_for_function('(id) => window.__fontkitBridge.selectedId === id', arg=target_id, timeout=3000)
+        except PlaywrightTimeout:
+            pass   # the assertions below name what was selected instead
+        self.assertEqual(frame.evaluate('window.__fontkitBridge.selectedId'), target_id, 'the bridge')
+        self.inspector_target(page, target_id)
+        self.assertEqual(page.locator('#liveTargetName').get_attribute('data-target-id'), target_id, 'the inspector')
+
+    def test_a_page_click_wins_over_a_list_pick_the_bridge_handles_late(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page = self.connected(engine)
+                frame = self.frame(page)
+                lead_before = self.style(frame, self.LEAD, 'fontSize')
+                frame.evaluate('window.__defer = true')
+                page.locator('[data-live-target="landing.hero.lead"]').click()     # the user picks the lead in Studio (older)
+                frame.wait_for_function('window.__stashed() === 1')
+                self.select_hero_title(page)                                         # then clicks the title in the page (newer)
+                frame.evaluate('window.__defer = false; window.__runStashed()')     # the bridge now handles the older pick
+                self.assert_selected_everywhere(page, frame, 'landing.hero.title')
+                # The next typed value lands on the title the user clicked, not on the lead picked earlier.
+                self.type_into(page, '#liveFontSize', '31')
+                self.wait_style(frame, TITLE, 'fontSize', '31px')
+                self.assertEqual(self.style(frame, self.LEAD, 'fontSize'), lead_before)
+                self.assertEqual(page.locator('#liveTargetName').text_content(), 'Hero title')
+                self.assertEqual(page.errors, [])
+
+    def test_a_page_click_after_the_bridge_handled_the_list_pick_still_wins(self):
+        """Characterization: the bridge handled the pick first, so nothing is stale."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page = self.connected(engine)
+                frame = self.frame(page)
+                title_before = self.style(frame, TITLE, 'fontSize')
+                page.locator('[data-live-target="landing.hero.lead"]').click()
+                self.inspector_target(page, 'landing.hero.lead')
+                self.select_hero_title(page)
+                self.assert_selected_everywhere(page, frame, 'landing.hero.title')
+                self.type_into(page, '#liveFontSize', '29')
+                self.wait_style(frame, TITLE, 'fontSize', '29px')
+                self.assertNotEqual(title_before, '29px')
+                self.assertEqual(page.errors, [])
+
+    def test_a_page_click_wins_over_all_targets_the_bridge_handles_late(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page = self.connected(engine)
+                frame = self.frame(page)
+                title_before = self.style(frame, TITLE, 'fontSize')
+                self.select_hero_title(page)
+                frame.evaluate('window.__defer = true')
+                page.locator('[data-live-back]').click()                             # "All targets" (older) ...
+                frame.wait_for_function('window.__stashed() === 1')
+                page.frame_locator('#targetAppFrame').locator(self.LEAD).click()   # ... then a click on the lead in the page
+                self.inspector_target(page, 'landing.hero.lead')
+                frame.evaluate('window.__defer = false; window.__runStashed()')
+                self.assert_selected_everywhere(page, frame, 'landing.hero.lead')
+                self.type_into(page, '#liveFontSize', '33')
+                self.wait_style(frame, self.LEAD, 'fontSize', '33px')
+                self.assertEqual(self.style(frame, TITLE, 'fontSize'), title_before)
                 self.assertEqual(page.errors, [])
 
 
@@ -618,6 +694,56 @@ class CompositionSyncTests(LiveIntegrationCase):
                 self.assertEqual(frame.evaluate('document.querySelectorAll("link[data-fontkit-font]").length'), 0)
                 self.assertEqual(self.font_requests, [])
                 self.assertIn('Load free fonts', page.locator('#composerStatus').text_content())
+                self.assertEqual(page.errors, [])
+
+    def record_target_font_requests(self, page):
+        """Font-host requests made by the target page itself (not by Studio's own specimens), as they happen.
+        The context route in open() records every font request but cannot say which frame asked."""
+        requests = []
+        page.on('request', lambda request: requests.append(request.url)
+                if request.url.startswith('https://fonts.googleapis.com/') and request.frame.url.startswith(self.target) else None)
+        return requests
+
+    def test_loading_free_fonts_after_a_sync_sends_the_linked_composition_with_its_stylesheets_to_the_page(self):
+        """The Composer promises the fonts load once the user presses Load free fonts: the real bridge must get them."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                self.overrides.unlink(missing_ok=True)
+                page = self.connected(engine)
+                frame = self.frame(page)
+                target_requests = self.record_target_font_requests(page)
+                self.sync_composition(page)                   # no consent yet
+                self.assertEqual(frame.evaluate('document.querySelectorAll("link[data-fontkit-font]").length'), 0)
+                self.assertEqual(self.font_requests, [], 'the sync alone contacts no font host, from Studio or the page')
+                self.assertEqual(target_requests, [])
+                page.locator('#loadFreeFonts').click()
+                frame.wait_for_function('document.querySelectorAll("link[data-fontkit-font]").length > 0')
+                links = frame.evaluate('[...document.querySelectorAll("link[data-fontkit-font]")].map(el => el.href)')
+                self.assertEqual(links, self.SHEETS, 'the consent re-sent the linked composition with its sheets')
+                frame.wait_for_function('[...document.querySelectorAll("link[data-fontkit-font]")].every(el => el.sheet !== null)')
+                for url in self.SHEETS:
+                    self.assertIn(url, target_requests, 'the page itself fetched the sheet')
+                self.assertEqual(page.errors, [])
+
+    def test_loading_free_fonts_without_a_sync_loads_no_stylesheet_in_the_page_until_the_user_syncs(self):
+        """Consent alone never pushes Studio's composition into the app (Rule 6): only a sync does."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                self.overrides.unlink(missing_ok=True)
+                page = self.connected(engine)
+                frame = self.frame(page)
+                target_requests = self.record_target_font_requests(page)
+                page.locator('#loadFreeFonts').click()
+                page.wait_for_function('() => document.getElementById("freeFontStatus").textContent.length > 0')
+                page.wait_for_timeout(400)               # absence window: a stray send would arrive well within it
+                self.assertEqual(frame.evaluate('document.querySelectorAll("link[data-fontkit-font]").length'), 0)
+                self.assertEqual(target_requests, [])
+                self.assertNotEqual(self.font_requests, [], "Studio's own specimens did load (the consent took effect)")
+                # The same page, bridge and consent still deliver the sheets once the user syncs.
+                self.sync_composition(page)
+                frame.wait_for_function('document.querySelectorAll("link[data-fontkit-font]").length > 0')
+                links = frame.evaluate('[...document.querySelectorAll("link[data-fontkit-font]")].map(el => el.href)')
+                self.assertEqual(links, self.SHEETS)
                 self.assertEqual(page.errors, [])
 
     def test_imported_tracking_values_are_normalised_before_they_reach_the_page(self):
@@ -792,6 +918,39 @@ class StructureReplayTests(LiveIntegrationCase):
                 self.assertNotIn('structure', self.export(page).get('live', {}),
                                  'Studio saves a container only because the user moved something in it')
                 self.assertFalse(page.locator('#liveReconnectBanner').is_visible())
+                self.assertEqual(page.errors, [])
+
+    def test_a_reset_of_an_unrelated_target_keeps_a_saved_dom_order_the_app_changed_in_session(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page = self.connected(engine)
+                frame = self.frame(page)
+                self.dom_move_the_cta(page, frame)
+                saved = self.export(page)['live']['structure']
+                self.assertEqual(len(saved), 1)
+                self.assertFalse(page.locator('#liveReconnectBanner').is_visible())
+                # The app puts its action row back in its own order (a re-render): no handshake, no message to Studio.
+                frame.evaluate('() => { const row = document.querySelector(".actions"); row.appendChild(row.firstElementChild); }')
+                self.wait_order(frame, self.ORIGINAL)
+                title_size = self.style(frame, TITLE, 'fontSize')
+                self.select_hero_title(page)
+                self.type_into(page, '#liveFontSize', '50')
+                self.wait_style(frame, TITLE, 'fontSize', '50px')
+                page.locator('#liveResetTarget').click()
+                self.wait_style(frame, TITLE, 'fontSize', title_size)
+                page.locator('#codeTabJson').click()
+                page.wait_for_function('() => !document.querySelector("#liveCodeOutput").textContent.includes("fontSize")')
+                banner = page.locator('#liveReconnectBanner')
+                self.assertEqual(self.export(page).get('live', {}).get('structure'), saved,
+                                 'an unrelated reset neither drops nor replaces what Studio saved')
+                banner.wait_for(state='visible', timeout=3000)
+                self.assertIn('the live target holds 0 of them', ' '.join(banner.inner_text().split()))
+                self.assertEqual(self.order(frame), self.ORIGINAL, 'Studio did not touch the page')
+                # The mismatch is the user's to resolve: Reapply puts the saved order back.
+                page.locator('#liveReapply').click()
+                banner.wait_for(state='hidden')
+                self.wait_order(frame, self.SAVED)
+                self.assertEqual(self.export(page)['live']['structure'], saved)
                 self.assertEqual(page.errors, [])
 
     def test_reapply_puts_a_saved_dom_move_back_on_the_first_press_even_with_a_stale_css_order_in_the_page(self):

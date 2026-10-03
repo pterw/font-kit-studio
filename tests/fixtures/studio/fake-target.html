@@ -55,6 +55,9 @@
     // and selectors, more children than Studio saves, an id two containers both claim). priorStructure is the same but
     // listed before the page's own entries (containers the page reordered long before, so they fill Studio's limit first).
     undoMoves: false, mapStructure: null, extraStructure: [], priorStructure: [],
+    // resetNamesTarget: a reset reply that names the element's manifest (the real bridge does, on a targeted reset);
+    // left off, the reply omits `target`, which the protocol allows.
+    resetNamesTarget: false,
     get mode() { return mode; }, get overlay() { return overlay; }, get revision() { return revision; } };
   const params = new URLSearchParams(location.search);
   fake.bulk = params.has("bulk");
@@ -613,7 +616,7 @@
       }
       revision += 1;
       post({ type: "design:applied", requestId: d.requestId, revision, targetId: d.targetId || "global", canonicalPatch: {},
-        reset: true, changes: ledger() });
+        reset: true, ...(d.targetId && fake.resetNamesTarget ? { target: manifest(byId.get(d.targetId)) } : {}), changes: ledger() });
     } else if (d.type === "design:restore-text") {
       if (conflict(d)) return;
       DEFS.forEach(def => { def.el.textContent = def.originalText; });

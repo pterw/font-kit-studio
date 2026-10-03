@@ -57,3 +57,13 @@ Every implementation task was independently reviewed. Final suite on Chromium: 2
   - Review found and fixed: page-only containers saved by a reset, Reapply undoing its own saved move (hidden by the fake's visual-order `orderIds`), a saved export its own import refused, status lines that promised a restore, imported fonts reaching Google before the ask, and test gaps shown by surviving mutations.
   - 517 tests (Chromium; Firefox not run here); offline frontend gate OK; the online free-fonts check could not run here (the gate's browser has no proxy) and runs in CI. Decisions D020 (extended), D021 (closed), D031, D032, D033.
 - **PR #2 review fixes (2026-10-03).** Codex: pressing Load free fonts after a linked Composer sync now re-sends the composition with its stylesheets; consent alone still sends nothing to an unlinked page (Rule 6). Reviewed in `tasks/v02-addendum-7-review.md`; 519 tests (Chromium).
+  - Copilot findings, each reproduced first and fixed test-first:
+    - A reset of an unrelated element no longer overwrites or drops a saved DOM order after the page changed it in session; Studio keeps the saved order and shows the banner.
+    - A DOM move made while the banner is open is not saved when it would put an element in two saved containers or exceed 100 containers, and the status says so.
+    - `initFontKitBridge` narrows the allow-list even when given back the options object the bridge was built from.
+    - The banner no longer promises a smaller CSS file, or 0 live edits, for text-only saved edits.
+    - Selections Studio makes for the user are tracked like its own refreshes, so a late reply cannot override a newer page click.
+  - One builder now sets a composition's complete stylesheet set for Sync, linked edits, the consent re-send and Reapply, so a streamed edit no longer releases a saved token's font.
+  - A real Studio + real bridge test covers Load free fonts after a linked sync. Limits recorded in D034.
+  - A reset whose reply names the element's container no longer drops a saved container the page restored since the last reply (the fake target's `resetNamesTarget` switch covers it). The banner heading now says what raised it: a reconnect, the page changing a saved DOM order, or an import.
+  - 548 tests (Chromium; Firefox not run here); offline frontend gate OK.
