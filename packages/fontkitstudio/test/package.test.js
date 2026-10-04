@@ -47,5 +47,6 @@ test('declares what npm needs to run and ship it', () => {
   assert.equal(pkg.bin.fontkitstudio, 'bin/fontkitstudio.js');
   assert.deepEqual(pkg.files, ['bin/', 'src/', 'dist/']);
   const bin = readFileSync(join(PKG_DIR, pkg.bin.fontkitstudio), 'utf8');
-  assert.ok(bin.startsWith('#!/usr/bin/env node\n'), 'the bin needs a node shebang');
+  // A Windows checkout with autocrlf turns the line ending into CRLF.
+  assert.match(bin, /^#!\/usr\/bin\/env node\r?\n/, 'the bin needs a node shebang');
 });
