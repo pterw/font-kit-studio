@@ -90,13 +90,12 @@ extension page before any build step. A spike at the start of R5 confirms both.
 Be exact about this when describing fontkit to anyone: the shipped product and the pitched
 product are not the same thing yet.
 
-- **Shipped (v0.2.0 and the first half of v0.2.1):** live per-element editing of a page
-  that loads the bridge, DOM moves with guards, an overrides stylesheet the dev server
-  writes, the Library and the Composer. Covered by 636 tests on `main` (786 with the second
-  half of v0.2.1), hostile-input cases on every boundary, and a CI gate for network
-  isolation and contrast. v0.2.1 works through the first-run, controls and visual audit
-  (`docs/implementation/audit-2026-10-03-first-run-and-controls.md`): the first-run half is
-  merged, and the controls and polish half is in review as PR #5.
+- **Shipped (v0.2.1):** live per-element editing of a page that loads the bridge, DOM
+  moves with guards, an overrides stylesheet the dev server writes, the Library and the
+  Composer. Covered by 788 tests, hostile-input cases on every boundary, and a CI gate for
+  network isolation and contrast. v0.2.1 worked through the first-run, controls and visual
+  audit (`docs/implementation/audit-2026-10-03-first-run-and-controls.md`); what it left
+  for later is in `docs/implementation/sweep-v0.2.1-pr-b.md`.
 - **Designed, not built:** everything in "How it differs" above. One-command start (R1),
   role detection (R2), pairing and type scales (R3), token output (R4), the extension (R5).
 - **Against "just looking", fontkit loses today.** A font-swap extension is faster for a
