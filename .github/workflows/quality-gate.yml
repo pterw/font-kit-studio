@@ -176,3 +176,32 @@ jobs:
       - name: Test the package
         working-directory: packages/fontkitstudio
         run: npm test
+
+  fixtures:
+    name: Fixtures (Vite 7 and 8)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: fixtures/*/package-lock.json
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install the fixtures
+        run: |
+          npm ci --prefix fixtures/vite-react
+          npm ci --prefix fixtures/vite7-react
+      - name: Bundle Studio and the bridge
+        run: npm --prefix packages/fontkitstudio run prepack
+      - name: Fixture tests (never skipped here)
+        env:
+          FKS_REQUIRE_FIXTURES: '1'
+          PYTHONPATH: tests
+        run: python -m unittest test_vite_build_guarantee -v
