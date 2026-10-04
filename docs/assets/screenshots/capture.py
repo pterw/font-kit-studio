@@ -115,6 +115,17 @@ def capture(browser, studio, target, rel, target_port, name, viewport):
         if block == 'start':
             page.evaluate('window.scrollBy(0, -64)')
 
+    def outline_follows_title():
+        """Wait until the selection outline is as tall as the edited title.
+
+        The bridge reports an element's bounds from an animation frame. A preview scrolled out of view runs none,
+        so after edits typed in the inspector below it the outline still has the old size until the preview is
+        visible again and its first frame has run (about 30 to 100 ms). A shot taken before that shows a stale outline.
+        """
+        height = frame.evaluate(f'document.querySelector({TITLE!r}).getBoundingClientRect().height')
+        page.wait_for_function('(h) => { const o = document.querySelector("#bridgeOverlaySelected"); '
+                               'return !o.hidden && Math.abs(o.getBoundingClientRect().height - h) < 2; }', arg=height, polling=POLL_MS)
+
     if name == 'desktop':
         # Pop-out first, before any edit, so the screenshot shows the plain docked placeholder.
         with page.expect_popup() as info:
@@ -151,15 +162,16 @@ def capture(browser, studio, target, rel, target_port, name, viewport):
     if name == 'desktop':
         page.locator('#targetAppBridgeBar').screenshot(path=str(OUT / f'bridge-bar-{name}.png'))
         page.locator('#liveCodePanel').screenshot(path=str(OUT / f'code-panel-{name}.png'))
-        # Theater mode gives the preview, the Changes panel and the inspector the whole window.
-        page.locator('#btnToggleFullscreen').click()
-        page.wait_for_function('() => document.querySelector("#liveCodePanel").getBoundingClientRect().bottom < innerHeight', polling=POLL_MS)
-        page.screenshot(path=str(OUT / f'target-app-{name}.png'))
-        page.keyboard.press('Escape')
+        # The first screen of Studio at the top of the page: its title and eyebrow, the bridge bar, the preview
+        # with the edited hero, and the inspector.
+        page.evaluate('window.scrollTo(0, 0)')
+        outline_follows_title()
+        page.screenshot(path=str(OUT / f'live-app-{name}.png'))
     else:
         below_sticky_tabs('#targetAppContainer')
         page.evaluate('window.scrollBy(0, 40)')
-        page.screenshot(path=str(OUT / f'target-app-{name}.png'))
+        outline_follows_title()
+        page.screenshot(path=str(OUT / f'live-app-{name}.png'))
         to_top('#liveCodePanel', 'center')
         page.screenshot(path=str(OUT / f'code-panel-{name}.png'))
 

@@ -73,7 +73,7 @@ Rules for every entry point:
 ## 2. The pairing system: the new Composer (approved)
 
 **One editing model.** The pairing system and single-element tweaks write to the same
-type-system file. A tweak to one element (today's Live Target inspector) becomes an
+type-system file. A tweak to one element (today's Live App inspector) becomes an
 **exception** rule in that file, under its role. There is one file and one preview. An
 existing `fontkit-overrides.css` from v0.2 is offered for import once, as exceptions,
 and then retired; nothing is imported without the user confirming.

@@ -98,7 +98,7 @@ into existence while the rule it breaks still reads as absolute.
   kit IDs, keys or accounts are prefilled.
 - Opening Studio contacts no third party. Free fonts load only after the user
   asks (Load free fonts, remembered per browser, or picking a library family
-  in the Live Target inspector); until then specimens use local fallbacks
+  in the Live App inspector); until then specimens use local fallbacks
   (D028).
 - Paid or account-bound providers (Adobe Fonts) are opt-in, bring-your-own.
 
