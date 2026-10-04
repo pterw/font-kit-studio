@@ -1,7 +1,7 @@
 # R1 One command: implementation plan
 
-Status: **approved** (owner, 2026-10-04); not started. Work resumes at R1.0, whose first
-steps are the owner's npm actions. The package name, Studio's file name, publishing and the
+Status: **active** (2026-10-04). PR A (R1.1-R1.3) is running; R1.0, the owner's npm
+steps, runs beside it (addendum 1 in the ledger below). The package name, Studio's file name, publishing and the
 versions under test are decided (D040 to D044 in
 `docs/implementation/deviations.md`; [roadmap register](2026-10-03-roadmap.md#decisions-register)),
 and the open questions below are answered. v0.2.1 is merged. This release is
@@ -180,3 +180,4 @@ R1.5 are created inside those tasks; R1.7 adds the CI wiring and the friction te
 |---|---|
 | 2026-10-03 | Draft written from the approved design. Waits on PR B and decisions 1, 2, 4. |
 | 2026-10-04 | Decisions taken (D040 to D044); open questions answered. Waits on PR B. |
+| 2026-10-04 | Addendum 1: R1 ships as three PRs under D050 (material lines counted, churn reported): A = R1.1-R1.3 (`2026-10-04-r1-pr-a-sdd.md`), B = R1.4-R1.6, C = R1.7-R1.9 and the release point. R1.0 runs beside PR A; only R1.9 depends on it. Trusted publisher fields fixed for R1.9: workflow `release.yml`, environment `npm-release`; the publish job runs Node 24 (npm 11.5.1 or later is required). |
