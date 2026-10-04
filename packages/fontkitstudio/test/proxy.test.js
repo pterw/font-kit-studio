@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { gzipSync } from 'node:zlib';
 
-import { BRIDGE_PATH, startProxy } from '../src/proxy.js';
+import { BRIDGE_PATH, ProxyTargetError, parseProxyTarget, startProxy } from '../src/proxy.js';
 import { startUpstream } from './helpers/upstream.js';
 import { acceptKey, startWsUpstream } from './helpers/ws-upstream.js';
 
@@ -668,4 +668,17 @@ describe('WebSocket upgrade', () => {
     await own.close();
     await c.waitFor((r, ended) => ended);
   });
+});
+
+test('parseProxyTarget returns local http targets and refuses the rest with a ProxyTargetError', () => {
+  assert.equal(parseProxyTarget('http://localhost:3000/a?b=1').port, '3000');
+  assert.equal(parseProxyTarget('http://127.0.0.1:3000').hostname, '127.0.0.1');
+  for (const bad of ['https://localhost:3000', 'http://example.com', 'not a url', 'ftp://localhost']) {
+    assert.throws(
+      () => parseProxyTarget(bad),
+      (error) =>
+        error instanceof ProxyTargetError &&
+        error.message === 'Font Kit Studio proxies only a local dev server (localhost or 127.0.0.1)',
+    );
+  }
 });

@@ -32,6 +32,7 @@ export function fontkitStudio(options = {}) {
   if (studio) checkLocalOrigin(studio.origin);
   const standalone = !studio;
   let bridge;
+  let standDown = false;
 
   function serveBridge(req, res, next) {
     const isRead = req.method === 'GET' || req.method === 'HEAD';
@@ -51,8 +52,18 @@ export function fontkitStudio(options = {}) {
   return {
     name: 'fontkit-studio',
     apply: 'serve',
+    // The command's instance says so, so a permanent one in the project's config stands down.
+    ...(standalone ? {} : { api: { fontkitStudio: { fromCommand: true } } }),
+
+    configResolved(config) {
+      if (!standalone) return;
+      standDown = config.plugins.some(
+        (plugin) => plugin.name === 'fontkit-studio' && plugin.api?.fontkitStudio?.fromCommand === true,
+      );
+    },
 
     async configureServer(server) {
+      if (standDown) return;
       const path = bridgeFile instanceof URL ? fileURLToPath(bridgeFile) : String(bridgeFile);
       try {
         bridge = await readFile(path);
@@ -89,7 +100,7 @@ export function fontkitStudio(options = {}) {
     },
 
     transformIndexHtml() {
-      if (!studio) return [];
+      if (standDown || !studio) return [];
       return [
         {
           tag: 'script',

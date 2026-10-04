@@ -200,8 +200,13 @@ jobs:
           npm ci --prefix fixtures/vite7-react
       - name: Bundle Studio and the bridge
         run: npm --prefix packages/fontkitstudio run prepack
+      - name: Install the test tools and Chromium
+        run: |
+          python -m pip install -r requirements-dev.txt
+          python -m playwright install --with-deps chromium
       - name: Fixture tests (never skipped here)
         env:
+          FKS_ENGINES: chromium
           FKS_REQUIRE_FIXTURES: '1'
           PYTHONPATH: tests
-        run: python -m unittest test_vite_build_guarantee -v
+        run: python -m unittest test_vite_build_guarantee test_one_command_vite test_one_command_proxy -v

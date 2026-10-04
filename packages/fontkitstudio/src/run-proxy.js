@@ -3,6 +3,23 @@ import { openBrowser } from './open-browser.js';
 import { startProxy } from './proxy.js';
 import { startStudioServer } from './studio-server.js';
 
+// Starts Studio on the wanted port; a busy port falls back to a free one and says so.
+export async function startStudio({ studioPort = 0, studioFile, err = process.stderr } = {}) {
+  // An undefined file falls back to the package's dist/ copy inside each starter.
+  const start = (port) => startStudioServer({ port, studioFile });
+
+  try {
+    return await start(studioPort);
+  } catch (error) {
+    if (studioPort === 0 || error.code !== 'EADDRINUSE') throw error;
+    const studio = await start(0);
+    err.write(
+      `Font Kit Studio: port ${studioPort} is busy, so Studio uses port ${studio.port}; its saved settings stay with the old port.\n`,
+    );
+    return studio;
+  }
+}
+
 export async function runProxy({
   target,
   open = true,
@@ -13,19 +30,7 @@ export async function runProxy({
   studioFile,
   bridgeFile,
 } = {}) {
-  // An undefined file falls back to the package's dist/ copy inside each starter.
-  const startStudio = (port) => startStudioServer({ port, studioFile });
-
-  let studio;
-  try {
-    studio = await startStudio(studioPort);
-  } catch (error) {
-    if (studioPort === 0 || error.code !== 'EADDRINUSE') throw error;
-    studio = await startStudio(0);
-    err.write(
-      `Font Kit Studio: port ${studioPort} is busy, so Studio uses port ${studio.port}; its saved settings stay with the old port.\n`,
-    );
-  }
+  const studio = await startStudio({ studioPort, studioFile, err });
 
   let proxy;
   try {

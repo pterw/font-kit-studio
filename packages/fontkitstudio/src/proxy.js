@@ -27,6 +27,26 @@ function parseUrl(text) {
   }
 }
 
+export class ProxyTargetError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'ProxyTargetError';
+  }
+}
+
+// The one check of the address to proxy: a local http dev server, nothing else.
+export function parseProxyTarget(target) {
+  const targetUrl = parseUrl(String(target));
+  if (
+    !targetUrl ||
+    targetUrl.protocol !== 'http:' ||
+    !LOOPBACK_URL_HOSTNAMES.includes(targetUrl.hostname)
+  ) {
+    throw new ProxyTargetError('Font Kit Studio proxies only a local dev server (localhost or 127.0.0.1)');
+  }
+  return targetUrl;
+}
+
 // Inserts the tag after <head>, else <html>, else a leading doctype, else at 0. Works on
 // latin1 so every byte of the page, whatever its encoding, comes out as it went in.
 export function insertTag(buffer, tag) {
@@ -47,14 +67,7 @@ export async function startProxy({
   port = 0,
   maxHtmlBytes = 8 * 1024 * 1024,
 } = {}) {
-  const targetUrl = parseUrl(String(target));
-  if (
-    !targetUrl ||
-    targetUrl.protocol !== 'http:' ||
-    !LOOPBACK_URL_HOSTNAMES.includes(targetUrl.hostname)
-  ) {
-    throw new Error('Font Kit Studio proxies only a local dev server (localhost or 127.0.0.1)');
-  }
+  const targetUrl = parseProxyTarget(target);
   const studioUrl = parseUrl(String(studio?.origin));
   if (
     !studioUrl ||

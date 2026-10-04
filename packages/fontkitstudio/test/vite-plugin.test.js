@@ -266,6 +266,57 @@ describe('fontkitStudio Vite plugin', () => {
     assert.deepEqual(plugin.transformIndexHtml('<html></html>'), []);
   });
 
+  describe('one Studio when the command runs the project', () => {
+    const STUDIO = { origin: 'http://127.0.0.1:5999', url: (t) => `http://127.0.0.1:5999/?t=${t}` };
+
+    test("a plugin given a Studio exposes the command's api flag; a standalone one does not", () => {
+      assert.deepEqual(fontkitStudio({ studio: STUDIO, bridgeFile }).api, {
+        fontkitStudio: { fromCommand: true },
+      });
+      assert.equal(fontkitStudio({ bridgeFile, studioFile }).api, undefined);
+    });
+
+    test('a standalone instance stands down when the command added its own: no Studio, no middleware, no log, no tag', async () => {
+      const mine = fontkitStudio({ bridgeFile, studioFile });
+      const commands = fontkitStudio({ studio: STUDIO, bridgeFile });
+      mine.configResolved({ plugins: [{ name: 'other' }, mine, commands] });
+      const fake = fakeViteServer();
+      await mine.configureServer(fake.server);
+      fake.listen();
+      fake.server.printUrls();
+      assert.equal(fake.handlers.length, 0);
+      assert.deepEqual(fake.logs, ['vite urls']);
+      assert.equal(fake.server.httpServer.listenerCount('close'), 0);
+      assert.deepEqual(mine.transformIndexHtml('<html></html>'), []);
+      assert.equal(commands.transformIndexHtml('<html></html>').length, 1);
+    });
+
+    test('a standalone instance alone, or beside look-alikes, keeps working', async () => {
+      const { plugin, fake } = standalone();
+      plugin.configResolved({
+        plugins: [
+          plugin,
+          { name: 'fontkit-studio' },
+          { name: 'fontkit-studio', api: { fontkitStudio: { fromCommand: false } } },
+          { name: 'other', api: { fontkitStudio: { fromCommand: true } } },
+        ],
+      });
+      await plugin.configureServer(fake.server);
+      assert.equal(fake.handlers.length, 1);
+      assert.equal(plugin.transformIndexHtml('<html></html>').length, 1);
+      fake.server.httpServer.emit('close');
+    });
+
+    test("the command's own instance never stands down", async () => {
+      const commands = fontkitStudio({ studio: STUDIO, bridgeFile });
+      commands.configResolved({ plugins: [commands, fontkitStudio({ studio: STUDIO, bridgeFile })] });
+      const fake = fakeViteServer();
+      await commands.configureServer(fake.server);
+      assert.equal(fake.handlers.length, 1);
+      assert.equal(commands.transformIndexHtml('<html></html>').length, 1);
+    });
+  });
+
   test('is importable as fontkitstudio/vite', async () => {
     const viaName = await import('fontkitstudio/vite');
     assert.equal(viaName.fontkitStudio, fontkitStudio);
