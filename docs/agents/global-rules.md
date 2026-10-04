@@ -68,8 +68,9 @@ into existence while the rule it breaks still reads as absolute.
 ## 5. Every boundary is a trust boundary
 
 - Cross-window messages are validated by source window, origin, protocol
-  version and session before use. `design:bridge-ready` and `design:hello`
-  carry no session; hello is accepted only from the parent or opener.
+  version and session before use. `design:bridge-ready` carries no session;
+  `design:hello` carries the session id Studio proposes and is accepted only
+  from the parent or opener.
 - Values crossing the boundary are allow-listed (CSS values via validation and
   `CSS.supports`, URLs by scheme and host, text via `textContent`).
 - Untrusted markup is never parsed into a live document.

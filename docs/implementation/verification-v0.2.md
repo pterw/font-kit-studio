@@ -381,3 +381,159 @@ Counted with the unittest loader at the same head.
 - Phone and touch layouts were measured by the frontend gate's advisory profiles only; no physical devices were used.
 - The free-fonts load path was not exercised (offline gate); the suite covers it with routed font responses.
 - Windows port reuse in `scripts/serve.py` is checked by code reading only.
+
+# v0.2.1 PR B release-point verification — 2026-10-04
+
+Gate evidence for the second v0.2.1 pull request (PR #5: plan Tasks T0, B0 and 6-9, that is the shared test browser, the late-reply import fix, controls disabled with a reason, dead controls, the visual pass and the README). Nothing was changed to obtain it: the tree was clean before and after every gate.
+
+## Artifact and environment
+
+- Head: `72d2a34` (`72d2a345c8158f22f4e7c0bbd1a5aaf23594c4d5`, "docs: bring the README and screenshots up to date with v0.2.1") on the PR B branch; `git status --porcelain` empty before and after every gate. `origin/main` is `ffcab4f`, the merge of PR A; no fetch was run.
+- Python 3.11.15; Node v22.22.0; Playwright (Python) 1.62.0; Chromium 141.0.7390.37 (`/opt/pw-browsers/chromium`, no `playwright install` run). Engines under test: Chromium only (`FKS_ENGINES=chromium`). The container has 4 CPUs; timings are wall clock, so compare them loosely.
+- SHA-256 (`sha256sum`):
+
+| File | SHA-256 |
+|---|---|
+| `font_kit_studio_v0.1.1.html` | `950dbc00cff1ee9b6d843a7a29cdc46f76f547acd17e723093df7887c86b15ff` |
+| `fontkit-bridge.js` | `a91551238cdab1d626eb70256c75e2650c23a2ca8d7e06808452a5bed110cd69` |
+| `scripts/serve.py` | `133aeb4ce2f50834818e448b89bca3c7414c518e11b23cd670ea4f2141440bf8` |
+| `demo/index.html` | `52e7404650610215431767cb384c60ac1945e7276bec15cac938c84c67868882` |
+
+`fontkit-bridge.js` has the same hash as in the PR A section: PR B leaves the bridge unchanged.
+
+## Exact commands
+
+```bash
+export FKS_ENGINES=chromium FKS_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium
+git rev-parse HEAD
+git status --porcelain
+python scripts/verify.py --static-only
+node --version
+node --check fontkit-bridge.js
+python -m unittest discover -s tests -v
+python scripts/dev/frontend_gate.py --offline --engines chromium
+python scripts/dev/check_commit_messages.py --range origin/main..HEAD
+sha256sum font_kit_studio_v0.1.1.html fontkit-bridge.js scripts/serve.py demo/index.html
+git status --porcelain
+```
+
+Each gate ran once, in this order, on the head above. None was repeated.
+
+## Gate results
+
+| Gate | Result |
+|---|---|
+| Clean tree at the verified head | PASS (empty status before and after every gate) |
+| Static checks and provenance (`python scripts/verify.py --static-only`) | PASS, exit 0: 96 unique static IDs, 1 inline JavaScript block parses, the three `supplied-v0.1.1` blobs match `SOURCES.json` |
+| Bridge syntax (`node --check fontkit-bridge.js`, Node v22.22.0) | PASS, exit 0, no output |
+| Full unittest/browser suite, Chromium (`python -m unittest discover -s tests -v`) | PASS, exit 0: `Ran 786 tests in 655.691s`, `OK` |
+| Frontend gate, offline, Chromium (`python scripts/dev/frontend_gate.py --offline --engines chromium`) | PASS, exit 0: `SUMMARY OK: 15 of 15 planned runs finished. Blocking: 7 runs, 6 passed, 0 failed, 1 skipped. Advisory: 8 runs, 0 ADVISORY lines. 166 REPORT lines, 1 SKIP lines, 0 FAIL lines` |
+| Commit messages (`python scripts/dev/check_commit_messages.py --range origin/main..HEAD`) | PASS, exit 0: `commit-message check: OK: 20 commits checked` (PR B's 20 commits) |
+| Firefox canary | NOT RUN locally: no Firefox build exists here; CI runs it (D037) |
+| Leftover processes and files | None: no `serve.py`, test or browser process after the gates, `git status --porcelain` empty, and the git-ignored paths are the same as before |
+
+## Static check output
+
+Command: `python scripts/verify.py --static-only`, exit 0. The last line is the flag's own message: the suite ran as its own gate below.
+
+```text
+PASS HTML IDs: 96 unique static IDs
+PASS JavaScript syntax: 1 executable inline blocks
+SHA-256 font_kit_studio_v0.1.1.html: 950dbc00cff1ee9b6d843a7a29cdc46f76f547acd17e723093df7887c86b15ff
+PASS provenance: supplied-v0.1.1:font_kit_studio_v0.1.1.html cae14e847640c71f4e1b528222efe2a21372e73dfcaac0ae20c26d5cf546d949
+PASS provenance: supplied-v0.1.1:docs/reference/2026-09-17-font-kit-studio-v0.1.1-responsive-rows-design.md f8d48f1a23800cf9ac04517575447478b6eff9268333a980a085ac27bc0542a1
+PASS provenance: supplied-v0.1.1:docs/reference/2026-09-17-font-kit-studio-v0.1.1-responsive-rows.md e3365196c271a6b8f387cdf9382b58217e7d279b8fd7b4f5356aebdea07b8090
+SKIP unittest/browser tests: --static-only; full acceptance not checked
+```
+
+## Test count and suite time
+
+`python -m unittest discover -s tests -v` printed `Ran 786 tests in 655.691s` and `OK`, exit 0. Wall clock was 2026-10-04T04:18:14Z to 04:29:10Z.
+
+| Measure | PR A (`0f410c0`) | PR B (`72d2a34`) |
+|---|---:|---:|
+| Tests | 623 | 786 (+163) |
+| Suite time | 740.902s | 655.691s |
+
+Of the 163 added tests, 13 arrived with the commits that landed on PR A after `0f410c0` (636 tests at `origin/main`, counted with the unittest loader on `git archive origin/main`), and 150 are PR B's.
+
+All 786 result lines end `ok`. There are no failures, errors, skips, expected failures or unexpected successes. 69 tests carry a docstring and print their id and docstring on two lines; that is unittest's verbose format, not a failure. The combined stdout and stderr hold only the unittest report: the stray `TargetClosedError` line recorded for PR A did not appear.
+
+Counted with the unittest loader at the same head; the per-file counts parsed from the verbose output are identical.
+
+| Test file | PR A | PR B | Change |
+|---|---:|---:|---:|
+| `tests/test_bridge_runtime.py` | 128 | 128 | 0 |
+| `tests/test_commit_messages.py` | 21 | 21 | 0 |
+| `tests/test_font_kit_studio_v011.py` | 20 | 20 | 0 |
+| `tests/test_frontend_gate_fonts.py` | 6 | 6 | 0 |
+| `tests/test_frontend_gate_helpers.py` | 62 | 62 | 0 |
+| `tests/test_frontend_gate_report.py` | 35 | 35 | 0 |
+| `tests/test_frontend_gate_runner.py` | 56 | 56 | 0 |
+| `tests/test_frontend_gate_theme_browser.py` | 2 | 2 | 0 |
+| `tests/test_live_integration.py` | 43 | 52 | +9 |
+| `tests/test_preview_server.py` | 34 | 34 | 0 |
+| `tests/test_studio_controls.py` | 0 | 32 | +32 (new file) |
+| `tests/test_studio_dead_controls.py` | 0 | 26 | +26 (new file) |
+| `tests/test_studio_first_run.py` | 22 | 24 | +2 |
+| `tests/test_studio_import_link.py` | 16 | 46 | +30 |
+| `tests/test_studio_live.py` | 152 | 152 | 0 |
+| `tests/test_studio_review_findings.py` | 11 | 12 | +1 |
+| `tests/test_studio_stage.py` | 11 | 11 | 0 |
+| `tests/test_studio_visual.py` | 0 | 33 | +33 (new file) |
+| `tests/test_support.py` | 4 | 34 | +30 |
+| **Total** | **623** | **786** | **+163** |
+
+## Frontend gate
+
+Command: `python scripts/dev/frontend_gate.py --offline --engines chromium`, exit 0, 18 seconds (2026-10-04T04:30:04Z to 04:30:22Z). 15 runs were planned and all 15 finished: 7 blocking runs (desktop Chromium) and 8 advisory runs (mobile and wide touch). The one skipped blocking run is the free-fonts load check, which needs the network and is skipped by design under `--offline`. Output without the REPORT lines:
+
+```text
+[frontend_gate] engines: chromium; planned runs: 15; blocking: chromium:desktop
+[frontend_gate] PASS network isolation [desktop, chromium]
+[frontend_gate] SKIP free fonts load [desktop, chromium]: skipped by --offline: this check needs fonts.googleapis.com
+[frontend_gate] PASS no horizontal overflow [desktop, chromium]
+[frontend_gate] PASS no horizontal overflow [mobile, chromium]
+[frontend_gate] PASS no horizontal overflow [wide touch, chromium]
+[frontend_gate] PASS initial visibility [desktop, chromium]
+[frontend_gate] PASS initial visibility [mobile, chromium]
+[frontend_gate] PASS live edit [desktop, chromium]
+[frontend_gate] PASS live edit [mobile, chromium]
+[frontend_gate] PASS live edit [wide touch, chromium]
+[frontend_gate] PASS logo paint [desktop, chromium]
+[frontend_gate] PASS theme contrast [desktop, chromium]
+[frontend_gate] PASS theme contrast [mobile, chromium]
+[frontend_gate] PASS touch targets [mobile, chromium]
+[frontend_gate] PASS touch targets [wide touch, chromium]
+[frontend_gate] SUMMARY OK: 15 of 15 planned runs finished. Blocking: 7 runs, 6 passed, 0 failed, 1 skipped. Advisory: 8 runs, 0 ADVISORY lines. 166 REPORT lines, 1 SKIP lines, 0 FAIL lines
+```
+
+The 166 REPORT lines are all `touch targets` measurements of controls whose smaller side is under 44 px. They are advisory and do not fail the build (D029). Grouped by profile:
+
+| Profile | REPORT lines |
+|---|---:|
+| desktop | 0 |
+| mobile | 82 |
+| wide touch | 84 |
+| **Total** | **166** |
+
+By surface (a line can name one control or a group of the same control, for example `li.live-sibling` with "4 of them"):
+
+| Surface | Mobile | Wide touch |
+|---|---:|---:|
+| Composer specimen | 39 | 39 |
+| Composer Live App view, title selected | 25 | 25 |
+| Studio Library | 11 | 11 |
+| Composer reconnect banner | 3 | 3 |
+| Demo (standalone) | 4 | 6 |
+| **Total** | **82** | **84** |
+
+PR A recorded 140 REPORT lines; this head has 166 (+26). The PR A section named the wide-touch profile only and did not split the 140 by profile, so a per-profile comparison is not possible. `button#liveReapply` is still listed, at 176x28 (PR A: 160x30). Between the two heads the gate's own code changed only in label wording (the page is now called Live App), so the measuring is the same and the difference comes from the pages it measures.
+
+## What was not run
+
+- Firefox canary (`PYTHONPATH=tests FKS_ENGINES=firefox python -m unittest firefox_canary -v`): not run locally. No Firefox build exists in this environment: none is on the path, `/opt/pw-browsers` holds only Chromium, its headless shell and ffmpeg, `FKS_FIREFOX_EXECUTABLE` is not set, and the path Playwright expects (`/opt/pw-browsers/firefox-1538/firefox/firefox`) is missing. No browser was downloaded. CI runs the canary and the gate's Firefox runs as advisory checks (D037, D029). Gecko behaviour of PR B is unverified here.
+- The gate's Firefox runs: the gate ran with `--engines chromium`, so none of its Firefox runs happened.
+- The free-fonts load check against the real font host: skipped by `--offline`. The suite's free-font tests ran, with routed font responses.
+- Physical devices: none were used. The mobile and wide-touch profiles are Chromium viewport emulation.
+- `python scripts/verify.py` in its default full mode as a single command: not run as such. Its static half ran as `--static-only` and the suite ran as `unittest discover`.

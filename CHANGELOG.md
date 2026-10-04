@@ -10,20 +10,34 @@ Two things have their own version numbers:
 - The Design Bridge Protocol is version 1 (`protocolVersion: 1`). Every change
   so far is additive.
 
-## [Unreleased] - v0.2.1
+## [Unreleased]
 
-Not released yet. The first half is merged to `main`; the rest is in review.
+## [0.2.1] - 2026-10-04
+
+Fit and finish: a first run that works on every path, controls that say why
+they are off, and a visual pass.
 
 ### Added
 
 - Controls that would do nothing are disabled, with the reason in the
   tooltip: Sync to Live App with no page, Restore Page Text, Reset this
   element, Sync to file, Copy and Download with no changes, Load free fonts
-  once loaded, single-cut styles, Image Width with no image, Focus pop-out.
+  once loaded, single-cut styles, Image Width with no image, Focus pop-out,
+  the preview widths and Select and Interact outside the Live App view, and
+  the colour fields the chosen colour source does not use. Sync to Live App
+  also shows the reason under the button. When the focused control turns
+  off, focus moves to a neighbouring control.
 - First-run help: the Live App URL box starts empty and says what to enter;
   the dev server prints one `Open:` URL, names a busy port, and opens a
   browser only with `--open`; Studio offers "Connect to the demo" and never
   connects by itself.
+- A browser that reaches the dev server by an address it does not accept
+  gets a short page that names the accepted addresses and `--host`, instead
+  of bare JSON. On Windows the dev server no longer shares a port another
+  server holds.
+- When no bridge answers, Studio lists the likely causes, including a
+  browser that blocks a web page from reaching localhost. A Live App URL
+  without `http://` or `https://` is refused with a message that says so.
 - An Exit button in fullscreen, plus `Esc`. A favicon for Studio and the demo.
 
 ### Changed
@@ -47,7 +61,7 @@ Not released yet. The first half is merged to `main`; the rest is in review.
 - The bridge bar has no emoji, and no two actions share a glyph. Select and
   Interact look disabled when they are. The reason Sync to file is off sits on
   its own line, apart from Auto-sync.
-- Preview widths (390 / 1024 / 1440) scroll under the preview instead of
+- Preview widths (1440 / 1024 / 390) scroll under the preview instead of
   cropping it. Nothing is scaled.
 - The `--font-serif` token comes from a slot's role or serif tag, never a
   fixed slot. Sans and mono follow the same rule, so the default preset no
@@ -60,6 +74,9 @@ Not released yet. The first half is merged to `main`; the rest is in review.
   target app".
 - The preset select applies on change and asks before replacing slot edits.
 - Library says which fonts are loaded, including ones loaded from the Composer.
+- An import says how many queued edits it dropped before they reached the
+  page.
+- The Composer's kit field reads "Adobe kit ID(s), optional".
 
 ### Fixed
 
@@ -95,11 +112,12 @@ Not released yet. The first half is merged to `main`; the rest is in review.
   advisory. Chromium is the tested browser.
 - Reapply cannot undo a DOM move that reached the page after an import, and
   cannot replay a Move anyway.
+- At 390 px wide, the "No bridge answered" badge can push the page sideways.
 
 ## [0.2.0] - 2026-10-03
 
-The live preview. The tag `v0.2.0` will point at a6d2751 (PR #1 merged at
-32c087a, PR #2 at a6d2751).
+The live preview, released at commit a6d2751. It has no `v0.2.0` tag; tags
+start with v0.2.1 (D039).
 
 ### Added
 
@@ -191,6 +209,7 @@ The supplied single-file Studio, preserved at the tag `supplied-v0.1.1`.
 
 - Nested rows and JPEG assets are out of scope.
 
-[Unreleased]: https://github.com/pterw/font-kit-studio/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/pterw/font-kit-studio/compare/supplied-v0.1.1...v0.2.0
+[Unreleased]: https://github.com/pterw/font-kit-studio/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/pterw/font-kit-studio/compare/a6d2751...v0.2.1
+[0.2.0]: https://github.com/pterw/font-kit-studio/compare/supplied-v0.1.1...a6d2751
 [0.1.1]: https://github.com/pterw/font-kit-studio/tree/supplied-v0.1.1

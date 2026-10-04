@@ -118,7 +118,8 @@ Node code lives under `packages/fontkitstudio/` (exact layout fixed in R1.1).
   `fixtures/`, `tests/` for the friction test, the CI job.
 
 - [ ] **R1.8 Docs.** README Quickstart leads with the one command; `serve.py` and the script
-  tag stay documented as the no-Node path; CONTRIBUTING covers the Node package. Owns:
+  tag stay documented as the no-Node path; CONTRIBUTING covers the Node package; user-facing
+  text says Font Kit Studio, not the bare "fontkit" (D040). Owns:
   `README.md`, `CONTRIBUTING.md`.
 
 - [ ] **R1.9 Release pipeline.** Workflow triggered by a `v*` tag (D042): the gates on

@@ -2,8 +2,8 @@
 
 Status: **idea, not implemented.** Nothing in this repository builds an extension. This note
 says what a first version could be, so the README can point to something honest. It is the
-lead surface in the [product direction](product-direction.md), which owns who it is for and
-the order of work; this note owns the technical sketch.
+last release (R5) in the [product direction](product-direction.md), which owns who it is for
+and the order of work; this note owns the technical sketch.
 
 ## Why
 
@@ -37,7 +37,7 @@ want to edit, and the extension would load the bridge into that tab for you.
 |---|---|
 | Permissions | `activeTab`, `scripting` and `sidePanel` (`chrome.sidePanel` needs its own permission). `activeTab` is a temporary grant that covers only the tab the user clicked on. |
 | Injection | `chrome.scripting.executeScript({ target: { tabId }, files: ["fontkit-bridge.js"], world: "MAIN" })`, which needs Chrome 111 or newer. The main world is needed because the bridge reads the page's own computed styles and looks for framework markers on elements. |
-| Panel | `chrome.sidePanel` with a cut-down Studio: the Live App inspector and the CSS tab with Copy. A popup is the fallback if a side panel is unavailable. Studio cannot be reused as it is: it is one HTML file with a large inline script, and Manifest V3 extension pages forbid inline scripts under the default content security policy. The panel needs its script moved into a separate file. |
+| Panel | `chrome.sidePanel` showing Studio. A popup is the fallback if a side panel is unavailable. Studio is one HTML file with a large inline script; Manifest V3 extension pages forbid inline scripts under the default content security policy, but a sandboxed extension page allows them. D047 settles the approach in principle: first Studio unchanged in a sandboxed page inside a small relay page; if that fails, a stdlib step copies Studio's script into a separate file. A hand-written second panel is rejected. |
 | Transport | See "Open questions": the current bridge only accepts a Studio that is the page's parent or opener. |
 | Cleanup | Closing the panel or navigating away drops the session, as the bridge already does when its Studio goes away. |
 
@@ -65,9 +65,9 @@ want to edit, and the extension would load the bridge into that tab for you.
    viewers block injection. The panel needs a clear message instead of failing silently.
 4. **Frames.** Should the bridge run in every frame, or only the top document? The current
    bridge assumes one document.
-5. **How much of Studio fits in a side panel?** The full Studio is one large HTML file with
-   an inline script, which an MV3 extension page may not run. It cannot be reused unchanged.
-   A cut-down inspector with its script in a separate file is the likely shape.
+5. **How much of Studio fits in a side panel?** Decided in principle by D047: Studio
+   unchanged in a sandboxed extension page first, a stdlib copy step if that fails. The R5
+   spike confirms it.
 6. **Store review.** An extension that edits arbitrary pages needs a clear privacy statement
    and a minimal permission list.
 7. **Firefox.** Manifest V3 differs there (for example the side panel API). Decide after the

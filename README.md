@@ -82,7 +82,7 @@ What does **not** work from a file: **Sync to file** and **Auto-sync** are switc
 Two things to know:
 
 - **A different `--overrides` path is written, but the demo does not link it.** The demo always links `demo/fontkit-overrides.css`. For your own app, add `<link rel="stylesheet" href="http://localhost:8001/<your overrides path>">` after your own CSS (in development), or just use Copy.
-- **`--host 0.0.0.0` does not give your LAN access.** By default the server listens on loopback only. It accepts `localhost`, `127.0.0.1` and the exact name you pass to `--host`. A phone or another computer that uses your machine's IP address gets `421 Misdirected Request`. This blocks DNS-rebinding attacks. A browser sees a short page that names the accepted addresses and says to pass `--host`. To allow one address, pass it explicitly, for example `--host 192.168.1.20`.
+- **`--host 0.0.0.0` does not give your LAN access.** By default the server listens on loopback only. It accepts `localhost`, `127.0.0.1`, `[::1]` and the exact name you pass to `--host`. A phone or another computer that uses your machine's IP address gets `421 Misdirected Request`. This blocks DNS-rebinding attacks. A browser sees a short page that names the accepted addresses and says to pass `--host`. To allow one address, pass it explicitly, for example `--host 192.168.1.20`.
 - **A busy port stops the server with a message that names it**, for example `--studio-port 8000 is in use; pick another with --studio-port <port>`. Pass a free port with that flag (and `--target-port` for the demo port).
 
 ## Workflows
@@ -101,7 +101,7 @@ Click anything in the preview and the panel on the right becomes its inspector.
 | Arrange | Moves the element. See [Arrange](#arrange). |
 | Reset this element | Puts this element back exactly as it was. |
 
-Studio also works in a narrow window. At 390 px wide the inspector stacks under the preview, and nothing scrolls sideways:
+Studio also works in a narrow window. At 390 px wide the inspector stacks under the preview, and the connected view does not scroll sideways:
 
 <table>
   <tr>
@@ -465,7 +465,7 @@ Two cautions. The script URL uses port 8000, the default `--studio-port`. If you
 
 Studio and the bridge talk with `window.postMessage`. This is a summary of what the code does today. The requirements are in [`font-kit-studio-v0.2.0-design-bridge-protocol-v1.md`](font-kit-studio-v0.2.0-design-bridge-protocol-v1.md), and the exact contract is in [the v0.2.0 plan](docs/plans/2026-10-02-v0.2.0-live-preview-code-sync.md).
 
-Every message has `protocolVersion: 1`. Every message except `design:bridge-ready` and `design:hello` also has the `sessionId` that Studio chose.
+Every message has `protocolVersion: 1`. Every message except `design:bridge-ready` also has the `sessionId` that Studio chose; Studio proposes it in `design:hello`.
 
 ```text
 Bridge                                   Studio
@@ -579,9 +579,9 @@ In a container with a browser already installed: `FKS_ENGINES=chromium FKS_CHROM
 | `test_studio_stage.py` | Width buttons never crop the preview, and the font tokens follow a slot's role. |
 | `test_studio_visual.py` | Version labels, one primary action per panel, control heights, focus rings, contrast and the width of the Live App URL box. |
 | `test_studio_review_findings.py` | Saved DOM order with a duplicate `data-design-id`, and the 16-stylesheet limit. |
-| `test_support.py` | The shared test harness refuses an engine list that runs no browser. |
+| `test_support.py` | The shared test harness: engine selection (an engine list that runs no browser is refused), the shared browser with a fresh context per test, the Firefox canary's test list, the Composer canvas snapshot helper, and a guard against reading a page's markup raw. |
 | `test_commit_messages.py` | The commit-message check, with a throwaway git repository: each forbidden form, allowed human co-authors, range parsing. |
-| `test_frontend_gate_*.py` | The gate's own logic, with no browser: colour maths, contrast and layout judgements, report lines, the exit-code rule, CLI flags and the check table. |
+| `test_frontend_gate_*.py` | The gate's own logic: colour maths, contrast and layout judgements, report lines, the exit-code rule, CLI flags and the check table. `test_frontend_gate_fonts.py` and `test_frontend_gate_theme_browser.py` run a real browser; the others need none. |
 | `test_live_integration.py` | Everything together, with nothing faked: real server, real Studio, real bridge, real demo and the real clipboard. It also runs the README's own script tag and bookmarklet. |
 
 **Screenshots** in this README come from `docs/assets/screenshots/capture.py`, which drives the same real setup.
@@ -607,7 +607,7 @@ Every finding is one line that names its check, profile and engine:
 [frontend_gate] ADVISORY <check> [<profile>, <engine>]: <detail>
 ```
 
-**Blocking and advisory.** Font Kit Studio is a desktop-first tool, so only Chromium at the desktop profile blocks: a `FAIL` there fails the gate. Every other run (Firefox, and the phone and wide-touch profiles) still runs and still prints what it finds, as `ADVISORY` lines that never change the exit code. The summary counts blocking and advisory results separately. `--enforce chromium:desktop` is the default; `--enforce all` (or a list such as `chromium:desktop,firefox:desktop`) makes more runs blocking, and `--enforce none` makes the whole gate advisory on purpose. A policy that leaves no blocking run among the selected engines is an error, so a typo cannot make the gate pass by checking nothing. If an engine with no blocking runs (Firefox by default) is not installed, the gate prints one `ADVISORY engine` line, counts its runs as not run, and carries on. In CI the Chromium gate and Chromium test suite block, and the Firefox suite runs in its own non-blocking step.
+**Blocking and advisory.** Font Kit Studio is a desktop-first tool, so only Chromium at the desktop profile blocks: a `FAIL` there fails the gate. Every other run (Firefox, and the phone and wide-touch profiles) still runs and still prints what it finds, as `ADVISORY` lines that never change the exit code. The summary counts blocking and advisory results separately. `--enforce chromium:desktop` is the default; `--enforce all` (or a list such as `chromium:desktop,firefox:desktop`) makes more runs blocking, and `--enforce none` makes the whole gate advisory on purpose. A policy that leaves no blocking run among the selected engines is an error, so a typo cannot make the gate pass by checking nothing. If an engine with no blocking runs (Firefox by default) is not installed, the gate prints one `ADVISORY engine` line, counts its runs as not run, and carries on. In CI the Chromium gate and Chromium test suite block, and the Firefox canary runs in its own non-blocking step.
 
 `FAIL` changes the exit code. `REPORT` is advisory and never does. `SKIP` says a check could not run. The last line, `SUMMARY`, counts runs passed, failed and skipped against the number planned, plus the REPORT and SKIP lines, so a check that silently stops running shows as a smaller number. A check that raises is a `FAIL`, not a crash. A failing run saves a screenshot under `work/frontend-gate/`.
 
@@ -634,6 +634,7 @@ Known gaps:
 
 - Reapply cannot replay a DOM move made with **Move anyway**, and cannot place an element in a container the page no longer holds (or one that holds none of the saved elements). It stops and says why.
 - Edits made while the page is reloading are dropped.
+- At 390 px wide, the "No bridge answered" badge can push the page sideways.
 - Rows hold 2 to 4 leaf slots. Nested rows and JPEG assets are out of scope.
 
 ## Roadmap

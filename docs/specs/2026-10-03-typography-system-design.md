@@ -3,7 +3,7 @@
 Status: **approved by the owner (2026-10-03)**, including the self-review additions
 (entry for non-developers, font choice, multi-page roles, one editing model, file format
 version, release and supply chain, Studio accessibility, Next.js, performance). Section 6
-lists the decisions still open.
+lists the decisions that were open; they were answered on 2026-10-04 (D040-D049).
 Nothing here is built. Implementation starts only from a plan in `docs/plans/`.
 
 Related: [product direction](../roadmap/product-direction.md),
@@ -274,8 +274,8 @@ Status and plan links per release: [roadmap ledger](../plans/2026-10-03-roadmap.
 | R1 One command | The Node package: Vite runner, `vite.config` plugin, proxy mode, the per-run token, the dev-only refusal, connection to the existing Studio; the release pipeline (1.1). Real-app fixtures and the friction test in CI. | Lowest friction first, so the owner can try fontkit on real apps immediately. Every later release is tested on these fixtures. |
 | R2 Engine | Text-style detection (with the performance budget and multi-page roles), the bridge-owned role stylesheet and its protocol messages, framework adapters (Bootstrap 5 and 4, React), the honest-preview reports. | The pairing UI needs it; it is testable on the R1 fixtures without new UI. |
 | R3 Pairing system | The new Composer: font picker with the catalogue snapshot, roles, candidates A/B/C, type scale, guardrails, exceptions from the inspector, Studio accessibility; the old canvas as the specimen-sheet export with JSON import kept. | Built on R2. |
-| R4 Output and handoff | The type-system file with versioned state block, safe writes with diff and hash check (Node and `serve.py`), import of v0.2 overrides as exceptions, exports (tokens, Tailwind v4 and v3, Bootstrap Sass), the font kit, licence labels, the handoff zip. |
-| R5 Extension | The browser extension for non-developers: side panel, any live site, the same engine and pairing system, output as the handoff zip. See [browser-extension.md](../roadmap/browser-extension.md). | Brings in the second user soon after the product is complete, reusing everything above. | Turns a chosen pairing into code the user keeps. |
+| R4 Output and handoff | The type-system file with versioned state block, safe writes with diff and hash check (Node and `serve.py`), import of v0.2 overrides as exceptions, exports (tokens, Tailwind v4 and v3, Bootstrap Sass), the font kit, licence labels, the handoff zip. | Turns a chosen pairing into code the user keeps. |
+| R5 Extension | The browser extension for non-developers: side panel, any live site, the same engine and pairing system, output as the handoff zip. See [browser-extension.md](../roadmap/browser-extension.md). | Brings in the second user soon after the product is complete, reusing everything above. |
 | Later | "Promote to source" (C); source rewriting (B), after global rule 1 is amended. | Owner priority: A first, then B and C. |
 
 ## 6. Open decisions

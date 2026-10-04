@@ -94,8 +94,9 @@ Running single test modules by name (`python -m unittest tests.test_x`)
 needs `PYTHONPATH=tests`; `discover -s tests` does not.
 
 Browser tests share one Playwright driver and one browser per engine per process
-(`tests/support.py`), with a fresh context per test. Take the driver from
-`shared_runtime()`; a direct `sync_playwright()` fails while the shared driver runs.
+(`tests/support.py`): the base classes borrow the browser and give each test a fresh
+context. A test that needs its own browser launches it from `shared_runtime()` and closes
+it; a direct `sync_playwright()` fails while the shared driver runs.
 
 `FKS_ENGINES` defaults to `chromium` for the test suite. Firefox runs only
 the canary in `tests/firefox_canary.py` (D037):
@@ -103,7 +104,7 @@ the canary in `tests/firefox_canary.py` (D037):
 When an engine is unavailable, say so in the ledger; never report it as verified.
 
 Run the app: `python scripts/serve.py`, then open the URL on its `Open:` line
-(Studio and the demo target run on separate localhost ports on purpose).
+(Studio and the demo app run on separate localhost ports on purpose).
 
 ---
 
@@ -188,8 +189,8 @@ Conventional Commits, imperative mood, no trailing period:
 <body>                            # explain WHY; wrap at 72 chars
 ```
 
-Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `style`, `perf`.
-Scopes in use: `studio`, `bridge`, `dev`, `composer`, `editor`, `defaults`.
+Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `style`, `perf`, `ci`.
+Scopes in use: `studio`, `bridge`, `dev`, `composer`, `editor`, `defaults`, `ci`, `demo`.
 `docs`, `test` and `chore` commits are usually unscoped.
 
 1. Update the ledger (and plan checkboxes) in the same change as the work.
