@@ -25,7 +25,7 @@ In:
   fontkit plugin added in memory.
 - `fontkitStudio()` from `fontkitstudio/vite` in `vite.config` for a permanent setup.
 - `npx fontkitstudio http://localhost:<port>`: proxy mode in front of any other local dev server.
-- A per-run token, the dev-only refusal, a visible "Font Kit Studio · dev only" marker, and clear
+- A per-run token, the dev-only refusal, a "Font Kit Studio · dev only" line in the terminal (D051), and clear
   failure messages.
 - Studio and the bridge bundled at matching versions; Studio renamed to `fontkit-studio.html` (D041).
 - Real-app fixtures (Vite + React, Bootstrap 5 static behind the proxy, Next.js behind the
@@ -106,10 +106,10 @@ Node code lives under `packages/fontkitstudio/` (exact layout fixed in R1.1).
   oversized response. Owns: `src/proxy.*`, the Bootstrap 5 and Next.js fixtures.
 
 - [ ] **R1.6 Dev-only refusal, visibility and failure messages.** The plugin and proxy
-  refuse to run for a production build or a non-loopback bind and say so; the page and the
-  terminal show "Font Kit Studio · dev only"; every connection failure (another bridge, a security
+  refuse to run for a production build or a non-loopback bind and say so; the terminal
+  shows "Font Kit Studio · dev only" (no page marker, D051); every connection failure (another bridge, a security
   policy, an unsupported project) gets a message that says what and why. Owns: the CLI
-  messages, a small bridge option for the marker (additive, protocol unchanged).
+  messages (the bridge does not change: no page marker, D051).
 
 - [ ] **R1.7 Fixtures and the friction test.** Committed fixtures with lockfiles, installed
   with `npm ci` in CI: Vite + React (plain CSS), Bootstrap 5 static with vendored CSS behind
