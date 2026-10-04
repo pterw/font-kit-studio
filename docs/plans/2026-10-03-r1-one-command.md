@@ -1,9 +1,10 @@
 # R1 One command: implementation plan
 
-Status: **ready** (2026-10-04). The package name, Studio's file name, publishing and the
+Status: **approved** (owner, 2026-10-04); not started. Work resumes at R1.0, whose first
+steps are the owner's npm actions. The package name, Studio's file name, publishing and the
 versions under test are decided (D040 to D044 in
 `docs/implementation/deviations.md`; [roadmap register](2026-10-03-roadmap.md#decisions-register)),
-and the open questions below are answered. Starts after v0.2.1 PR B merges. This release is
+and the open questions below are answered. v0.2.1 is merged. This release is
 version 0.3.0 (D044).
 Design: [typography system design](../specs/2026-10-03-typography-system-design.md),
 sections 1 (Starting fontkit), 1.1 (Releasing), 4.1, 4.3 to 4.5 (Testing).
