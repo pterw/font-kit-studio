@@ -29,7 +29,7 @@ version. Builds on R1.2a (Studio is already `fontkit-studio.html` at your BASE).
 `packages/fontkitstudio/scripts/versions.js`, `packages/fontkitstudio/scripts/bundle.js`,
 `packages/fontkitstudio/test/versions.test.js`, `packages/fontkitstudio/test/bundle.test.js`,
 `packages/fontkitstudio/test/helpers/fake-root.js`, `.gitattributes` (new),
-`packages/fontkitstudio/test/package.test.js` (the shebang assertion only).
+`packages/fontkitstudio/test/package.test.js` (the shebang assertion and the import guard).
 
 ## Steps
 
@@ -213,17 +213,28 @@ if (resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) {
   `npm --prefix packages/fontkitstudio test`, record the failing line, restore it.
 
 - [ ] **7. LF line endings for the package.** A tarball packed from a Windows checkout
-  would carry a CRLF shebang, and `env: node` breaks the bin on Linux and macOS (R1.1
+  would carry a CRLF shebang, and `env: node
+` breaks the bin on Linux and macOS (R1.1
   report). Create `.gitattributes` with `packages/fontkitstudio/** text eol=lf`, run
   `git add --renormalize packages/fontkitstudio`, and restore the strict shebang assertion
   in `test/package.test.js` (`bin.startsWith('#!/usr/bin/env node
 ')`). Show it bites:
-  write the bin with CRLF, run the test, record the failure, restore.
+  write the bin with CRLF, run the test, record the failure, restore. The strict check on
+  the working copy is the check on the tarball: `npm pack` packs the working copy.
 
-- [ ] **8. Gates** (constraints.md): static, bridge-syntax, node-package, frontend-gate,
+- [ ] **8. Close the import guard's gaps** (R1.1 review, plan-mandated). In
+  `test/package.test.js`, make the guard also catch `export ... from 'x'`,
+  `import('x', { with: ... })` and `createRequire(...)('x')` / `require('x')` in `.mjs` and
+  `.cjs` files as well as `.js`. Replace the scan's `.js` filter with
+  `/\.(c|m)?js$/` and extend `SPECIFIER` so `export` statements with `from` match like
+  `import` ones. RED first: put `export * from 'left-pad';` in `src/cli.js`, run, and see the
+  current guard pass (the gap); then fix, see it fail, and remove the line. Do the same once
+  with a `src/x.mjs` holding `import 'left-pad';`, then delete it.
+
+- [ ] **9. Gates** (constraints.md): static, bridge-syntax, node-package, frontend-gate,
   commit-messages. The Python suite halves do not apply to this diff.
 
-- [ ] **9. Handoff text** (the landing writes it): the progress.md event. No CHANGELOG
+- [ ] **10. Handoff text** (the landing writes it): the progress.md event. No CHANGELOG
   line: nothing user-visible changes until the package ships.
 
 Commit subject: `feat(dev): bundle Studio and the bridge at one checked version`. Body:
