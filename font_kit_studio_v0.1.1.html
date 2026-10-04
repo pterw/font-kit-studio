@@ -1016,6 +1016,7 @@ body.dark .live-overlay-label { color: #111; }
           </div>
         </div>
         <p id="bridgeWarning" class="bridge-warning" role="status" hidden><span id="bridgeWarningText"></span> <button id="bridgeWarningDismiss" class="btn" type="button">Dismiss</button></p>
+        <p id="targetUrlProblem" class="bridge-hint" role="alert" hidden></p>
         <p id="targetUrlHint" class="bridge-hint">Enter your app's URL</p>
         <p id="bridgeHint" class="bridge-hint" hidden>Either nothing is running there, or the page does not load fontkit-bridge.js. Add <code>&lt;script src="fontkit-bridge.js"&gt;&lt;/script&gt;</code> after the page's own scripts, reload it, then press Connect Target. <span id="bridgeHintServe" hidden>Start the dev server: <code>python scripts/serve.py</code></span></p>
       </div>
@@ -1380,7 +1381,8 @@ function renderCard(font, index) {
   card.dataset.tags = font.tags.join(" ");
   card._font = font;
 
-  const styleButtons = font.styles.map((s, i) =>
+  // A single cut has nothing to choose between: no chip.
+  const styleButtons = font.styles.length < 2 ? "" : font.styles.map((s, i) =>
     `<button type="button" class="style-chip ${i === 0 ? "active" : ""}"
       data-style-index="${i}">${s.label}</button>`
   ).join("");
@@ -1530,12 +1532,21 @@ function updateFontHints() {
   Object.entries(hints).forEach(([id, text]) => { const el = document.getElementById(id); if (el) el.textContent = text; });
 }
 
+// The Library's status line says which fonts are loaded, whichever view asked for them (Library button, Composer button,
+// the Kit preset or a family picked in the Live Target inspector). It never claims fallbacks after the ask.
+const FREE_FONTS_ON_STATUS = "Free fonts are on: families load as their cards scroll into view.";
+function setFreeFontStatus(text) {
+  const el = document.getElementById("freeFontStatus");
+  if (el) el.textContent = text;
+}
+
 // The user asked for free fonts: remember it, update the hints and request whatever was waiting.
 function allowFreeFonts() {
   const asked = !freeFontsAllowed;
   if (asked) {
     freeFontsAllowed = true;
     writeStore(FREE_FONTS_KEY, "yes");
+    setFreeFontStatus(FREE_FONTS_ON_STATUS);
   }
   updateFontHints();
   // The live panels word their notes by consent state (the CSS tab gains the saved fonts' imports).
@@ -1547,9 +1558,10 @@ function allowFreeFonts() {
   document.querySelectorAll("[data-fallback-note], [data-load-note]").forEach(el => el.remove());
 }
 updateFontHints();
-if (freeFontsAllowed) document.getElementById("freeFontStatus").textContent = "Families load as their cards scroll into view.";
+if (freeFontsAllowed) setFreeFontStatus(FREE_FONTS_ON_STATUS);
 
-function loadAllFreeFonts(report) {
+function loadAllFreeFonts(reportTo) {
+  const report = text => { setFreeFontStatus(text); reportTo(text); };
   allowFreeFonts();
   const total = fonts.length;
   const links = fonts.map(font => ensureFontStylesheet(font, { retry:true }));
@@ -1583,7 +1595,7 @@ if (typeof IntersectionObserver === "function") {
   fonts.forEach(font => ensureFontStylesheet(font));
 }
 document.getElementById("loadFreeFontsLibrary")?.addEventListener("click", () => {
-  loadAllFreeFonts(text => { document.getElementById("freeFontStatus").textContent = text; });
+  loadAllFreeFonts(() => {});   // the status line is set by loadAllFreeFonts itself
 });
 
 const tagSet = ["all", ...new Set(fonts.flatMap(f => f.tags))];
@@ -2255,6 +2267,10 @@ if (remembered) kitId.value = remembered;
     else if (kitPreset.value === "adobe") {
       composerStatus.textContent = "Adobe Fonts is bring-your-own: paste your own kit ID(s) and press Load. Nothing is prefilled.";
       composerKitIds.focus();
+    } else if (kitPreset.value === "custom") {
+      // "Custom / manual" is the kit field itself: the ID(s) are typed by hand, never prefilled.
+      composerStatus.textContent = "Custom kit: type your own kit ID(s) in the field and press Load. Nothing is prefilled.";
+      composerKitIds.focus();
     }
   });
   q("loadFreeFonts")?.addEventListener("click", () => loadAllFreeFonts(reportComposerFonts));
@@ -2324,8 +2340,20 @@ if (remembered) kitId.value = remembered;
     return slot;
   }
 
+  // What the composition looked like right after the last preset was applied. Slot ids are fresh on every
+  // hydrate, so they stay out of the comparison; anything else that differs is an edit the person made.
+  const presetBaseline = { key: "rowdemo", signature: "" };
+  function compositionSignature() {
+    const withoutIds = value => Array.isArray(value) ? value.map(withoutIds)
+      : value && typeof value === "object"
+        ? Object.fromEntries(Object.entries(value).filter(([name]) => name !== "id").map(([name, item]) => [name, withoutIds(item)]))
+        : value;
+    return JSON.stringify({ width: state.canvasWidth, background: state.background, slots: withoutIds(state.slots) });
+  }
+
   function applyCompositionPreset(key) {
-    const preset = COMPOSITION_PRESETS[key] || COMPOSITION_PRESETS.rowdemo;
+    const resolved = COMPOSITION_PRESETS[key] ? key : "rowdemo";
+    const preset = COMPOSITION_PRESETS[resolved];
     state.canvasWidth = preset.width;
     state.background = clone(preset.background);
     state.slots = preset.slots.map(slot => hydrateSlot(slot, 0));
@@ -2333,6 +2361,28 @@ if (remembered) kitId.value = remembered;
     syncCompositionControls();
     renderComposer();
     composerStatus.textContent = `${preset.name} applied. Every slot is still editable.`;
+    compositionPreset.value = resolved;
+    presetBaseline.key = resolved;
+    presetBaseline.signature = compositionSignature();
+  }
+
+  // Choosing a preset applies it. Replacing edits made since the last preset needs an explicit yes (Rule 6);
+  // No keeps them and puts the select back on the preset they belong to.
+  function requestCompositionPreset(key) {
+    const edited = compositionSignature() !== presetBaseline.signature;
+    if (!edited && key === presetBaseline.key) {
+      // Apply on an untouched preset: applying it again would change nothing, so say that instead of doing it silently.
+      composerStatus.textContent = `${COMPOSITION_PRESETS[key].name} is already applied; there are no edits to reset.`;
+      return false;
+    }
+    if (edited
+        && !window.confirm("Replace your edits? Applying this preset replaces the changes you made to the slots, canvas width and background since the last preset.")) {
+      compositionPreset.value = presetBaseline.key;
+      composerStatus.textContent = "Kept your edits. The preset was not applied.";
+      return false;
+    }
+    applyCompositionPreset(key);
+    return true;
   }
 
   function syncCompositionControls() {
@@ -2933,8 +2983,10 @@ if (remembered) kitId.value = remembered;
 
   slotCount.addEventListener("change", () => setSlotCount(slotCount.value));
   canvasWidth.addEventListener("change", () => { state.canvasWidth = canvasWidth.value; updateCanvasBackground(); });
-  compositionPreset.addEventListener("change", () => {});
-  applyPreset.addEventListener("click", () => applyCompositionPreset(compositionPreset.value));
+  compositionPreset.addEventListener("change", () => requestCompositionPreset(compositionPreset.value));
+  // Apply stays for the one thing the select cannot do: choosing the preset that is already selected fires no change,
+  // so this puts that preset back (after the same question when edits would be lost).
+  applyPreset.addEventListener("click", () => requestCompositionPreset(compositionPreset.value));
 
   familyOptions(canvasBgFamily, state.background.family);
   updateShadeOptions(canvasBgFamily, canvasBgShade, state.background.shade);
@@ -3701,6 +3753,7 @@ if (remembered) kitId.value = remembered;
 
   // One URL gate for the iframe and the pop-out: http(s) only (file: only from file:), never Studio itself.
   function resolveTarget(raw) {
+    showTargetUrlProblem("");
     if (!hasUrlScheme(raw)) { setBridgeStatus("Use a full URL starting with http:// or https://", "error"); return null; }
     const resolved = safeTargetUrl(raw);
     if (!resolved) { setBridgeStatus("Invalid target URL", "error"); return null; }
@@ -3708,11 +3761,20 @@ if (remembered) kitId.value = remembered;
     if (isStudioDocument(resolved)) {
       setBridgeStatus("Recursion blocked", "error");
       console.warn("[FontKitStudio] Blocked recursive self-embedding:", resolved.href);
-      if (targetAppUrlInput) { targetAppUrlInput.value = ""; refreshConnectControl(); }
+      // The typed address stays in the field so it can be corrected; the message says why it was refused.
+      showTargetUrlProblem("That address is Font Kit Studio itself, and Studio cannot preview itself. Enter your own app's URL instead.");
       return null;
     }
     return resolved;
   }
+
+  function showTargetUrlProblem(text) {
+    const problem = q("targetUrlProblem");
+    if (!problem) return;
+    problem.textContent = text;
+    problem.hidden = !text;
+  }
+  targetAppUrlInput?.addEventListener("input", () => showTargetUrlProblem(""));
 
   function connectTargetApp(url) {
     if (!targetAppFrameEl) return;
@@ -4822,7 +4884,9 @@ if (remembered) kitId.value = remembered;
     }
     if (editable.color) {
       body += `
-        <div class="inspector-field full"><label for="liveColorHex">Colour</label><div class="color-grid"><input id="liveColorHex" type="text" spellcheck="false" aria-label="Colour value"><input id="liveColor" type="color" aria-label="Pick colour"></div></div>`;
+        <div class="inspector-field full"><label for="liveColorHex">Colour</label><div class="color-grid"><input id="liveColorHex" type="text" spellcheck="false" aria-label="Colour value"><input id="liveColor" type="color" aria-label="Pick colour"></div>
+          <p id="liveColorMessage" class="inspector-note" role="alert" hidden></p>
+          ${target.tag === "svg" ? '<p id="liveColorSvgNote" class="inspector-note">Colour only reaches parts of this SVG that use the current colour. If the SVG sets its own fills, its fills win.</p>' : ""}</div>`;
     }
     if (editable.text && target.kind === "text") {
       body += `<div class="inspector-field full"><label for="liveText">Text</label><textarea id="liveText" spellcheck="true"></textarea></div>`;
@@ -4859,14 +4923,25 @@ if (remembered) kitId.value = remembered;
     });
     q("liveTextAlign")?.addEventListener("change", event => queueLivePatch(target.id, "textAlign", event.target.value));
     q("liveTextTransform")?.addEventListener("change", event => queueLivePatch(target.id, "textTransform", event.target.value));
+    // Text that is not a colour is never sent: the colour that is applied stays, and the message says so.
+    const colourMessage = text => { const el = q("liveColorMessage"); if (el) { el.textContent = text; el.hidden = !text; } };
     q("liveColor")?.addEventListener("input", event => {
       const hex = q("liveColorHex");
       if (hex) hex.value = event.target.value;
+      colourMessage("");
       queueLivePatch(target.id, "color", event.target.value);
     });
+    q("liveColorHex")?.addEventListener("input", () => colourMessage(""));
     q("liveColorHex")?.addEventListener("change", event => {
       const value = event.target.value.trim();
-      if (value) queueLivePatch(target.id, "color", value);
+      if (!value) return;
+      if (!canonicalLiveValue("color", value).ok || !CSS.supports("color", value)) {
+        const kept = liveValues(target.id).color;
+        colourMessage(`"${value.slice(0, 40)}" is not a colour Studio can apply. Use #rrggbb, rgb() or hsl().${kept ? ` Still ${kept}.` : ""}`);
+        return;
+      }
+      colourMessage("");
+      queueLivePatch(target.id, "color", value);
     });
     q("liveText")?.addEventListener("input", event => queueLivePatch(target.id, "text", event.target.value));
     // Leaving a field shows the acknowledged (canonical) value, e.g. 550 → 600 or a rejected entry.
@@ -4950,6 +5025,8 @@ if (remembered) kitId.value = remembered;
         </div>
         <p class="inspector-note">${escapeAttr(hint)}</p>
       </div>` : "";
+    // No container is preselected: the button stays off, and says why, until the person chooses one.
+    const moveIntoReason = destinations.length ? "Choose a container to move into first." : "There is no other container to move into.";
     const guard = live.moveGuard && arrangement.siblings.some(sibling => sibling.id === live.moveGuard.targetId) ? live.moveGuard : null;
     const guardHtml = guard
       ? `<p><strong>Move blocked${guard.guard ? ` (${escapeAttr(guard.guard)})` : ""}.</strong> ${escapeAttr(guard.message)}</p>`
@@ -4968,10 +5045,11 @@ if (remembered) kitId.value = remembered;
       <div class="live-move-container">
         <label for="liveMoveContainer">Move into another container</label>
         <select id="liveMoveContainer"${destinations.length ? "" : " disabled"}>${destinations.length
-          ? destinations.map(item => `<option value="${escapeAttr(item.key)}">${escapeAttr(item.name)}</option>`).join("")
-          : "<option>No other containers</option>"}</select>
-        <button id="liveMoveInto" class="btn" type="button"${destinations.length ? "" : " disabled"}>Move into</button>
+          ? `<option value="" selected>Choose a container…</option>` + destinations.map(item => `<option value="${escapeAttr(item.key)}">${escapeAttr(item.name)}</option>`).join("")
+          : '<option value="">No other containers</option>'}</select>
+        <button id="liveMoveInto" class="btn" type="button" title="${escapeAttr(moveIntoReason)}" aria-describedby="liveMoveIntoHint" disabled>Move into</button>
       </div>
+      <p id="liveMoveIntoHint" class="inspector-note">${escapeAttr(moveIntoReason)}</p>
       <div id="liveMoveGuard" class="live-move-guard" role="alert"${guardHtml ? "" : " hidden"}>${guardHtml}</div>`;
   }
 
@@ -4985,7 +5063,10 @@ if (remembered) kitId.value = remembered;
     const inside = active && box.contains(active) ? active : null;
     const focusSibling = inside?.dataset?.siblingId;
     const focusId = inside && !focusSibling ? inside.id : "";
+    const chosenContainer = q("liveMoveContainer")?.value || "";
     box.innerHTML = arrangeHtml(targetId, arrangement);
+    const containerSelect = q("liveMoveContainer");
+    if (chosenContainer && containerSelect && [...containerSelect.options].some(option => option.value === chosenContainer)) containerSelect.value = chosenContainer;
     bindArrange(targetId);
     let next = null;
     if (focusSibling) next = [...box.querySelectorAll("[data-sibling-id]")].find(item => item.dataset.siblingId === focusSibling);
@@ -5070,6 +5151,8 @@ if (remembered) kitId.value = remembered;
       if (event.key === "End") { event.preventDefault(); items[items.length - 1]?.focus(); return; }
       if (event.key === "Enter" || event.key === " ") { event.preventDefault(); requestSelection(id); }
     });
+    // A click selects the sibling, the same as picking it on the page (the target answers with its manifest).
+    item.addEventListener("click", () => requestSelection(id));
     // HTML5 drag and drop: the upper half of an item drops before it, the lower half after it.
     item.addEventListener("dragstart", event => {
       live.dragId = id;
@@ -5106,6 +5189,17 @@ if (remembered) kitId.value = remembered;
       .forEach(([id, kind]) => q(id)?.addEventListener("click", () => moveSelectedBy(kind)));
     q("liveMoveStrategyDom")?.addEventListener("click", () => setMoveStrategy("dom"));
     q("liveMoveStrategyCss")?.addEventListener("click", () => setMoveStrategy("css-order"));
+    const syncMoveInto = () => {
+      const button = q("liveMoveInto");
+      const hint = q("liveMoveIntoHint");
+      if (!button || !hint) return;
+      const chosen = Boolean(q("liveMoveContainer")?.value);
+      button.disabled = !chosen;
+      hint.hidden = chosen;
+      if (chosen) button.removeAttribute("title"); else button.title = hint.textContent;
+    };
+    q("liveMoveContainer")?.addEventListener("change", syncMoveInto);
+    syncMoveInto();
     q("liveMoveInto")?.addEventListener("click", () => {
       const key = q("liveMoveContainer")?.value;
       // Re-parenting is a DOM move; CSS order cannot leave the container.

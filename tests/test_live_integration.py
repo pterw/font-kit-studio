@@ -1784,7 +1784,7 @@ class RecursionGuardTests(LiveIntegrationCase):
                     page.locator('#targetAppUrl').fill(probe)
                     page.locator('#btnConnectTarget').click()
                     self.wait_badge(page, r'^Recursion blocked$')
-                    # The guard resets the field; connect to the demo again before the next probe.
+                    # The field keeps the refused address; connect to the demo again before the next probe.
                     page.locator('#targetAppUrl').fill(self.target)
                     page.locator('#btnConnectTarget').click()
                     self.wait_badge(page, CONNECTED)

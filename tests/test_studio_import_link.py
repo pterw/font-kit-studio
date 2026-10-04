@@ -198,7 +198,9 @@ class ImportWhileLinkedTests(ImportLinkCase):
                 frame.wait_for_function('window.fake.ledger().tokens["--font-display"].startsWith(\'"Inter"\')')
                 # The page now holds what was imported: the conflict is over.
                 banner.wait_for(state='hidden')
-                # Linked again: the next composition edit streams.
+                # Linked again: the next composition edit streams. The imported composition counts as edits, so
+                # replacing it with a preset asks first (v0.2.1 Task 7); the answer here is yes.
+                page.once('dialog', lambda dialog: dialog.accept())
                 page.locator('#compositionPreset').select_option('asteria')
                 page.locator('#applyPreset').click()
                 self.wait_composition_updates(frame, 3)

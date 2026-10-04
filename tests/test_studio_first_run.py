@@ -155,14 +155,16 @@ class TargetUrlFieldTests(LiveCase):
                 self.assertFalse(page.locator('#bridgePopoutPlaceholder').is_visible())
                 self.assertEqual(errors, [])
 
-    def test_a_recursion_block_leaves_the_field_empty_and_connect_disabled(self):
+    def test_a_recursion_block_keeps_the_typed_address_and_says_why(self):
+        # v0.2.1 Task 7: the block used to empty the field, which threw away what the person typed.
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, errors = self.composer(engine)
                 self.connect(page, APP)
                 self.assertEqual(page.locator('#bridgeStatusBadge').inner_text(), 'Recursion blocked')
-                self.assertEqual(page.locator('#targetAppUrl').input_value(), '')
-                self.assertTrue(page.locator('#btnConnectTarget').is_disabled())
+                self.assertEqual(page.locator('#targetAppUrl').input_value(), APP)
+                self.assertFalse(page.locator('#btnConnectTarget').is_disabled())
+                self.assertTrue(page.locator('#targetUrlProblem').is_visible())
                 self.assertEqual(errors, [])
 
 

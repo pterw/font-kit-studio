@@ -121,6 +121,7 @@
     .plan .price small { font-family: var(--font-sans); font-size: 15px; font-weight: 500; color: var(--ink-soft); }
     .plan ul { margin: 0; padding-left: 20px; color: var(--ink-soft); }
     .plan .btn { margin-top: auto; }
+    .plan[data-chosen="true"] { border-color: var(--ink); box-shadow: 0 0 0 3px var(--tint); }
 
     .faq details { border-bottom: 1px solid var(--line); padding: 18px 0; max-width: 46em; }
     .faq summary { cursor: pointer; font-weight: 600; font-size: 18px; }
@@ -268,7 +269,7 @@
               <li>Unlimited file sharing</li>
               <li>Email support</li>
             </ul>
-            <button class="btn btn-ghost" type="button">Choose Solo</button>
+            <button class="btn btn-ghost" type="button" data-plan-choice="Solo" aria-pressed="false">Choose Solo</button>
           </div>
           <div class="plan featured">
             <h3>Studio</h3>
@@ -278,7 +279,7 @@
               <li>Custom domain and branding</li>
               <li>Priority support</li>
             </ul>
-            <button class="btn btn-primary" type="button">Choose Studio</button>
+            <button class="btn btn-primary" type="button" data-plan-choice="Studio" aria-pressed="false">Choose Studio</button>
           </div>
         </div>
       </div>
@@ -335,6 +336,19 @@
     </div>
   </footer>
 
+  <!-- The pricing buttons act, so Interact mode has something to show: the chosen plan says so in its button. -->
+  <script>
+    document.querySelectorAll('[data-plan-choice]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        document.querySelectorAll('[data-plan-choice]').forEach(function (other) {
+          var chosen = other === button;
+          other.setAttribute('aria-pressed', String(chosen));
+          other.textContent = chosen ? other.dataset.planChoice + ' chosen' : 'Choose ' + other.dataset.planChoice;
+          other.closest('.plan').dataset.chosen = String(chosen);
+        });
+      });
+    });
+  </script>
   <script src="../fontkit-bridge.js"></script>
 </body>
 </html>

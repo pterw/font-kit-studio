@@ -73,3 +73,56 @@ test_preview_server -v`. Do not run the full suite. Task 6 runs browser tests be
 Append "## Implementer report" here (your worktree copy): RED and GREEN per item, a mutation
 per behaviour, the decisions on items 1 and 2, deviations, changed existing tests, final
 `git diff --stat`, and what you did not verify.
+
+## Implementer report
+
+Kerning-7. Worktree at 16a07ce. Nothing committed or staged.
+
+New module `tests/test_studio_dead_controls.py` (18 tests). RED run before any product change: 16 of 17
+tests failed or timed out (the one that passed is the Library's own load, a characterization). GREEN: all 18
+pass in Chromium. One mutation per behaviour, all 16 killed (script patched, ran the named tests, restored).
+
+| Item | RED | Mutation killed |
+|---|---|---|
+| 1 preset select | select did nothing; 0 dialogs; Apply replaced edits silently | handler emptied; confirm skipped; select not restored on Cancel; Cancel applies anyway |
+| 2 Custom kit | focus stayed on `modeComposer` | custom branch disabled |
+| 3 one-cut chips | Inter, Space Grotesk, Bricolage Grotesque, Bebas Neue showed "Regular" | threshold `< 1` |
+| 4 demo plans | no text change (real server, standalone and Interact mode through Studio) | click handler removed |
+| 5 Move into | value was `container:7`, button enabled | placeholder removed; button never enabled |
+| 6 sibling click | selection stayed on the title (real bridge) | click listener removed |
+| 7 Library label | "Specimens show fallback fonts..." after a Composer load | status write removed |
+| 8 recursion | field emptied, no reason | field cleared; message hidden |
+| 9 invalid colour | no message (real bridge) | validation disabled |
+| 10 SVG note | no note (real bridge) | note never shown; note on every target |
+
+Decisions: the Apply button is kept (it is the only way to re-apply the already-selected preset, a reset,
+because the select fires no change for the same value; it now asks before replacing edits and says "already
+applied" on an untouched preset). "Custom / manual" is wired to the existing `#composerKitIds` field (focus plus
+status; nothing prefilled).
+
+Deviations: `setFreeFontStatus` added in `allowFreeFonts`/`loadAllFreeFonts` (the Library label's only writers);
+new `#targetUrlProblem` element before `#targetUrlHint` (possible conflict with Task 6); the SVG note shows for
+every SVG target because the manifest carries no fills information; `refreshArrange` keeps the chosen container;
+"No other containers" option has an empty value.
+
+Changed existing tests: `test_studio_first_run.py` recursion test renamed and inverted (the emptied field was the
+defect); `test_studio_import_link.py` `test_sync_after_an_import_relinks_...` accepts the new replace-edits dialog.
+
+Gates (Chromium; Firefox not run): static verify PASS; `node --check` OK; dead_controls + studio_live +
+font_kit_studio_v011 + preview_server 224 OK; live_integration + review_findings + stage + first_run +
+import_link 136 OK. Not verified: frontend gate, full suite (including `test_bridge_runtime.py`), Firefox/WebKit,
+phone layout of the new hint beyond the existing 390 px arrange test.
+
+### Fix round 1 (review findings 1-6, 8 and style)
+
+Tests added to `tests/test_studio_dead_controls.py` (now 26): design:update counting for invalid colour
+text; a keystroke-level colour test (no message and nothing sent while typing, Enter applies, `#12` plus Tab
+shows the message and resets the field, typing clears it, a valid commit clears it); width, background and
+import count as preset edits; linked-sync counts (+1, +0, +0, +1) against the fake target; the chosen Move
+into container survives a re-render (a refused move); the Live Target family pick updates the Library label;
+the remembered-choice and fresh-ask label are one string (`FREE_FONTS_ON_STATUS`). The stale comment at
+`tests/test_live_integration.py:1621` now says the field keeps the refused address. The sibling-click test
+now waits for `aria-current` to follow (it once read the list a moment before it re-rendered).
+Mutations now killed: signature of slots only; invalid colour also sent; no clear on input; no clear on
+valid change; `refreshArrange` forgets the container; no label write in `allowFreeFonts`; remembered path
+with another string; Apply on an untouched preset re-applies; Cancel also applies.
