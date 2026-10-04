@@ -9,7 +9,7 @@ the pure maths flattens that stack onto the first opaque ancestor background
 
 Two tiers (plan Addendum 4):
 
-* v0.2 surfaces (bridge bar, Live Target inspector, code panel, reconnect
+* v0.2 surfaces (bridge bar, Live App inspector, code panel, reconnect
   banner, their warning states) are enforced: body text needs 4.5:1.
 * legacy surfaces (Library, Composer setup, the slot inspector) are
   report-only: they predate this gate and are listed, not blocking.
@@ -60,7 +60,7 @@ LEGACY_COMPOSER = (
 V02_IDLE = (("Bridge bar, idle", ("#targetAppBridgeBar",), ()),)
 V02_CONNECTED = (
     ("Bridge bar, connected", ("#targetAppBridgeBar",), ()),
-    ("Live Target inspector", ("#slotInspector",), ()),
+    ("Live App inspector", ("#slotInspector",), ()),
     ("Code panel", ("#liveCodePanel",), ()),
 )
 V02_BANNER = (("Reconnect banner", ("#liveReconnectBanner",), ()),)
@@ -83,11 +83,11 @@ FORCE_ERROR_STATES_JS = """() => {
     badge.textContent = 'No bridge detected';
     const warning = document.querySelector('#bridgeWarning');
     warning.hidden = false;
-    warning.querySelector('#bridgeWarningText').textContent = 'The target reported a problem.';
+    warning.querySelector('#bridgeWarningText').textContent = 'The Live App reported a problem.';
     const warnings = document.querySelector('#liveCodeWarnings');
     warnings.hidden = false;
     const item = document.createElement('li');
-    item.textContent = 'Runtime warning from the target.';
+    item.textContent = 'Runtime warning from the Live App.';
     warnings.replaceChildren(item);
     const status = document.querySelector('#liveCodeStatus');
     status.dataset.state = 'error';

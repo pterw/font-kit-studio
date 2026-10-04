@@ -1,4 +1,4 @@
-"""Preview dev server (scripts/serve.py) and demo target app (demo/index.html)."""
+"""Preview dev server (scripts/serve.py) and the demo app (demo/index.html)."""
 
 import http.client
 import importlib.util
@@ -504,7 +504,8 @@ class PreviewServerLifecycleTest(unittest.TestCase):
                         f'?target=http://localhost:{server.target}/demo/')
             self.assertEqual(lines[-1], expected, lines)
             self.assertTrue(lines[0].startswith('Studio:'), 'the existing lines are kept')
-            self.assertTrue(any(line.startswith('Target:') for line in lines))
+            self.assertTrue(any(line.startswith('Demo:') for line in lines))
+            self.assertFalse(any(line.startswith('Target:') for line in lines), 'the old label is gone')
             self.assertTrue(any(line.startswith('Sync:') for line in lines))
         finally:
             server.close()

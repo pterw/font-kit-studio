@@ -48,7 +48,7 @@ CODE_HAS = (
 def connect_studio(ctx: GateContext) -> None:
     """Open Studio with ?target= and wait until it reports Connected and the demo loaded.
 
-    `?target=` switches Studio to Composer's Target App view and connects. The
+    `?target=` switches Studio to Composer's Live App view and connects. The
     iframe load and the bridge handshake race, and a re-hello after load
     starts a fresh session, so the badge is awaited twice around the frame's
     own readiness, as the real-integration tests do.
@@ -123,7 +123,7 @@ def read_code_tab(page, name: str, needle: str | None = None) -> str:
 
 
 def open_popout(ctx: GateContext):
-    """Pop the target out into its own window and return the popup page.
+    """Pop the Live App out into its own window and return the popup page.
 
     The caller closes the popup. Studio replaces the iframe with a
     placeholder once the window opens, which is the state the overflow check
@@ -142,7 +142,7 @@ def reach_reconnect_banner(ctx: GateContext) -> None:
     """Edit the title, reload the demo, and wait for Studio's reconnect banner.
 
     The banner appears only when Studio holds saved overrides that differ
-    from a freshly reloaded target. It is a v0.2 surface that a plain
+    from a freshly reloaded Live App. It is a v0.2 surface that a plain
     connect never shows.
     """
     page = ctx.page

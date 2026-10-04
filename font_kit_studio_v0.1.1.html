@@ -769,7 +769,9 @@ footer {
 .bridge-bar-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .bridge-bar-label { color: var(--accent); font-size: 11px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
 .bridge-bar-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; flex: 1 1 240px; min-width: 0; max-width: 100%; }
-.bridge-bar .bridge-url { flex: 1 1 100px; min-width: 100px; max-width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+/* The address box keeps room for an address (about 28 characters): when the badge and the buttons leave less on the
+   first row, the other controls wrap to the next row instead of the box shrinking. */
+.bridge-bar .bridge-url { flex: 1 1 240px; min-width: 240px; max-width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .bridge-bar .segmented { display: inline-flex; flex-shrink: 0; }
 .bridge-bar .device-bar { display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; }
 
@@ -940,7 +942,7 @@ body.dark .live-overlay-label { color: #111; }
 }
 .popout-placeholder p { margin: 0; max-width: 46ch; overflow-wrap: anywhere; }
 .popout-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
-/* Arrange (Live Target inspector) */
+/* Arrange (Live App inspector) */
 .live-arrange h3 { margin: 0 0 6px; color: var(--muted-strong); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
 .live-arrange .inspector-note { margin: 0 0 6px; overflow-wrap: anywhere; }
 .live-move-buttons { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 8px; }
@@ -1563,7 +1565,7 @@ function renderCard(font, index) {
 
 /* ---- free font loading: silent until the user asks, then one stylesheet <link> per family, added once ----
    Nothing is requested from Google Fonts until the person presses Load free fonts, picks a library
-   family in the Live Target inspector or switches the Kit preset to Free Google Fonts. That consent is remembered in this
+   family in the Live App inspector or switches the Kit preset to Free Google Fonts. That consent is remembered in this
    browser (guarded storage) so later visits load cards as they scroll into view. Until then specimens
    render in their fallback stacks, and the families they wanted are queued, not requested. */
 const FREE_FONTS_KEY = "fontkit-free-fonts";
@@ -1614,7 +1616,7 @@ function updateFontHints() {
 }
 
 // The Library's status line says which fonts are loaded, whichever view asked for them (Library button, Composer button,
-// the Kit preset or a family picked in the Live Target inspector). It never claims fallbacks after the ask.
+// the Kit preset or a family picked in the Live App inspector). It never claims fallbacks after the ask.
 const FREE_FONTS_ON_STATUS = "Free fonts are on: families load as their cards scroll into view.";
 function setFreeFontStatus(text) {
   const el = document.getElementById("freeFontStatus");
@@ -3779,7 +3781,7 @@ if (remembered) kitId.value = remembered;
       && url.protocol === location.protocol && url.port === location.port && path(url.pathname) === path(location.pathname);
   }
 
-  // ---- first run: the Target URL field --------------------------------------
+  // ---- first run: the Live App URL field -------------------------------------
   // The field starts empty. Only a loopback dev server may offer the demo (detectDevServerSync); it never connects.
   let offeredDemoUrl = "";
   // Only the two hostnames are known, so this states browser blocking as one possible cause beside the other two.
@@ -4826,7 +4828,7 @@ if (remembered) kitId.value = remembered;
     placeOverlay(overlaySelected, live.selectedId ? live.selectedRect : null, selected?.name || live.selectedId || "");
   }
 
-  // ---- Live Target inspector -----------------------------------------------
+  // ---- Live App inspector --------------------------------------------------
   function liveSeed(target) {
     const c = isPlainObject(target?.computed) ? target.computed : {};
     const size = parseFloat(c.fontSize) || 16;
@@ -5357,7 +5359,7 @@ if (remembered) kitId.value = remembered;
     if (layer) layer.hidden = on;
     if (popoutText) {
       popoutText.textContent = live.popup && !live.popup.closed
-        ? `The Live App is open in its own window ("${POPOUT_NAME}"). Pick elements there; the inspector here edits them.`
+        ? "The Live App is open in its own window. Pick elements there; the inspector here edits them."
         : "The pop-out window was closed. Dock back to the preview, or pop it out again.";
     }
   }
@@ -5998,7 +6000,7 @@ if (remembered) kitId.value = remembered;
     renderInspector();
   }
 
-  // `connect: false` shows the Target view without loading the typed URL (fullscreen only changes the layout).
+  // `connect: false` shows the Live App view without loading the typed URL (fullscreen only changes the layout).
   function switchToTargetView(options) {
     if (viewTargetBtn) viewTargetBtn.classList.add("active");
     if (viewSpecimenBtn) viewSpecimenBtn.classList.remove("active");
@@ -6029,7 +6031,7 @@ if (remembered) kitId.value = remembered;
   };
 
   // Anti-recursion guard (the only one): if Studio itself is embedded in an iframe,
-  // hide the Target Bridge connector and preview so Studio never nests itself.
+  // hide the Live App Bridge connector and preview so Studio never nests itself.
   const studioEmbedded = window.self !== window.top;
   if (studioEmbedded) {
     const bridgeBar = q("targetAppBridgeBar");

@@ -302,7 +302,7 @@ class StudioProtocolTests(LiveCase):
                 self.assertEqual(len({h['data']['sessionId'] for h in hellos}), 1)
                 self.assertEqual(hellos[-1]['data']['sessionId'], self.session_id(frame))
 
-                # ?target= prefills, opens Composer -> Target App view and connects.
+                # ?target= prefills, opens Composer -> Live App view and connects.
                 page2 = context.new_page()
                 errors = []
                 page2.on('pageerror', lambda error: errors.append(str(error)))

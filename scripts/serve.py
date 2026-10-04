@@ -1,12 +1,12 @@
 """Font Kit Studio local preview server (development only, Python stdlib).
 
-Serves the repository on two loopback ports so the target app runs cross-origin from Studio:
+Serves the repository on two loopback ports so the demo app runs cross-origin from Studio:
 
   studio port  Studio HTML + GET /__fontkit/status + PUT /__fontkit/overrides.css
-  target port  the same files (e.g. /demo/), no /__fontkit/* endpoints
+  demo port    the same files (e.g. /demo/), no /__fontkit/* endpoints (--target-port)
 
 Studio's "Sync to file" writes the overrides stylesheet (a path inside this repository,
-fixed on the command line) which the target app links after its own CSS. All responses
+fixed on the command line) which the demo app links after its own CSS. All responses
 are sent with Cache-Control: no-store.
 
   python3 scripts/serve.py [--host 127.0.0.1] [--studio-port 8000] [--target-port 8001]
@@ -316,7 +316,8 @@ def main(argv=None):
         thread.start()
 
     print(f"Studio:  {config.studio_url}{config.studio_path}")
-    print(f"Target:  {config.target_url}")
+    # The demo app's own address, on its own port. It is context, not the link to open: the Open: line below is.
+    print(f"Demo:    {config.target_url}")
     print(f"Sync:    {'on' if config.sync else 'off'} -> {config.overrides_rel}")
     print("Press Ctrl-C to stop.")
     print(f"Open: {config.open_url}", flush=True)

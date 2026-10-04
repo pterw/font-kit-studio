@@ -1,7 +1,7 @@
 """End-to-end: real Studio + real bridge + demo app, served by the real scripts/serve.py.
 
 Nothing here is faked. A `scripts/serve.py` subprocess runs on two OS-assigned loopback
-ports (Studio on one, the demo target on the other, so they stay cross-origin), and
+ports (Studio on one, the demo app on the other, so they stay cross-origin), and
 Chromium loads the real Studio over http://localhost, which makes the real clipboard
 available. Studio talks to `fontkit-bridge.js` inside `demo/index.html` over real
 `postMessage`.

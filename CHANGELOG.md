@@ -33,7 +33,8 @@ Not released yet. The first half is merged to `main`; the rest is in review.
   longer name a version.
 - One name for your page, "Live App": the bridge bar, the view button, the
   inspector, the reconnect banner (Accept Live App state) and the Connect Live
-  App button no longer say Target App, Live Target or Connect Target.
+  App button no longer say Target App, Live Target or Connect Target. The
+  pop-out placeholder no longer shows the window's internal name.
 - Each panel has one primary action (Load free fonts in the Library, Connect
   Live App in the bridge bar, Sync to Live App in the toolbar), drawn in the
   accent colour. Buttons, fields and selects share two heights (34 px, and
@@ -53,7 +54,10 @@ Not released yet. The first half is merged to `main`; the rest is in review.
   longer sends `--font-sans`.
 - Importing while linked to the page keeps the import's state, ends the link
   and shows the reconnect banner if the page differs (D035).
-- Fullscreen no longer connects to the Target URL.
+- Fullscreen no longer connects to the Live App URL.
+- The dev server labels the demo app's address `Demo:` instead of `Target:`,
+  and the demo's description and footer say "demo app" instead of "demo
+  target app".
 - The preset select applies on change and asks before replacing slot edits.
 - Library says which fonts are loaded, including ones loaded from the Composer.
 
@@ -72,11 +76,16 @@ Not released yet. The first half is merged to `main`; the rest is in review.
   on an Arrange sibling (now selects it), the recursion message (keeps your
   text), the invalid colour message (the previous colour stays), and a note
   that an SVG's own fills win.
-- A target URL like `http:example.com` is refused instead of resolving
+- A Live App URL like `http:example.com` is refused instead of resolving
   against Studio.
 - An element with a duplicate `data-design-id` no longer discards its
   container's saved DOM order.
 - A composition with more than 16 library fonts names the ones not sent.
+- The Live App URL box no longer shrinks to a sliver. It was squeezed to as
+  few as 12 characters when the status badge and the buttons shared its row
+  of the bridge bar. It now stays at least 240 px wide, enough for
+  `http://localhost:12345/demo/`, and the other controls wrap to the next row
+  instead.
 
 ### Known limitations
 

@@ -543,6 +543,8 @@ class PageNameTests(StudioCase):
                 page.wait_for_selector('#bridgePopoutPlaceholder:not([hidden])')
                 self.assertEqual(self.bad_names(page), [], 'popped out')
                 self.assertIn('The Live App is open in its own window', page.locator('#bridgePopoutText').inner_text())
+                # The window's name is plumbing (window.open's second argument), not something to read.
+                self.assertNotIn('fontkit-target', page.locator('#bridgePopoutText').inner_text())
                 page, errors = self.open(engine)
                 self.wait_connected(page)
                 from_the_page(self.frame(page), {'type': 'design:targets', 'targets': []}, page)
@@ -598,6 +600,51 @@ class ToolbarFitTests(StudioCase):
                         return [label(el), text, Math.round(ctx.measureText(text).width), Math.round(room)]; });""")
                     self.assertGreaterEqual(len(rows), 5)
                     self.assertEqual([row for row in rows if row[2] > row[3]], [], f'{width}px: selected text wider than its select')
+
+
+# The longest address the dev server offers: its own port is up to five digits, as in http://localhost:12345/demo/.
+OFFERED_ADDRESS = 'http://localhost:12345/demo/'
+URL_BOX_SIZES = ((1440, 900), (1280, 800), (1024, 768))
+# How many characters of the box's own (monospace) font fit between its padding, and whether the page scrolls sideways.
+URL_BOX_JS = """() => {
+  const el = document.getElementById('targetAppUrl'), style = getComputedStyle(el);
+  const ctx = document.createElement('canvas').getContext('2d');
+  ctx.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+  const room = el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+  return { chars: Math.floor(room / ctx.measureText('0').width), scrollsSideways: document.documentElement.scrollWidth > innerWidth };
+}"""
+
+
+class UrlBoxFitTests(LiveAppCase):
+    def fit(self, page, width, state):
+        """One subTest per width and state, so a failing run names every state that squeezes the box."""
+        with self.subTest(width=width, state=state):
+            measured = page.evaluate(URL_BOX_JS)
+            self.assertGreaterEqual(measured['chars'], len(OFFERED_ADDRESS), f'the address box fits {measured["chars"]} characters')
+            self.assertFalse(measured['scrollsSideways'], 'the page scrolls sideways')
+
+    def test_the_address_box_holds_an_address_in_every_state_of_the_bar(self):
+        """The badge text and the button label decide how many controls share the first row, so the box is measured
+        in each state: the bar's other controls must not squeeze it into a sliver."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                for width, height in URL_BOX_SIZES:
+                    size = {'width': width, 'height': height}
+                    page = self.open(engine, viewport=size, query=False)
+                    page.locator('#modeComposer').click()
+                    page.wait_for_function('(url) => document.getElementById("targetAppUrl").value === url', arg=self.target)
+                    self.fit(page, width, 'idle, the demo offered')
+                    page.locator('#targetAppUrl').fill('')
+                    self.fit(page, width, 'idle, empty box')
+
+                    page = self.live(engine, viewport=size)
+                    self.fit(page, width, 'Connected (N targets)')
+                    self.select_title(page)
+                    self.type_into(page, '#liveFontSize', '70')
+                    self.wait_badge(page, r'^Live')
+                    self.fit(page, width, 'Live · rev N')
+                    with self.subTest(width=width, state='page errors'):
+                        self.assertEqual(page.errors, [])
 
 
 class ExportCommentTests(StudioCase):

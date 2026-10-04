@@ -167,7 +167,7 @@ def overflow_failures(surface: str, measured: dict) -> list[str]:
 def check_no_horizontal_overflow(ctx: GateContext) -> Outcome:
     """No Studio view or the demo needs a horizontal scrollbar at this profile.
 
-    Covers the Library, the Composer specimen, the Composer target view with
+    Covers the Library, the Composer specimen, the Composer Live App view with
     the demo connected and a target selected (and the demo's own document
     inside its frame), the pop-out placeholder, and the demo standalone.
     """
@@ -182,7 +182,7 @@ def check_no_horizontal_overflow(ctx: GateContext) -> Outcome:
 
     connect_and_select(ctx)
     out.failures.extend(
-        overflow_failures("Composer target view (target selected)", page.evaluate(OVERFLOW_JS))
+        overflow_failures("Composer Live App view (target selected)", page.evaluate(OVERFLOW_JS))
     )
     out.failures.extend(
         overflow_failures("demo inside the preview frame", target_frame(page).evaluate(OVERFLOW_JS))
@@ -295,7 +295,7 @@ def _demo(ctx: GateContext) -> None:
 TOUCH_TARGET_STATES = (
     ("Studio Library", _library),
     ("Composer specimen", _composer_specimen),
-    ("Composer target view, title selected", connect_and_select),
+    ("Composer Live App view, title selected", connect_and_select),
     ("Composer reconnect banner", reach_reconnect_banner),
     ("demo (standalone)", _demo),
 )
