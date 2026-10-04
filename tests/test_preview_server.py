@@ -72,13 +72,14 @@ class Server:
         self.overrides = overrides or self.scratch / 'overrides.css'
         self.rel = self.overrides.relative_to(REPO).as_posix()
         self.studio, self.target = free_ports()
-        self.out = open(self.scratch / 'stdout.txt', 'w+')
-        self.err = open(self.scratch / 'stderr.txt', 'w+')
+        self.out = open(self.scratch / 'stdout.txt', 'w+', encoding='utf-8')
+        self.err = open(self.scratch / 'stderr.txt', 'w+', encoding='utf-8')
         self.proc = subprocess.Popen(
             [sys.executable, str(SERVE), '--quiet', '--studio-port', str(self.studio),
              '--target-port', str(self.target), '--overrides', self.rel, *extra],
             cwd=REPO, stdout=self.out, stderr=self.err,
-            env={**os.environ, **env} if env else None)
+            env={**os.environ, 'PYTHONIOENCODING': 'utf-8', **(env or {})},
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0)
         try:
             self.wait_ready()
         except BaseException:
@@ -101,14 +102,18 @@ class Server:
 
     def read_out(self):
         self.out.flush()
-        return (self.scratch / 'stdout.txt').read_text()
+        return (self.scratch / 'stdout.txt').read_text(encoding='utf-8')
 
     def read_err(self):
         self.err.flush()
-        return (self.scratch / 'stderr.txt').read_text()
+        return (self.scratch / 'stderr.txt').read_text(encoding='utf-8')
 
     def stop(self, sig=signal.SIGTERM):
         if self.proc.poll() is None:
+            if os.name == 'nt':
+                # Windows cannot deliver SIGINT or SIGTERM to a child gracefully (SIGTERM is
+                # TerminateProcess); Ctrl-Break to the child's own process group is the stop.
+                sig = signal.CTRL_BREAK_EVENT
             self.proc.send_signal(sig)
             try:
                 self.proc.wait(timeout=10)
@@ -609,7 +614,7 @@ def route_demo_stylesheet(page, server):
 
 class DemoPageTest(unittest.TestCase):
     def test_demo_source_is_offline(self):
-        source = DEMO.read_text()
+        source = DEMO.read_text(encoding='utf-8')
         self.assertIsNone(re.search(r'''(?:src|href|action)\s*=\s*["']?\s*(?:[a-z]+:)?//''', source, re.I))
         self.assertIsNone(re.search(r'url\(\s*["\']?\s*(?:[a-z]+:)?//', source, re.I))
         self.assertIsNone(re.search(r'@import', source, re.I))
