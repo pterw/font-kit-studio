@@ -1,0 +1,7 @@
+# Lint only, no formatting: pyflakes (unused or undefined names) and syntax errors.
+# The rule set stays this narrow on purpose; widening it restyles code for no behaviour gain.
+target-version = "py311"
+extend-exclude = [".claude", "work"]
+
+[lint]
+select = ["F", "E9"]

@@ -12,11 +12,10 @@ Two groups:
     colour messages and the SVG note).
 """
 
-import json
 import unittest
 
 from support import ENGINES, canvas_snapshot
-from test_live_integration import CONNECTED, LiveIntegrationCase
+from test_live_integration import LiveIntegrationCase
 from test_studio_live import APP, LiveCase
 
 ASTERIA_BACKGROUND = 'rgb(3, 4, 9)'      # asteria preset: #030409
@@ -366,7 +365,6 @@ class DemoPlanTests(LiveIntegrationCase):
                 page = self.open(engine, query=False)
                 page.goto(self.target)       # the demo on its own, no Studio
                 solo = page.get_by_role('button', name='Choose Solo')
-                studio = page.get_by_role('button', name='Choose Studio')
                 solo.click()
                 page.wait_for_function('() => /Solo chosen/.test(document.querySelector("#pricing").innerText)')
                 self.assertEqual(page.locator('#pricing .plan').first.get_attribute('data-chosen'), 'true')
