@@ -6088,9 +6088,11 @@ if (remembered) kitId.value = remembered;
     return savedStateEmpty() && !live.heldSavedState;
   }
 
-  // What Copy and Download would hand over: the saved state, or whatever the page's ledger still holds.
+  // What Copy and Download would hand over: the saved state, saved DOM order (the JSON tab carries it even with no
+  // page connected, after an import), or whatever the page's ledger still holds. Sync to file writes CSS only, so
+  // saved DOM order alone does not count for savedStateEmpty().
   function ledgerEmpty() {
-    return savedStateEmpty() && !live.changes.targets.length && !Object.keys(live.changes.tokens).length;
+    return savedStateEmpty() && !live.structure.length && !live.changes.targets.length && !Object.keys(live.changes.tokens).length;
   }
 
   // Reset sends the element back to the page's own look, so it needs something on this element: a saved override, a

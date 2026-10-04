@@ -12,6 +12,7 @@ Run one module by name with PYTHONPATH=tests:  python -m unittest test_studio_co
 """
 
 import base64
+import json
 import re
 import unittest
 
@@ -230,6 +231,27 @@ class ChangesPanelTests(ControlsMixin, LiveCase):
                 self.assert_disabled(page, '#liveCodeSync', NO_DEV_SERVER, hint='#liveCodeSyncHint')
                 self.assert_enabled(page, '#liveCodeCopy')
                 self.assert_enabled(page, '#liveCodeDownload')
+                self.assertEqual(errors, [])
+
+
+    def test_copy_and_download_hand_over_an_imported_dom_order_but_sync_to_file_still_waits(self):
+        # The JSON tab carries saved DOM order (live.structure) even with no page connected, so Copy and Download have
+        # something to hand over. Sync to file writes CSS, which DOM order is not, so it still refuses to write.
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors = self.composer(engine, sync=True)
+                document = self.export(page)
+                document['live'] = {'target': '', 'revision': 0, 'overrides': {},
+                                    'structure': [{'selector': '[data-design-id="hero"]', 'name': 'Hero',
+                                                   'ids': ['hero.cta', 'hero.title']}]}
+                self.assertNotRegex(self.import_document(page, document), r'(?i)failed')
+                self.assert_enabled(page, '#liveCodeCopy')
+                self.assert_enabled(page, '#liveCodeDownload')
+                self.assert_disabled(page, '#liveCodeSync', NOTHING_TO_SAVE)   # the Changes panel is not on screen here
+                page.locator('#codeTabJson').dispatch_event('click')
+                shown = json.loads(page.locator('#liveCodeOutput').text_content())
+                self.assertEqual(shown['structure'][0]['ids'], ['hero.cta', 'hero.title'])
+                self.assertEqual(self.puts, [])
                 self.assertEqual(errors, [])
 
 
