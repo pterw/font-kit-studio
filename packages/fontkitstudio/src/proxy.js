@@ -5,6 +5,14 @@ import { Agent, createServer, request } from 'node:http';
 import { connect } from 'node:net';
 import { fileURLToPath } from 'node:url';
 
+import {
+  BRIDGE_TWICE_MESSAGE,
+  CSP_MESSAGE,
+  blocksSameOriginScript,
+  loadsOwnBridge,
+  metaPolicies,
+} from './csp.js';
+
 export const BRIDGE_PATH = '/@fontkit/fontkit-bridge.js';
 
 const LOOPBACK_HOSTS = ['127.0.0.1', '::1', 'localhost'];
@@ -66,6 +74,7 @@ export async function startProxy({
   host = '127.0.0.1',
   port = 0,
   maxHtmlBytes = 8 * 1024 * 1024,
+  log = (line) => process.stderr.write(`${line}\n`),
 } = {}) {
   const targetUrl = parseProxyTarget(target);
   const studioUrl = parseUrl(String(studio?.origin));
@@ -101,6 +110,21 @@ export async function startProxy({
   const targetPort = Number(targetUrl.port || 80);
   const tag = `<script src="${BRIDGE_PATH}" data-allowed-origins="${studioUrl.origin}"></script>`;
   const agent = new Agent({ keepAlive: true });
+  const said = new Set();
+
+  // Warnings about the page being tagged: each once per run.
+  function warnOnce(message) {
+    if (said.has(message)) return;
+    said.add(message);
+    log(message);
+  }
+
+  function checkPage(buffer, headers) {
+    const html = buffer.toString('latin1');
+    if (loadsOwnBridge(html)) warnOnce(BRIDGE_TWICE_MESSAGE);
+    const policies = [headers['content-security-policy'], ...metaPolicies(html)];
+    if (blocksSameOriginScript(policies)) warnOnce(CSP_MESSAGE);
+  }
   let proxyOrigin;
   let actualPort;
   let allowedHosts;
@@ -190,7 +214,9 @@ export async function startProxy({
           upstream.pipe(res);
         };
         const onEnd = () => {
-          const page = insertTag(Buffer.concat(chunks), tag);
+          const original = Buffer.concat(chunks);
+          checkPage(original, upstream.headers);
+          const page = insertTag(original, tag);
           const headers = rewriteLocation({ ...upstream.headers });
           delete headers['transfer-encoding'];
           delete headers.etag;

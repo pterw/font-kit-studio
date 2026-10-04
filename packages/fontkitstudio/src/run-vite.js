@@ -23,7 +23,7 @@ export async function runVite({
   try {
     server = await vite.createServer({
       root: projectDir,
-      plugins: [fontkitStudio({ studio, bridgeFile })],
+      plugins: [fontkitStudio({ studio, bridgeFile, log: (line) => err.write(`${line}\n`) })],
     });
     await server.listen();
     server.printUrls();

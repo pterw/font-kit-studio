@@ -34,7 +34,7 @@ export async function runProxy({
 
   let proxy;
   try {
-    proxy = await startProxy({ target, studio, bridgeFile });
+    proxy = await startProxy({ target, studio, bridgeFile, log: (line) => err.write(`${line}\n`) });
   } catch (error) {
     await studio.close();
     throw error;

@@ -6,11 +6,18 @@ import { createServer, request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { BRIDGE_PATH, fontkitStudio } from '../src/vite-plugin.js';
+import { BRIDGE_TWICE_MESSAGE, CSP_MESSAGE } from '../src/csp.js';
+import {
+  BRIDGE_PATH,
+  BUILD_LINE,
+  HOST_ERROR,
+  START_LINE,
+  fontkitStudio,
+} from '../src/vite-plugin.js';
 
 const BRIDGE_TEXT = '// bridge marker\n';
 const STUDIO_MARKER = 'Font Kit Studio vT';
-const LINE_PREFIX = '  Font Kit Studio: ';
+const LINE_PREFIX = '  Open: ';
 const ORIGIN_ERROR =
   'Font Kit Studio: studio.origin must be a local http origin such as http://127.0.0.1:5000';
 
@@ -64,6 +71,8 @@ async function assertRefused(url) {
 function studioUrlFrom(logs) {
   const lines = logs.filter((l) => l.startsWith(LINE_PREFIX));
   assert.equal(lines.length, 1);
+  assert.equal(logs.filter((l) => l === START_LINE).length, 1);
+  assert.equal(logs.indexOf(START_LINE) + 1, logs.indexOf(lines[0]));
   return lines[0].slice(LINE_PREFIX.length);
 }
 
@@ -126,7 +135,8 @@ describe('fontkitStudio Vite plugin', () => {
   test('is named fontkit-studio and applies to serve only', () => {
     const plugin = fontkitStudio();
     assert.equal(plugin.name, 'fontkit-studio');
-    assert.equal(plugin.apply, 'serve');
+    assert.equal(typeof plugin.apply, 'function');
+    assert.equal(plugin.apply({}, { command: 'serve' }), true);
     assert.equal(BRIDGE_PATH, '/@fontkit/fontkit-bridge.js');
   });
 
@@ -320,5 +330,162 @@ describe('fontkitStudio Vite plugin', () => {
   test('is importable as fontkitstudio/vite', async () => {
     const viaName = await import('fontkitstudio/vite');
     assert.equal(viaName.fontkitStudio, fontkitStudio);
+  });
+
+  describe('dev only: the build line', () => {
+    test('a build prints the line once per process, a serve prints nothing', () => {
+      const written = [];
+      const original = process.stdout.write;
+      process.stdout.write = (chunk) => {
+        written.push(String(chunk));
+        return true;
+      };
+      try {
+        const plugin = fontkitStudio({ bridgeFile, studioFile });
+        assert.equal(plugin.apply({}, { command: 'serve' }), true);
+        assert.deepEqual(written, []);
+        assert.equal(plugin.apply({}, { command: 'build' }), false);
+        assert.equal(fontkitStudio().apply({}, { command: 'build' }), false);
+      } finally {
+        process.stdout.write = original;
+      }
+      assert.deepEqual(written, [`${BUILD_LINE}\n`]);
+      assert.equal(BUILD_LINE, 'Font Kit Studio · dev only: not added to this build');
+    });
+  });
+
+  describe('a server open to the network', () => {
+    const refused = [true, '0.0.0.0', '::', '192.168.1.20', '10.0.0.5', 'example.test', ''];
+    const allowed = [undefined, 'localhost', '127.0.0.1', '::1', '[::1]'];
+
+    test('the refusal text is exact', () => {
+      assert.equal(HOST_ERROR, 'Font Kit Studio runs only on localhost; remove --host or server.host to use it');
+    });
+
+    for (const instance of ['standalone', 'the command']) {
+      const make = () =>
+        instance === 'standalone'
+          ? fontkitStudio({ bridgeFile, studioFile })
+          : fontkitStudio({ studio: { origin: 'http://127.0.0.1:5999', url: () => '' }, bridgeFile });
+
+      for (const host of refused) {
+        test(`${instance}: server.host ${JSON.stringify(host)} throws the refusal`, () => {
+          const plugin = make();
+          assert.throws(
+            () => plugin.configResolved({ plugins: [plugin], server: { host } }),
+            (error) => {
+              assert.equal(error.message, HOST_ERROR);
+              return true;
+            },
+          );
+        });
+      }
+
+      for (const host of allowed) {
+        test(`${instance}: server.host ${JSON.stringify(host)} is accepted`, () => {
+          const plugin = make();
+          plugin.configResolved({ plugins: [plugin], server: { host } });
+        });
+      }
+
+      test(`${instance}: a config without a server block is accepted`, () => {
+        const plugin = make();
+        plugin.configResolved({ plugins: [plugin] });
+      });
+    }
+  });
+
+  describe('the start lines', () => {
+    test("standalone prints the two indented lines in order, once, after Vite's urls", async () => {
+      const { plugin, fake } = standalone();
+      await plugin.configureServer(fake.server);
+      fake.listen();
+      fake.server.printUrls();
+      fake.server.printUrls();
+      assert.equal(fake.logs[0], 'vite urls');
+      assert.equal(fake.logs[1], START_LINE);
+      assert.equal(START_LINE, '  Font Kit Studio · dev only');
+      assert.match(fake.logs[2], /^ {2}Open: http:\/\/127\.0\.0\.1:\d+\/fontkit-studio\.html\?/);
+      assert.equal(fake.logs.length, 4);
+      fake.server.httpServer.emit('close');
+    });
+  });
+
+  describe('pages the bridge may not reach', () => {
+    const STUDIO = { origin: 'http://127.0.0.1:5999', url: () => '' };
+    const OWN = '<html><head><script src="/js/fontkit-bridge.js"></script></head></html>';
+    const META = `<html><head><meta http-equiv="Content-Security-Policy" content="script-src 'nonce-q'"></head></html>`;
+
+    function plugged({ headers } = {}) {
+      const lines = [];
+      const plugin = fontkitStudio({ studio: STUDIO, bridgeFile, log: (line) => lines.push(line) });
+      plugin.configResolved({ plugins: [plugin], server: { headers } });
+      return { plugin, lines };
+    }
+
+    test('an own bridge: still tagged, one warning across two pages', () => {
+      const { plugin, lines } = plugged();
+      assert.equal(plugin.transformIndexHtml(OWN).length, 1);
+      assert.equal(plugin.transformIndexHtml(OWN).length, 1);
+      assert.deepEqual(lines, [BRIDGE_TWICE_MESSAGE]);
+    });
+
+    test('a page without it, or with a non-string, is silent', () => {
+      const { plugin, lines } = plugged();
+      plugin.transformIndexHtml('<html><script src="/app.js"></script></html>');
+      plugin.transformIndexHtml(undefined);
+      assert.deepEqual(lines, []);
+    });
+
+    test('a blocking CSP meta tag warns once', () => {
+      const { plugin, lines } = plugged();
+      assert.equal(plugin.transformIndexHtml(META).length, 1);
+      plugin.transformIndexHtml(META);
+      assert.deepEqual(lines, [CSP_MESSAGE]);
+    });
+
+    test('a blocking server.headers policy warns once, whatever the header case or shape', () => {
+      for (const headers of [
+        { 'Content-Security-Policy': "script-src 'nonce-q'" },
+        { 'content-security-policy': ["script-src 'self'", "default-src 'none'"] },
+      ]) {
+        const { plugin, lines } = plugged({ headers });
+        plugin.transformIndexHtml('<html></html>');
+        plugin.transformIndexHtml('<html></html>');
+        assert.deepEqual(lines, [CSP_MESSAGE]);
+      }
+    });
+
+    test('an allowing or report-only policy says nothing', () => {
+      const { plugin, lines } = plugged({
+        headers: {
+          'Content-Security-Policy': "script-src 'self'",
+          'Content-Security-Policy-Report-Only': "script-src 'none'",
+        },
+      });
+      plugin.transformIndexHtml('<html></html>');
+      assert.deepEqual(lines, []);
+    });
+
+    test('a plugin that stood down warns about nothing', () => {
+      const mine = fontkitStudio({ bridgeFile, studioFile, log: (line) => assert.fail(line) });
+      const commands = fontkitStudio({ studio: STUDIO, bridgeFile });
+      mine.configResolved({
+        plugins: [mine, commands],
+        server: { headers: { 'content-security-policy': "default-src 'none'" } },
+      });
+      assert.deepEqual(mine.transformIndexHtml(OWN + META), []);
+    });
+
+    test('without a log option the warning goes through the Vite logger', () => {
+      const lines = [];
+      const plugin = fontkitStudio({ studio: STUDIO, bridgeFile });
+      plugin.configResolved({
+        plugins: [plugin],
+        logger: { warn: (line) => lines.push(line), info: () => assert.fail('info') },
+      });
+      plugin.transformIndexHtml(OWN);
+      assert.deepEqual(lines, [BRIDGE_TWICE_MESSAGE]);
+    });
   });
 });

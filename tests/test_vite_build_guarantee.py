@@ -9,6 +9,7 @@ from pathlib import Path
 from fixture_support import FIXTURES, require_fixture, vite_bin
 
 NODE = shutil.which('node')
+BUILD_LINE = 'Font Kit Studio · dev only: not added to this build'
 FORBIDDEN = (b'fontkit-bridge', b'@fontkit', b'data-allowed-origins', b'Font Kit Studio')
 
 
@@ -27,6 +28,8 @@ class ViteBuildGuaranteeTests(unittest.TestCase):
             timeout=180,
         )
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        # The permanent plugin in the config says, once, that it added nothing.
+        self.assertEqual(result.stdout.count(BUILD_LINE), 1, result.stdout)
         return Path(out)
 
     def check(self, name):

@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { gzipSync } from 'node:zlib';
 
+import { BRIDGE_TWICE_MESSAGE, CSP_MESSAGE } from '../src/csp.js';
 import { BRIDGE_PATH, ProxyTargetError, parseProxyTarget, startProxy } from '../src/proxy.js';
 import { startUpstream } from './helpers/upstream.js';
 import { acceptKey, startWsUpstream } from './helpers/ws-upstream.js';
@@ -681,4 +682,95 @@ test('parseProxyTarget returns local http targets and refuses the rest with a Pr
         error.message === 'Font Kit Studio proxies only a local dev server (localhost or 127.0.0.1)',
     );
   }
+});
+
+describe('warnings about pages the bridge may not reach (R1.6)', () => {
+  const OWN_BRIDGE_PAGE = '<html><head><script src="/js/fontkit-bridge.js"></script></head><body>x</body></html>';
+  const CSP_META_PAGE = `<html><head><meta http-equiv="Content-Security-Policy" content="script-src 'nonce-q'"></head></html>`;
+  const FINE_META_PAGE = `<html><head><meta http-equiv="Content-Security-Policy" content="script-src 'self'"></head></html>`;
+  let warn;
+  let lines;
+  let warnProxy;
+
+  const csp = (value, name = 'content-security-policy') => ({ ...HTML, [name]: value });
+
+  before(async () => {
+    warn = await startUpstream({
+      '/own-bridge': { headers: HTML, body: OWN_BRIDGE_PAGE },
+      '/own-bridge-2': { headers: HTML, body: OWN_BRIDGE_PAGE },
+      '/own-bridge-json': { headers: { 'content-type': 'application/json' }, body: OWN_BRIDGE_PAGE },
+      '/plain': { headers: HTML, body: PAGE },
+      '/csp-header': { headers: csp("script-src 'nonce-q'"), body: PAGE },
+      '/csp-header-2': { headers: csp("default-src 'none'"), body: PAGE },
+      '/csp-fine': { headers: csp("script-src 'self'"), body: PAGE },
+      '/csp-report-only': {
+        headers: csp("script-src 'none'", 'content-security-policy-report-only'),
+        body: PAGE,
+      },
+      '/csp-meta': { headers: HTML, body: CSP_META_PAGE },
+      '/csp-meta-fine': { headers: HTML, body: FINE_META_PAGE },
+      '/csp-and-own': { headers: csp("script-src 'nonce-q'"), body: OWN_BRIDGE_PAGE },
+    });
+  });
+  after(() => warn.close());
+
+  // A fresh proxy per case: "once per run" is a property of one proxy.
+  async function fresh(tests) {
+    lines = [];
+    warnProxy = await startProxy({
+      target: warn.origin,
+      studio: STUDIO,
+      bridgeFile,
+      log: (line) => lines.push(line),
+    });
+    try {
+      await tests();
+    } finally {
+      await warnProxy.close();
+    }
+  }
+  const page = (path) => get(path, { via: warnProxy });
+
+  test('a page that loads its own bridge is still tagged and warns once across two pages', () =>
+    fresh(async () => {
+      const first = await page('/own-bridge');
+      await page('/own-bridge-2');
+      assert.ok(first.body.toString().includes(TAG));
+      assert.deepEqual(lines, [BRIDGE_TWICE_MESSAGE]);
+    }));
+
+  test('a page without its own bridge, and a non-HTML answer, say nothing', () =>
+    fresh(async () => {
+      await page('/plain');
+      await page('/own-bridge-json');
+      assert.deepEqual(lines, []);
+    }));
+
+  test('a blocking CSP header warns once across two pages', () =>
+    fresh(async () => {
+      const first = await page('/csp-header');
+      await page('/csp-header-2');
+      assert.equal(first.headers['content-security-policy'], "script-src 'nonce-q'");
+      assert.ok(first.body.toString().includes(TAG));
+      assert.deepEqual(lines, [CSP_MESSAGE]);
+    }));
+
+  test('a blocking CSP meta tag warns', () =>
+    fresh(async () => {
+      await page('/csp-meta');
+      assert.deepEqual(lines, [CSP_MESSAGE]);
+    }));
+
+  test('a CSP that allows self, or only reports, says nothing', () =>
+    fresh(async () => {
+      for (const path of ['/csp-fine', '/csp-report-only', '/csp-meta-fine']) await page(path);
+      assert.deepEqual(lines, []);
+    }));
+
+  test('a page with both problems prints each message once, in order', () =>
+    fresh(async () => {
+      await page('/csp-and-own');
+      await page('/csp-and-own');
+      assert.deepEqual(lines, [BRIDGE_TWICE_MESSAGE, CSP_MESSAGE]);
+    }));
 });

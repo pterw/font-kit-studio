@@ -5,6 +5,7 @@ import { createServer, request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { CSP_MESSAGE } from '../src/csp.js';
 import { runProxy } from '../src/run-proxy.js';
 import { startUpstream } from './helpers/upstream.js';
 
@@ -26,6 +27,10 @@ before(async () => {
   writeFileSync(bridgeFile, '// bridge\n');
   upstream = await startUpstream({
     '/app': { headers: HTML, body: '<!doctype html><html><head></head><body>app</body></html>' },
+    '/csp': {
+      headers: { ...HTML, 'content-security-policy': "script-src 'nonce-q'" },
+      body: '<!doctype html><html><head></head><body>app</body></html>',
+    },
   });
 });
 
@@ -210,4 +215,13 @@ describe('runProxy', () => {
     assert.equal(new URL(running.studioUrl).port, match[2]);
     await running.close();
   });
+});
+
+test('a page whose policy blocks the bridge is reported once on err, not out', async () => {
+  const { running, out, err } = await start({ target: `http://localhost:${upstream.port}/csp` });
+  const proxied = new URL(running.proxyOrigin);
+  await get(`${proxied.origin}/csp`);
+  await get(`${proxied.origin}/csp`);
+  assert.equal(err.text(), `${CSP_MESSAGE}\n`);
+  assert.ok(!out.text().includes('Content-Security-Policy'));
 });

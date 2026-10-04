@@ -70,7 +70,12 @@ class OneCommandViteBrowserTest(unittest.TestCase):
                 break
             previous = line
         self.assertEqual(previous, 'Font Kit Studio · dev only', self.collected)
-        self.assertFalse([x for x in self.collected if x.startswith('  Font Kit Studio: ')], self.collected)
+        # The config's own copy of the plugin stood down: one start line, one Open: line, none indented.
+        stripped = [x.strip() for x in self.collected if not x.startswith('err: ')]
+        self.assertEqual(stripped.count('Font Kit Studio · dev only'), 1, self.collected)
+        self.assertEqual(len([x for x in stripped if x.startswith('Open: ')]), 1, self.collected)
+        self.assertFalse([x for x in self.collected if x.startswith('  ')
+                          and ('Font Kit Studio' in x or 'Open:' in x)], self.collected)
         url = line[len('Open: '):]
         self.studio_port = urlsplit(url).port
         self.app_port = urlsplit(parse_qs(urlsplit(url).query)['target'][0]).port
