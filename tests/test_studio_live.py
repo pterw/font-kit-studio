@@ -2468,7 +2468,6 @@ class StudioSharedRulesTests(LiveCase):
         six = self.SHEET + '&'.join(f'family=Family{i}:wght@400;700' for i in range(6)) + '&display=swap'
         nine = self.SHEET + '&'.join(f'family=F{i}' for i in range(9))
         tilde = self.SHEET + 'family=A~B:wght@400&text=Hi%20there'
-        euro = self.SHEET + 'family=Inter&text=%E2%82%AC'
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, errors = self.open(engine, target=f'{FAKE}?hostile=1')

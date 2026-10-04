@@ -371,7 +371,10 @@ class EditAndCodePanelTests(LiveIntegrationCase):
                     shown = self.wait_code(page, tab, needle)
                     page.locator('#liveCodeCopy').click()
                     page.wait_for_function('() => /^Copied /.test(document.querySelector("#liveCodeStatus").textContent)')
-                    self.assertEqual(page.evaluate('navigator.clipboard.readText()'), shown, tab)
+                    clipboard = page.evaluate('navigator.clipboard.readText()')
+                    if sys.platform == 'win32':
+                        clipboard = clipboard.replace('\r\n', '\n')   # the Windows clipboard stores CRLF
+                    self.assertEqual(clipboard, shown, tab)
                     page.evaluate('navigator.clipboard.writeText("")')
                     page.evaluate('document.querySelector("#liveCodeStatus").textContent = ""')
                 self.assertEqual(page.errors, [])

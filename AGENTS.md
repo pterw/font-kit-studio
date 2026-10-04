@@ -115,6 +115,7 @@ Run before starting work (baseline) and before every commit:
 ```bash
 python scripts/verify.py --static-only            # unique IDs, inline JS syntax, provenance hashes
 node --check fontkit-bridge.js
+python -m ruff check .                            # unused or undefined names, syntax errors
 python -m unittest discover -s tests -v           # or: python scripts/verify.py (static + full suite)
 python scripts/dev/frontend_gate.py               # browser gate: layout, contrast, privacy, live edit
 python scripts/dev/check_commit_messages.py --range origin/main..HEAD   # no AI signatures

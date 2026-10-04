@@ -12,6 +12,10 @@ Two things have their own version numbers:
 
 ## [Unreleased]
 
+### Fixed
+
+- On Windows, `scripts/serve.py` also stops cleanly on Ctrl-Break.
+
 ### Changed
 
 - Studio is now `fontkit-studio.html`. The old name, `font_kit_studio_v0.1.1.html`,

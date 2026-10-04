@@ -1458,7 +1458,7 @@ class DemotedTargetTests(BridgeCase):
                 reply = self.request(page, {'type': 'design:reset', 'targetId': ids[0]})
                 self.assertEqual((reply['type'], reply['reset']), ('design:applied', True))
                 self.assertEqual([e['targetId'] for e in reply['changes']['targets']], [TITLE, BADGE])
-                self.assertIsNone(frame.evaluate(f"document.querySelector('p.lead').getAttribute('style')"))
+                self.assertIsNone(frame.evaluate("document.querySelector('p.lead').getAttribute('style')"))
                 self.assertEqual(self.errors(frame), [])
 
     def test_a_fresh_studio_sees_the_demoted_target_and_the_old_id_is_gone(self):
@@ -2864,7 +2864,6 @@ class SpaRobustnessTests(BridgeCase):
                 self.hello(page)
                 self.applied(page, 'spa.title', {'fontSize': 50, 'color': '#ff0000', 'text': 'Edited'})
                 frame.evaluate("window.__old = document.querySelector('[data-design-id=\"spa.title\"]')")
-                start = self.mark(page)
                 frame.evaluate('render()')
                 self.assertTrue(frame.evaluate("window.__old !== document.querySelector('[data-design-id=\"spa.title\"]')"))
                 frame.wait_for_function(
