@@ -58,3 +58,16 @@ test('declares what npm needs to run and ship it', () => {
   // .gitattributes pins LF: with CRLF, Linux and macOS look for an interpreter named "node\r".
   assert.ok(bin.startsWith('#!/usr/bin/env node\n'), 'the bin needs an LF node shebang');
 });
+
+// The project's own Vite is loaded by a computed path (createRequire + import()); only
+// src/project.js may do that, so every other file stays checkable by the guard above.
+test('only src/project.js loads code by a computed path', () => {
+  const allowed = join(PKG_DIR, 'src', 'project.js');
+  for (const file of ['bin', 'src'].flatMap((dir) => sourceFiles(join(PKG_DIR, dir)))) {
+    if (file === allowed) continue;
+    const text = readFileSync(file, 'utf8');
+    assert.doesNotMatch(text, /\bcreateRequire\b/, `${file} uses createRequire`);
+    assert.doesNotMatch(text, /\bimport\(\s*(?!['"])/, `${file} has a computed import()`);
+    assert.doesNotMatch(text, /\brequire\(\s*(?!['"])/, `${file} has a computed require()`);
+  }
+});
