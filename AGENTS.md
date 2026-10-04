@@ -248,8 +248,10 @@ describe the cleanup in the new history.
 (D039): Studio's title and eyebrow, `CHANGELOG.md` and the release tag. A change a user
 notices adds a line under Unreleased in `CHANGELOG.md` in the same commit. At a release
 point the controller dates that entry; after the owner merges, the merge commit is tagged
-`vX.Y.Z` (annotated). The owner pushes tags when the agent's git proxy refuses them. The export format version changes
-only when the JSON format does.
+`vX.Y.Z` (annotated). The owner pushes tags when the agent's git proxy refuses them. Release
+assets come from the tag, not a working tree, so their hashes match the evidence:
+`git -c core.autocrlf=false archive vX.Y.Z <files>` (a Windows checkout adds CRLF). The
+export format version changes only when the JSON format does.
 
 **Every commit has a body.** The body says why the change was made (the
 problem, the decision, or the ruling it records), not a restatement of the

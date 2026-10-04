@@ -48,3 +48,11 @@
   `docs/roadmap/product-direction.md` ("Where it stands"), the typography system
   design and the README, and say plainly which parts are designed but not built.
   Never present R1-R5 as shipped.
+- After the owner merges a pull request from the session branch, bring the branch up to
+  `main` with `git merge --ff-only origin/main`; resetting it (`checkout -B`) is refused as
+  destructive.
+- Line budget (D036): release-point evidence, the sweep and ledger entries count toward a
+  pull request's changed lines. Leave about 300 lines of room for review fixes.
+- A release-point doc pass of small, already-located edits is faster done by the controller
+  than dispatched: a docs agent can spend its whole run re-reading. Dispatch when edits need
+  research the controller has not done.
