@@ -73,7 +73,7 @@ Node code lives under `packages/fontkitstudio/` (exact layout fixed in R1.1).
   release workflow, and set the package to require 2FA and disallow tokens. The controller
   writes the steps as a checklist and records the outcome in the ledger.
 
-- [ ] **R1.1 Package skeleton.** `package.json` with no `dependencies`, `bin`, `exports`;
+- [x] **R1.1 Package skeleton.** `package.json` with no `dependencies`, `bin`, `exports`;
   Node's built-in test runner; a test that fails if a runtime dependency is added (spec
   4.5); CI job for `node --test`. Owns: `packages/fontkitstudio/`, `.github/workflows/` (a new job).
 

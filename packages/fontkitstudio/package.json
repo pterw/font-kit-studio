@@ -1,0 +1,18 @@
+{
+  "name": "fontkitstudio",
+  "version": "0.2.1",
+  "description": "Font Kit Studio: try type on your running web app, in development only.",
+  "license": "MIT",
+  "type": "module",
+  "bin": { "fontkitstudio": "bin/fontkitstudio.js" },
+  "exports": { "./package.json": "./package.json" },
+  "files": ["bin/", "src/", "dist/"],
+  "engines": { "node": ">=22.12" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pterw/font-kit-studio.git",
+    "directory": "packages/fontkitstudio"
+  },
+  "homepage": "https://github.com/pterw/font-kit-studio#readme",
+  "scripts": { "test": "node --test test/*.test.js" }
+}
