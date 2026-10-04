@@ -1,6 +1,6 @@
 # Dev hygiene: ruff in CI, and the Windows-only test failures
 
-Status: **done** (owner approved, 2026-10-04); pull request open. One small pull request from `main`, branch
+Status: **done** (owner approved, 2026-10-04); merged as PR #9 (bba5738). One small pull request from `main`, branch
 `chore/ruff-and-windows-tests`, before R1 PR B starts. Not part of a roadmap release.
 
 ## Why

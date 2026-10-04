@@ -74,7 +74,7 @@
   also runs `test_support` (its guards scan every module).
 - Pull request size counts material lines (D050): measure with `git diff -B -M`, report
   churn (renames, stubs, lockfiles, vendored files) separately in the PR body.
-- Windows quirks: six suite-a tests fail on Windows only (listed in the workspace
-  constraints; CI on Linux is green). Python's `Path.write_text` writes CRLF (use
+- Windows quirks: the full suite passes on Windows (since the dev-hygiene PR); keep it
+  that way. Python's `Path.write_text` writes CRLF (use
   `open(..., newline='\n')`); Git Bash's `/tmp` is not Python's `/tmp`; Git Bash has no `bc`.
 
