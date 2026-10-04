@@ -1,3 +1,4 @@
+import base64
 import json
 import re
 import struct
@@ -8,6 +9,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from support import ENGINES, HTML, close_contexts, launch, new_context, shared_runtime  # noqa: E402
+
+# 1x1 PNG, for controls that stay disabled until an image is chosen.
+PNG = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==')
 
 
 class BrowserCase(unittest.TestCase):
@@ -364,6 +368,8 @@ class BrowserCase(unittest.TestCase):
                     self.assertEqual(page.locator('[data-bind="type"] option[value="row"]').count(),0)
                     self.assertEqual(page.locator('.row-child .slot-movers').count(),0)
                     control=page.locator(selector)
+                    if key=='imageWidth':  # the width is disabled until the child has an image
+                        page.locator('#assetFile').set_input_files({'name':'mark.png','mimeType':'image/png','buffer':PNG})
                     control.fill(value)
                     control.dispatch_event('input')
                     self.assertEqual(self.export(page)['composition']['slots'][0]['children'][index][key], expected)

@@ -582,6 +582,8 @@ class SelectionOrderTests(LiveIntegrationCase):
                 self.select_hero_title(page)
                 lead_before = self.style(frame, self.LEAD, 'fontSize')
                 title_before = self.style(frame, TITLE, 'fontSize')
+                self.type_into(page, '#liveFontSize', '40')               # Reset is disabled until the element has a change
+                page.wait_for_function('() => !document.querySelector("#liveResetTarget").disabled')
                 frame.evaluate('window.__hold = true')
                 page.locator('#liveResetTarget').click()                  # the target acknowledges the reset first ...
                 page.frame_locator('#targetAppFrame').locator(self.LEAD).click()   # ... the user clicks the lead right after

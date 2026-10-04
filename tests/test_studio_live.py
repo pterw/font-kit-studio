@@ -23,6 +23,9 @@ EVIL = 'http://evil.test'
 HOST = 'http://host.test'
 APP = f'{STUDIO}/{HTML.name}'
 FAKE = f'{TARGET}/fake-target.html'
+# The dev-server status request has been answered once Sync to file stops saying "Checking": it then says what it writes
+# or why it is off. It is disabled while the ledger is empty either way, so the title is the signal, not `disabled`.
+DEV_SERVER_ANSWERED = '() => !/^Checking/.test(document.querySelector("#liveCodeSync").title)'
 
 
 class LiveCase(unittest.TestCase):
@@ -262,7 +265,10 @@ class StudioDefectTests(LiveCase):
                 studio.locator('#modeComposer').click()
                 # The guard still hides the recursive connector when Studio is embedded.
                 self.assertFalse(studio.locator('#targetAppBridgeBar').is_visible())
-                studio.locator('#btnSyncToApp').click()
+                # Nothing is connected, so Sync to Live App is disabled. The handler is still driven (the button forced
+                # on), because the proof is that pressing it never posts to the parent.
+                self.assertTrue(studio.locator('#btnSyncToApp').is_disabled())
+                studio.locator('#btnSyncToApp').evaluate('(button) => { button.disabled = false; button.click(); }')
                 studio.locator('#applyPreset').click()
                 page.wait_for_timeout(300)
                 self.assertEqual(page.evaluate('window.__fromStudio'), [])
@@ -587,11 +593,12 @@ class StudioProtocolTests(LiveCase):
                 self.wait_connected(page)
                 frame = self.frame(page)
                 sync = page.locator('#liveCodeSync')
-                page.wait_for_function('() => !document.querySelector("#liveCodeSync").disabled')
-                self.assertIn('demo/fontkit-overrides.css', sync.get_attribute('title'))
+                page.wait_for_function(DEV_SERVER_ANSWERED)
                 self.select(page, frame, 'hero.title')
                 self.set_value(page, '#liveFontSize', 48)
                 page.wait_for_function('() => /rev 1$/.test(document.querySelector("#bridgeStatusBadge").textContent)')
+                page.wait_for_function('() => !document.querySelector("#liveCodeSync").disabled')
+                self.assertIn('demo/fontkit-overrides.css', sync.get_attribute('title'))
                 sync.click()
                 page.wait_for_function('() => /Saved/.test(document.querySelector("#liveCodeStatus").textContent)')
                 self.assertEqual(len(self.puts), 1)
@@ -943,7 +950,7 @@ class StudioFixRound1Tests(LiveCase):
                 # here, so this proves the origin gate (nothing is offered from a non-loopback origin); the scheme and
                 # host checks on a loopback Studio are in test_studio_first_run.DemoOfferTests.
                 page, errors = self.open(engine, target=None, sync=True, status_target='javascript:parent.__pwned=1')
-                page.wait_for_function('() => !document.querySelector("#liveCodeSync").disabled')
+                page.wait_for_function(DEV_SERVER_ANSWERED)
                 self.assertEqual(page.locator('#targetAppUrl').input_value(), '')
                 self.assert_not_loaded(page)
                 self.assertEqual(errors, [])
@@ -987,7 +994,7 @@ class StudioFixRound1Tests(LiveCase):
                 page, errors = self.open(engine, sync=True)
                 self.wait_connected(page)
                 frame = self.frame(page)
-                page.wait_for_function('() => !document.querySelector("#liveCodeSync").disabled')
+                page.wait_for_function(DEV_SERVER_ANSWERED)
                 self.select(page, frame, 'hero.title')
                 self.set_value(page, '#liveFontSize', 70)
                 page.wait_for_function('() => /rev 1$/.test(document.querySelector("#bridgeStatusBadge").textContent)')
@@ -1056,8 +1063,10 @@ class StudioFixRound1Tests(LiveCase):
                 page.locator('#btnRestoreOriginalText').click()
                 page.wait_for_function('() => /rev 3$/.test(document.querySelector("#bridgeStatusBadge").textContent)')
                 page.wait_for_selector('#liveResetTarget')
-                page.locator('#liveResetTarget').click()
+                self.set_value(page, '#liveFontSize', 20)      # Reset is disabled until the element has a change
                 page.wait_for_function('() => /rev 4$/.test(document.querySelector("#bridgeStatusBadge").textContent)')
+                page.locator('#liveResetTarget').click()
+                page.wait_for_function('() => /rev 5$/.test(document.querySelector("#bridgeStatusBadge").textContent)')
                 page.wait_for_selector('[data-live-back]')
                 page.locator('[data-live-back]').click()
                 page.wait_for_timeout(300)
@@ -1167,7 +1176,7 @@ class StudioFixRound1Tests(LiveCase):
                 page, errors = self.open(engine, sync=True)
                 self.wait_connected(page)
                 frame = self.frame(page)
-                page.wait_for_function('() => !document.querySelector("#liveCodeSync").disabled')
+                page.wait_for_function(DEV_SERVER_ANSWERED)
                 page.locator('#liveCodeAutoSync').check()
                 page.locator('#btnSyncToApp').click()
                 page.wait_for_function('() => /rev 1$/.test(document.querySelector("#bridgeStatusBadge").textContent)')
@@ -2263,8 +2272,9 @@ class StudioFreeFontTests(LiveCase):
                 self.assertEqual(sorted(links), sorted(FREE_URLS.values()))
                 for href in links:
                     self.assertRegex(href, GOOGLE_RE)
-                # Pressing it again does not duplicate.
-                page.locator('#loadFreeFontsLibrary').click()
+                # Once every sheet has loaded the button is disabled; if it were pressed anyway nothing is duplicated.
+                page.wait_for_function('() => document.querySelector("#loadFreeFontsLibrary").disabled')
+                page.locator('#loadFreeFontsLibrary').evaluate('(button) => { button.disabled = false; button.click(); }')
                 page.wait_for_timeout(150)
                 self.assertEqual(len(self.font_links(page)), 16)
                 self.assertEqual(sorted(set(requested)), sorted(FREE_URLS.values()))
@@ -2573,7 +2583,7 @@ class StudioReviewFixTests(LiveCase):
                 page, errors = self.open(engine, sync=True)
                 self.wait_connected(page)
                 frame = self.frame(page)
-                page.wait_for_function('() => !document.querySelector("#liveCodeSync").disabled')
+                page.wait_for_function(DEV_SERVER_ANSWERED)
                 self.select(page, frame, 'auto.h2.1')
                 size = 40
                 for selector in self.ACCEPTED_SELECTORS:
@@ -3039,10 +3049,10 @@ class StudioDomMovePersistenceTests(ArrangeCase):
     """DOM-order moves are saved state: they survive a reload through Reapply, never silently (rule 6)."""
     CARDS = {'selector': '[data-design-id="cards"]', 'name': 'Cards'}
 
-    def move_first(self, page, frame, card='card.c'):
+    def move_first(self, page, frame, card='card.c', rev=1):
         self.select(page, frame, card)
         page.locator('#liveMoveFirst').click()
-        self.wait_badge(page, r'^Live · rev 1$')
+        self.wait_badge(page, rf'^Live · rev {rev}$')
 
     def test_a_dom_move_says_it_is_kept_in_studio_but_not_in_the_css_file(self):
         for engine in ENGINES:
@@ -3176,9 +3186,8 @@ class StudioDomMovePersistenceTests(ArrangeCase):
             with self.subTest(engine=engine):
                 page, errors = self.open(engine, target=ARRANGE, sync=True)
                 frame = self.wait_ready(page, 11)
-                page.wait_for_function('() => !document.querySelector("#liveCodeSync").disabled')
-                with page.expect_response(lambda response: response.request.method == 'PUT'):
-                    page.locator('#liveCodeAutoSync').check()               # auto-sync writes once when switched on
+                page.wait_for_function(DEV_SERVER_ANSWERED)
+                page.locator('#liveCodeAutoSync').check()               # nothing to write yet: the ledger is empty
                 self.move_first(page, frame)
                 saved = self.export(page)['live']['structure']
                 self.assertEqual(saved, self.saved_cards(self.CARDS_AS_SAVED))
@@ -3187,8 +3196,11 @@ class StudioDomMovePersistenceTests(ArrangeCase):
                 frame.evaluate('window.fake.reverse("cards")')       # the app reorders Cards itself, in session
                 self.assertEqual(self.dom(frame), ['card.d', 'card.b', 'card.a', 'card.c'])
                 self.select(page, frame, 'side.x')
-                page.locator('#liveResetTarget').click()
+                with page.expect_response(lambda response: response.request.method == 'PUT'):
+                    self.set_value(page, '#liveFontSize', 20)           # Side X gets something to reset; auto-sync writes it
                 self.wait_badge(page, r'^Live · rev 2$')
+                page.locator('#liveResetTarget').click()
+                self.wait_badge(page, r'^Live · rev 3$')
                 self.assertEqual(self.export(page)['live']['structure'], saved, 'the saved order is what the user saved, not the page\'s')
                 banner.wait_for(state='visible')
                 self.assertIn('the live target holds 0 of them', ' '.join(banner.inner_text().split()))
@@ -3206,8 +3218,10 @@ class StudioDomMovePersistenceTests(ArrangeCase):
                 self.restore_cards_in_the_page(frame)
                 self.assertEqual(self.dom(frame), ['card.a', 'card.b', 'card.c', 'card.d'])
                 self.select(page, frame, 'side.x')
-                page.locator('#liveResetTarget').click()
+                self.set_value(page, '#liveFontSize', 20)               # Side X gets something to reset
                 self.wait_badge(page, r'^Live · rev 2$')
+                page.locator('#liveResetTarget').click()
+                self.wait_badge(page, r'^Live · rev 3$')
                 self.assertEqual(self.export(page).get('live', {}).get('structure'), saved)
                 page.locator('#liveReconnectBanner').wait_for(state='visible')
                 self.assertEqual(self.dom(frame), ['card.a', 'card.b', 'card.c', 'card.d'])
@@ -3522,8 +3536,10 @@ class StudioDomMovePersistenceTests(ArrangeCase):
                 page, errors, frame = self.open_arrange(engine)
                 frame.evaluate('window.fake.reverse("cards")')       # the page reorders Cards by itself: d c b a
                 self.select(page, frame, 'card.b')
-                page.locator('#liveResetTarget').click()
+                self.set_value(page, '#liveFontSize', 20)               # Card B gets something to reset
                 self.wait_badge(page, r'^Live · rev 1$')
+                page.locator('#liveResetTarget').click()
+                self.wait_badge(page, r'^Live · rev 2$')
                 self.assertEqual(len(frame.evaluate('window.fake.ledger().structure')), 1, 'the page still reports the container')
                 self.assertNotIn('live', self.export(page), 'the user never moved anything')
                 self.assertNotIn('Structure: Cards', self.code(page, 'Json'))
@@ -3671,11 +3687,13 @@ class StudioDomMovePersistenceTests(ArrangeCase):
             with self.subTest(engine=engine):
                 page, errors = self.open(engine, target=ARRANGE, sync=True)
                 frame = self.wait_ready(page, 11)
-                page.wait_for_function('() => !document.querySelector("#liveCodeSync").disabled')
+                page.wait_for_function(DEV_SERVER_ANSWERED)
+                page.locator('#liveCodeAutoSync').check()               # nothing to write yet: the ledger is empty
+                self.select(page, frame, 'hero.title')
                 with page.expect_response(lambda response: response.request.method == 'PUT'):
-                    page.locator('#liveCodeAutoSync').check()               # auto-sync writes once when switched on
+                    self.set_value(page, '#liveFontSize', 48)           # a CSS change: auto-sync writes it once
                 before = self.puts[-1]['body']
-                self.move_first(page, frame)
+                self.move_first(page, frame, rev=2)
                 page.wait_for_timeout(1000)                                # absence check: auto-sync waits 400 ms
                 self.assertEqual(len(self.puts), 1, 'a DOM move changes no CSS, so nothing is written by itself')
                 page.locator('#liveCodeAutoSync').uncheck()
@@ -3751,6 +3769,8 @@ class StudioSelectionOrderTests(ArrangeCase):
 
     def reset_with_held_acknowledgement(self, page, frame):
         self.select(page, frame, 'card.a')
+        self.set_value(page, '#liveFontSize', 21)                # Reset is disabled until the element has a change
+        self.wait_badge(page, r'^Live · rev 1$')
         self.watch_handled(page)
         frame.evaluate('window.fake.holdAll = true')
         page.locator('#liveResetTarget').click()        # the acknowledgement of this reset is held first
@@ -3765,7 +3785,7 @@ class StudioSelectionOrderTests(ArrangeCase):
                 page.keyboard.press('Enter')                    # then the user picks Card B
                 self.wait_held(frame, 2)
                 self.release_one(page, frame)                   # the acknowledgement reaches Studio first
-                self.wait_badge(page, r'^Live · rev 1$')
+                self.wait_badge(page, r'^Live · rev 2$')
                 self.release_all(page, frame)
                 page.wait_for_function('() => document.querySelector("#liveTargetName").dataset.targetId === "card.b"')
                 self.assertEqual(self.shown(page), 'card.b')
@@ -3782,7 +3802,7 @@ class StudioSelectionOrderTests(ArrangeCase):
                 frame.evaluate('window.fake.select("card.b")')  # ... and the user clicks Card B in the page right after
                 self.wait_held(frame, 2)
                 self.release_one(page, frame)                   # Studio sees the acknowledgement, then the click
-                self.wait_badge(page, r'^Live · rev 1$')
+                self.wait_badge(page, r'^Live · rev 2$')
                 self.release_all(page, frame)
                 page.wait_for_function('() => document.querySelector("#liveTargetName").dataset.targetId === "card.b"')
                 self.assertEqual(self.shown(page), 'card.b')
@@ -3852,9 +3872,11 @@ class StudioSelectionOrderTests(ArrangeCase):
             with self.subTest(engine=engine):
                 page, errors, frame = self.open_arrange(engine)
                 self.select(page, frame, 'card.a')
+                self.set_value(page, '#liveFontSize', 21)       # Reset is disabled until the element has a change
+                self.wait_badge(page, r'^Live · rev 1$')
                 before = len(self.received(frame, 'design:select'))
                 page.locator('#liveResetTarget').click()
-                self.wait_badge(page, r'^Live · rev 1$')
+                self.wait_badge(page, r'^Live · rev 2$')
                 frame.wait_for_function('(n) => window.__received.filter(i => i.data && i.data.type === "design:select").length > n', arg=before)
                 self.assertEqual(self.received(frame, 'design:select')[-1]['data']['targetId'], 'card.a')
                 self.assertEqual(self.shown(page), 'card.a')

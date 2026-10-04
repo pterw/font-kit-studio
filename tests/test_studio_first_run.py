@@ -16,7 +16,7 @@ import xml.dom.minidom
 
 from support import ENGINES, HTML, REPO
 from test_live_integration import CONNECTED, LiveIntegrationCase, free_ports
-from test_studio_live import APP, EVIL, FAKE, TARGET, LiveCase
+from test_studio_live import APP, DEV_SERVER_ANSWERED, EVIL, FAKE, TARGET, LiveCase
 
 NEED_URL = "Enter your app's URL"
 FULL_URL = 'Use a full URL starting with http:// or https://'
@@ -215,7 +215,7 @@ class NoDemoOfferTests(LiveCase):
             with self.subTest(engine=engine):
                 # studio.test answers /__fontkit/status like the dev server does, but it is not loopback.
                 page, errors = self.open(engine, target=None, sync=True)
-                page.wait_for_function('() => !document.querySelector("#liveCodeSync").disabled')
+                page.wait_for_function(DEV_SERVER_ANSWERED)
                 self.assertEqual(page.locator('#targetAppUrl').input_value(), '')
                 self.assertEqual(page.locator('#btnConnectTarget').inner_text(), 'Connect Target')
                 self.assertEqual(errors, [])
@@ -292,7 +292,7 @@ class DemoOfferTests(LiveIntegrationCase):
         page = self.open(engine, query=False)
         page.locator('#modeComposer').click()
         # Sync is enabled in the same step that decides the offer, so the decision is made by then.
-        page.wait_for_function('() => !document.querySelector("#liveCodeSync").disabled')
+        page.wait_for_function(DEV_SERVER_ANSWERED)
         return page
 
     def test_a_hostile_status_target_is_never_offered(self):

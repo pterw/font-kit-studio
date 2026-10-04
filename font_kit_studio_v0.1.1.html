@@ -1090,6 +1090,7 @@ body.dark .live-overlay-label { color: #111; }
         <button id="btnSyncToApp" class="btn primary" type="button" style="font-weight: 600;">⚡ Sync to Live App</button>
         <input id="importJsonFile" type="file" accept="application/json,.json" hidden>
       </div>
+      <div id="syncToAppHint" class="composer-status" data-hint-for="btnSyncToApp" hidden></div>
       <div id="composerStatus" class="composer-status">Editorial — Image + Body Row preset ready. Specimens show fallback fonts until you load the free fonts.</div>
       <div id="composerFontHint" class="composer-status">Loading free fonts contacts Google Fonts and sends your IP address and the font names.</div>
     </section>
@@ -1136,6 +1137,7 @@ body.dark .live-overlay-label { color: #111; }
             <button id="liveCodeDownload" class="btn" type="button">Download</button>
             <button id="liveCodeSync" class="btn" type="button" disabled title="Checking for the Font Kit dev server…">Sync to file</button>
             <label class="live-autosync"><input id="liveCodeAutoSync" type="checkbox" disabled> Auto-sync</label>
+            <span id="liveCodeSyncHint" class="live-code-status" data-hint-for="liveCodeSync" hidden></span>
             <span id="liveCodeStatus" class="live-code-status" role="status" aria-live="polite"></span>
           </div>
           <ul id="liveCodeWarnings" class="live-warnings" aria-label="Runtime warnings from the target" hidden></ul>
@@ -1506,8 +1508,10 @@ function ensureFontStylesheet(font, { retry = false } = {}) {
   link.href = href;
   link.dataset.studioFont = font.family;
   link.dataset.state = "loading";
-  link.addEventListener("load", () => { link.dataset.state = "loaded"; });
-  link.addEventListener("error", () => { link.dataset.state = "error"; });
+  // The composer's controls follow the loaded state (a Load button has nothing to do once every family is in).
+  const stateChanged = () => document.dispatchEvent(new CustomEvent("fontkit:font-state"));
+  link.addEventListener("load", () => { link.dataset.state = "loaded"; stateChanged(); });
+  link.addEventListener("error", () => { link.dataset.state = "error"; stateChanged(); });
   fontLinks.set(font.family, link);
   try { document.head.appendChild(link); } catch (_) { link.dataset.state = "error"; }
   return link;
@@ -2168,7 +2172,11 @@ if (remembered) kitId.value = remembered;
     selectedId: null, selectedRect: null, hoverId: null, hoverRect: null, hoverName: "",
     mode: "select", viewActive: false, codeTab: "css",
     queue: [], inFlight: null, requestSeq: 0, requestTimer: null, compositionLinked: false,
-    syncAvailable: false, syncPath: "", syncBusy: false, syncQueued: false, syncTimer: null
+    syncAvailable: false, syncPath: "", syncBusy: false, syncQueued: false, syncTimer: null,
+    syncTitle: "Checking for the Font Kit dev server…",
+    // Studio never reads the overrides file, so "empty" cannot tell a file that never had anything from one the user has just
+    // emptied. Once Studio has held saved state in this session, writing the empty state is the user's own result.
+    heldSavedState: false
   };
 
   const q = id => document.getElementById(id);
@@ -2396,6 +2404,7 @@ if (remembered) kitId.value = remembered;
       saved: state.background.saved
     });
     composerCanvas.style.width = state.canvasWidth === "100%" ? "100%" : `min(100%, ${state.canvasWidth}px)`;
+    refreshControlStates();
   }
 
   function setSlotCount(nextCount) {
@@ -2675,7 +2684,7 @@ if (remembered) kitId.value = remembered;
   }
 
   function renderInspector() {
-    if (live.viewActive) { renderLiveInspector(); return; }
+    if (live.viewActive) { renderLiveInspector(); refreshControlStates(); return; }
     const loc = selectedLocation();
     const slot = loc?.slot;
     if (!slot) {
@@ -2919,6 +2928,7 @@ if (remembered) kitId.value = remembered;
         btn.addEventListener("click", () => { const current = selectedSlot(); current.align = btn.dataset.value; renderComposer(); });
       });
     }
+    refreshControlStates();
   }
 
   slotCount.addEventListener("change", () => setSlotCount(slotCount.value));
@@ -3734,6 +3744,7 @@ if (remembered) kitId.value = remembered;
     live.selectedRect = null;
     live.hoverId = null;
     live.hoverRect = null;
+    refreshControlStates();
     if (!live.sessionId) live.sessionId = newSessionId();
     setBridgeStatus("Connecting…", "connecting");
     sendDesignMessage({ type:"design:hello" });
@@ -4737,6 +4748,7 @@ if (remembered) kitId.value = remembered;
     const shown = q("liveTargetName")?.dataset.targetId;
     if (live.ready && live.selectedId && shown === live.selectedId && live.targets.has(live.selectedId)) { reseedLiveControls(); refreshArrange(); }
     else renderLiveInspector();
+    refreshControlStates();
   }
 
   function reflectCanonical(targetId, canonicalPatch) {
@@ -5399,6 +5411,8 @@ if (remembered) kitId.value = remembered;
       button?.classList.toggle("active", key === live.codeTab);
       button?.setAttribute("aria-selected", String(key === live.codeTab));
     });
+    if (!savedStateEmpty()) live.heldSavedState = true;
+    refreshControlStates();
   }
 
   function setCodeStatus(text, kind = "") {
@@ -5443,12 +5457,13 @@ if (remembered) kitId.value = remembered;
   // ---- dev-server sync ------------------------------------------------------
   function setSyncAvailability(available, title) {
     live.syncAvailable = available;
-    if (liveCodeSync) { liveCodeSync.disabled = !available; liveCodeSync.title = title; }
+    live.syncTitle = title;   // refreshControlStates decides whether Sync to file is enabled and which reason it shows
     if (liveCodeAutoSync) {
       liveCodeAutoSync.disabled = !available;
       liveCodeAutoSync.title = title;
       if (!available) liveCodeAutoSync.checked = false;
     }
+    refreshControlStates();
   }
 
   async function detectDevServerSync() {
@@ -5486,6 +5501,9 @@ if (remembered) kitId.value = remembered;
     try {
       do {
         live.syncQueued = false;
+        // A session that never held saved state would write a placeholder over the user's file (Rule 6), whether Sync to
+        // file or Auto-sync asked.
+        if (emptyWriteRefused()) { setCodeStatus(NOTHING_TO_SAVE + " The overrides file was left as it is."); break; }
         const css = liveCss();
         setCodeStatus("Saving…", "saving");
         try {
@@ -5526,6 +5544,7 @@ if (remembered) kitId.value = remembered;
     renderReconnectBanner();
     renderLiveCode();
     if (live.viewActive) renderLiveInspector();
+    refreshControlStates();
   }
 
   q("liveReapply")?.addEventListener("click", reapplyStudioOverrides);
@@ -5817,6 +5836,7 @@ if (remembered) kitId.value = remembered;
   renderCanvas = function() {
     originalRenderCanvas();
     broadcastLiveState(false);
+    refreshControlStates();
   };
 
   const originalApplyCompositionPreset = applyCompositionPreset;
@@ -5835,6 +5855,107 @@ if (remembered) kitId.value = remembered;
     if (viewTargetBtn) viewTargetBtn.style.display = "none";
     if (viewSpecimenBtn) viewSpecimenBtn.style.display = "none";
   }
+
+  // ---- controls that would do nothing ------------------------------------------------------------------------------
+  // A control with nothing to act on is disabled and says why in its title and, where a tooltip is easy to miss, in an
+  // adjacent hint ([data-hint-for]). refreshControlStates() decides every one of them from the current state; it runs
+  // wherever that state changes (connect, disconnect, selection, ledger, view, fonts, pop-out, colour source).
+  const CONNECT_FIRST = "Connect a page first: enter its URL and press Connect Target.";
+  const NOTHING_TO_SAVE = "No changes to save yet.";
+  const LIVE_VIEW_ONLY = "Only for the Live App view: switch to the page preview first.";
+  const COLOUR_SOURCES = { custom:"Custom hex", tailwind:"Tailwind", saved:"Saved palette" };
+
+  // A focused control that is about to be disabled hands keyboard focus to the next usable control in its panel (or the
+  // last one before it), so a keyboard user is not dropped on the page.
+  const FOCUS_PANELS = "#slotInspector, #targetAppBridgeBar, .controls, .composer-toolbar, .live-code-panel";
+  function moveFocusAway(el) {
+    const panel = el.closest(FOCUS_PANELS);
+    if (!panel) return;
+    const usable = [...panel.querySelectorAll('button, input, select, textarea, a[href], [tabindex]:not([tabindex="-1"])')]
+      .filter(node => node !== el && !node.disabled && node.offsetParent !== null);
+    const next = usable.find(node => el.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING) || usable[usable.length - 1];
+    if (next) next.focus({ preventScroll:true });
+  }
+
+  // `reason` null enables the control and restores the title it had in the markup (or the one it was last given).
+  function setDisabledReason(el, reason) {
+    if (!el) return;
+    if (reason && el === document.activeElement) moveFocusAway(el);
+    if (el.dataset.normalTitle === undefined) el.dataset.normalTitle = el.getAttribute("title") || "";
+    el.disabled = Boolean(reason);
+    const title = reason || el.dataset.normalTitle;
+    if (title) el.title = title; else el.removeAttribute("title");
+    const hint = el.id ? document.querySelector(`[data-hint-for="${el.id}"]`) : null;
+    if (!hint) return;
+    hint.textContent = reason || "";
+    hint.hidden = !reason;
+    if (reason) el.setAttribute("aria-describedby", hint.id); else el.removeAttribute("aria-describedby");
+  }
+
+  // What Sync to file would write: Studio's saved overrides, saved composition tokens and DOM moves. These are exactly
+  // what the Changes count shows.
+  function savedStateEmpty() {
+    return !Object.keys(live.overrides).length && !Object.keys(live.savedTokens).length && !live.changes.structure.length;
+  }
+
+  // An empty write is refused only while Studio has never held saved state in this session (see live.heldSavedState).
+  function emptyWriteRefused() {
+    return savedStateEmpty() && !live.heldSavedState;
+  }
+
+  // What Copy and Download would hand over: the saved state, or whatever the page's ledger still holds.
+  function ledgerEmpty() {
+    return savedStateEmpty() && !live.changes.targets.length && !Object.keys(live.changes.tokens).length;
+  }
+
+  // Reset sends the element back to the page's own look, so it needs something on this element: a saved override, a
+  // ledger entry, or a DOM order that names it.
+  function elementHasChanges(id) {
+    return Object.keys(live.overrides[id] || {}).length > 0
+      || live.changes.targets.some(entry => entry.targetId === id && (Object.keys(entry.declarations).length || entry.text !== null))
+      || live.changes.structure.some(entry => entry.orderIds.includes(id));
+  }
+
+  function applyColourSource(source, fields) {
+    const active = COLOUR_SOURCES[source] ? source : "custom";
+    Object.entries(fields).forEach(([name, elements]) => elements.forEach(el => setDisabledReason(el, name === active ? null
+      : `Not used: the colour source is ${COLOUR_SOURCES[active]}. Pick ${COLOUR_SOURCES[name]} as the source to use this field.`)));
+  }
+
+  function refreshControlStates() {
+    const ready = live.ready;
+    setDisabledReason(q("btnSyncToApp"), ready ? null : CONNECT_FIRST);
+    setDisabledReason(q("btnRestoreOriginalText"), !ready ? CONNECT_FIRST
+      : live.changes.targets.some(entry => entry.text !== null) ? null : "Nothing to restore: no page text has been edited.");
+    if (live.selectedId) setDisabledReason(q("liveResetTarget"), elementHasChanges(live.selectedId) ? null : "No changes on this element.");
+    [q("btnDeviceDesktop"), q("btnDeviceLaptop"), q("btnDeviceMobile"), q("btnDeviceFluid"), q("bridgeModeSelect"), q("bridgeModeInteract")]
+      .forEach(el => setDisabledReason(el, live.viewActive ? null : LIVE_VIEW_ONLY));
+    setDisabledReason(q("bridgeFocusPopout"), live.popup && !live.popup.closed ? null : "The pop-out window is closed. Dock back, or pop it out again.");
+    // Loaded means every family's stylesheet arrived; after a failed load the button stays, to try again.
+    const allLoaded = freeFontsAllowed && fonts.every(font => !fontStylesheetUrl(font) || fontLinks.get(font.family)?.dataset.state === "loaded");
+    ["loadFreeFontsLibrary", "loadFreeFonts"].forEach(id => setDisabledReason(q(id), allLoaded ? "Already loaded: every free font is on in this browser." : null));
+    const syncFile = q("liveCodeSync");
+    if (syncFile) {
+      syncFile.dataset.normalTitle = !savedStateEmpty() ? live.syncTitle
+        : `Writes an empty overrides file to ${live.syncPath}: nothing is saved in Studio now, so this clears what the file holds.`;
+      setDisabledReason(syncFile, !live.syncAvailable ? live.syncTitle : emptyWriteRefused() ? NOTHING_TO_SAVE : null);
+    }
+    setDisabledReason(q("liveCodeCopy"), ledgerEmpty() ? NOTHING_TO_SAVE : null);
+    setDisabledReason(q("liveCodeDownload"), ledgerEmpty() ? NOTHING_TO_SAVE : null);
+
+    applyColourSource(canvasBgSource.value, { custom:[canvasBgHex], tailwind:[canvasBgFamily, canvasBgShade], saved:[canvasSavedColor] });
+    const sourceSelect = slotInspector.querySelector('[data-bind="colorSource"]');
+    if (sourceSelect) {
+      const bound = name => slotInspector.querySelector(`[data-bind="${name}"]`);
+      applyColourSource(sourceSelect.value, { custom:[bound("colorHex")], tailwind:[bound("colorFamily"), bound("colorShade")], saved:[bound("savedColor")] });
+    }
+    const cut = slotInspector.querySelector('[data-bind="styleIndex"]');
+    if (cut) setDisabledReason(cut, cut.options.length <= 1 ? "This family has one cut only." : null);
+    const imageWidth = slotInspector.querySelector('[data-bind="imageWidth"]');
+    if (imageWidth) setDisabledReason(imageWidth, selectedSlot()?.assetDataUrl ? null : "Choose an image first: the width applies to the image.");
+  }
+  document.addEventListener("fontkit:font-state", refreshControlStates);
+  document.addEventListener("fontkit:free-fonts-allowed", refreshControlStates);
 
   renderLiveCode();
   detectDevServerSync();
