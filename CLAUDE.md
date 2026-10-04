@@ -42,8 +42,8 @@
 - A stopped agent (for example on a usage limit) resumes with its context through
   SendMessage to its agent id. Earlier agents stay resumable by name, so never
   reuse a role name as an address unless you mean that exact agent.
-- The session's git proxy refuses branch deletion and tag pushes (HTTP 403). Ask the
-  owner to delete branches and to create release tags in the GitHub UI.
+- The session's git proxy refuses branch deletion and tag pushes (HTTP 403). The owner
+  does those from a local clone after pulling; list what is needed in one line.
 - When asked what fontkit is, who it is for or how it competes, answer from
   `docs/roadmap/product-direction.md` ("Where it stands"), the typography system
   design and the README, and say plainly which parts are designed but not built.

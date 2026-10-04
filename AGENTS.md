@@ -139,7 +139,10 @@ claim graph verification you did not get.
 
 - **Owner:** sets vision and scope, approves designs, requests external reviews
   (Codex, Copilot) and merges. Agents never merge or call external reviews
-  themselves.
+  themselves. On a pull request, Copilot and Codex findings are verified, then fixed
+  or answered on their thread. Graphify: act on its main comment, not on its
+  complexity comments. Codacy findings are unconfirmed until reproduced; many have
+  been false positives.
 - **Controller:** owns plans, ledgers, `AGENTS.md`, `docs/agents/global-rules.md`,
   git commits and pushes. The only role that spawns agents.
   Writes task briefs, dispatches agents, integrates results.
