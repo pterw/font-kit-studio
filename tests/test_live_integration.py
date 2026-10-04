@@ -168,10 +168,13 @@ class LiveIntegrationCase(unittest.TestCase):
 
     def inspector_target(self, page, target, timeout=3000):
         """Wait until the inspector shows `target`: an id, or a regex matched against the shown name."""
+        # Pass only the key that applies and test for it with typeof: wait_for_function turns a None
+        # value into a missing key (`undefined`), so a `name: None` placeholder cannot be told from a regex.
         page.wait_for_function(
-            '(want) => { const el = document.querySelector("#liveTargetName");'
-            ' return Boolean(el) && (el.dataset.targetId === want.id || (want.name !== null && new RegExp(want.name).test(el.textContent))); }',
-            arg={'id': target, 'name': None} if not target.startswith('/') else {'id': None, 'name': target.strip('/')},
+            '(want) => { const el = document.querySelector("#liveTargetName"); if (!el) return false;'
+            ' return typeof want.name === "string" ? new RegExp(want.name).test(el.textContent)'
+            ' : el.dataset.targetId === want.id; }',
+            arg={'name': target.strip('/')} if target.startswith('/') else {'id': target},
             timeout=timeout)
 
     def click_in_target(self, page, selector, target):
@@ -264,6 +267,43 @@ class LiveIntegrationCase(unittest.TestCase):
         frame.wait_for_function('document.readyState === "complete"')
         self.wait_badge(page, CONNECTED)
         return frame
+
+
+class InspectorWaitTests(unittest.TestCase):
+    """`inspector_target` must really wait. Playwright's wait_for_function drops dict keys whose value
+    is None (the predicate sees `undefined`, not `null`), so a predicate that told "no regex" apart with
+    `!== null` matched every name and the wait returned at once for any plain id."""
+
+    inspector_target = LiveIntegrationCase.inspector_target  # the helper under test; it uses only `page`
+
+    def setUp(self):
+        shared_runtime()
+        context = new_context('chromium')
+        self.addCleanup(context.close)
+        self.page = context.new_page()
+        self.page.set_content('<span id="liveTargetName" data-target-id="landing.hero.lead">Hero lead</span>')
+
+    def test_a_plain_id_that_is_not_shown_times_out(self):
+        with self.assertRaises(PlaywrightTimeout):
+            self.inspector_target(self.page, 'landing.hero.title', timeout=500)
+
+    def test_a_regex_that_does_not_match_the_shown_name_times_out(self):
+        with self.assertRaises(PlaywrightTimeout):
+            self.inspector_target(self.page, '/^Hero title$/', timeout=500)
+
+    def test_the_shown_id_returns(self):
+        self.inspector_target(self.page, 'landing.hero.lead', timeout=500)
+
+    def test_a_regex_that_matches_the_shown_name_returns(self):
+        self.inspector_target(self.page, '/^Hero lead$/', timeout=500)
+
+    def test_the_wait_holds_until_the_inspector_renders_the_target(self):
+        self.page.evaluate("""() => setTimeout(() => {
+            const el = document.getElementById('liveTargetName');
+            el.dataset.targetId = 'landing.hero.title'; el.textContent = 'Hero title'; }, 300)""")
+        self.inspector_target(self.page, 'landing.hero.title', timeout=3000)
+        self.assertEqual(self.page.evaluate('document.getElementById("liveTargetName").dataset.targetId'),
+                         'landing.hero.title')
 
 
 class EditAndCodePanelTests(LiveIntegrationCase):
@@ -685,6 +725,27 @@ class SelectionOrderTests(LiveIntegrationCase):
                 frame.wait_for_function('window.__stashed() === 4')                  # the second ready forgot the first refreshes
                 self.select_hero_title(page)
                 frame.evaluate('window.__defer = false; window.__runStashed()')
+                self.assert_selected_everywhere(page, frame, 'landing.hero.title')
+                self.assertEqual(page.errors, [])
+
+    def test_the_inspector_checks_wait_for_a_bridge_that_reports_a_selection_late(self):
+        """The bridge's design:selected reaches Studio 150 ms late. The helpers must wait for the inspector to
+        show the click instead of reading it before Studio has rendered the report."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page = self.connected(engine)
+                self.trace(page)
+                frame = self.frame(page)
+                frame.evaluate("""() => {
+                    const proto = window.FontKitBridge.prototype, send = proto.post;
+                    proto.post = function (message) {
+                        if (message && message.type === 'design:selected') setTimeout(() => send.call(this, message), 150);
+                        else send.call(this, message);
+                    };
+                }""")
+                page.locator('[data-live-target="landing.hero.lead"]').click()
+                self.inspector_target(page, 'landing.hero.lead')
+                self.select_hero_title(page)
                 self.assert_selected_everywhere(page, frame, 'landing.hero.title')
                 self.assertEqual(page.errors, [])
 

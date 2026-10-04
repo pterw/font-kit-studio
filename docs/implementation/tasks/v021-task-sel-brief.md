@@ -90,3 +90,24 @@ with no id (title), then `selected fks-sel-2..6` for the lead. The four selectio
 20 of 20 each on two CPUs; `test_live_integration test_studio_live`: 198 tests OK.
 Surviving mutation: dropping the `intent === null` fallback (no path reaches it; defensive).
 The CI failure is still not reproduced locally; CI on the fixed head decides.
+
+## The CI cause: a wait that never waited (2026-10-03)
+
+CI failed again at `5696899`, and the new trace showed `selected(lead, fks-sel-1)`, then
+`selected(title)`, then `hover(title)`: no late reply. The cause was the test helper
+`LiveIntegrationCase.inspector_target`. Playwright's `wait_for_function` drops dict keys
+whose value is `None` (`page.evaluate` keeps them as `null`), so `want.name` was undefined,
+`new RegExp(undefined)` matched every name, and every plain-id wait returned at once.
+`assert_selected_everywhere` then read `#liveTargetName` before Studio had rendered the
+bridge's `design:selected`. The selection-order fix above still closes a real race (forced
+on base), but it was not the CI failure.
+
+Fix (test-only, implementer Tracking-H): `inspector_target` passes only the key that
+applies and the predicate tests `typeof want.name === "string"`. `InspectorWaitTests`
+(5 tests) pin the helper; `test_the_inspector_checks_wait_for_a_bridge_that_reports_a_selection_late`
+delays `design:selected` to Studio by 150 ms. RED on the old helper: the wrong-id wait did
+not time out, the late-render wait read the old target, and the delayed-selection test
+failed with the CI message. GREEN after. A sweep of every `wait_for_function` `arg` in
+`tests/` and `scripts/` found no other dict carrying `None`. With real waits, all 51
+`test_live_integration` tests still pass. Review: Approved (the reviewer reproduced the key
+dropping in Playwright 1.62 and the RED/GREEN). `SelectionOrderTests`: 20 of 20 runs.
