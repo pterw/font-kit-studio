@@ -61,3 +61,15 @@ already LF); only the working copies were CRLF. No dist/ or LICENSE in the patch
   Studio from another release; the check runs before anything is copied. Also pins the package to LF line
   endings so the bin shebang survives a Windows checkout, and closes the import guard's gaps.
 - Landing: the frontend gate applies (bridge changed by one comment line).
+
+## Codex P2 fix (BASE 221a0a4, worktree C:/fks/t2b-fix)
+Patch: `.superpowers/sdd/r1-pr-a/task-2b-fix-codex.patch` (reverse-apply check passes). Files:
+packages/fontkitstudio/scripts/bundle.js, packages/fontkitstudio/test/bundle.test.js. No dist/ or LICENSE in it.
+- Test added: links the package dir (junction on Windows, 'dir' elsewhere) in a temp folder, deletes dist/ and
+  LICENSE, runs `node <link>/scripts/bundle.js`, asserts exit 0 and dist/fontkit-studio.html equals the repo's
+  Studio bytes; link and temp dir removed in `finally`.
+- RED (current code): `✖ running the script through a directory link still bundles`, `ℹ tests 24 / pass 23 / fail 1`.
+- Fix: `isMain = process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))`.
+- GREEN: `ℹ tests 24 / pass 24 / fail 0`.
+- Mutation (old bundle.js restored): `ℹ pass 23 / fail 1`, the link test fails; fix restored, `pass 24 / fail 0`.
+- Not run: frontend gate, Python suites, pre-commit (not installed).
