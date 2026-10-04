@@ -8,7 +8,7 @@ import zlib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from support import ENGINES, HTML, close_contexts, launch, new_context, shared_runtime  # noqa: E402
+from support import ENGINES, HTML, canvas_snapshot, close_contexts, launch, new_context, shared_runtime  # noqa: E402
 
 # 1x1 PNG, for controls that stay disabled until an image is chosen.
 PNG = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==')
@@ -136,7 +136,7 @@ class BrowserCase(unittest.TestCase):
             with self.subTest(engine=engine):
                 page, errors = self.page(engine)
                 before = self.export(page)
-                before_canvas = page.locator('#composerCanvas').inner_html()
+                before_canvas = canvas_snapshot(page)
                 for malformed in ([None], [42], [[]], [{'type':'row', 'children':{}}],
                                   [{'type':'row', 'children':[{'type':'text'}, None]}]):
                     status = self.import_document(page, {'composition': {'canvasWidth':'640',
@@ -144,7 +144,7 @@ class BrowserCase(unittest.TestCase):
                     self.assertTrue(status.startswith('Import failed:'), status)
                     self.assertIn('slot', status.lower())
                     self.assertEqual(self.export(page), before)
-                    self.assertEqual(page.locator('#composerCanvas').inner_html(), before_canvas)
+                    self.assertEqual(canvas_snapshot(page), before_canvas)
                 # A malformed background previously throws after live state assignments.
                 status = self.import_document(page, {'composition': {'canvasWidth':'640',
                     'background':42, 'slots':[{'type':'text', 'text':'replacement'}]}})

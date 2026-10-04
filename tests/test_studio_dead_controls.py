@@ -15,7 +15,7 @@ Two groups:
 import json
 import unittest
 
-from support import ENGINES
+from support import ENGINES, canvas_snapshot
 from test_live_integration import CONNECTED, LiveIntegrationCase
 from test_studio_live import APP, LiveCase
 
@@ -145,11 +145,13 @@ class PresetSelectTests(StudioOnlyCase):
             with self.subTest(engine=engine):
                 page, errors = self.studio(engine)
                 self.answer_dialogs(page, accept=True)
-                before = page.locator('#composerCanvas').inner_html()
+                before = canvas_snapshot(page)
                 page.locator('#applyPreset').click()
                 self.assertRegex(self.preset_title(page), r'already applied')
                 self.assertEqual(page.dialogs, [])
-                self.assertEqual(page.locator('#composerCanvas').inner_html(), before)
+                # Re-applying the preset would regenerate every slot id, which the snapshot keeps; it leaves out what the
+                # canvas width derives (the row's collapsed state), which settles a frame after the Composer opens.
+                self.assertEqual(canvas_snapshot(page), before)
                 # With an edit, the same button resets the preset.
                 self.edit_first_slot(page, 'My own wordmark')
                 page.locator('#applyPreset').click()

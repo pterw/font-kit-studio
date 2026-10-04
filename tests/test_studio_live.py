@@ -13,8 +13,8 @@ import unittest
 from pathlib import Path
 from urllib.parse import quote
 
-from support import (ENGINES, HTML, REPO, close_contexts, launch, new_context, route_virtual_origins,
-                     shared_runtime)
+from support import (ENGINES, HTML, REPO, canvas_snapshot, close_contexts, launch, new_context,
+                     route_virtual_origins, shared_runtime)
 
 FIXTURES = Path(__file__).resolve().parent / 'fixtures' / 'studio'
 STUDIO = 'http://studio.test'
@@ -853,7 +853,7 @@ class StudioPersistenceTests(LiveCase):
                 self.assertEqual(exported['version'], '0.1.1')
                 self.assertEqual(exported['live'], {'target': FAKE, 'revision': 1, 'overrides': {'stat.badge': {'fontWeight': 800}}})
                 self.assertNotIn('live', exported['composition'])
-                before_canvas = page.locator('#composerCanvas').inner_html()
+                before_canvas = canvas_snapshot(page)
                 bad_lives = [
                     42, [], {'target': FAKE, 'revision': 1, 'overrides': []},
                     {'target': 7, 'revision': 1, 'overrides': {}},
@@ -869,7 +869,7 @@ class StudioPersistenceTests(LiveCase):
                     status = self.import_document(page, doc)
                     self.assertTrue(status.startswith('Import failed:'), (bad, status))
                     self.assertEqual(self.export(page), exported)
-                    self.assertEqual(page.locator('#composerCanvas').inner_html(), before_canvas)
+                    self.assertEqual(canvas_snapshot(page), before_canvas)
                 # A valid live field replaces Studio's saved overrides; it is never auto-applied.
                 good = {**exported, 'live': {'target': FAKE, 'revision': 9, 'overrides': {
                     'hero.title': {'fontSize': 44.444, 'textAlign': 'center', 'color': '#ABC'}}}}
@@ -2433,7 +2433,7 @@ class StudioSavedTokensTests(LiveCase):
                 page, errors = self.open(engine, query=False)
                 page.locator('#modeComposer').click()
                 before = self.export(page)
-                before_canvas = page.locator('#composerCanvas').inner_html()
+                before_canvas = canvas_snapshot(page)
                 base = {'target': FAKE, 'revision': 1, 'overrides': {}}
                 bad_tokens = [
                     [], 'x', 5, {'font-display': 'serif'}, {'--': 'serif'}, {'--bad name': 'serif'},
@@ -2449,7 +2449,7 @@ class StudioSavedTokensTests(LiveCase):
                     status = self.import_document(page, doc)
                     self.assertTrue(status.startswith('Import failed:'), (str(bad)[:60], status))
                     self.assertEqual(self.export(page), before)
-                    self.assertEqual(page.locator('#composerCanvas').inner_html(), before_canvas)
+                    self.assertEqual(canvas_snapshot(page), before_canvas)
                 good = {**before, 'live': {**base, 'tokens': dict(self.TOKENS)}}
                 self.assertIn('Composition imported.', self.import_document(page, good))
                 self.assertEqual(self.export(page)['live']['tokens'], self.TOKENS)
