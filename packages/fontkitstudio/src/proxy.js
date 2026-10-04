@@ -2,6 +2,7 @@
 // serves the bridge itself and adds one script tag to HTML pages.
 import { readFile } from 'node:fs/promises';
 import { Agent, createServer, request } from 'node:http';
+import { connect } from 'node:net';
 import { fileURLToPath } from 'node:url';
 
 export const BRIDGE_PATH = '/@fontkit/fontkit-bridge.js';
@@ -239,6 +240,47 @@ export async function startProxy({
     forward(req, res);
   });
 
+  // WebSocket upgrades (the app's own hot reload): the same Host and request-line checks,
+  // then the same header rewrites, then raw bytes both ways until either side ends.
+  const upgraded = new Set();
+  const refuse = (socket, line) => {
+    socket.write(`HTTP/1.1 ${line}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`, () =>
+      socket.destroy(),
+    );
+  };
+  server.on('upgrade', (req, socket, head) => {
+    socket.on('error', () => socket.destroy());
+    const requestHost = String(req.headers.host ?? '').toLowerCase();
+    if (!allowedHosts.includes(requestHost)) return refuse(socket, '421 Misdirected Request');
+    if (!req.url.startsWith('/')) return refuse(socket, '400 Bad Request');
+
+    const headers = forwardHeaders(req.headers);
+    headers.connection = req.headers.connection;
+    headers.upgrade = req.headers.upgrade;
+    const lines = [`${req.method} ${req.url} HTTP/1.1`];
+    for (const [name, value] of Object.entries(headers)) {
+      for (const one of Array.isArray(value) ? value : [value]) lines.push(`${name}: ${one}`);
+    }
+    const upstream = connect(targetPort, targetHostname);
+    upgraded.add(socket);
+    upgraded.add(upstream);
+    const drop = () => {
+      socket.destroy();
+      upstream.destroy();
+      upgraded.delete(socket);
+      upgraded.delete(upstream);
+    };
+    socket.on('close', drop);
+    upstream.on('close', drop);
+    upstream.on('error', drop);
+    upstream.on('connect', () => {
+      upstream.write(`${lines.join('\r\n')}\r\n\r\n`);
+      if (head.length > 0) upstream.write(head);
+      socket.pipe(upstream);
+      upstream.pipe(socket);
+    });
+  });
+
   await new Promise((resolve, reject) => {
     server.once('error', reject);
     server.listen(port, host, resolve);
@@ -258,6 +300,7 @@ export async function startProxy({
           resolve();
         });
         server.closeAllConnections();
+        for (const socket of upgraded) socket.destroy();
       });
     },
   };

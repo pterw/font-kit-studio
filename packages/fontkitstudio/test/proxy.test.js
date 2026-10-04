@@ -11,6 +11,7 @@ import { gzipSync } from 'node:zlib';
 
 import { BRIDGE_PATH, startProxy } from '../src/proxy.js';
 import { startUpstream } from './helpers/upstream.js';
+import { acceptKey, startWsUpstream } from './helpers/ws-upstream.js';
 
 const STUDIO = { origin: 'http://127.0.0.1:5000' };
 const TAG = `<script src="/@fontkit/fontkit-bridge.js" data-allowed-origins="${STUDIO.origin}"></script>`;
@@ -511,5 +512,160 @@ describe('start-up refusals', () => {
         `Font Kit Studio cannot read the bridge at ${missing}; run npm --prefix packages/fontkitstudio run prepack`,
       ),
     );
+  });
+});
+
+describe('WebSocket upgrade', () => {
+  const KEY = 'dGhlIHNhbXBsZSBub25jZQ==';
+  const ACCEPT = acceptKey(KEY);
+  let ws;
+  let wsProxy;
+
+  before(async () => {
+    ws = await startWsUpstream();
+    wsProxy = await startProxy({ target: ws.origin, studio: STUDIO, bridgeFile });
+  });
+
+  after(async () => {
+    await wsProxy.close();
+    await ws.close();
+  });
+
+  function upgradeRequest({ host, origin, referer, path = '/socket?x=1' }) {
+    const lines = [
+      `GET ${path} HTTP/1.1`,
+      `Host: ${host}`,
+      'Upgrade: websocket',
+      'Connection: Upgrade',
+      `Sec-WebSocket-Key: ${KEY}`,
+      'Sec-WebSocket-Version: 13',
+      'Sec-WebSocket-Protocol: vite-hmr',
+    ];
+    if (origin) lines.push(`Origin: ${origin}`);
+    if (referer) lines.push(`Referer: ${referer}`);
+    return `${lines.join('\r\n')}\r\n\r\n`;
+  }
+
+  // Collects what the socket receives; waitFor resolves once `done(text)` holds.
+  function client(via, text) {
+    const socket = connect(via.port, '127.0.0.1');
+    const chunks = [];
+    let ended = false;
+    const waiting = [];
+    const check = () => {
+      const received = Buffer.concat(chunks);
+      for (const w of [...waiting]) {
+        if (w.done(received, ended)) {
+          waiting.splice(waiting.indexOf(w), 1);
+          w.resolve(received);
+        }
+      }
+    };
+    socket.on('data', (chunk) => {
+      chunks.push(chunk);
+      check();
+    });
+    socket.on('close', () => {
+      ended = true;
+      check();
+    });
+    socket.on('error', () => {});
+    socket.write(text);
+    closers.push(() => socket.destroy());
+    return {
+      socket,
+      // Fails after 3 s instead of hanging when the proxy does not do what the test expects.
+      waitFor: (done) =>
+        new Promise((resolve, reject) => {
+          const timer = setTimeout(() => reject(new Error('timed out waiting for the socket')), 3000);
+          waiting.push({
+            done,
+            resolve: (received) => {
+              clearTimeout(timer);
+              resolve(received);
+            },
+          });
+          check();
+        }),
+    };
+  }
+
+  const headEnd = (received) => received.includes('\r\n\r\n');
+
+  test('passes the handshake and the bytes through, as the dev server', async () => {
+    const proxyHost = `127.0.0.1:${wsProxy.port}`;
+    const c = client(
+      wsProxy,
+      upgradeRequest({ host: proxyHost, origin: wsProxy.origin, referer: `${wsProxy.origin}/page` }),
+    );
+    const head = (await c.waitFor(headEnd)).toString('latin1');
+    assert.match(head, /^HTTP\/1\.1 101 /);
+    assert.ok(head.includes(`Sec-WebSocket-Accept: ${ACCEPT}`));
+    const frame = Buffer.from([0x81, 0x85, 1, 2, 3, 4, 0x49, 0x67, 0x6f, 0x68, 0x6e]);
+    const mark = head.indexOf('\r\n\r\n') + 4;
+    c.socket.write(frame);
+    const received = await c.waitFor((r) => r.length >= mark + frame.length);
+    assert.deepEqual(received.subarray(mark, mark + frame.length), frame);
+
+    assert.equal(ws.upgrades.length, 1);
+    const seen = ws.upgrades[0];
+    assert.equal(seen.url, '/socket?x=1');
+    assert.equal(seen.headers.host, `127.0.0.1:${ws.port}`);
+    assert.equal(seen.headers.origin, ws.origin);
+    assert.equal(seen.headers.referer, `${ws.origin}/page`);
+    assert.equal(seen.headers['sec-websocket-key'], KEY);
+    assert.equal(seen.headers['sec-websocket-protocol'], 'vite-hmr');
+    assert.equal(seen.headers.upgrade, 'websocket');
+    c.socket.destroy();
+  });
+
+  test('refuses a foreign Host with 421 and the dev server sees nothing', async () => {
+    const seenBefore = ws.upgrades.length;
+    const c = client(wsProxy, upgradeRequest({ host: 'evil.example' }));
+    const received = (await c.waitFor((r, ended) => ended)).toString('latin1');
+    assert.equal(
+      received,
+      'HTTP/1.1 421 Misdirected Request\r\nConnection: close\r\nContent-Length: 0\r\n\r\n',
+    );
+    assert.equal(ws.upgrades.length, seenBefore);
+  });
+
+  test('refuses an absolute-form upgrade with 400', async () => {
+    const seenBefore = ws.upgrades.length;
+    const c = client(
+      wsProxy,
+      upgradeRequest({ host: `127.0.0.1:${wsProxy.port}`, path: 'http://evil.example/socket' }),
+    );
+    const received = (await c.waitFor((r, ended) => ended)).toString('latin1');
+    assert.equal(
+      received,
+      'HTTP/1.1 400 Bad Request\r\nConnection: close\r\nContent-Length: 0\r\n\r\n',
+    );
+    assert.equal(ws.upgrades.length, seenBefore);
+  });
+
+  test('forwards bytes sent with the handshake (the upgrade head)', async () => {
+    // One write, so the bytes after the blank line reach the proxy as the upgrade's `head`.
+    const c = client(wsProxy, `${upgradeRequest({ host: `127.0.0.1:${wsProxy.port}` })}early-bytes`);
+    const received = await c.waitFor((r) => r.includes('early-bytes'));
+    assert.match(received.toString('latin1'), /^HTTP\/1\.1 101 /);
+  });
+
+  test('an upstream that closes ends the browser socket',{ timeout: 10000 }, async () => {
+    const ownWs = await startWsUpstream();
+    const own = await startProxy({ target: ownWs.origin, studio: STUDIO, bridgeFile });
+    closers.push(() => own.close(), () => ownWs.close());
+    const c = client(own, upgradeRequest({ host: `127.0.0.1:${own.port}` }));
+    await c.waitFor(headEnd);
+    await ownWs.close();
+    await c.waitFor((r, ended) => ended);
+  });
+
+  test('close() destroys an open upgraded socket and resolves', { timeout: 10000 }, async () => {
+    const own = await startProxy({ target: ws.origin, studio: STUDIO, bridgeFile });
+    const c = client(own, upgradeRequest({ host: `127.0.0.1:${own.port}` }));
+    await c.waitFor(headEnd);
+    await own.close();
+    await c.waitFor((r, ended) => ended);
   });
 });
