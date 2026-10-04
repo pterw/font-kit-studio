@@ -1,0 +1,515 @@
+import { after, before, describe, test } from 'node:test';
+import assert from 'node:assert/strict';
+import { randomBytes } from 'node:crypto';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { request } from 'node:http';
+import { connect } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { gzipSync } from 'node:zlib';
+
+import { BRIDGE_PATH, startProxy } from '../src/proxy.js';
+import { startUpstream } from './helpers/upstream.js';
+
+const STUDIO = { origin: 'http://127.0.0.1:5000' };
+const TAG = `<script src="/@fontkit/fontkit-bridge.js" data-allowed-origins="${STUDIO.origin}"></script>`;
+const BRIDGE = Buffer.from('// bridge\nwindow.fontkitBridge = "café";\n');
+const HTML = { 'content-type': 'text/html; charset=utf-8' };
+
+const PAGE = Buffer.from(
+  '<!doctype html><html><head><meta charset="utf-8"><title>café</title></head><body>café</body></html>',
+);
+const PNG = randomBytes(300);
+const GZIPPED = gzipSync(PAGE);
+const EXACT = Buffer.from(`<head>${'a'.repeat(58)}`);
+const OVER = Buffer.from(`<head>${'a'.repeat(59)}`);
+
+let dir;
+let bridgeFile;
+let upstream;
+let proxy;
+let small;
+const closers = [];
+
+before(async () => {
+  dir = mkdtempSync(join(tmpdir(), 'fks-proxy-'));
+  writeFileSync(join(dir, 'bridge.js'), BRIDGE);
+  bridgeFile = pathToFileURL(join(dir, 'bridge.js'));
+  upstream = await startUpstream({
+    '/page': {
+      headers: {
+        ...HTML,
+        etag: '"v1"',
+        'last-modified': 'Wed, 01 Jan 2025 00:00:00 GMT',
+        'cache-control': 'max-age=3600',
+        'content-security-policy': "script-src 'self'",
+        'x-app': 'kept',
+      },
+      body: PAGE,
+    },
+    '/header': {
+      headers: HTML,
+      body: '<header>top</header><html lang="en"><body>café</body></html>',
+    },
+    '/fragment': { headers: HTML, body: '<!doctype html><p>hi</p>' },
+    '/upper': { headers: { 'content-type': 'TEXT/HTML' }, body: PAGE },
+    '/xhtml': { headers: { 'content-type': 'application/xhtml+xml' }, body: PAGE },
+    '/json': { headers: { 'content-type': 'application/json' }, body: '{"a":"<head>"}' },
+    '/js': { headers: { 'content-type': 'text/javascript' }, body: 'var a = "<head>";' },
+    '/css': { headers: { 'content-type': 'text/css' }, body: 'a { color: red }' },
+    '/png': { headers: { 'content-type': 'image/png', etag: '"p"' }, body: PNG },
+    '/missing-html': { status: 404, headers: HTML, body: PAGE },
+    '/not-modified': { status: 304, headers: { ...HTML, etag: '"v1"' } },
+    '/gzip': { headers: { ...HTML, 'content-encoding': 'gzip' }, body: GZIPPED },
+    '/exact': { headers: HTML, body: EXACT },
+    '/over': { headers: HTML, body: OVER },
+    '/chunked-small': {
+      headers: { ...HTML, 'transfer-encoding': 'chunked' },
+      body: Buffer.from('<head><p>café</p>'),
+    },
+    '/chunked': {
+      headers: { ...HTML, 'transfer-encoding': 'chunked' },
+      body: Buffer.alloc(100, 'x'),
+    },
+    '/echo': (req) => ({ status: 201, headers: { 'content-type': 'text/plain' }, body: req.url }),
+    '/redirect-abs': (req) => ({
+      status: 302,
+      headers: { location: `http://127.0.0.1:${req.socket.localPort}/login?next=/a#x` },
+    }),
+    '/redirect-rel': { status: 302, headers: { location: '/login' } },
+    '/redirect-other': { status: 302, headers: { location: 'http://example.com/' } },
+    '/redirect-html': (req) => ({
+      status: 200,
+      headers: { ...HTML, location: `http://127.0.0.1:${req.socket.localPort}/where` },
+      body: PAGE,
+    }),
+  });
+  proxy = await startProxy({ target: upstream.origin, studio: STUDIO, bridgeFile });
+  small = await startProxy({
+    target: upstream.origin,
+    studio: STUDIO,
+    bridgeFile,
+    maxHtmlBytes: 64,
+  });
+});
+
+after(async () => {
+  try {
+    for (const close of [() => proxy.close(), () => small.close(), () => upstream.close(), ...closers]) {
+      try {
+        await close();
+      } catch {
+        // keep closing the rest
+      }
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// Starts a proxy that must not start; if it does, it is closed and the test fails.
+async function mustRefuse(options, expected) {
+  let started;
+  try {
+    started = await startProxy({ studio: STUDIO, bridgeFile, ...options });
+  } catch (error) {
+    return expected(error);
+  }
+  closers.push(() => started.close());
+  return assert.fail('startProxy should have refused');
+}
+
+// node:http, not fetch: fetch cannot set Host.
+function get(path, { method = 'GET', headers = {}, host, body, via = proxy } = {}) {
+  return new Promise((resolve, reject) => {
+    const req = request(
+      {
+        host: '127.0.0.1',
+        port: via.port,
+        path,
+        method,
+        headers: { Host: host ?? `127.0.0.1:${via.port}`, ...headers },
+      },
+      (res) => {
+        const chunks = [];
+        res.on('data', (chunk) => chunks.push(chunk));
+        res.on('end', () =>
+          resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks) }),
+        );
+      },
+    );
+    req.on('error', reject);
+    req.end(body);
+  });
+}
+
+// A raw socket: node:http cannot send an empty Host or an absolute-form request line.
+function raw(text) {
+  return new Promise((resolve, reject) => {
+    const socket = connect(proxy.port, '127.0.0.1');
+    const chunks = [];
+    socket.on('connect', () => socket.write(text));
+    socket.on('data', (chunk) => chunks.push(chunk));
+    socket.on('error', reject);
+    socket.on('close', () => {
+      const answer = Buffer.concat(chunks).toString('latin1');
+      resolve({ status: Number(answer.split(' ')[1]), text: answer });
+    });
+  });
+}
+
+const sawCount = () => upstream.requests.length;
+
+describe('tag insertion', () => {
+  test('tags a page after <head> and leaves every other byte alone', async () => {
+    const answer = await get('/page');
+    const at = PAGE.indexOf('<head>') + '<head>'.length;
+    const expected = Buffer.concat([PAGE.subarray(0, at), Buffer.from(TAG), PAGE.subarray(at)]);
+    assert.equal(answer.status, 200);
+    assert.deepEqual(answer.body, expected);
+    assert.equal(answer.headers['content-length'], String(expected.length));
+    assert.equal(answer.headers.etag, undefined);
+    assert.equal(answer.headers['last-modified'], undefined);
+    assert.equal(answer.headers['cache-control'], 'no-store');
+    assert.equal(answer.headers['content-security-policy'], "script-src 'self'");
+    assert.equal(answer.headers['x-app'], 'kept');
+    assert.equal(answer.headers['transfer-encoding'], undefined);
+  });
+
+  test('uses <html> when there is no <head>, never <header>, and a doctype last', async () => {
+    const header = (await get('/header')).body.toString('utf8');
+    assert.equal(header, `<header>top</header><html lang="en">${TAG}<body>café</body></html>`);
+    const fragment = (await get('/fragment')).body.toString('utf8');
+    assert.equal(fragment, `<!doctype html>${TAG}<p>hi</p>`);
+  });
+
+  test('tags text/html with parameters or capitals, passes other types untouched', async () => {
+    assert.ok((await get('/page')).body.includes(TAG));
+    assert.ok((await get('/upper')).body.includes(TAG));
+    const untouched = [
+      ['/xhtml', PAGE, 'application/xhtml+xml'],
+      ['/json', Buffer.from('{"a":"<head>"}'), 'application/json'],
+      ['/js', Buffer.from('var a = "<head>";'), 'text/javascript'],
+      ['/css', Buffer.from('a { color: red }'), 'text/css'],
+      ['/png', PNG, 'image/png'],
+    ];
+    for (const [path, body, type] of untouched) {
+      const answer = await get(path);
+      assert.deepEqual(answer.body, body, path);
+      assert.equal(answer.headers['content-type'], type, path);
+      assert.equal(answer.headers['content-length'], String(body.length), path);
+    }
+    assert.equal((await get('/png')).headers.etag, '"p"');
+  });
+
+  test('passes a 404 page, a 304 and a HEAD untouched', async () => {
+    const missing = await get('/missing-html');
+    assert.equal(missing.status, 404);
+    assert.deepEqual(missing.body, PAGE);
+
+    const notModified = await get('/not-modified');
+    assert.equal(notModified.status, 304);
+    assert.equal(notModified.headers.etag, '"v1"');
+    assert.equal(notModified.headers['cache-control'], undefined);
+
+    const before = sawCount();
+    const head = await get('/page', { method: 'HEAD' });
+    assert.equal(sawCount(), before + 1);
+    assert.equal(upstream.requests.at(-1).method, 'HEAD');
+    assert.equal(head.status, 200);
+    assert.equal(head.body.length, 0);
+    assert.equal(head.headers['content-length'], String(PAGE.length));
+    assert.equal(head.headers.etag, '"v1"');
+    assert.equal(head.headers['cache-control'], 'max-age=3600');
+  });
+
+  test('tags a page of exactly maxHtmlBytes and passes one byte more through', async () => {
+    assert.equal(EXACT.length, 64);
+    assert.equal(OVER.length, 65);
+    const tagged = await get('/exact', { via: small });
+    assert.ok(tagged.body.includes(TAG));
+    const passed = await get('/over', { via: small });
+    assert.deepEqual(passed.body, OVER);
+    assert.equal(passed.headers['content-length'], '65');
+    assert.equal(passed.headers['cache-control'], undefined);
+  });
+
+  test('tags a chunked page under the limit and sets its length', async () => {
+    const answer = await get('/chunked-small');
+    const expected = Buffer.concat([
+      Buffer.from('<head>'),
+      Buffer.from(TAG),
+      Buffer.from('<p>café</p>'),
+    ]);
+    assert.deepEqual(answer.body, expected);
+    assert.equal(answer.headers['content-length'], String(expected.length));
+    assert.equal(answer.headers['transfer-encoding'], undefined);
+  });
+
+  test('streams a chunked page that passes maxHtmlBytes while being read', async () => {
+    const answer = await get('/chunked', { via: small });
+    assert.deepEqual(answer.body, Buffer.alloc(100, 'x'));
+    assert.equal(answer.headers['transfer-encoding'], 'chunked');
+    assert.equal(answer.headers['cache-control'], undefined);
+  });
+
+  test('passes compressed HTML through and asks upstream for identity', async () => {
+    const answer = await get('/gzip', { headers: { 'accept-encoding': 'gzip, br' } });
+    assert.deepEqual(answer.body, GZIPPED);
+    assert.equal(answer.headers['content-encoding'], 'gzip');
+    assert.equal(upstream.requests.at(-1).url, '/gzip');
+    assert.equal(upstream.requests.at(-1).headers['accept-encoding'], 'identity');
+  });
+});
+
+describe('the bridge path', () => {
+  test('serves the bridge itself, with or without a query, and never asks upstream', async () => {
+    const before = sawCount();
+    for (const path of [BRIDGE_PATH, `${BRIDGE_PATH}?v=1`]) {
+      const answer = await get(path);
+      assert.equal(answer.status, 200);
+      assert.deepEqual(answer.body, BRIDGE);
+      assert.equal(answer.headers['content-type'], 'text/javascript; charset=utf-8');
+      assert.equal(answer.headers['cache-control'], 'no-store');
+      assert.equal(answer.headers['x-content-type-options'], 'nosniff');
+    }
+    const head = await get(BRIDGE_PATH, { method: 'HEAD' });
+    assert.equal(head.status, 200);
+    assert.equal(head.body.length, 0);
+    assert.equal(sawCount(), before);
+  });
+
+  test('forwards look-alike paths unchanged and maps nothing to a local file', async () => {
+    assert.equal(BRIDGE_PATH, '/@fontkit/fontkit-bridge.js');
+    for (const path of [
+      '/@fontkit/../package.json',
+      '/@fontkit/../@fontkit/fontkit-bridge.js',
+      '/%40fontkit/fontkit-bridge.js',
+      '/..%2f..%2fetc/passwd',
+      '/@fontkit/fontkit-bridge.js/',
+      '/@fontkit/fontkit-bridge.jsx',
+    ]) {
+      const answer = await get(path);
+      assert.equal(upstream.requests.at(-1).url, path);
+      assert.equal(answer.status, 404);
+      assert.equal(answer.body.toString(), 'not found');
+    }
+  });
+
+  test('forwards a POST to the bridge path', async () => {
+    const before = sawCount();
+    const answer = await get(BRIDGE_PATH, { method: 'POST', body: 'x' });
+    assert.equal(sawCount(), before + 1);
+    assert.equal(answer.status, 404);
+  });
+});
+
+describe('Host and request line', () => {
+  test('refuses a foreign Host and an empty Host, accepts localhost in any case', async () => {
+    const before = sawCount();
+    const evil = await get('/page', { host: `evil.test:${proxy.port}` });
+    assert.equal(evil.status, 421);
+    assert.equal(evil.body.toString(), 'Host header not allowed.');
+    const wrongPort = await get('/page', { host: '127.0.0.1:1' });
+    assert.equal(wrongPort.status, 421);
+    const empty = await raw('GET /page HTTP/1.1\r\nHost:\r\nConnection: close\r\n\r\n');
+    assert.equal(empty.status, 421);
+    assert.equal(sawCount(), before);
+
+    for (const host of [`localhost:${proxy.port}`, `LOCALHOST:${proxy.port}`]) {
+      const ok = await get('/page', { host });
+      assert.equal(ok.status, 200);
+    }
+    assert.equal(sawCount(), before + 2);
+  });
+
+  test('refuses an absolute-form request line and *', async () => {
+    const before = sawCount();
+    const absolute = await raw(
+      `GET http://example.com/ HTTP/1.1\r\nHost: 127.0.0.1:${proxy.port}\r\nConnection: close\r\n\r\n`,
+    );
+    assert.equal(absolute.status, 400);
+    assert.ok(absolute.text.endsWith('Bad request.'));
+    const star = await raw(
+      `OPTIONS * HTTP/1.1\r\nHost: 127.0.0.1:${proxy.port}\r\nConnection: close\r\n\r\n`,
+    );
+    assert.equal(star.status, 400);
+    assert.equal(sawCount(), before);
+  });
+});
+
+describe('forwarding', () => {
+  test('keeps method, path, query, body and type, and rewrites only the listed headers', async () => {
+    const payload = JSON.stringify({ a: 1, b: 'café' });
+    await get('/echo?x=1&y=%20z', {
+      method: 'POST',
+      body: payload,
+      headers: {
+        'content-type': 'application/json',
+        'content-length': String(Buffer.byteLength(payload)),
+        origin: proxy.origin,
+        referer: `${proxy.origin}/from?q=1`,
+        'proxy-connection': 'keep-alive',
+        te: 'trailers',
+        'x-custom': 'yes',
+      },
+    });
+    const seen = upstream.requests.at(-1);
+    assert.equal(seen.method, 'POST');
+    assert.equal(seen.url, '/echo?x=1&y=%20z');
+    assert.equal(seen.body.toString('utf8'), payload);
+    assert.equal(seen.headers['content-type'], 'application/json');
+    assert.equal(seen.headers.host, `127.0.0.1:${upstream.port}`);
+    assert.equal(seen.headers.origin, upstream.origin);
+    assert.equal(seen.headers.referer, `${upstream.origin}/from?q=1`);
+    assert.equal(seen.headers['x-custom'], 'yes');
+    assert.equal(seen.headers['proxy-connection'], undefined);
+    assert.equal(seen.headers.te, undefined);
+  });
+
+  test('leaves a foreign origin and a foreign referer alone', async () => {
+    await get('/echo', {
+      headers: { origin: 'http://evil.test', referer: `${proxy.origin}0/x` },
+    });
+    const seen = upstream.requests.at(-1);
+    assert.equal(seen.headers.origin, 'http://evil.test');
+    assert.equal(seen.headers.referer, `${proxy.origin}0/x`);
+  });
+
+  test('treats every loopback form of the proxy origin as its own', async () => {
+    const port = proxy.port;
+    await get('/echo', {
+      host: `localhost:${port}`,
+      headers: {
+        origin: `http://localhost:${port}`,
+        referer: `http://LOCALHOST:${port}/a`,
+      },
+    });
+    let seen = upstream.requests.at(-1);
+    assert.equal(seen.headers.origin, upstream.origin);
+    assert.equal(seen.headers.referer, `${upstream.origin}/a`);
+    await get('/echo', {
+      headers: { origin: `http://[::1]:${port}`, referer: `http://[::1]:${port}/b?c=1` },
+    });
+    seen = upstream.requests.at(-1);
+    assert.equal(seen.headers.origin, upstream.origin);
+    assert.equal(seen.headers.referer, `${upstream.origin}/b?c=1`);
+    await get('/echo', {
+      headers: { origin: `http://localhost:${port + 1}`, referer: `http://localhost:${port + 1}/a` },
+    });
+    seen = upstream.requests.at(-1);
+    assert.equal(seen.headers.origin, `http://localhost:${port + 1}`);
+    assert.equal(seen.headers.referer, `http://localhost:${port + 1}/a`);
+  });
+
+  test('sends a // path to the dev server as a path, never to another host', async () => {
+    const before = sawCount();
+    const answer = await raw(
+      `GET //evil.test/x HTTP/1.1\r\nHost: 127.0.0.1:${proxy.port}\r\nConnection: close\r\n\r\n`,
+    );
+    assert.equal(answer.status, 404);
+    assert.equal(sawCount(), before + 1);
+    assert.equal(upstream.requests.at(-1).url, '//evil.test/x');
+    assert.equal(upstream.requests.at(-1).headers.host, `127.0.0.1:${upstream.port}`);
+  });
+
+  test('forwards a body sent without a length', async () => {
+    const status = await new Promise((resolve, reject) => {
+      const req = request(
+        {
+          host: '127.0.0.1',
+          port: proxy.port,
+          path: '/echo',
+          method: 'PUT',
+          headers: { Host: `127.0.0.1:${proxy.port}` },
+        },
+        (res) => {
+          res.resume();
+          res.on('end', () => resolve(res.statusCode));
+        },
+      );
+      req.on('error', reject);
+      req.write('part one;');
+      req.end('part two');
+    });
+    assert.equal(status, 201);
+    assert.equal(upstream.requests.at(-1).body.toString(), 'part one;part two');
+  });
+
+  test('rewrites a location at the upstream origin to the proxy origin', async () => {
+    const absolute = await get('/redirect-abs');
+    assert.equal(absolute.status, 302);
+    assert.equal(absolute.headers.location, `${proxy.origin}/login?next=/a#x`);
+    assert.equal((await get('/redirect-rel')).headers.location, '/login');
+    assert.equal((await get('/redirect-other')).headers.location, 'http://example.com/');
+    const html = await get('/redirect-html');
+    assert.equal(html.headers.location, `${proxy.origin}/where`);
+    assert.ok(html.body.includes(TAG));
+  });
+
+  test('answers 502 with a fixed text when the dev server is not running', async () => {
+    const gone = await startUpstream({});
+    const { origin } = gone;
+    await gone.close();
+    const dead = await startProxy({ target: origin, studio: STUDIO, bridgeFile });
+    closers.push(() => dead.close());
+    const answer = await get('/page', { via: dead });
+    assert.equal(answer.status, 502);
+    assert.match(answer.headers['content-type'], /^text\/plain/);
+    assert.equal(
+      answer.body.toString(),
+      `Font Kit Studio cannot reach the dev server at ${origin}. Is it running?`,
+    );
+  });
+});
+
+describe('start-up refusals', () => {
+  const TARGET_TEXT = 'Font Kit Studio proxies only a local dev server (localhost or 127.0.0.1)';
+  const STUDIO_TEXT =
+    'Font Kit Studio: studio.origin must be a local http origin such as http://127.0.0.1:5000';
+
+  for (const target of [
+    'http://example.com',
+    'http://10.0.0.5:3000',
+    'https://localhost:3000',
+    'file:///etc/passwd',
+    'localhost:3000',
+    '',
+  ]) {
+    test(`refuses target ${JSON.stringify(target)}`, async () => {
+      await mustRefuse({ target }, (error) => assert.equal(error.message, TARGET_TEXT));
+    });
+  }
+
+  for (const origin of ['http://example.com:5000', 'http://127.0.0.1:5000/x']) {
+    test(`refuses studio origin ${origin}`, async () => {
+      await mustRefuse({ target: upstream.origin, studio: { origin } }, (error) => {
+        assert.equal(error.message, STUDIO_TEXT);
+        assert.ok(!error.message.includes(origin));
+      });
+    });
+  }
+
+  test('refuses a missing studio', async () => {
+    await mustRefuse({ target: upstream.origin, studio: undefined }, (error) =>
+      assert.equal(error.message, STUDIO_TEXT),
+    );
+  });
+
+  test('refuses to bind a non-loopback host', async () => {
+    await mustRefuse({ target: upstream.origin, host: '0.0.0.0' }, (error) =>
+      assert.equal(error.message, 'refusing to bind 0.0.0.0: the proxy runs on loopback only'),
+    );
+  });
+
+  test('refuses a missing bridge file', async () => {
+    const missing = join(dir, 'nope.js');
+    await mustRefuse({ target: upstream.origin, bridgeFile: missing }, (error) =>
+      assert.equal(
+        error.message,
+        `Font Kit Studio cannot read the bridge at ${missing}; run npm --prefix packages/fontkitstudio run prepack`,
+      ),
+    );
+  });
+});
