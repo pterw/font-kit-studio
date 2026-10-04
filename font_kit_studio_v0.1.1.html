@@ -5998,6 +5998,8 @@ if (remembered) kitId.value = remembered;
     renderOverlays();
     renderReconnectBanner();
     renderInspector();
+    // The inspector's row and empty branches return before their own refresh, and the view-only controls change here.
+    refreshControlStates();
   }
 
   // `connect: false` shows the Live App view without loading the typed URL (fullscreen only changes the layout).

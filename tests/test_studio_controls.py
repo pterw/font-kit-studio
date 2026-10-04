@@ -160,6 +160,25 @@ class NoTargetTests(ControlsMixin, LiveCase):
                 self.assertEqual(errors, [])
 
 
+    def test_the_view_controls_turn_off_on_leaving_the_live_app_view_with_a_row_selected(self):
+        # A selected row is drawn by its own inspector branch; leaving the Live App view must still turn these off.
+        buttons = ['#btnDeviceDesktop', '#btnDeviceFluid', '#bridgeModeSelect', '#bridgeModeInteract']
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors = self.composer(engine)
+                page.locator('#composerCanvas .row-layout').first.click(position={'x': 2, 'y': 2})
+                page.wait_for_selector('.row-child-list')
+                self.connect(page)
+                self.wait_connected(page)
+                for selector in buttons:
+                    self.wait_disabled(page, selector, False)
+                page.locator('#viewSpecimenCanvas').click()
+                page.wait_for_selector('.row-child-list')
+                for selector in buttons:
+                    self.assert_disabled(page, selector, LIVE_VIEW_ONLY)
+                self.assertEqual(errors, [])
+
+
 class ResetElementTests(ControlsMixin, LiveCase):
     def test_reset_is_disabled_until_the_selected_element_changes_and_follows_the_selection(self):
         for engine in ENGINES:
