@@ -309,7 +309,8 @@ def main(argv=None):
             return 1
 
     stop = threading.Event()
-    for signum in (signal.SIGINT, signal.SIGTERM):
+    # SIGBREAK is the graceful stop Windows can deliver to a child process (Ctrl-Break).
+    for signum in (signal.SIGINT, signal.SIGTERM, getattr(signal, 'SIGBREAK', signal.SIGTERM)):
         signal.signal(signum, lambda *_: stop.set())
     threads = [threading.Thread(target=server.serve_forever, daemon=True) for server in servers]
     for thread in threads:

@@ -16,6 +16,7 @@ python scripts/serve.py          # Studio and the demo app on localhost
 git fetch origin tag supplied-v0.1.1      # once; the provenance check needs it
 python scripts/verify.py --static-only    # HTML IDs, inline script syntax, provenance
 node --check fontkit-bridge.js
+python -m ruff check .                    # unused or undefined names, syntax errors
 python -m unittest discover -s tests -v   # browser tests (Chromium)
 PYTHONPATH=tests FKS_ENGINES=firefox python -m unittest firefox_canary -v   # Firefox canary
 python scripts/dev/frontend_gate.py       # layout, contrast, privacy and live-edit checks

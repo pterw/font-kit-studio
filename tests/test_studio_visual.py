@@ -13,7 +13,7 @@ import re
 import unittest
 
 from support import ENGINES, HTML
-from test_live_integration import CONNECTED, LiveIntegrationCase, TITLE
+from test_live_integration import LiveIntegrationCase
 from test_studio_live import APP, FAKE, LiveCase
 
 # Computed colours reach the page as rgb(), rgba() or color(srgb ...) (colour-mix), so the

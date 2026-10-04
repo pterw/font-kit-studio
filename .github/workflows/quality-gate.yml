@@ -63,6 +63,11 @@ jobs:
       - name: Syntax-check the bridge
         run: node --check fontkit-bridge.js
 
+      # Pyflakes rules only (ruff.toml): unused or undefined names and syntax
+      # errors. Lint, not formatting, so it never restyles a file.
+      - name: Lint Python (ruff)
+        run: python -m ruff check .
+
       # History carries product changes only: no session links, AI co-author
       # trailers or "Generated with" banners (see CONTRIBUTING.md). Stdlib only,
       # so it costs nothing and reports before any browser is installed. The
