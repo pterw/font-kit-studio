@@ -66,6 +66,9 @@ time. Treat it as a possible direction, not the plan.
 
 ## Decisions this needs from the owner
 
+Taken in principle on 2026-10-04 (D047): `activeTab` only, and Studio in a sandboxed
+extension page before any build step. A spike at the start of R5 confirms both.
+
 - **Build step.** Global rule 8 keeps Studio a single file with no build. A Manifest V3
   extension page cannot run Studio's inline script, so the extension panel needs its script in
   separate files. Either the extension is hand-written files with no build, or it gets its own

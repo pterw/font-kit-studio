@@ -37,7 +37,7 @@ want to edit, and the extension would load the bridge into that tab for you.
 |---|---|
 | Permissions | `activeTab`, `scripting` and `sidePanel` (`chrome.sidePanel` needs its own permission). `activeTab` is a temporary grant that covers only the tab the user clicked on. |
 | Injection | `chrome.scripting.executeScript({ target: { tabId }, files: ["fontkit-bridge.js"], world: "MAIN" })`, which needs Chrome 111 or newer. The main world is needed because the bridge reads the page's own computed styles and looks for framework markers on elements. |
-| Panel | `chrome.sidePanel` with a cut-down Studio: the Live Target inspector and the CSS tab with Copy. A popup is the fallback if a side panel is unavailable. Studio cannot be reused as it is: it is one HTML file with a large inline script, and Manifest V3 extension pages forbid inline scripts under the default content security policy. The panel needs its script moved into a separate file. |
+| Panel | `chrome.sidePanel` with a cut-down Studio: the Live App inspector and the CSS tab with Copy. A popup is the fallback if a side panel is unavailable. Studio cannot be reused as it is: it is one HTML file with a large inline script, and Manifest V3 extension pages forbid inline scripts under the default content security policy. The panel needs its script moved into a separate file. |
 | Transport | See "Open questions": the current bridge only accepts a Studio that is the page's parent or opener. |
 | Cleanup | Closing the panel or navigating away drops the session, as the bridge already does when its Studio goes away. |
 
@@ -53,7 +53,7 @@ want to edit, and the extension would load the bridge into that tab for you.
 
 ## Open questions
 
-1. **Transport.** The bridge trusts a `design:hello` only from `window.parent` or
+1. **Transport.** Taken in principle on 2026-10-04: a relay content script (D048). The bridge trusts a `design:hello` only from `window.parent` or
    `window.opener`. A side panel is neither. Options: add an extension channel to the bridge
    (`chrome.runtime` messages relayed by a small content script), or have the panel open the
    page in a window it controls. Either one changes the trust model and needs its own

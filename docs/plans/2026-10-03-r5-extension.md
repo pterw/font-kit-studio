@@ -1,7 +1,9 @@
 # R5 Extension: implementation plan (outline)
 
-Status: **outline** (2026-10-03). Completed, then approved by the owner, after R4 merges and
-roadmap decisions 7 (build step, permissions) and 8 (transport) are taken.
+Status: **outline** (2026-10-03). Completed, then approved by the owner, after R4 merges.
+Roadmap decisions 7 and 8 are taken in principle (D047: `activeTab` only, Studio in a
+sandboxed page first; D048: a relay content script); a spike at the start of R5 confirms
+them before the plan is approved.
 Design: [typography system design](../specs/2026-10-03-typography-system-design.md),
 section 5; technical sketch and open questions:
 [browser extension](../roadmap/browser-extension.md).
@@ -22,16 +24,16 @@ after the Chrome version exists).
 
 ## Contract to write first
 
-The transport (decision 8). The bridge today trusts `design:hello` only from its parent or
+The transport (D048, a relay content script). The bridge today trusts `design:hello` only from its parent or
 opener; a side panel is neither. The chosen channel, its origin and session pinning, and its
 hostile cases are specified and approved before any code.
 
 ## Tasks (coarse)
 
-- [ ] **R5.1 Transport.** Implement decision 8 with hostile-input tests equal to the
+- [ ] **R5.1 Transport.** Implement the relay (D048) with hostile-input tests equal to the
   existing boundary's.
 - [ ] **R5.2 Panel build.** Studio's pairing UI with its script in separate files (MV3 bans
-  inline scripts), per decision 7.
+  inline scripts), per D047: Studio in a sandboxed page first, a stdlib copy step if that fails.
 - [ ] **R5.3 Injection and cleanup.** Inject on click; clear message on pages that block
   injection; session dropped on navigation.
 - [ ] **R5.4 Real-site checks.** Strict `font-src` and `style-src` sites, frames, Chrome's
@@ -50,7 +52,7 @@ hostile cases are specified and approved before any code.
 
 - Page security policies block injected fonts or styles. Mitigation: R5.4 before any claim.
 - Store review. Mitigation: `activeTab` only by default; optional host permissions only per
-  site, if decision 7 allows them.
+  site, which R5 does not promise (D047).
 
 ## Ledger
 

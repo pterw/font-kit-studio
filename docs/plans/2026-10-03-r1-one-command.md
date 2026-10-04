@@ -1,8 +1,10 @@
 # R1 One command: implementation plan
 
-Status: **draft for owner approval** (2026-10-03). Becomes binding when the owner approves
-it and decisions 1, 2 and 4 in the [roadmap](2026-10-03-roadmap.md#decisions-register) are
-taken. Starts after v0.2.1 PR B merges.
+Status: **ready** (2026-10-04). The package name, Studio's file name, publishing and the
+versions under test are decided (D040 to D044 in
+`docs/implementation/deviations.md`; [roadmap register](2026-10-03-roadmap.md#decisions-register)),
+and the open questions below are answered. Starts after v0.2.1 PR B merges. This release is
+version 0.3.0 (D044).
 Design: [typography system design](../specs/2026-10-03-typography-system-design.md),
 sections 1 (Starting fontkit), 1.1 (Releasing), 4.1, 4.3 to 4.5 (Testing).
 
@@ -16,23 +18,23 @@ first public release.
 
 In:
 
-- A Node package (name: decision 1; written `<pkg>` below) with zero runtime dependencies
+- A Node package, `fontkitstudio` (D040), with zero runtime dependencies
   that uses the project's own Vite (global rule 8, D030).
-- `npx <pkg>` in a Vite project: runs the project's Vite through its JavaScript API with the
+- `npx fontkitstudio` in a Vite project: runs the project's Vite through its JavaScript API with the
   fontkit plugin added in memory.
-- `fontkit()` in `vite.config` for a permanent setup.
-- `npx <pkg> http://localhost:<port>`: proxy mode in front of any other local dev server.
-- A per-run token, the dev-only refusal, a visible "fontkit · dev only" marker, and clear
+- `fontkitStudio()` from `fontkitstudio/vite` in `vite.config` for a permanent setup.
+- `npx fontkitstudio http://localhost:<port>`: proxy mode in front of any other local dev server.
+- A per-run token, the dev-only refusal, a visible "Font Kit Studio · dev only" marker, and clear
   failure messages.
-- Studio and the bridge bundled at matching versions; Studio renamed (decision 2).
+- Studio and the bridge bundled at matching versions; Studio renamed to `fontkit-studio.html` (D041).
 - Real-app fixtures (Vite + React, Bootstrap 5 static behind the proxy, Next.js behind the
   proxy) and the friction test in CI.
-- The release pipeline: semver, changelog, npm provenance, an OS and Node matrix.
+- The release pipeline: semver, changelog, trusted publishing with provenance (D042), the OS and
+  Node matrix of D043.
 
 Out (later releases): text-style detection (R2), the pairing UI (R3), the type-system file
 and its write endpoint (R4), the extension (R5). Sync to file keeps working through
-`scripts/serve.py`; whether the Node entry also serves the existing overrides sync is open
-question 3 below.
+`scripts/serve.py`; the Node entry does not serve the overrides sync (question 3 below).
 
 ## Architecture
 
@@ -42,7 +44,7 @@ flowchart LR
       V["Project's own Vite<br/>(JS API)"]
       DS["Other dev server<br/>localhost:N"]
     end
-    subgraph PKG["fontkit package (Node, zero deps)"]
+    subgraph PKG["fontkitstudio package (Node, zero deps)"]
       CLI["CLI<br/>detects project type"]
       PL["Vite plugin<br/>adds bridge to HTML,<br/>dev only"]
       PX["Loopback proxy<br/>adds bridge to text/html,<br/>passes CSP + WebSocket"]
@@ -62,19 +64,22 @@ flowchart LR
 
 Each task is one brief, one report and one independent review under
 `docs/implementation/tasks/r1-task-<n>-*.md`. Owned files are exclusive while a task runs.
-Node code lives under `packages/<pkg>/` (exact layout fixed in R1.1).
+Node code lives under `packages/fontkitstudio/` (exact layout fixed in R1.1).
 
-- [ ] **R1.0 Decisions and name registration.** Owner confirms decisions 1, 2 and 4; the
-  name is registered on npm with a placeholder `0.0.0` that says "not released yet".
-  Owner action; the controller records the answers in `deviations.md`.
+- [ ] **R1.0 Name registration and publishing setup.** Owner actions (D042): publish the
+  `0.0.0` placeholder of `fontkitstudio` by hand from the owner's npm account with 2FA,
+  deprecate it ("not released yet"), configure the trusted publisher for this repository's
+  release workflow, and set the package to require 2FA and disallow tokens. The controller
+  writes the steps as a checklist and records the outcome in the ledger.
 
 - [ ] **R1.1 Package skeleton.** `package.json` with no `dependencies`, `bin`, `exports`;
   Node's built-in test runner; a test that fails if a runtime dependency is added (spec
-  4.5); CI job for `node --test`. Owns: `packages/<pkg>/`, `.github/workflows/` (a new job).
+  4.5); CI job for `node --test`. Owns: `packages/fontkitstudio/`, `.github/workflows/` (a new job).
 
-- [ ] **R1.2 Studio rename and bundling.** Replace `font_kit_studio_v0.1.1.html` and the
-  `v0.1.1` labels (D009, D009a) with the decided name and the real version; keep the old
-  path working for one release (redirect or copy) and write the migration note; the build
+- [ ] **R1.2 Studio rename and bundling.** Rename `font_kit_studio_v0.1.1.html` to
+  `fontkit-studio.html` (D041); the version labels already follow D039. The old name stays
+  for one release as a stub that forwards with its query and hash, with a test, and the
+  migration note says when it goes; the build
   copies Studio and the bridge into the package with a version check that fails if they
   differ. Owns: the Studio file name, `README.md` references, `scripts/verify.py`
   provenance handling (the `supplied-v0.1.1` blob check must keep passing), the copy step.
@@ -84,11 +89,11 @@ Node code lives under `packages/<pkg>/` (exact layout fixed in R1.1).
 - [ ] **R1.3 Studio server and per-run token.** The package serves the bundled Studio on a
   free loopback port with a random token in the URL; requests without it are refused; Host
   and Origin checks as in `serve.py`. Hostile cases: missing and wrong token, wrong Host,
-  wrong Origin. Owns: `packages/<pkg>/src/studio-server.*`, its tests.
+  wrong Origin. Owns: `packages/fontkitstudio/src/studio-server.*`, its tests.
 
-- [ ] **R1.4 Vite runner and plugin.** `npx <pkg>` finds the project's Vite, starts it
+- [ ] **R1.4 Vite runner and plugin.** `npx fontkitstudio` finds the project's Vite, starts it
   through the JavaScript API with the plugin in memory, and opens Studio connected to it;
-  `fontkit()` in `vite.config` does the same through `npm run dev`. The plugin adds the
+  `fontkitStudio()` in `vite.config` does the same through `npm run dev`. The plugin adds the
   bridge only in `serve` mode; `vite build` output contains no bridge (guarantee test,
   spec 4.2). Hot reload keeps the connection. Owns: `src/vite-*`, the Vite + React fixture.
 
@@ -101,7 +106,7 @@ Node code lives under `packages/<pkg>/` (exact layout fixed in R1.1).
 
 - [ ] **R1.6 Dev-only refusal, visibility and failure messages.** The plugin and proxy
   refuse to run for a production build or a non-loopback bind and say so; the page and the
-  terminal show "fontkit · dev only"; every connection failure (another bridge, a security
+  terminal show "Font Kit Studio · dev only"; every connection failure (another bridge, a security
   policy, an unsupported project) gets a message that says what and why. Owns: the CLI
   messages, a small bridge option for the marker (additive, protocol unchanged).
 
@@ -116,10 +121,11 @@ Node code lives under `packages/<pkg>/` (exact layout fixed in R1.1).
   tag stay documented as the no-Node path; CONTRIBUTING covers the Node package. Owns:
   `README.md`, `CONTRIBUTING.md`.
 
-- [ ] **R1.9 Release pipeline.** Tag-triggered GitHub Actions workflow: tests on Linux,
-  macOS and Windows and the decided Node LTS versions, then `npm publish` with provenance
-  (decision 3: trusted publishing or a token secret, set up by the owner); semver and a
-  `CHANGELOG.md`. The first real release is cut by the owner. Owns:
+- [ ] **R1.9 Release pipeline.** Workflow triggered by a `v*` tag (D042): the gates on
+  the D043 matrix, then `npm publish` from `packages/fontkitstudio/` by trusted publishing
+  (`id-token: write`, `contents: read`), in a GitHub environment that needs the owner's
+  approval; the release notes come from `CHANGELOG.md`. The owner creates the tag and
+  approves the run. Owns:
   `.github/workflows/release.yml`, `CHANGELOG.md`.
 
 - [ ] **R1 release point.** Full gates (Python suite, Node tests, fixtures, friction test,
@@ -142,24 +148,23 @@ flowchart TD
 R1.4 and R1.5 run in parallel (disjoint files); so do R1.8 and R1.9. Fixtures for R1.4 and
 R1.5 are created inside those tasks; R1.7 adds the CI wiring and the friction test.
 
-## Open questions (answer before approval)
+## Open questions (answered 2026-10-04)
 
-1. Package layout: `packages/<pkg>/` in this repository (a small monorepo) or the package at
-   the repository root. Proposal: `packages/<pkg>/`, so the Python tooling stays where it is.
-2. Studio's new file name, for example `studio.html`, and how long the old path keeps
-   working. Proposal: one release with a redirect.
-3. Does the Node entry also serve the v0.2 overrides sync (today `serve.py` only)?
-   Proposal: no; R4 brings writes to both servers together, and R1 docs point Sync users to
-   `serve.py`.
-4. Friction-test budget. Proposal: measured on the first green CI run, budget set at that
-   time plus 50 percent.
+1. Package layout: `packages/fontkitstudio/` in this repository, so the Python tooling stays
+   where it is.
+2. Studio's new file name: `fontkit-studio.html`; the old path forwards for one release
+   (D041).
+3. The Node entry does not serve the v0.2 overrides sync. R4 brings writes to both servers
+   together, and R1 docs point Sync users to `serve.py`.
+4. Friction-test budget: measured on the first green CI run, then set at that time plus 50
+   percent.
 
 ## Risks
 
 - **The rename touches everything.** Mitigation: R1.2 is its own task with a grep list and
   the full suite.
 - **Vite's JavaScript API changes between majors.** Mitigation: the Vite majors under test
-  are fixed (decision 4), and the runner fails with a clear message on an untested major.
+  are fixed (D043), and the runner fails with a clear message on an untested major.
 - **Proxy as a new trust boundary.** Mitigation: hostile cases from spec 4.3 are part of
   R1.5's definition of done, not a follow-up.
 - **CI time.** Fixtures with `npm ci` add minutes. Mitigation: cache npm, run fixtures in
@@ -172,3 +177,4 @@ R1.5 are created inside those tasks; R1.7 adds the CI wiring and the friction te
 | Date | Event |
 |---|---|
 | 2026-10-03 | Draft written from the approved design. Waits on PR B and decisions 1, 2, 4. |
+| 2026-10-04 | Decisions taken (D040 to D044); open questions answered. Waits on PR B. |

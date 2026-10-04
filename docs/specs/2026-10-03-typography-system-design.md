@@ -280,6 +280,10 @@ Status and plan links per release: [roadmap ledger](../plans/2026-10-03-roadmap.
 
 ## 6. Open decisions
 
+Answered on 2026-10-04: 1 by D040 (`fontkitstudio`), 2 by D046
+(in principle) and 3 by D041 (`fontkit-studio.html`). The reasons are in
+`docs/implementation/deviations.md`; the arguments below are kept as the record.
+
 1. **Package and command name.** `fontkit` on npm is an unrelated font engine with millions
    of weekly downloads, so `npx fontkit` would run the wrong package. Options: a scoped name
    (`@pterw/fontkit`, run as `npx @pterw/fontkit`) or a distinct name (for example

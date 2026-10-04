@@ -1,7 +1,8 @@
 # R3 Pairing system: implementation plan (outline)
 
-Status: **outline** (2026-10-03). Completed, then approved by the owner, after R2 merges and
-roadmap decision 6 (where the specimen canvas lives) is taken.
+Status: **outline** (2026-10-03). Completed, then approved by the owner, after R2 merges.
+Roadmap decision 6 is taken in principle (D046: the specimen canvas is a Composer tab fed by
+the pairing's roles) and is confirmed with a mockup in this plan.
 Design: [typography system design](../specs/2026-10-03-typography-system-design.md),
 section 2 items 4-7, 11, 12.
 
@@ -33,9 +34,9 @@ Out: writing the type-system file (R4).
 - [ ] **R3.3 Candidates.** Three pairings, keyboard switching on the real page.
 - [ ] **R3.4 Type scale.** Ratio and fluid modes; roles snap to steps; re-flow on change.
 - [ ] **R3.5 Guardrails.** Warnings only, never blocking; each with a test on a fixture.
-- [ ] **R3.6 Exceptions.** The Live Target inspector writes exceptions under roles (one
+- [ ] **R3.6 Exceptions.** The Live App inspector writes exceptions under roles (one
   editing model).
-- [ ] **R3.7 Specimen canvas.** Moved per decision 6; old JSON still imports.
+- [ ] **R3.7 Specimen canvas.** A Composer tab rendering the pairing's roles (D046); old JSON still imports.
 - [ ] **R3.8 Studio accessibility.** Keyboard operation and contrast, enforced by the
   frontend gate.
 - [ ] **R3 release point.**
@@ -50,7 +51,7 @@ Out: writing the type-system file (R4).
 
 ## Open questions
 
-1. Decision 6 (specimen canvas location).
+1. The mockup that confirms D046: how canvas slots bind to roles.
 2. Whether the Studio single-file rule (global rule 8) still fits a UI this size; any change
    needs an owner ruling before the plan is approved.
 
