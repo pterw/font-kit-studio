@@ -1,7 +1,7 @@
 # AGENTS.md: Rules for AI Agents
 
 fontkit (Font Kit Studio): a single-file HTML typography studio
-(`font_kit_studio_v0.1.1.html`), a dependency-free target runtime
+(`fontkit-studio.html`), a dependency-free target runtime
 (`fontkit-bridge.js`) that lets Studio live-edit a running web app over
 `postMessage`, and a stdlib-only localhost dev server (`scripts/serve.py`).
 Tests are Python `unittest` + Playwright. This file is the ruleset for every

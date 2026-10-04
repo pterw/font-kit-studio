@@ -229,7 +229,7 @@ class RunOneTests(unittest.TestCase):
         run_one(gate.Check('c', lambda ctx: seen.append(ctx) or Outcome(), (MOBILE,)))
         ctx = seen[0]
         self.assertEqual((ctx.profile, ctx.engine, ctx.touch), (MOBILE, 'chromium', True))
-        self.assertEqual(ctx.live_url, 'http://localhost:1111/font_kit_studio_v0.1.1.html'
+        self.assertEqual(ctx.live_url, 'http://localhost:1111/fontkit-studio.html'
                                        '?target=http://localhost:2222/demo/')
         self.assertEqual(ctx.demo_url, 'http://localhost:2222/demo/')
 

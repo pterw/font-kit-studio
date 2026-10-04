@@ -211,14 +211,14 @@ class LayoutJudgeTests(unittest.TestCase):
         self.assertEqual(layout.MIN_TOUCH_TARGET_PX, 44)
 
     def test_every_hidden_on_load_selector_exists_in_studio(self):
-        html = (REPO / 'font_kit_studio_v0.1.1.html').read_text(encoding='utf-8')
+        html = (REPO / 'fontkit-studio.html').read_text(encoding='utf-8')
         for _, _, selectors in layout.HIDDEN_ON_LOAD:
             for selector in selectors:
                 with self.subTest(selector=selector):
                     self.assertIn(f'id="{selector.lstrip("#")}"', html)
 
     def test_every_theme_surface_root_that_is_an_id_exists_in_studio(self):
-        html = (REPO / 'font_kit_studio_v0.1.1.html').read_text(encoding='utf-8')
+        html = (REPO / 'fontkit-studio.html').read_text(encoding='utf-8')
         groups = (theme.V02_IDLE, theme.V02_CONNECTED, theme.V02_BANNER, theme.V02_ERROR_STATES, theme.LEGACY_COMPOSER)
         for group in groups:
             for _, roots, excludes in group:

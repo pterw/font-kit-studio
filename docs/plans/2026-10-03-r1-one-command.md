@@ -1,7 +1,7 @@
 # R1 One command: implementation plan
 
-Status: **approved** (owner, 2026-10-04); not started. Work resumes at R1.0, whose first
-steps are the owner's npm actions. The package name, Studio's file name, publishing and the
+Status: **active** (2026-10-04). PR A (R1.1-R1.3) is running; R1.0, the owner's npm
+steps, runs beside it (addendum 1 in the ledger below). The package name, Studio's file name, publishing and the
 versions under test are decided (D040 to D044 in
 `docs/implementation/deviations.md`; [roadmap register](2026-10-03-roadmap.md#decisions-register)),
 and the open questions below are answered. v0.2.1 is merged. This release is
@@ -67,17 +67,17 @@ Each task is one brief, one report and one independent review under
 `docs/implementation/tasks/r1-task-<n>-*.md`. Owned files are exclusive while a task runs.
 Node code lives under `packages/fontkitstudio/` (exact layout fixed in R1.1).
 
-- [ ] **R1.0 Name registration and publishing setup.** Owner actions (D042): publish the
+- [x] **R1.0 Name registration and publishing setup.** Owner actions (D042): publish the
   `0.0.0` placeholder of `fontkitstudio` by hand from the owner's npm account with 2FA,
   deprecate it ("not released yet"), configure the trusted publisher for this repository's
   release workflow, and set the package to require 2FA and disallow tokens. The controller
   writes the steps as a checklist and records the outcome in the ledger.
 
-- [ ] **R1.1 Package skeleton.** `package.json` with no `dependencies`, `bin`, `exports`;
+- [x] **R1.1 Package skeleton.** `package.json` with no `dependencies`, `bin`, `exports`;
   Node's built-in test runner; a test that fails if a runtime dependency is added (spec
   4.5); CI job for `node --test`. Owns: `packages/fontkitstudio/`, `.github/workflows/` (a new job).
 
-- [ ] **R1.2 Studio rename and bundling.** Rename `font_kit_studio_v0.1.1.html` to
+- [x] **R1.2 Studio rename and bundling.** Rename `font_kit_studio_v0.1.1.html` to
   `fontkit-studio.html` (D041); the version labels already follow D039. The old name stays
   for one release as a stub that forwards with its query and hash, with a test, and the
   migration note says when it goes; the build
@@ -87,7 +87,7 @@ Node code lives under `packages/fontkitstudio/` (exact layout fixed in R1.1).
   Risk: every test, bookmarklet and doc names the old file; grep and update in the same
   commit (anti-pattern 11, 12).
 
-- [ ] **R1.3 Studio server and per-run token.** The package serves the bundled Studio on a
+- [x] **R1.3 Studio server and per-run token.** The package serves the bundled Studio on a
   free loopback port with a random token in the URL; requests without it are refused; Host
   and Origin checks as in `serve.py`. Hostile cases: missing and wrong token, wrong Host,
   wrong Origin. Owns: `packages/fontkitstudio/src/studio-server.*`, its tests.
@@ -180,3 +180,4 @@ R1.5 are created inside those tasks; R1.7 adds the CI wiring and the friction te
 |---|---|
 | 2026-10-03 | Draft written from the approved design. Waits on PR B and decisions 1, 2, 4. |
 | 2026-10-04 | Decisions taken (D040 to D044); open questions answered. Waits on PR B. |
+| 2026-10-04 | Addendum 1: R1 ships as three PRs under D050 (material lines counted, churn reported): A = R1.1-R1.3 (`2026-10-04-r1-pr-a-sdd.md`), B = R1.4-R1.6, C = R1.7-R1.9 and the release point. R1.0 runs beside PR A; only R1.9 depends on it. Trusted publisher fields fixed for R1.9: workflow `release.yml`, environment `npm-release`; the publish job runs Node 24 (npm 11.5.1 or later is required). |

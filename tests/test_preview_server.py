@@ -149,10 +149,10 @@ class PreviewServerTest(unittest.TestCase):
     def test_both_ports_serve_repo_files(self):
         s = self.server
         for port in (s.studio, s.target):
-            status, headers, body = request(port, 'GET', '/font_kit_studio_v0.1.1.html')
+            status, headers, body = request(port, 'GET', '/fontkit-studio.html')
             self.assertEqual(status, 200)
             self.assertIn('text/html', headers['content-type'])
-            self.assertEqual(body, (REPO / 'font_kit_studio_v0.1.1.html').read_bytes())
+            self.assertEqual(body, (REPO / 'fontkit-studio.html').read_bytes())
             self.assert_no_store(headers)
             status, headers, body = request(port, 'GET', '/demo/')
             self.assertEqual(status, 200)
@@ -167,7 +167,7 @@ class PreviewServerTest(unittest.TestCase):
         s = self.server
         status, headers, _ = request(s.studio, 'GET', '/')
         self.assertEqual(status, 302)
-        self.assertEqual(headers['location'], '/font_kit_studio_v0.1.1.html'
+        self.assertEqual(headers['location'], '/fontkit-studio.html'
                          f'?target=http://localhost:{s.target}/demo/')
         status, headers, _ = request(s.target, 'GET', '/')
         self.assertEqual((status, headers['location']), (302, '/demo/'))
@@ -484,7 +484,7 @@ class PreviewServerLifecycleTest(unittest.TestCase):
             server = Server()
             try:
                 self.assertEqual(server.stop(sig), 0, server.read_err())
-                expected = (f'http://localhost:{server.studio}/font_kit_studio_v0.1.1.html'
+                expected = (f'http://localhost:{server.studio}/fontkit-studio.html'
                             f'?target=http://localhost:{server.target}/demo/')
                 self.assertIn(expected, server.read_out())
                 self.assertNotIn('Traceback', server.read_err())
@@ -500,7 +500,7 @@ class PreviewServerLifecycleTest(unittest.TestCase):
             lines = server.read_out().splitlines()
             self.assertEqual(lines[-1], 'Stopped.')
             lines = lines[:-1]
-            expected = (f'Open: http://localhost:{server.studio}/font_kit_studio_v0.1.1.html'
+            expected = (f'Open: http://localhost:{server.studio}/fontkit-studio.html'
                         f'?target=http://localhost:{server.target}/demo/')
             self.assertEqual(lines[-1], expected, lines)
             self.assertTrue(lines[0].startswith('Studio:'), 'the existing lines are kept')
@@ -521,7 +521,7 @@ class PreviewServerLifecycleTest(unittest.TestCase):
             script.write_text('import sys\nopen(sys.argv[1], "a").write(sys.argv[2] + "\\n")\n')
             server = Server(*flags, env={'BROWSER': f'"{sys.executable}" "{script}" "{log}" %s'})
             try:
-                expected = (f'http://localhost:{server.studio}/font_kit_studio_v0.1.1.html'
+                expected = (f'http://localhost:{server.studio}/fontkit-studio.html'
                             f'?target=http://localhost:{server.target}/demo/')
                 self.assertEqual(server.stop(), 0, server.read_err())  # open() has returned by exit
                 opened = log.read_text().splitlines() if log.exists() else []
@@ -590,7 +590,7 @@ class PreviewServerLifecycleTest(unittest.TestCase):
     def test_refuses_overrides_outside_repo(self):
         with tempfile.TemporaryDirectory() as outside:
             for path in (str(Path(outside) / 'x.css'), '../outside.css', 'demo/../../x.css',
-                         'font_kit_studio_v0.1.1.html', '.git/hooks/x.css'):
+                         'fontkit-studio.html', '.git/hooks/x.css'):
                 ports = free_ports()
                 result = subprocess.run(
                     [sys.executable, str(SERVE), '--quiet', '--studio-port', str(ports[0]),
