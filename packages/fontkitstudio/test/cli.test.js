@@ -1,7 +1,7 @@
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { connect, createServer as createNetServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -67,7 +67,7 @@ test('a folder that is not a Vite project exits 2 and names the folder and the f
   assert.equal(result.status, 2);
   assert.equal(
     result.stderr,
-    `Font Kit Studio found no Vite project in ${dir}. Run it in your Vite project, or give your dev server's address: npx fontkitstudio http://localhost:3000\n`,
+    `Font Kit Studio found no Vite project in ${realpathSync(dir)}. Run it in your Vite project, or give your dev server's address: npx fontkitstudio http://localhost:3000\n`,
   );
   assert.equal(result.stdout, '');
 });
@@ -97,7 +97,7 @@ test('a project that lists Vite but has none installed exits 1 and says to insta
   );
   const result = runIn(dir, '--no-open');
   assert.equal(result.status, 1);
-  assert.equal(result.stderr, `Vite is not installed in ${dir}. Run npm install there, then try again.\n`);
+  assert.equal(result.stderr, `Vite is not installed in ${realpathSync(dir)}. Run npm install there, then try again.\n`);
 });
 
 for (const bad of ['0', '70000', 'abc', '1.5', '-1', '']) {
