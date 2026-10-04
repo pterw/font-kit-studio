@@ -580,6 +580,7 @@ In a container with a browser already installed: `FKS_ENGINES=chromium FKS_CHROM
 | `test_studio_visual.py` | Version labels, one primary action per panel, control heights, focus rings, contrast and the width of the Live App URL box. |
 | `test_studio_review_findings.py` | Saved DOM order with a duplicate `data-design-id`, and the 16-stylesheet limit. |
 | `test_studio_rename.py` | The old Studio file name forwards to `fontkit-studio.html` with its query and hash. |
+| `test_node_studio_server.py` | The npm package's Studio server in a real browser: the app never sees the per-run token, and a URL without it shows no Studio. |
 | `test_support.py` | The shared test harness: engine selection (an engine list that runs no browser is refused), the shared browser with a fresh context per test, the Firefox canary's test list, the Composer canvas snapshot helper, and a guard against reading a page's markup raw. |
 | `test_commit_messages.py` | The commit-message check, with a throwaway git repository: each forbidden form, allowed human co-authors, range parsing. |
 | `test_frontend_gate_*.py` | The gate's own logic: colour maths, contrast and layout judgements, report lines, the exit-code rule, CLI flags and the check table. `test_frontend_gate_fonts.py` and `test_frontend_gate_theme_browser.py` run a real browser; the others need none. |

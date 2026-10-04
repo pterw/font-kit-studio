@@ -87,7 +87,7 @@ Node code lives under `packages/fontkitstudio/` (exact layout fixed in R1.1).
   Risk: every test, bookmarklet and doc names the old file; grep and update in the same
   commit (anti-pattern 11, 12).
 
-- [ ] **R1.3 Studio server and per-run token.** The package serves the bundled Studio on a
+- [x] **R1.3 Studio server and per-run token.** The package serves the bundled Studio on a
   free loopback port with a random token in the URL; requests without it are refused; Host
   and Origin checks as in `serve.py`. Hostile cases: missing and wrong token, wrong Host,
   wrong Origin. Owns: `packages/fontkitstudio/src/studio-server.*`, its tests.
