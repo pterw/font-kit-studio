@@ -77,7 +77,7 @@ Node code lives under `packages/fontkitstudio/` (exact layout fixed in R1.1).
   Node's built-in test runner; a test that fails if a runtime dependency is added (spec
   4.5); CI job for `node --test`. Owns: `packages/fontkitstudio/`, `.github/workflows/` (a new job).
 
-- [ ] **R1.2 Studio rename and bundling.** Rename `font_kit_studio_v0.1.1.html` to
+- [x] **R1.2 Studio rename and bundling.** Rename `font_kit_studio_v0.1.1.html` to
   `fontkit-studio.html` (D041); the version labels already follow D039. The old name stays
   for one release as a stub that forwards with its query and hash, with a test, and the
   migration note says when it goes; the build

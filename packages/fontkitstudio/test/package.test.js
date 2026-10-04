@@ -25,16 +25,24 @@ test('has no runtime dependencies (spec 4.5, D030)', () => {
 function sourceFiles(dir) {
   return readdirSync(dir).flatMap((name) => {
     const path = join(dir, name);
-    return statSync(path).isDirectory() ? sourceFiles(path) : path.endsWith('.js') ? [path] : [];
+    return statSync(path).isDirectory() ? sourceFiles(path) : /\.(c|m)?js$/.test(path) ? [path] : [];
   });
 }
 
-const SPECIFIER = /\bimport\s*(?:[^'"()]*?\bfrom\s*)?['"]([^'"]+)['"]|\bimport\(\s*['"]([^'"]+)['"]\s*\)|\brequire\(\s*['"]([^'"]+)['"]\s*\)/g;
+const SPECIFIER = new RegExp([
+  // import 'x', import a from 'x', export * from 'x', export { a } from 'x'
+  /\b(?:import|export)\s*(?:[^'"()]*?\bfrom\s*)?['"]([^'"]+)['"]/,
+  // import('x'), import('x', { with: ... })
+  /\bimport\(\s*['"]([^'"]+)['"]/,
+  // require('x'), createRequire(import.meta.url)('x')
+  /\brequire\(\s*['"]([^'"]+)['"]\s*\)/,
+  /\bcreateRequire\([^)]*\)\(\s*['"]([^'"]+)['"]/,
+].map((pattern) => pattern.source).join('|'), 'g');
 
 test('shipped code imports only node built-ins and its own files', () => {
   for (const file of ['bin', 'src'].flatMap((dir) => sourceFiles(join(PKG_DIR, dir)))) {
     for (const match of readFileSync(file, 'utf8').matchAll(SPECIFIER)) {
-      const spec = match[1] ?? match[2] ?? match[3];
+      const spec = match[1] ?? match[2] ?? match[3] ?? match[4];
       assert.ok(spec.startsWith('node:') || spec.startsWith('.'),
         `${file} imports ${spec}: only node:* and relative imports are allowed`);
     }
@@ -47,6 +55,6 @@ test('declares what npm needs to run and ship it', () => {
   assert.equal(pkg.bin.fontkitstudio, 'bin/fontkitstudio.js');
   assert.deepEqual(pkg.files, ['bin/', 'src/', 'dist/']);
   const bin = readFileSync(join(PKG_DIR, pkg.bin.fontkitstudio), 'utf8');
-  // A Windows checkout with autocrlf turns the line ending into CRLF.
-  assert.match(bin, /^#!\/usr\/bin\/env node\r?\n/, 'the bin needs a node shebang');
+  // .gitattributes pins LF: with CRLF, Linux and macOS look for an interpreter named "node\r".
+  assert.ok(bin.startsWith('#!/usr/bin/env node\n'), 'the bin needs an LF node shebang');
 });

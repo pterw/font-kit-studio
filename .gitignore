@@ -5,3 +5,5 @@ work/
 demo/fontkit-overrides.css
 .*.css.*.tmp
 .ruff_cache/
+packages/fontkitstudio/dist/
+packages/fontkitstudio/LICENSE

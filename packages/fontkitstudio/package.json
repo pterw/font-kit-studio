@@ -14,5 +14,8 @@
     "directory": "packages/fontkitstudio"
   },
   "homepage": "https://github.com/pterw/font-kit-studio#readme",
-  "scripts": { "test": "node --test test/*.test.js" }
+  "scripts": {
+    "prepack": "node scripts/bundle.js",
+    "test": "node --test test/*.test.js"
+  }
 }
