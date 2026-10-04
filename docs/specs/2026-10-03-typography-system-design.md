@@ -3,7 +3,7 @@
 Status: **approved by the owner (2026-10-03)**, including the self-review additions
 (entry for non-developers, font choice, multi-page roles, one editing model, file format
 version, release and supply chain, Studio accessibility, Next.js, performance). Section 6
-lists the decisions still open.
+lists the decisions that were open; they were answered on 2026-10-04 (D040-D049).
 Nothing here is built. Implementation starts only from a plan in `docs/plans/`.
 
 Related: [product direction](../roadmap/product-direction.md),
@@ -73,7 +73,7 @@ Rules for every entry point:
 ## 2. The pairing system: the new Composer (approved)
 
 **One editing model.** The pairing system and single-element tweaks write to the same
-type-system file. A tweak to one element (today's Live Target inspector) becomes an
+type-system file. A tweak to one element (today's Live App inspector) becomes an
 **exception** rule in that file, under its role. There is one file and one preview. An
 existing `fontkit-overrides.css` from v0.2 is offered for import once, as exceptions,
 and then retired; nothing is imported without the user confirming.
@@ -267,17 +267,22 @@ fails if `package.json` gains a runtime dependency (D030).
 ## 5. Build order (approved)
 
 Each release has its own plan, branch and pull request from `main`, after PR #1 merges.
+Status and plan links per release: [roadmap ledger](../plans/2026-10-03-roadmap.md).
 
 | Release | Scope | Why this position |
 |---|---|---|
 | R1 One command | The Node package: Vite runner, `vite.config` plugin, proxy mode, the per-run token, the dev-only refusal, connection to the existing Studio; the release pipeline (1.1). Real-app fixtures and the friction test in CI. | Lowest friction first, so the owner can try fontkit on real apps immediately. Every later release is tested on these fixtures. |
 | R2 Engine | Text-style detection (with the performance budget and multi-page roles), the bridge-owned role stylesheet and its protocol messages, framework adapters (Bootstrap 5 and 4, React), the honest-preview reports. | The pairing UI needs it; it is testable on the R1 fixtures without new UI. |
 | R3 Pairing system | The new Composer: font picker with the catalogue snapshot, roles, candidates A/B/C, type scale, guardrails, exceptions from the inspector, Studio accessibility; the old canvas as the specimen-sheet export with JSON import kept. | Built on R2. |
-| R4 Output and handoff | The type-system file with versioned state block, safe writes with diff and hash check (Node and `serve.py`), import of v0.2 overrides as exceptions, exports (tokens, Tailwind v4 and v3, Bootstrap Sass), the font kit, licence labels, the handoff zip. |
-| R5 Extension | The browser extension for non-developers: side panel, any live site, the same engine and pairing system, output as the handoff zip. See [browser-extension.md](../roadmap/browser-extension.md). | Brings in the second user soon after the product is complete, reusing everything above. | Turns a chosen pairing into code the user keeps. |
+| R4 Output and handoff | The type-system file with versioned state block, safe writes with diff and hash check (Node and `serve.py`), import of v0.2 overrides as exceptions, exports (tokens, Tailwind v4 and v3, Bootstrap Sass), the font kit, licence labels, the handoff zip. | Turns a chosen pairing into code the user keeps. |
+| R5 Extension | The browser extension for non-developers: side panel, any live site, the same engine and pairing system, output as the handoff zip. See [browser-extension.md](../roadmap/browser-extension.md). | Brings in the second user soon after the product is complete, reusing everything above. |
 | Later | "Promote to source" (C); source rewriting (B), after global rule 1 is amended. | Owner priority: A first, then B and C. |
 
 ## 6. Open decisions
+
+Answered on 2026-10-04: 1 by D040 (`fontkitstudio`), 2 by D046
+(in principle) and 3 by D041 (`fontkit-studio.html`). The reasons are in
+`docs/implementation/deviations.md`; the arguments below are kept as the record.
 
 1. **Package and command name.** `fontkit` on npm is an unrelated font engine with millions
    of weekly downloads, so `npx fontkit` would run the wrong package. Options: a scoped name

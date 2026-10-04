@@ -1,7 +1,7 @@
 """End-to-end: real Studio + real bridge + demo app, served by the real scripts/serve.py.
 
 Nothing here is faked. A `scripts/serve.py` subprocess runs on two OS-assigned loopback
-ports (Studio on one, the demo target on the other, so they stay cross-origin), and
+ports (Studio on one, the demo app on the other, so they stay cross-origin), and
 Chromium loads the real Studio over http://localhost, which makes the real clipboard
 available. Studio talks to `fontkit-bridge.js` inside `demo/index.html` over real
 `postMessage`.
@@ -27,10 +27,10 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import quote
 
-from playwright.sync_api import TimeoutError as PlaywrightTimeout, sync_playwright
+from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from support import ENGINES, HTML, REPO, launch  # noqa: E402
+from support import ENGINES, HTML, REPO, close_contexts, launch, new_context, shared_runtime  # noqa: E402
 
 SERVE = REPO / 'scripts' / 'serve.py'
 TITLE = '[data-design-id="landing.hero.title"]'
@@ -69,9 +69,9 @@ class LiveIntegrationCase(unittest.TestCase):
         self.proc = None
         self.start_server()
         self.addCleanup(self.stop_server)
-        self.runtime = sync_playwright().start()
-        self.addCleanup(self.runtime.stop)
-        self.browsers = []
+        self.runtime = shared_runtime()   # one driver and one browser per engine per process (support.py)
+        self.browsers = []                # browsers a test launches itself; closed below
+        self.contexts = []                # one fresh context per test, closed below
         self.addCleanup(self.close_browsers)
 
     # ---- server --------------------------------------------------------
@@ -111,8 +111,11 @@ class LiveIntegrationCase(unittest.TestCase):
         self.log.close()
 
     def close_browsers(self):
-        for browser in self.browsers:
-            browser.close()
+        try:
+            close_contexts(self.contexts)
+        finally:
+            for browser in self.browsers:
+                browser.close()
 
     def written(self):
         return self.overrides.read_text(encoding='utf-8') if self.overrides.exists() else ''
@@ -123,9 +126,8 @@ class LiveIntegrationCase(unittest.TestCase):
 
     # ---- browser -------------------------------------------------------
     def open(self, engine, viewport=None, query=True):
-        browser = launch(self.runtime, engine)
-        self.browsers.append(browser)
-        context = browser.new_context(viewport=viewport or {'width': 1440, 'height': 900})
+        context = new_context(engine, viewport=viewport or {'width': 1440, 'height': 900})
+        self.contexts.append(context)
         if engine == 'chromium':  # the real clipboard works on localhost once permitted
             context.grant_permissions(['clipboard-read', 'clipboard-write'], origin=self.studio)
         self.font_requests = []
@@ -166,10 +168,13 @@ class LiveIntegrationCase(unittest.TestCase):
 
     def inspector_target(self, page, target, timeout=3000):
         """Wait until the inspector shows `target`: an id, or a regex matched against the shown name."""
+        # Pass only the key that applies and test for it with typeof: wait_for_function turns a None
+        # value into a missing key (`undefined`), so a `name: None` placeholder cannot be told from a regex.
         page.wait_for_function(
-            '(want) => { const el = document.querySelector("#liveTargetName");'
-            ' return Boolean(el) && (el.dataset.targetId === want.id || (want.name !== null && new RegExp(want.name).test(el.textContent))); }',
-            arg={'id': target, 'name': None} if not target.startswith('/') else {'id': None, 'name': target.strip('/')},
+            '(want) => { const el = document.querySelector("#liveTargetName"); if (!el) return false;'
+            ' return typeof want.name === "string" ? new RegExp(want.name).test(el.textContent)'
+            ' : el.dataset.targetId === want.id; }',
+            arg={'name': target.strip('/')} if target.startswith('/') else {'id': target},
             timeout=timeout)
 
     def click_in_target(self, page, selector, target):
@@ -262,6 +267,43 @@ class LiveIntegrationCase(unittest.TestCase):
         frame.wait_for_function('document.readyState === "complete"')
         self.wait_badge(page, CONNECTED)
         return frame
+
+
+class InspectorWaitTests(unittest.TestCase):
+    """`inspector_target` must really wait. Playwright's wait_for_function drops dict keys whose value
+    is None (the predicate sees `undefined`, not `null`), so a predicate that told "no regex" apart with
+    `!== null` matched every name and the wait returned at once for any plain id."""
+
+    inspector_target = LiveIntegrationCase.inspector_target  # the helper under test; it uses only `page`
+
+    def setUp(self):
+        shared_runtime()
+        context = new_context('chromium')
+        self.addCleanup(context.close)
+        self.page = context.new_page()
+        self.page.set_content('<span id="liveTargetName" data-target-id="landing.hero.lead">Hero lead</span>')
+
+    def test_a_plain_id_that_is_not_shown_times_out(self):
+        with self.assertRaises(PlaywrightTimeout):
+            self.inspector_target(self.page, 'landing.hero.title', timeout=500)
+
+    def test_a_regex_that_does_not_match_the_shown_name_times_out(self):
+        with self.assertRaises(PlaywrightTimeout):
+            self.inspector_target(self.page, '/^Hero title$/', timeout=500)
+
+    def test_the_shown_id_returns(self):
+        self.inspector_target(self.page, 'landing.hero.lead', timeout=500)
+
+    def test_a_regex_that_matches_the_shown_name_returns(self):
+        self.inspector_target(self.page, '/^Hero lead$/', timeout=500)
+
+    def test_the_wait_holds_until_the_inspector_renders_the_target(self):
+        self.page.evaluate("""() => setTimeout(() => {
+            const el = document.getElementById('liveTargetName');
+            el.dataset.targetId = 'landing.hero.title'; el.textContent = 'Hero title'; }, 300)""")
+        self.inspector_target(self.page, 'landing.hero.title', timeout=3000)
+        self.assertEqual(self.page.evaluate('document.getElementById("liveTargetName").dataset.targetId'),
+                         'landing.hero.title')
 
 
 class EditAndCodePanelTests(LiveIntegrationCase):
@@ -423,13 +465,13 @@ class SyncAndReloadTests(LiveIntegrationCase):
                                   'the page looks right because the file styles it, not because of a live edit')
                 banner = page.locator('#liveReconnectBanner')
                 text = ' '.join(banner.text_content().split())
-                self.assertIn('the live target has 0 targets changed', text)
+                self.assertIn('the Live App has 0 targets changed', text)
                 # Why the page looks right although the bridge counts nothing.
                 self.assertRegex(text, r'overrides file already styles the page')
                 self.assertRegex(text, r'0 live edits')
                 self.assertRegex(text, r'counts only edits (made )?through Studio')
                 # What Accept does, in plain words.
-                self.assertRegex(text, r"Accept target state replaces Studio's saved overrides, composition tokens and DOM order")
+                self.assertRegex(text, r"Accept Live App state replaces Studio's saved overrides, composition tokens and DOM order")
                 self.assertRegex(text, r'next Sync writes a smaller file')
                 # The words are true: accepting and syncing really does shrink the file.
                 page.locator('#liveAcceptTarget').click()
@@ -540,6 +582,8 @@ class SelectionOrderTests(LiveIntegrationCase):
                 self.select_hero_title(page)
                 lead_before = self.style(frame, self.LEAD, 'fontSize')
                 title_before = self.style(frame, TITLE, 'fontSize')
+                self.type_into(page, '#liveFontSize', '40')               # Reset is disabled until the element has a change
+                page.wait_for_function('() => !document.querySelector("#liveResetTarget").disabled')
                 frame.evaluate('window.__hold = true')
                 page.locator('#liveResetTarget').click()                  # the target acknowledges the reset first ...
                 page.frame_locator('#targetAppFrame').locator(self.LEAD).click()   # ... the user clicks the lead right after
@@ -561,20 +605,47 @@ class SelectionOrderTests(LiveIntegrationCase):
                 self.assertEqual(page.errors, [])
 
     # ---- picks Studio sends for the user, handled by the bridge later than a newer click in the page ----------
+    def trace(self, page):
+        """Record what Studio receives from the target (every design:* message, with its requestId and target) and
+        every load of the target frame, so a failure below can show the order that produced it. Call it right after
+        connected()."""
+        page.evaluate("""() => {
+            const started = performance.now(), log = window.__trace = [];
+            const note = (entry) => log.push(Object.assign({ at: Math.round(performance.now() - started) }, entry));
+            window.addEventListener('message', (event) => {
+                const data = event.data;
+                if (data && typeof data.type === 'string' && data.type.startsWith('design:')) {
+                    note({ message: data.type, requestId: data.requestId, targetId: data.targetId });
+                }
+            });
+            document.querySelector('#targetAppFrame').addEventListener('load', () => note({ load: 'targetAppFrame' }));
+        }""")
+
+    def trace_text(self, page):
+        try:
+            lines = page.evaluate('() => (window.__trace || []).map((entry) => JSON.stringify(entry))')
+        except Exception as error:   # the page may be gone; the assertion below still matters more
+            return f'(no trace: {error})'
+        return 'Studio received, in order:\n' + '\n'.join(lines)
+
     def assert_selected_everywhere(self, page, frame, target_id):
         """The inspector and the bridge's own selection both end on `target_id` (the realign needs a round trip)."""
         try:
             frame.wait_for_function('(id) => window.__fontkitBridge.selectedId === id', arg=target_id, timeout=3000)
         except PlaywrightTimeout:
             pass   # the assertions below name what was selected instead
-        self.assertEqual(frame.evaluate('window.__fontkitBridge.selectedId'), target_id, 'the bridge')
-        self.inspector_target(page, target_id)
-        self.assertEqual(page.locator('#liveTargetName').get_attribute('data-target-id'), target_id, 'the inspector')
+        try:
+            self.assertEqual(frame.evaluate('window.__fontkitBridge.selectedId'), target_id, 'the bridge')
+            self.inspector_target(page, target_id)
+            self.assertEqual(page.locator('#liveTargetName').get_attribute('data-target-id'), target_id, 'the inspector')
+        except (AssertionError, PlaywrightTimeout) as error:
+            raise AssertionError(f'{error}\n{self.trace_text(page)}') from None
 
     def test_a_page_click_wins_over_a_list_pick_the_bridge_handles_late(self):
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page = self.connected(engine)
+                self.trace(page)
                 frame = self.frame(page)
                 lead_before = self.style(frame, self.LEAD, 'fontSize')
                 frame.evaluate('window.__defer = true')
@@ -590,11 +661,102 @@ class SelectionOrderTests(LiveIntegrationCase):
                 self.assertEqual(page.locator('#liveTargetName').text_content(), 'Hero title')
                 self.assertEqual(page.errors, [])
 
+    def test_a_page_click_wins_over_a_list_pick_the_bridge_answers_after_a_re_handshake(self):
+        """The list pick is still waiting at the bridge when the target's load re-sends hello and Studio sees the new
+        design:ready (which forgets every request asked before it). The user then clicks the title in the page. The
+        bridge finally answers the old pick: that answer is still the old request's, not a new choice."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page = self.connected(engine)
+                self.trace(page)
+                frame = self.frame(page)
+                lead_before = self.style(frame, self.LEAD, 'fontSize')
+                frame.evaluate('window.__defer = true')
+                page.locator('[data-live-target="landing.hero.lead"]').click()     # the user picks the lead in Studio (older)
+                frame.wait_for_function('window.__stashed() === 1')
+                page.evaluate('document.querySelector("#targetAppFrame").dispatchEvent(new Event("load"))')   # the re-hello
+                self.wait_badge(page, CONNECTED)                                     # ... answered by a new design:ready
+                self.select_hero_title(page)                                         # then the click on the title (newer)
+                frame.evaluate('window.__defer = false; window.__runStashed()')     # the bridge now answers the older pick
+                self.assert_selected_everywhere(page, frame, 'landing.hero.title')
+                self.type_into(page, '#liveFontSize', '31')
+                self.wait_style(frame, TITLE, 'fontSize', '31px')
+                self.assertEqual(self.style(frame, self.LEAD, 'fontSize'), lead_before)
+                self.assertEqual(page.locator('#liveTargetName').text_content(), 'Hero title')
+                self.assertEqual(page.errors, [])
+
+    CTA = '[data-design-id="landing.hero.cta"]'
+
+    def test_a_sibling_pick_the_bridge_answers_after_a_re_handshake_keeps_the_pick(self):
+        """The user picks a sibling in the Arrange list; the bridge has not handled it when the target's load re-sends
+        hello. The new design:ready must not reset what the user last picked to the target it kept selected."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page = self.connected(engine)
+                self.trace(page)
+                frame = self.frame(page)
+                self.click_in_target(page, self.CTA, 'landing.hero.cta')
+                siblings = page.locator('#liveSiblingList [data-sibling-id]').evaluate_all('els => els.map(el => el.dataset.siblingId)')
+                other = next(item for item in siblings if item != 'landing.hero.cta')
+                frame.evaluate('window.__defer = true')
+                page.locator(f'#liveSiblingList [data-sibling-id="{other}"]').focus()
+                page.keyboard.press('Enter')                                          # the user picks the sibling (newest)
+                frame.wait_for_function('window.__stashed() === 1')
+                page.evaluate('document.querySelector("#targetAppFrame").dispatchEvent(new Event("load"))')   # the re-hello
+                self.wait_badge(page, CONNECTED)
+                frame.evaluate('window.__defer = false; window.__runStashed()')
+                self.assert_selected_everywhere(page, frame, other)
+                self.assertEqual(page.errors, [])
+
+    def test_a_page_click_wins_when_two_re_handshakes_forget_a_refresh_the_bridge_answers_late(self):
+        """The CI-shaped order: the first ready re-sends the kept selection (the lead) as a tracked refresh, the second
+        ready forgets that request, and the bridge answers it after the user clicked the title."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page = self.connected(engine)
+                self.trace(page)
+                frame = self.frame(page)
+                page.locator('[data-live-target="landing.hero.lead"]').click()
+                self.inspector_target(page, 'landing.hero.lead')
+                frame.evaluate('window.__defer = true')
+                page.evaluate('document.querySelector("#targetAppFrame").dispatchEvent(new Event("load"))')
+                self.wait_badge(page, CONNECTED)
+                frame.wait_for_function('window.__stashed() === 2')                  # the kept selection, re-sent as a refresh (twice: also for its bulk manifest)
+                page.evaluate('document.querySelector("#targetAppFrame").dispatchEvent(new Event("load"))')
+                self.wait_badge(page, CONNECTED)
+                frame.wait_for_function('window.__stashed() === 4')                  # the second ready forgot the first refreshes
+                self.select_hero_title(page)
+                frame.evaluate('window.__defer = false; window.__runStashed()')
+                self.assert_selected_everywhere(page, frame, 'landing.hero.title')
+                self.assertEqual(page.errors, [])
+
+    def test_the_inspector_checks_wait_for_a_bridge_that_reports_a_selection_late(self):
+        """The bridge's design:selected reaches Studio 150 ms late. The helpers must wait for the inspector to
+        show the click instead of reading it before Studio has rendered the report."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page = self.connected(engine)
+                self.trace(page)
+                frame = self.frame(page)
+                frame.evaluate("""() => {
+                    const proto = window.FontKitBridge.prototype, send = proto.post;
+                    proto.post = function (message) {
+                        if (message && message.type === 'design:selected') setTimeout(() => send.call(this, message), 150);
+                        else send.call(this, message);
+                    };
+                }""")
+                page.locator('[data-live-target="landing.hero.lead"]').click()
+                self.inspector_target(page, 'landing.hero.lead')
+                self.select_hero_title(page)
+                self.assert_selected_everywhere(page, frame, 'landing.hero.title')
+                self.assertEqual(page.errors, [])
+
     def test_a_page_click_after_the_bridge_handled_the_list_pick_still_wins(self):
         """Characterization: the bridge handled the pick first, so nothing is stale."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page = self.connected(engine)
+                self.trace(page)
                 frame = self.frame(page)
                 title_before = self.style(frame, TITLE, 'fontSize')
                 page.locator('[data-live-target="landing.hero.lead"]').click()
@@ -610,6 +772,7 @@ class SelectionOrderTests(LiveIntegrationCase):
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page = self.connected(engine)
+                self.trace(page)
                 frame = self.frame(page)
                 title_before = self.style(frame, TITLE, 'fontSize')
                 self.select_hero_title(page)
@@ -944,7 +1107,7 @@ class StructureReplayTests(LiveIntegrationCase):
                 self.assertEqual(self.export(page).get('live', {}).get('structure'), saved,
                                  'an unrelated reset neither drops nor replaces what Studio saved')
                 banner.wait_for(state='visible', timeout=3000)
-                self.assertIn('the live target holds 0 of them', ' '.join(banner.inner_text().split()))
+                self.assertIn('the Live App holds 0 of them', ' '.join(banner.inner_text().split()))
                 self.assertEqual(self.order(frame), self.ORIGINAL, 'Studio did not touch the page')
                 # The mismatch is the user's to resolve: Reapply puts the saved order back.
                 page.locator('#liveReapply').click()
@@ -1594,7 +1757,7 @@ class ImportedTokensTests(LiveIntegrationCase):
                 self.assertEqual(frame.evaluate(token), '#123456', 'importing never changes the page')
                 # The bridge announces itself again (a reconnect without a reload), then the user presses Reapply.
                 frame.evaluate('window.parent.postMessage({type: "design:bridge-ready", protocolVersion: 1}, "*")')
-                page.wait_for_function('() => /the live target has \\d+ targets? changed and 1 composition token\\b/.test('
+                page.wait_for_function('() => /the Live App has \\d+ targets? changed and 1 composition token\\b/.test('
                                        'document.querySelector("#liveReconnectText").textContent)')
                 self.assertEqual(frame.evaluate(token), '#123456', 'reconnecting never changes the page')
                 page.locator('#liveReapply').click()
@@ -1621,7 +1784,7 @@ class RecursionGuardTests(LiveIntegrationCase):
                     page.locator('#targetAppUrl').fill(probe)
                     page.locator('#btnConnectTarget').click()
                     self.wait_badge(page, r'^Recursion blocked$')
-                    # The guard resets the field; connect to the demo again before the next probe.
+                    # The field keeps the refused address; connect to the demo again before the next probe.
                     page.locator('#targetAppUrl').fill(self.target)
                     page.locator('#btnConnectTarget').click()
                     self.wait_badge(page, CONNECTED)

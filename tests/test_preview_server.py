@@ -1,4 +1,4 @@
-"""Preview dev server (scripts/serve.py) and demo target app (demo/index.html)."""
+"""Preview dev server (scripts/serve.py) and the demo app (demo/index.html)."""
 
 import http.client
 import importlib.util
@@ -18,7 +18,7 @@ from unittest import mock
 from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from support import ENGINES, REPO, launch  # noqa: E402
+from support import ENGINES, REPO, launch, shared_runtime  # noqa: E402
 
 SERVE = REPO / 'scripts' / 'serve.py'
 DEMO = REPO / 'demo' / 'index.html'
@@ -504,7 +504,8 @@ class PreviewServerLifecycleTest(unittest.TestCase):
                         f'?target=http://localhost:{server.target}/demo/')
             self.assertEqual(lines[-1], expected, lines)
             self.assertTrue(lines[0].startswith('Studio:'), 'the existing lines are kept')
-            self.assertTrue(any(line.startswith('Target:') for line in lines))
+            self.assertTrue(any(line.startswith('Demo:') for line in lines))
+            self.assertFalse(any(line.startswith('Target:') for line in lines), 'the old label is gone')
             self.assertTrue(any(line.startswith('Sync:') for line in lines))
         finally:
             server.close()
@@ -616,14 +617,14 @@ class DemoPageTest(unittest.TestCase):
         self.assertIn('<script src="../fontkit-bridge.js"></script>', source)
 
     def test_demo_loads_from_target_port(self):
-        from playwright.sync_api import sync_playwright
+        from contextlib import nullcontext
 
         # Sync off and a scratch overrides path that is never created: the demo's stylesheet
         # request is routed there, so the checkout's own demo/fontkit-overrides.css (which
         # Sync to file creates) never takes part.
         server = Server('--no-sync')
         try:
-            with sync_playwright() as runtime:
+            with nullcontext(shared_runtime()) as runtime:  # a second driver cannot start beside the shared one
                 for engine in ENGINES:
                     with self.subTest(engine=engine):
                         self.check_demo(runtime, engine, server)
@@ -631,7 +632,7 @@ class DemoPageTest(unittest.TestCase):
             server.close()
 
     def test_demo_loads_without_any_overrides_request_failing(self):
-        from playwright.sync_api import sync_playwright
+        from contextlib import nullcontext
 
         # The server's own scratch overrides path is the file under test. The checkout's
         # demo/fontkit-overrides.css (Sync to file creates it) is never read or touched.
@@ -639,7 +640,7 @@ class DemoPageTest(unittest.TestCase):
         overrides = server.overrides
         self.assertFalse(overrides.exists(), 'the scratch overrides file starts missing')
         try:
-            with sync_playwright() as runtime:
+            with nullcontext(shared_runtime()) as runtime:  # a second driver cannot start beside the shared one
                 for engine in ENGINES:
                     with self.subTest(engine=engine):
                         browser = launch(runtime, engine)

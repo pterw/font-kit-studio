@@ -13,7 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from support import ENGINES, launch  # noqa: E402
+from support import ENGINES, launch, shared_runtime  # noqa: E402
 from scripts.dev import _frontend_gate_theme as theme  # noqa: E402
 
 # Light text on a black page, under a layer that paints almost nothing.
@@ -28,12 +28,7 @@ LAYERS = (
 class InPageAlphaTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        from playwright.sync_api import sync_playwright
-        cls.runtime = sync_playwright().start()
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.runtime.stop()
+        cls.runtime = shared_runtime()   # the process-wide driver; a second one cannot start beside it
 
     def samples(self, engine, layer):
         browser = launch(self.runtime, engine)

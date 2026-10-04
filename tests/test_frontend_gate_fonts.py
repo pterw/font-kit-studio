@@ -15,7 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from support import ENGINES, launch  # noqa: E402
+from support import ENGINES, launch, shared_runtime  # noqa: E402
 from scripts.dev import _frontend_gate_network as network  # noqa: E402
 
 DEADLINE_MS = 300
@@ -42,12 +42,7 @@ NO_FONTS_API = """() => {
 class FontMeasurementDeadlineTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        from playwright.sync_api import sync_playwright
-        cls.runtime = sync_playwright().start()
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.runtime.stop()
+        cls.runtime = shared_runtime()   # the process-wide driver; a second one cannot start beside it
 
     def setUp(self):
         # A blocked sync Playwright call ignores SIGALRM, so the watchdog is faulthandler's:

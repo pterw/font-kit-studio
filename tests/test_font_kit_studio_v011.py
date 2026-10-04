@@ -1,3 +1,4 @@
+import base64
 import json
 import re
 import struct
@@ -6,26 +7,30 @@ import unittest
 import zlib
 from pathlib import Path
 
-from playwright.sync_api import sync_playwright
-
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from support import ENGINES, HTML, launch  # noqa: E402
+from support import ENGINES, HTML, canvas_snapshot, close_contexts, launch, new_context, shared_runtime  # noqa: E402
+
+# 1x1 PNG, for controls that stay disabled until an image is chosen.
+PNG = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==')
 
 
 class BrowserCase(unittest.TestCase):
     def setUp(self):
-        self.runtime = sync_playwright().start()
-        self.browsers = []
+        self.runtime = shared_runtime()   # one driver and one browser per engine per process (support.py)
+        self.browsers = []                # browsers a test launches itself; closed below
+        self.contexts = []                # one fresh context per test, closed below
 
     def tearDown(self):
-        for browser in self.browsers:
-            browser.close()
-        self.runtime.stop()
+        try:
+            close_contexts(self.contexts)
+        finally:
+            for browser in self.browsers:
+                browser.close()
 
     def page(self, engine):
-        browser = launch(self.runtime, engine)
-        self.browsers.append(browser)
-        page = browser.new_page(viewport={'width': 1600, 'height': 1200})
+        context = new_context(engine, viewport={'width': 1600, 'height': 1200})
+        self.contexts.append(context)
+        page = context.new_page()
         errors = []
         page.on('pageerror', lambda error: errors.append(str(error)))
         page.goto(HTML.as_uri())
@@ -131,7 +136,7 @@ class BrowserCase(unittest.TestCase):
             with self.subTest(engine=engine):
                 page, errors = self.page(engine)
                 before = self.export(page)
-                before_canvas = page.locator('#composerCanvas').inner_html()
+                before_canvas = canvas_snapshot(page)
                 for malformed in ([None], [42], [[]], [{'type':'row', 'children':{}}],
                                   [{'type':'row', 'children':[{'type':'text'}, None]}]):
                     status = self.import_document(page, {'composition': {'canvasWidth':'640',
@@ -139,7 +144,7 @@ class BrowserCase(unittest.TestCase):
                     self.assertTrue(status.startswith('Import failed:'), status)
                     self.assertIn('slot', status.lower())
                     self.assertEqual(self.export(page), before)
-                    self.assertEqual(page.locator('#composerCanvas').inner_html(), before_canvas)
+                    self.assertEqual(canvas_snapshot(page), before_canvas)
                 # A malformed background previously throws after live state assignments.
                 status = self.import_document(page, {'composition': {'canvasWidth':'640',
                     'background':42, 'slots':[{'type':'text', 'text':'replacement'}]}})
@@ -363,6 +368,8 @@ class BrowserCase(unittest.TestCase):
                     self.assertEqual(page.locator('[data-bind="type"] option[value="row"]').count(),0)
                     self.assertEqual(page.locator('.row-child .slot-movers').count(),0)
                     control=page.locator(selector)
+                    if key=='imageWidth':  # the width is disabled until the child has an image
+                        page.locator('#assetFile').set_input_files({'name':'mark.png','mimeType':'image/png','buffer':PNG})
                     control.fill(value)
                     control.dispatch_event('input')
                     self.assertEqual(self.export(page)['composition']['slots'][0]['children'][index][key], expected)
@@ -524,7 +531,7 @@ class BrowserCase(unittest.TestCase):
 class StructureTests(unittest.TestCase):
     def test_version_and_existing_model(self):
         source = HTML.read_text(encoding='utf-8')
-        self.assertTrue('<title>Font Kit Studio v0.1.1</title>' in source, 'Document title must match version 0.1.1')
+        self.assertTrue('<title>Font Kit Studio v0.2.1</title>' in source, 'Document title names the release it ships in (D039)')
         for symbol in ('makeRowSlot', 'findSlotById', 'selectedLocation', 'LEAF_SLOT_TYPES'):
             self.assertIn(symbol, source)
 

@@ -46,7 +46,8 @@ a general editor.
 ## Surfaces and order
 
 The agreed design and release order now live in
-[the typography system design](../specs/2026-10-03-typography-system-design.md). In short:
+[the typography system design](../specs/2026-10-03-typography-system-design.md); status and
+one plan per release are in [the roadmap ledger](../plans/2026-10-03-roadmap.md). In short:
 one command for Vite and React projects and a local proxy for any other dev server come
 first (R1); then the detection engine (R2), the pairing system (R3) and output and
 handoff (R4); then the browser extension for non-developers (R5). Source rewriting and
@@ -65,6 +66,9 @@ time. Treat it as a possible direction, not the plan.
 
 ## Decisions this needs from the owner
 
+Taken in principle on 2026-10-04 (D047): `activeTab` only, and Studio in a sandboxed
+extension page before any build step. A spike at the start of R5 confirms both.
+
 - **Build step.** Global rule 8 keeps Studio a single file with no build. A Manifest V3
   extension page cannot run Studio's inline script, so the extension panel needs its script in
   separate files. Either the extension is hand-written files with no build, or it gets its own
@@ -81,16 +85,18 @@ time. Treat it as a possible direction, not the plan.
   permission list.
 - **Scope.** One maintainer cannot build three surfaces at once. Sequence them.
 
-## Where it stands (2026-10-03)
+## Where it stands (2026-10-04)
 
 Be exact about this when describing fontkit to anyone: the shipped product and the pitched
 product are not the same thing yet.
 
-- **Shipped (v0.2.0):** live per-element editing of a page that loads the bridge, DOM
-  moves with guards, an overrides stylesheet the dev server writes, the Library and the
-  Composer. Covered by 548 browser tests, hostile-input cases on every boundary, and a CI
-  gate for network isolation and contrast. The first-run experience has known defects
-  (`docs/implementation/audit-2026-10-03-first-run-and-controls.md`).
+- **Shipped (v0.2.0 and the first half of v0.2.1):** live per-element editing of a page
+  that loads the bridge, DOM moves with guards, an overrides stylesheet the dev server
+  writes, the Library and the Composer. Covered by 636 tests on `main` (786 with the second
+  half of v0.2.1), hostile-input cases on every boundary, and a CI gate for network
+  isolation and contrast. v0.2.1 works through the first-run, controls and visual audit
+  (`docs/implementation/audit-2026-10-03-first-run-and-controls.md`): the first-run half is
+  merged, and the controls and polish half is in review as PR #5.
 - **Designed, not built:** everything in "How it differs" above. One-command start (R1),
   role detection (R2), pairing and type scales (R3), token output (R4), the extension (R5).
 - **Against "just looking", fontkit loses today.** A font-swap extension is faster for a
@@ -101,6 +107,6 @@ product are not the same thing yet.
   smaller DevTools. It ships after R2-R4 so it carries roles, pairings, scales and handoff
   into a tab the user does not own; built earlier it would be the DevTools remake it is
   accused of being.
-- **The README is the product page**, and does not position fontkit against competitors;
+- **The README is the product page**, and does not name competitors;
   that comparison lives here. A separate product page makes sense once R1 ships and there is
   a one-command story for people who do not start from a repository.

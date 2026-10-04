@@ -10,9 +10,7 @@ import re
 import unittest
 from urllib.parse import quote
 
-from playwright.sync_api import sync_playwright
-
-from support import ENGINES, REPO, launch, route_virtual_origins
+from support import ENGINES, REPO, launch, route_virtual_origins, shared_runtime
 
 FIXTURES = REPO / 'tests' / 'fixtures' / 'bridge'
 STUDIO = 'http://studio.test'
@@ -53,14 +51,13 @@ BY_ID = "(id) => [...document.querySelectorAll('[data-design-id]')].find((el) =>
 class BridgeCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.runtime = sync_playwright().start()
+        cls.runtime = shared_runtime()   # the process-wide driver; a second one cannot start beside it
         cls.browsers = {engine: launch(cls.runtime, engine) for engine in ENGINES}
 
     @classmethod
     def tearDownClass(cls):
         for browser in cls.browsers.values():
             browser.close()
-        cls.runtime.stop()
 
     # -- harness -----------------------------------------------------------
 

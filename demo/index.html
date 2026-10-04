@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Halyard — client portals for small studios</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23d9480f'/%3E%3Ctext x='16' y='24' font-family='Georgia,serif' font-size='22' font-weight='700' text-anchor='middle' fill='%23ffffff'%3EH%3C/text%3E%3C/svg%3E">
-  <meta name="description" content="Font Kit Studio demo target app: a small, offline product landing page instrumented with fontkit-bridge.js.">
+  <meta name="description" content="Font Kit Studio demo app: a small, offline product landing page instrumented with fontkit-bridge.js.">
   <style>
     :root {
       --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
@@ -121,6 +121,7 @@
     .plan .price small { font-family: var(--font-sans); font-size: 15px; font-weight: 500; color: var(--ink-soft); }
     .plan ul { margin: 0; padding-left: 20px; color: var(--ink-soft); }
     .plan .btn { margin-top: auto; }
+    .plan[data-chosen="true"] { border-color: var(--ink); box-shadow: 0 0 0 3px var(--tint); }
 
     .faq details { border-bottom: 1px solid var(--line); padding: 18px 0; max-width: 46em; }
     .faq summary { cursor: pointer; font-weight: 600; font-size: 18px; }
@@ -268,7 +269,7 @@
               <li>Unlimited file sharing</li>
               <li>Email support</li>
             </ul>
-            <button class="btn btn-ghost" type="button">Choose Solo</button>
+            <button class="btn btn-ghost" type="button" data-plan-choice="Solo" aria-pressed="false">Choose Solo</button>
           </div>
           <div class="plan featured">
             <h3>Studio</h3>
@@ -278,7 +279,7 @@
               <li>Custom domain and branding</li>
               <li>Priority support</li>
             </ul>
-            <button class="btn btn-primary" type="button">Choose Studio</button>
+            <button class="btn btn-primary" type="button" data-plan-choice="Studio" aria-pressed="false">Choose Studio</button>
           </div>
         </div>
       </div>
@@ -330,11 +331,24 @@
 
   <footer class="site-footer">
     <div class="wrap">
-      <p>© 2026 Halyard Labs. A demo target app for Font Kit Studio.</p>
+      <p>© 2026 Halyard Labs. A demo app for Font Kit Studio.</p>
       <p><a href="#top">Back to top</a></p>
     </div>
   </footer>
 
+  <!-- The pricing buttons act, so Interact mode has something to show: the chosen plan says so in its button. -->
+  <script>
+    document.querySelectorAll('[data-plan-choice]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        document.querySelectorAll('[data-plan-choice]').forEach(function (other) {
+          var chosen = other === button;
+          other.setAttribute('aria-pressed', String(chosen));
+          other.textContent = chosen ? other.dataset.planChoice + ' chosen' : 'Choose ' + other.dataset.planChoice;
+          other.closest('.plan').dataset.chosen = String(chosen);
+        });
+      });
+    });
+  </script>
   <script src="../fontkit-bridge.js"></script>
 </body>
 </html>

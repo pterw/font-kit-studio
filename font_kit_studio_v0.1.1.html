@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Font Kit Studio v0.1.1</title>
+<title>Font Kit Studio v0.2.1</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2314213d'/%3E%3Ctext x='16' y='24' font-family='Georgia,serif' font-size='22' font-weight='700' text-anchor='middle' fill='%23ffffff'%3EF%3C/text%3E%3C/svg%3E" />
 
 <!--
@@ -30,6 +30,13 @@
   --muted-strong: #625e56;
   --warn-text: #9a3412;
   --sample-size: 42px;
+  /* One control-height scale for buttons, fields and selects: 34px, or 28px inside compact panels (see
+     "Compact controls"). --field-line is the border of a text field or select: 3:1 on --bg, --panel and --chip. */
+  --control-h: 34px;
+  --control-h-sm: 28px;
+  --control-fs: 14px;
+  --field-line: #857f74;
+  --on-accent: #fff;
 }
 * { box-sizing: border-box; }
 html { color-scheme: light; }
@@ -51,10 +58,16 @@ body.dark {
   --shadow: none;
   --muted-strong: #a7a198;
   --warn-text: #fca5a5;
+  --field-line: #7a766d;
+  --on-accent: #111;
   color-scheme: dark;
 }
-button, input { font: inherit; }
+button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
+/* Every control shows where keyboard focus is. Text fields also take the accent border (see their :focus rules). */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline-offset: 1px; }
+::placeholder { color: var(--muted-strong); opacity: 1; }
 a { color: inherit; }
 
 .wrap {
@@ -119,24 +132,34 @@ h1 {
 input[type="text"] {
   width: 100%;
   min-width: 0;
-  padding: 10px 11px;
+  height: var(--control-h);
+  padding: 0 11px;
   color: var(--ink);
   background: var(--panel);
-  border: 1px solid var(--line);
+  border: 1px solid var(--field-line);
   border-radius: 7px;
-  outline: none;
+  font-size: var(--control-fs);
 }
 input[type="text"]:focus { border-color: var(--accent); }
 input[type="range"] { width: 100%; accent-color: var(--accent); }
 .btn {
-  padding: 10px 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--control-h);
+  padding: 0 12px;
   color: var(--ink);
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 7px;
+  font-size: var(--control-fs);
   white-space: nowrap;
 }
 .btn:hover { border-color: var(--accent); }
+/* The one primary action of a panel: the action the panel exists for. */
+.btn.primary { color: var(--on-accent); background: var(--accent); border-color: var(--accent); font-weight: 650; }
+.btn.primary:hover { background: color-mix(in srgb, var(--accent) 86%, var(--ink)); border-color: color-mix(in srgb, var(--accent) 86%, var(--ink)); }
+.btn.active { border-color: var(--accent); }
 .status {
   margin-top: 5px;
   color: var(--muted);
@@ -149,7 +172,9 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
   padding: 18px 0 8px;
 }
 .filter {
-  padding: 7px 10px;
+  --control-h: var(--control-h-sm);
+  height: var(--control-h);
+  padding: 0 10px;
   color: var(--muted);
   background: transparent;
   border: 1px solid var(--line);
@@ -207,19 +232,21 @@ body.dark .filter.active { color: #111; background: #f1eee6; border-color: #f1ee
 }
 .tag {
   padding: 4px 6px;
-  color: var(--muted);
+  color: var(--muted-strong);
   background: var(--chip);
   border-color: transparent;
 }
 .styles {
   display: flex;
+  align-items: flex-start;
   justify-content: flex-end;
   gap: 5px;
   flex-wrap: wrap;
   max-width: 260px;
 }
 .style-chip {
-  padding: 5px 7px;
+  height: var(--control-h-sm);
+  padding: 0 9px;
   color: var(--muted);
   background: transparent;
 }
@@ -321,7 +348,7 @@ footer {
 
 
 /* ================================================================
-   Font Kit Studio v0.1.1 — Composer
+   Composer (added in v0.1.1)
    ================================================================ */
 .mode-nav {
   position: sticky;
@@ -387,13 +414,19 @@ footer {
 .inspector textarea {
   width: 100%;
   min-width: 0;
-  padding: 9px 10px;
+  padding: 0 10px;
   color: var(--ink);
   background: var(--bg);
-  border: 1px solid var(--line);
+  border: 1px solid var(--field-line);
   border-radius: 7px;
-  outline: none;
+  font-size: var(--control-fs);
 }
+.c-field input,
+.c-field select,
+.inspector input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.inspector select { height: var(--control-h); }
+.inspector textarea { padding: 8px 10px; }
+.inspector input[type="file"] { padding: 4px 10px; }
 .c-field input:focus,
 .c-field select:focus,
 .inspector input:focus,
@@ -410,7 +443,7 @@ footer {
 
 .composer-shell {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 330px;
+  grid-template-columns: minmax(0, 1fr) 300px;
   gap: 14px;
   align-items: start;
 }
@@ -495,8 +528,8 @@ footer {
 .flow-slot:hover > .slot-movers,
 .flow-slot.selected > .slot-movers { opacity: 1; }
 .slot-mini-btn {
-  width: 25px;
-  height: 25px;
+  width: var(--control-h-sm);
+  height: var(--control-h-sm);
   padding: 0;
   display: grid;
   place-items: center;
@@ -513,9 +546,8 @@ footer {
 .asset-placeholder {
   width: 100%;
   padding: 28px;
-  border: 1px dashed currentColor;
+  border: 1px dashed color-mix(in srgb, currentColor 55%, transparent);
   border-radius: 7px;
-  opacity: .55;
   text-align: center;
   font: 600 12px/1.35 system-ui, sans-serif;
 }
@@ -547,11 +579,14 @@ footer {
 }
 .row-child-jump {
   display: grid;
-  grid-template-columns: 1fr auto;
+  /* The name is the human identifier, so it keeps its width and the id gives way first. */
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
   gap: 8px;
   align-items: center;
   width: 100%;
-  padding: 8px 9px;
+  height: var(--control-h);
+  padding: 0 9px;
+  font-size: var(--control-fs);
   border: 1px solid var(--line);
   border-radius: 6px;
   color: var(--ink);
@@ -560,11 +595,16 @@ footer {
   cursor: pointer;
 }
 .row-child-jump:hover { border-color: var(--accent); }
-.row-child-jump small { color: var(--muted); }
+.row-child-jump span, .row-child-jump small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row-child-jump small { color: var(--muted-strong); font-size: 11px; text-align: right; }
+/* The list scrolls, which would clip a ring drawn outside the button: draw it inside. */
+.row-child-jump:focus-visible { outline-offset: -2px; }
 
 .inspector {
   position: sticky;
   top: 65px;
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
   padding: 14px;
   background: var(--panel);
   border: 1px solid var(--line);
@@ -590,7 +630,9 @@ footer {
 .value-line output { color: var(--muted); font: 600 10px/1 system-ui, sans-serif; }
 .segmented { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; }
 .segmented button {
-  min-height: 34px;
+  height: var(--control-h);
+  padding: 0 10px;
+  font-size: var(--control-fs);
   border: 1px solid var(--line);
   border-radius: 6px;
   color: var(--muted);
@@ -598,6 +640,7 @@ footer {
   cursor: pointer;
 }
 .segmented button.active { color: var(--ink); border-color: var(--accent); }
+.segmented button:disabled { opacity: .5; cursor: not-allowed; }
 .color-grid { display: grid; grid-template-columns: 1fr .75fr; gap: 7px; }
 .swatch-row { display: grid; grid-template-columns: 32px 1fr; gap: 7px; align-items: center; }
 .swatch {
@@ -633,12 +676,15 @@ footer {
 .dialog-actions { display:flex; justify-content:flex-end; gap:7px; margin-top:10px; }
 
 @media (max-width: 1100px) {
-  .composer-shell { grid-template-columns: 1fr; }
-  .inspector { position: static; }
   .composer-toolbar { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .c-field.span-1 { grid-column: span 1; }
   .c-field.span-2 { grid-column: span 2; }
   .c-field.span-3, .c-field.span-4, .c-field.span-6 { grid-column: span 3; }
+}
+/* The inspector stays a 300px column beside the preview down to 900px; below that it stacks under it. */
+@media (max-width: 900px) {
+  .composer-shell { grid-template-columns: 1fr; }
+  .inspector { position: static; max-height: none; overflow-y: visible; }
 }
 @media (max-width: 680px) {
   .composer-toolbar { grid-template-columns: 1fr 1fr; }
@@ -699,8 +745,48 @@ footer {
 }
 
 /* ================================================================
-   v0.2.0 — Live preview: bridge status, overlay, live inspector, code panel
+   Live preview: bridge status, overlay, live inspector, code panel (added in v0.2.0)
    ================================================================ */
+/* Compact controls: panels that sit in a row of small actions take the 28px step of the scale. Every button, field
+   and select below them follows --control-h, so there are two heights and no others. */
+.bridge-bar, .live-banner-actions, .live-code-actions, .live-code-tabs, .live-move-buttons, .live-move-container,
+.live-move-strategy, .live-move-guard, .bridge-warning, .filters, .popout-actions {
+  --control-h: var(--control-h-sm);
+  --control-fs: 12px;
+}
+/* The bridge bar: one bordered panel with its own row of controls that wraps. */
+.composer-toolbar > .bridge-bar {
+  grid-column: 1 / -1;
+  min-width: 0;
+  max-width: 100%;
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line));
+  border-radius: 8px;
+}
+.bridge-bar-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; min-width: 0; max-width: 100%; }
+.bridge-bar-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.bridge-bar-label { color: var(--accent); font-size: 11px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.bridge-bar-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; flex: 1 1 240px; min-width: 0; max-width: 100%; }
+/* The address box keeps room for an address (about 28 characters): when the badge and the buttons leave less on the
+   first row, the other controls wrap to the next row instead of the box shrinking. */
+.bridge-bar .bridge-url { flex: 1 1 240px; min-width: 240px; max-width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.bridge-bar .segmented { display: inline-flex; flex-shrink: 0; }
+.bridge-bar .device-bar { display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; }
+
+/* The Live App view: fields that only change the composition step aside and the header shrinks, so the page under
+   edit starts in the top half of a 900px window. Specimen and the Library keep everything. */
+.composer-view.is-live-view .composition-only { display: none; }
+body:has(#composerView.is-live-view:not([hidden])) header { padding: 8px 0 7px; }
+body:has(#composerView.is-live-view:not([hidden])) .eyebrow { margin: 0; }
+body:has(#composerView.is-live-view:not([hidden])) h1 { font-size: 18px; letter-spacing: -.01em; line-height: 1.2; }
+body:has(#composerView.is-live-view:not([hidden])) .deck { display: none; }
+.composer-view.is-live-view { padding-top: 10px; }
+.composer-view.is-live-view .composer-toolbar { margin-bottom: 10px; }
+.composer-view.is-live-view .composer-actions { grid-column: 1 / -1; }
+.composer-view.is-live-view .canvas-stage { padding: 14px; }
+
 .bridge-badge {
   padding: 2px 7px;
   border-radius: 999px;
@@ -719,7 +805,6 @@ footer {
   overflow-wrap: anywhere;
 }
 .bridge-hint code, .live-target-id code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--ink); }
-.bridge-mode button { padding: 6px 8px; font-size: 11px; min-height: 0; }
 .live-banner {
   display: flex;
   flex-wrap: wrap;
@@ -736,7 +821,6 @@ footer {
 }
 .live-banner > div { min-width: 0; }
 .live-banner-actions { display: flex; flex-wrap: wrap; gap: 6px; }
-.live-banner-actions .btn { padding: 6px 10px; font-size: 11px; }
 .live-overlay-layer { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 2; }
 .live-overlay {
   position: absolute;
@@ -793,7 +877,7 @@ body.dark .live-overlay-label { color: #111; }
   font: 700 10px/1.5 system-ui, sans-serif;
   text-align: center;
 }
-.live-code-tabs button { min-height: 30px; padding: 4px 12px; font-size: 11px; }
+.live-code-tabs button { padding: 0 12px; }
 .live-code-output {
   max-height: 340px;
   min-height: 90px;
@@ -809,16 +893,19 @@ body.dark .live-overlay-label { color: #111; }
   tab-size: 2;
 }
 .live-code-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 9px; }
-.live-code-actions .btn { padding: 7px 10px; font-size: 11px; }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 .btn:disabled:hover { border-color: var(--line); }
 .live-autosync { display: inline-flex; gap: 5px; align-items: center; color: var(--muted-strong); font-size: 11px; }
 .live-code-status { flex: 1 1 160px; min-width: 0; color: var(--muted-strong); font-size: 11px; overflow-wrap: anywhere; }
 .live-code-status[data-state="error"] { color: var(--warn-text); }
+/* The reason Sync to file is off is a sentence about that button, not part of the Auto-sync row: it takes its own line. */
+.live-code-hint { flex: 1 1 100%; }
 .live-target-id { margin: -4px 0 10px; overflow-wrap: anywhere; }
-.live-target-list { display: grid; gap: 6px; }
+.live-target-list { display: grid; align-content: start; gap: 12px; max-height: 360px; overflow-y: auto; padding-right: 2px; }
+.live-target-group { display: grid; gap: 4px; }
+.live-target-group h3 { margin: 0 0 2px; color: var(--muted-strong); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
 .live-target-list small { overflow-wrap: anywhere; }
-.inspector input[type="color"] { height: 36px; padding: 3px; cursor: pointer; }
+.inspector input[type="color"] { padding: 3px; cursor: pointer; }
 .inspector input[aria-invalid="true"] { border-color: #c2410c; }
 .live-banner[hidden], .live-code-panel[hidden], .live-overlay[hidden], .bridge-hint[hidden],
 .live-overlay-layer[hidden], .popout-placeholder[hidden], .bridge-warning[hidden], .live-warnings[hidden],
@@ -834,7 +921,6 @@ body.dark .live-overlay-label { color: #111; }
   overflow-wrap: anywhere;
 }
 .bridge-warning > span { min-width: 0; }
-.bridge-warning .btn { padding: 3px 8px; font-size: 10px; }
 .live-warnings { margin: 9px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 11px; color: var(--warn-text); }
 .live-warnings li { padding: 4px 8px; border: 1px solid color-mix(in srgb, #ef4444 40%, var(--line)); border-radius: 6px; overflow-wrap: anywhere; }
 #targetAppContainer:focus { outline: none; }
@@ -856,13 +942,12 @@ body.dark .live-overlay-label { color: #111; }
 }
 .popout-placeholder p { margin: 0; max-width: 46ch; overflow-wrap: anywhere; }
 .popout-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
-/* Arrange (Live Target inspector) */
+/* Arrange (Live App inspector) */
 .live-arrange h3 { margin: 0 0 6px; color: var(--muted-strong); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
 .live-arrange .inspector-note { margin: 0 0 6px; overflow-wrap: anywhere; }
 .live-move-buttons { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 8px; }
-.live-move-buttons .btn { min-width: 0; padding: 6px 9px; font-size: 11px; }
+.live-move-buttons .btn { min-width: 0; padding: 0 9px; }
 .live-move-strategy { margin: 4px 0 8px; }
-.live-move-strategy .segmented button { padding: 5px 9px; font-size: 11px; min-height: 0; }
 .live-sibling-list { display: grid; gap: 4px; margin: 8px 0; padding: 0; list-style: none; }
 .live-sibling {
   display: flex;
@@ -888,7 +973,6 @@ body.dark .live-overlay-label { color: #111; }
 .live-move-container { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .live-move-container label { flex: 0 0 100%; }
 .live-move-container select { flex: 1 1 120px; min-width: 0; }
-.live-move-container .btn { padding: 6px 10px; font-size: 11px; }
 .live-move-guard {
   margin: 8px 0 0;
   padding: 8px 10px;
@@ -899,7 +983,6 @@ body.dark .live-overlay-label { color: #111; }
   overflow-wrap: anywhere;
 }
 .live-move-guard p { margin: 0 0 6px; }
-.live-move-guard .btn { padding: 5px 9px; font-size: 11px; }
 @media (max-width: 680px) {
   .live-code-output { max-height: 260px; }
 }
@@ -910,7 +993,7 @@ body.dark .live-overlay-label { color: #111; }
 <body>
 <header>
   <div class="wrap">
-    <p class="eyebrow">Font Kit Studio · v0.1.1</p>
+    <p class="eyebrow">Font Kit Studio · v0.2.1</p>
     <h1>Inspect the faces. Then make them live together.</h1>
     <p class="deck">
       A local-first free-font specimen library and flow-based brand typography composer.
@@ -932,7 +1015,7 @@ body.dark .live-overlay-label { color: #111; }
     <div class="field">
       <label for="loadFreeFontsLibrary">Free fonts (Google Fonts, OFL)</label>
       <div class="input-row">
-        <button id="loadFreeFontsLibrary" class="btn" type="button">Load free fonts</button>
+        <button id="loadFreeFontsLibrary" class="btn primary" type="button">Load free fonts</button>
       </div>
       <div id="freeFontStatus" class="status">Specimens show fallback fonts until you load the free fonts.</div>
       <div id="libraryFontHint" class="status">Loading contacts Google Fonts and sends your IP address and the font names.</div>
@@ -986,41 +1069,42 @@ body.dark .live-overlay-label { color: #111; }
 <section id="composerView" class="mode-view composer-view" hidden>
   <div class="wrap">
     <section class="composer-toolbar" aria-label="Composer setup">
-      <!-- Target Application Connector (Design Bridge Protocol v1) -->
-      <div id="targetAppBridgeBar" class="c-field span-6" style="grid-column: 1 / -1; min-width: 0; max-width: 100%; box-sizing: border-box; padding: 8px 12px; background: color-mix(in srgb, var(--accent) 8%, var(--panel)); border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line)); border-radius: 8px; margin-bottom: 6px;">
-        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; min-width: 0; max-width: 100%;">
-          <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
-            <span style="font-weight: 750; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--accent);">Target Application Bridge</span>
+      <!-- Live App connector (Design Bridge Protocol v1) -->
+      <div id="targetAppBridgeBar" class="c-field bridge-bar">
+        <div class="bridge-bar-row">
+          <div class="bridge-bar-title">
+            <span class="bridge-bar-label">Live App Bridge</span>
             <span id="bridgeStatusBadge" class="bridge-badge" data-state="idle" role="status" aria-live="polite">Idle</span>
           </div>
-          <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 6px; flex: 1 1 240px; min-width: 0; max-width: 100%;">
-            <input id="targetAppUrl" type="text" value="" placeholder="Target URL e.g. http://localhost:8001/demo/" aria-label="Target application URL" spellcheck="false" style="padding: 6px 8px; font-size: 12px; font-family: monospace; min-width: 100px; flex: 1 1 100px; max-width: 100%; box-sizing: border-box;" />
-            <button id="btnConnectTarget" class="btn" type="button" disabled title="Enter your app's URL" style="padding: 6px 10px; font-size: 11px; font-weight: 600;">Connect Target</button>
-            <button id="btnRestoreOriginalText" class="btn" type="button" style="padding: 6px 8px; font-size: 11px;" title="Restore original text in live web app">↻ Restore Page Text</button>
-            <div class="segmented" style="display: inline-flex; flex-shrink: 0;">
-              <button id="viewSpecimenCanvas" class="active" type="button" style="padding: 6px 8px; font-size: 11px;">Specimen</button>
-              <button id="viewTargetApp" type="button" style="padding: 6px 8px; font-size: 11px;">Target App</button>
+          <div class="bridge-bar-controls">
+            <input id="targetAppUrl" class="bridge-url" type="text" value="" placeholder="Live App URL e.g. http://localhost:8001/demo/" aria-label="Live App URL" spellcheck="false" />
+            <button id="btnConnectTarget" class="btn primary" type="button" disabled title="Enter your app's URL">Connect Live App</button>
+            <button id="btnRestoreOriginalText" class="btn" type="button" title="Restore original text in live web app">↻ Restore Page Text</button>
+            <div class="segmented">
+              <button id="viewSpecimenCanvas" class="active" type="button">Specimen</button>
+              <button id="viewTargetApp" type="button">Live App</button>
             </div>
-            <div class="segmented bridge-mode" role="group" aria-label="Preview pointer mode" style="display: inline-flex; flex-shrink: 0;">
+            <div class="segmented bridge-mode" role="group" aria-label="Preview pointer mode">
               <button id="bridgeModeSelect" class="active" type="button" aria-pressed="true" title="Clicks in the preview select elements for editing">Select</button>
               <button id="bridgeModeInteract" type="button" aria-pressed="false" title="Use the app normally: links, buttons and forms work">Interact</button>
             </div>
-            <button id="bridgePopOut" class="btn" type="button" style="padding: 6px 8px; font-size: 11px;" title="Open the target in its own window, keeping Studio beside it">Pop out</button>
-            <div id="deviceViewportBar" style="display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;">
-              <button id="btnDeviceDesktop" class="btn" type="button" style="padding: 5px 8px; font-size: 10px;" title="Desktop (1440px)">🖥️ 1440</button>
-              <button id="btnDeviceLaptop" class="btn" type="button" style="padding: 5px 8px; font-size: 10px;" title="Laptop (1024px)">💻 1024</button>
-              <button id="btnDeviceMobile" class="btn" type="button" style="padding: 5px 8px; font-size: 10px;" title="Mobile (390px)">📱 390</button>
-              <button id="btnDeviceFluid" class="btn active" type="button" style="padding: 5px 8px; font-size: 10px;" title="Fluid (100%)">⛶ Fluid</button>
-              <button id="btnToggleFullscreen" class="btn primary" type="button" style="padding: 5px 9px; font-size: 11px; font-weight: 700;" title="Toggle Fullscreen Theater Mode">⛶ Fullscreen</button>
+            <button id="bridgePopOut" class="btn" type="button" title="Open the Live App in its own window, keeping Studio beside it">Pop out</button>
+            <div id="deviceViewportBar" class="device-bar">
+              <button id="btnDeviceDesktop" class="btn" type="button" title="Desktop (1440px)">1440</button>
+              <button id="btnDeviceLaptop" class="btn" type="button" title="Laptop (1024px)">1024</button>
+              <button id="btnDeviceMobile" class="btn" type="button" title="Mobile (390px)">390</button>
+              <button id="btnDeviceFluid" class="btn active" type="button" title="Fluid (100%)">Fluid</button>
+              <button id="btnToggleFullscreen" class="btn" type="button" title="Toggle Fullscreen Theater Mode">⛶ Fullscreen</button>
             </div>
           </div>
         </div>
         <p id="bridgeWarning" class="bridge-warning" role="status" hidden><span id="bridgeWarningText"></span> <button id="bridgeWarningDismiss" class="btn" type="button">Dismiss</button></p>
+        <p id="targetUrlProblem" class="bridge-hint" role="alert" hidden></p>
         <p id="targetUrlHint" class="bridge-hint">Enter your app's URL</p>
-        <p id="bridgeHint" class="bridge-hint" hidden>Either nothing is running there, or the page does not load fontkit-bridge.js. Add <code>&lt;script src="fontkit-bridge.js"&gt;&lt;/script&gt;</code> after the page's own scripts, reload it, then press Connect Target. <span id="bridgeHintServe" hidden>Start the dev server: <code>python scripts/serve.py</code></span></p>
+        <p id="bridgeHint" class="bridge-hint" hidden>Either nothing is running there, or the page does not load fontkit-bridge.js. Add <code>&lt;script src="fontkit-bridge.js"&gt;&lt;/script&gt;</code> after the page's own scripts, reload it, then press Connect Live App. <span id="bridgeHintServe" hidden>Start the dev server: <code>python scripts/serve.py</code></span></p>
       </div>
 
-      <div class="c-field span-2">
+      <div class="c-field span-3">
         <label for="kitPreset">Kit preset</label>
         <select id="kitPreset">
           <option value="google" selected>Free Google Fonts (OFL)</option>
@@ -1028,8 +1112,8 @@ body.dark .live-overlay-label { color: #111; }
           <option value="custom">Custom / manual</option>
         </select>
       </div>
-      <div class="c-field span-4">
-        <label for="composerKitIds">Adobe kit ID(s), optional: bring your own</label>
+      <div class="c-field span-3">
+        <label for="composerKitIds">Adobe kit ID(s), optional</label>
         <div class="input-row">
           <input id="composerKitIds" type="text" value="" placeholder="abc123, def456" spellcheck="false">
           <button id="loadComposerKits" class="btn" type="button">Load</button>
@@ -1043,11 +1127,11 @@ body.dark .live-overlay-label { color: #111; }
           <option value="asteria">Asteria — Sculptural</option>
         </select>
       </div>
-      <div class="c-field span-1">
+      <div class="c-field composition-only span-1">
         <label for="slotCount">Slots</label>
         <input id="slotCount" type="number" min="1" max="8" value="5" inputmode="numeric">
       </div>
-      <div class="c-field span-2">
+      <div class="c-field composition-only span-2">
         <label for="canvasWidth">Canvas width</label>
         <select id="canvasWidth">
           <option value="720">720px</option>
@@ -1057,7 +1141,7 @@ body.dark .live-overlay-label { color: #111; }
         </select>
       </div>
 
-      <div class="c-field span-2">
+      <div class="c-field composition-only span-2">
         <label for="canvasBgSource">Canvas colour source</label>
         <select id="canvasBgSource">
           <option value="custom">Custom hex</option>
@@ -1065,19 +1149,19 @@ body.dark .live-overlay-label { color: #111; }
           <option value="saved">Saved palette</option>
         </select>
       </div>
-      <div class="c-field span-2">
+      <div class="c-field composition-only span-2">
         <label for="canvasBgHex">Custom background</label>
         <input id="canvasBgHex" type="text" value="#030409" spellcheck="false">
       </div>
-      <div class="c-field span-2">
+      <div class="c-field composition-only span-2">
         <label for="canvasBgFamily">Tailwind family</label>
         <select id="canvasBgFamily"></select>
       </div>
-      <div class="c-field span-1">
+      <div class="c-field composition-only span-1">
         <label for="canvasBgShade">Shade</label>
         <select id="canvasBgShade"></select>
       </div>
-      <div class="c-field span-2">
+      <div class="c-field composition-only span-2">
         <label for="canvasSavedColor">Saved colour</label>
         <select id="canvasSavedColor"></select>
       </div>
@@ -1087,9 +1171,10 @@ body.dark .live-overlay-label { color: #111; }
         <button id="importJson" class="btn" type="button">Import JSON</button>
         <button id="exportCss" class="btn" type="button">Export CSS</button>
         <button id="loadFreeFonts" class="btn" type="button" title="Load every free Google Fonts family used by the library">Load free fonts</button>
-        <button id="btnSyncToApp" class="btn primary" type="button" style="font-weight: 600;">⚡ Sync to Live App</button>
+        <button id="btnSyncToApp" class="btn primary" type="button">Sync to Live App</button>
         <input id="importJsonFile" type="file" accept="application/json,.json" hidden>
       </div>
+      <div id="syncToAppHint" class="composer-status" data-hint-for="btnSyncToApp" hidden></div>
       <div id="composerStatus" class="composer-status">Editorial — Image + Body Row preset ready. Specimens show fallback fonts until you load the free fonts.</div>
       <div id="composerFontHint" class="composer-status">Loading free fonts contacts Google Fonts and sends your IP address and the font names.</div>
     </section>
@@ -1099,17 +1184,17 @@ body.dark .live-overlay-label { color: #111; }
       <div class="canvas-stage">
         <section id="composerCanvas" class="composer-canvas" aria-label="Brand composition preview"></section>
         <div id="liveReconnectBanner" class="live-banner" role="alert" hidden>
-          <div><strong id="liveReconnectHeading">Target reconnected.</strong> <span id="liveReconnectText">Studio's saved overrides differ from the live target.</span></div>
+          <div><strong id="liveReconnectHeading">Live App reconnected.</strong> <span id="liveReconnectText">Studio's saved overrides differ from the Live App.</span></div>
           <div class="live-banner-actions">
             <button id="liveReapply" class="btn" type="button">Reapply Studio overrides</button>
-            <button id="liveAcceptTarget" class="btn" type="button">Accept target state</button>
+            <button id="liveAcceptTarget" class="btn" type="button">Accept Live App state</button>
           </div>
         </div>
         <div id="previewScroller" class="preview-scroller">
         <section id="targetAppContainer" tabindex="-1" style="display: none; position: relative; width: 100%; height: 720px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: #fff;">
-          <iframe id="targetAppFrame" title="Target application preview" style="width: 100%; height: 100%; border: none;"></iframe>
+          <iframe id="targetAppFrame" title="Live App preview" style="width: 100%; height: 100%; border: none;"></iframe>
           <div id="bridgePopoutPlaceholder" class="popout-placeholder" hidden>
-            <p id="bridgePopoutText">The target is open in its own window.</p>
+            <p id="bridgePopoutText">The Live App is open in its own window.</p>
             <div class="popout-actions">
               <button id="bridgeFocusPopout" class="btn" type="button">Focus pop-out</button>
               <button id="bridgeDock" class="btn" type="button">Dock back</button>
@@ -1136,9 +1221,10 @@ body.dark .live-overlay-label { color: #111; }
             <button id="liveCodeDownload" class="btn" type="button">Download</button>
             <button id="liveCodeSync" class="btn" type="button" disabled title="Checking for the Font Kit dev server…">Sync to file</button>
             <label class="live-autosync"><input id="liveCodeAutoSync" type="checkbox" disabled> Auto-sync</label>
+            <span id="liveCodeSyncHint" class="live-code-status live-code-hint" data-hint-for="liveCodeSync" hidden></span>
             <span id="liveCodeStatus" class="live-code-status" role="status" aria-live="polite"></span>
           </div>
-          <ul id="liveCodeWarnings" class="live-warnings" aria-label="Runtime warnings from the target" hidden></ul>
+          <ul id="liveCodeWarnings" class="live-warnings" aria-label="Runtime warnings from the Live App" hidden></ul>
         </section>
       </div>
       <aside id="slotInspector" class="inspector" aria-label="Selected slot inspector"></aside>
@@ -1378,7 +1464,8 @@ function renderCard(font, index) {
   card.dataset.tags = font.tags.join(" ");
   card._font = font;
 
-  const styleButtons = font.styles.map((s, i) =>
+  // A single cut has nothing to choose between: no chip.
+  const styleButtons = font.styles.length < 2 ? "" : font.styles.map((s, i) =>
     `<button type="button" class="style-chip ${i === 0 ? "active" : ""}"
       data-style-index="${i}">${s.label}</button>`
   ).join("");
@@ -1478,7 +1565,7 @@ function renderCard(font, index) {
 
 /* ---- free font loading: silent until the user asks, then one stylesheet <link> per family, added once ----
    Nothing is requested from Google Fonts until the person presses Load free fonts, picks a library
-   family in the Live Target inspector or switches the Kit preset to Free Google Fonts. That consent is remembered in this
+   family in the Live App inspector or switches the Kit preset to Free Google Fonts. That consent is remembered in this
    browser (guarded storage) so later visits load cards as they scroll into view. Until then specimens
    render in their fallback stacks, and the families they wanted are queued, not requested. */
 const FREE_FONTS_KEY = "fontkit-free-fonts";
@@ -1506,8 +1593,10 @@ function ensureFontStylesheet(font, { retry = false } = {}) {
   link.href = href;
   link.dataset.studioFont = font.family;
   link.dataset.state = "loading";
-  link.addEventListener("load", () => { link.dataset.state = "loaded"; });
-  link.addEventListener("error", () => { link.dataset.state = "error"; });
+  // The composer's controls follow the loaded state (a Load button has nothing to do once every family is in).
+  const stateChanged = () => document.dispatchEvent(new CustomEvent("fontkit:font-state"));
+  link.addEventListener("load", () => { link.dataset.state = "loaded"; stateChanged(); });
+  link.addEventListener("error", () => { link.dataset.state = "error"; stateChanged(); });
   fontLinks.set(font.family, link);
   try { document.head.appendChild(link); } catch (_) { link.dataset.state = "error"; }
   return link;
@@ -1526,12 +1615,21 @@ function updateFontHints() {
   Object.entries(hints).forEach(([id, text]) => { const el = document.getElementById(id); if (el) el.textContent = text; });
 }
 
+// The Library's status line says which fonts are loaded, whichever view asked for them (Library button, Composer button,
+// the Kit preset or a family picked in the Live App inspector). It never claims fallbacks after the ask.
+const FREE_FONTS_ON_STATUS = "Free fonts are on: families load as their cards scroll into view.";
+function setFreeFontStatus(text) {
+  const el = document.getElementById("freeFontStatus");
+  if (el) el.textContent = text;
+}
+
 // The user asked for free fonts: remember it, update the hints and request whatever was waiting.
 function allowFreeFonts() {
   const asked = !freeFontsAllowed;
   if (asked) {
     freeFontsAllowed = true;
     writeStore(FREE_FONTS_KEY, "yes");
+    setFreeFontStatus(FREE_FONTS_ON_STATUS);
   }
   updateFontHints();
   // The live panels word their notes by consent state (the CSS tab gains the saved fonts' imports).
@@ -1543,9 +1641,10 @@ function allowFreeFonts() {
   document.querySelectorAll("[data-fallback-note], [data-load-note]").forEach(el => el.remove());
 }
 updateFontHints();
-if (freeFontsAllowed) document.getElementById("freeFontStatus").textContent = "Families load as their cards scroll into view.";
+if (freeFontsAllowed) setFreeFontStatus(FREE_FONTS_ON_STATUS);
 
-function loadAllFreeFonts(report) {
+function loadAllFreeFonts(reportTo) {
+  const report = text => { setFreeFontStatus(text); reportTo(text); };
   allowFreeFonts();
   const total = fonts.length;
   const links = fonts.map(font => ensureFontStylesheet(font, { retry:true }));
@@ -1579,7 +1678,7 @@ if (typeof IntersectionObserver === "function") {
   fonts.forEach(font => ensureFontStylesheet(font));
 }
 document.getElementById("loadFreeFontsLibrary")?.addEventListener("click", () => {
-  loadAllFreeFonts(text => { document.getElementById("freeFontStatus").textContent = text; });
+  loadAllFreeFonts(() => {});   // the status line is set by loadAllFreeFonts itself
 });
 
 const tagSet = ["all", ...new Set(fonts.flatMap(f => f.tags))];
@@ -1671,7 +1770,7 @@ const remembered = readStore("typekit-specimen-kit");
 if (remembered) kitId.value = remembered;
 
 /* ================================================================
-   Font Kit Studio v0.1.1 — Flow Composer
+   Flow Composer (added in v0.1.1)
    ================================================================ */
 (function initComposer() {
   const TAILWIND_COLORS = {
@@ -2168,7 +2267,11 @@ if (remembered) kitId.value = remembered;
     selectedId: null, selectedRect: null, hoverId: null, hoverRect: null, hoverName: "",
     mode: "select", viewActive: false, codeTab: "css",
     queue: [], inFlight: null, requestSeq: 0, requestTimer: null, compositionLinked: false,
-    syncAvailable: false, syncPath: "", syncBusy: false, syncQueued: false, syncTimer: null
+    syncAvailable: false, syncPath: "", syncBusy: false, syncQueued: false, syncTimer: null,
+    syncTitle: "Checking for the Font Kit dev server…",
+    // Studio never reads the overrides file, so "empty" cannot tell a file that never had anything from one the user has just
+    // emptied. Once Studio has held saved state in this session, writing the empty state is the user's own result.
+    heldSavedState: false
   };
 
   const q = id => document.getElementById(id);
@@ -2247,6 +2350,10 @@ if (remembered) kitId.value = remembered;
     else if (kitPreset.value === "adobe") {
       composerStatus.textContent = "Adobe Fonts is bring-your-own: paste your own kit ID(s) and press Load. Nothing is prefilled.";
       composerKitIds.focus();
+    } else if (kitPreset.value === "custom") {
+      // "Custom / manual" is the kit field itself: the ID(s) are typed by hand, never prefilled.
+      composerStatus.textContent = "Custom kit: type your own kit ID(s) in the field and press Load. Nothing is prefilled.";
+      composerKitIds.focus();
     }
   });
   q("loadFreeFonts")?.addEventListener("click", () => loadAllFreeFonts(reportComposerFonts));
@@ -2316,8 +2423,20 @@ if (remembered) kitId.value = remembered;
     return slot;
   }
 
+  // What the composition looked like right after the last preset was applied. Slot ids are fresh on every
+  // hydrate, so they stay out of the comparison; anything else that differs is an edit the person made.
+  const presetBaseline = { key: "rowdemo", signature: "" };
+  function compositionSignature() {
+    const withoutIds = value => Array.isArray(value) ? value.map(withoutIds)
+      : value && typeof value === "object"
+        ? Object.fromEntries(Object.entries(value).filter(([name]) => name !== "id").map(([name, item]) => [name, withoutIds(item)]))
+        : value;
+    return JSON.stringify({ width: state.canvasWidth, background: state.background, slots: withoutIds(state.slots) });
+  }
+
   function applyCompositionPreset(key) {
-    const preset = COMPOSITION_PRESETS[key] || COMPOSITION_PRESETS.rowdemo;
+    const resolved = COMPOSITION_PRESETS[key] ? key : "rowdemo";
+    const preset = COMPOSITION_PRESETS[resolved];
     state.canvasWidth = preset.width;
     state.background = clone(preset.background);
     state.slots = preset.slots.map(slot => hydrateSlot(slot, 0));
@@ -2325,6 +2444,28 @@ if (remembered) kitId.value = remembered;
     syncCompositionControls();
     renderComposer();
     composerStatus.textContent = `${preset.name} applied. Every slot is still editable.`;
+    compositionPreset.value = resolved;
+    presetBaseline.key = resolved;
+    presetBaseline.signature = compositionSignature();
+  }
+
+  // Choosing a preset applies it. Replacing edits made since the last preset needs an explicit yes (Rule 6);
+  // No keeps them and puts the select back on the preset they belong to.
+  function requestCompositionPreset(key) {
+    const edited = compositionSignature() !== presetBaseline.signature;
+    if (!edited && key === presetBaseline.key) {
+      // Apply on an untouched preset: applying it again would change nothing, so say that instead of doing it silently.
+      composerStatus.textContent = `${COMPOSITION_PRESETS[key].name} is already applied; there are no edits to reset.`;
+      return false;
+    }
+    if (edited
+        && !window.confirm("Replace your edits? Applying this preset replaces the changes you made to the slots, canvas width and background since the last preset.")) {
+      compositionPreset.value = presetBaseline.key;
+      composerStatus.textContent = "Kept your edits. The preset was not applied.";
+      return false;
+    }
+    applyCompositionPreset(key);
+    return true;
   }
 
   function syncCompositionControls() {
@@ -2396,6 +2537,7 @@ if (remembered) kitId.value = remembered;
       saved: state.background.saved
     });
     composerCanvas.style.width = state.canvasWidth === "100%" ? "100%" : `min(100%, ${state.canvasWidth}px)`;
+    refreshControlStates();
   }
 
   function setSlotCount(nextCount) {
@@ -2675,7 +2817,7 @@ if (remembered) kitId.value = remembered;
   }
 
   function renderInspector() {
-    if (live.viewActive) { renderLiveInspector(); return; }
+    if (live.viewActive) { renderLiveInspector(); refreshControlStates(); return; }
     const loc = selectedLocation();
     const slot = loc?.slot;
     if (!slot) {
@@ -2699,7 +2841,7 @@ if (remembered) kitId.value = remembered;
         <div class="inspector-field"><label for="rowAlignItems">Align items</label><select id="rowAlignItems" data-bind="rowAlignItems">${optionsHtml(ROW_ALIGNMENTS, slot.alignItems)}</select></div>
         <div class="inspector-field"><div class="value-line"><label for="rowCollapseAt">Collapse at</label><output>${slot.collapseAt}px</output></div><input id="rowCollapseAt" data-bind="rowCollapseAt" type="number" min="240" max="1600" step="10" value="${slot.collapseAt}"></div>
         <div class="inspector-field full"><span class="inspector-label">Column weights</span><div class="inspector-grid">${slot.children.map((child, childIndex) => `<div class="inspector-field"><label for="rowRatio${childIndex}">Child ${childIndex + 1}</label><input id="rowRatio${childIndex}" data-row-ratio="${childIndex}" type="number" min="0.25" max="12" step="0.25" value="${slot.ratios[childIndex] ?? 1}"></div>`).join("")}</div></div>
-        <div class="inspector-field full"><span class="inspector-label">Children</span><div class="row-child-list">${slot.children.map((child, childIndex) => `<button type="button" class="row-child-jump" data-select-child="${escapeAttr(child.id)}"><span>${childIndex + 1}. ${escapeAttr(child.type === "text" ? child.role : child.type[0].toUpperCase()+child.type.slice(1))}</span><small>${escapeAttr(child.type)}</small></button>`).join("")}</div><p class="inspector-note">Children are ordinary leaf slots. Select one to edit it. Rows cannot contain rows in v0.1.1.</p></div>`;
+        <div class="inspector-field full"><span class="inspector-label">Children</span><div class="row-child-list">${slot.children.map((child, childIndex) => `<button type="button" class="row-child-jump" data-select-child="${escapeAttr(child.id)}"><span>${childIndex + 1}. ${escapeAttr(child.type === "text" ? child.role : child.type[0].toUpperCase()+child.type.slice(1))}</span><small>${escapeAttr(child.type)}</small></button>`).join("")}</div><p class="inspector-note">Children are ordinary leaf slots. Select one to edit it. Rows cannot contain rows.</p></div>`;
     } else if (slot.type === "text") {
       const font = byFamily(slot.family);
       const styleLabels = font.styles.map((s, i) => `${i}|${s.label}`);
@@ -2726,7 +2868,7 @@ if (remembered) kitId.value = remembered;
       }
     } else if (slot.type === "image") {
       body += `
-        <div class="inspector-field full"><label>PNG / SVG file</label><input id="assetFile" type="file" accept="image/png,image/svg+xml"><p class="inspector-note">Session-local in v0.1.1. SVG is previewed as an image; it is not injected as editable markup.</p></div>
+        <div class="inspector-field full"><label>PNG / SVG file</label><input id="assetFile" type="file" accept="image/png,image/svg+xml"><p class="inspector-note">Session-local. SVG is previewed as an image; it is not injected as editable markup.</p></div>
         <div class="inspector-field full"><label>Alignment</label><div class="segmented" data-align>${["left","center","right"].map(a => `<button type="button" data-value="${a}" class="${slot.align === a ? "active" : ""}">${a[0].toUpperCase()}</button>`).join("")}</div></div>
         <div class="inspector-field full"><div class="value-line"><label>Width</label><output>${slot.imageWidth}px</output></div><input type="range" data-bind="imageWidth" min="16" max="800" step="1" value="${slot.imageWidth}"></div>
         <div class="inspector-field full"><div class="value-line"><label>Opacity</label><output>${Math.round(slot.opacity*100)}%</output></div><input type="range" data-bind="opacity" min="0.05" max="1" step="0.01" value="${slot.opacity}"></div>
@@ -2885,7 +3027,7 @@ if (remembered) kitId.value = remembered;
         const allowed = ["image/png", "image/svg+xml"];
         const extOkay = /\.(png|svg)$/i.test(file.name);
         if (!allowed.includes(file.type) || !extOkay) {
-          composerStatus.textContent = "Asset rejected: v0.1.1 accepts PNG and SVG only.";
+          composerStatus.textContent = "Asset rejected: only PNG and SVG are accepted.";
           assetFile.value = "";
           return;
         }
@@ -2919,12 +3061,15 @@ if (remembered) kitId.value = remembered;
         btn.addEventListener("click", () => { const current = selectedSlot(); current.align = btn.dataset.value; renderComposer(); });
       });
     }
+    refreshControlStates();
   }
 
   slotCount.addEventListener("change", () => setSlotCount(slotCount.value));
   canvasWidth.addEventListener("change", () => { state.canvasWidth = canvasWidth.value; updateCanvasBackground(); });
-  compositionPreset.addEventListener("change", () => {});
-  applyPreset.addEventListener("click", () => applyCompositionPreset(compositionPreset.value));
+  compositionPreset.addEventListener("change", () => requestCompositionPreset(compositionPreset.value));
+  // Apply stays for the one thing the select cannot do: choosing the preset that is already selected fires no change,
+  // so this puts that preset back (after the same question when edits would be lost).
+  applyPreset.addEventListener("click", () => requestCompositionPreset(compositionPreset.value));
 
   familyOptions(canvasBgFamily, state.background.family);
   updateShadeOptions(canvasBgFamily, canvasBgShade, state.background.shade);
@@ -3041,11 +3186,35 @@ if (remembered) kitId.value = remembered;
     live.reapplyError = "";
   }
 
-  // What Studio saved before an import made while linked: the page may still hold it after the import dropped it
-  // (reconcileImportedLinked). Kept across imports until the user resolves the difference or syncs.
-  function rememberSavedBeforeImport() {
+  // An import that carries a `live` field replaces Studio's overrides (D035), so an edit made before it must not
+  // become saved state after it. Every request already sent (in flight or timed out) is marked, whatever its kind,
+  // so its reply only redoes the comparison with the page (recordCanonical, handleReply, handleLateReply). An edit
+  // still queued was never sent and would restyle the page with what the import replaced, so it is dropped; the
+  // count goes in the import status (never silent). Queued composition edits are already gone with the link and
+  // are not counted: the composition is what the import replaced. Returns the count and the sent user edits, whose
+  // values the page may still come to hold (rememberSavedBeforeImport). An import without `live` replaces no
+  // overrides: ordinary edits keep their normal path, and only the composition and Reapply ops end with the link.
+  function supersedeLiveOpsForImport(replacesOverrides) {
+    if (!replacesOverrides) return { dropped:0, sent:[] };
+    const sent = [live.inFlight, ...live.timedOut.values()].filter(Boolean);
+    sent.forEach(op => { op.importSuperseded = true; });
+    // States intent: endRunningReapply and endCompositionLink have already removed Reapply and composition ops.
+    const dropped = live.queue.filter(op => !op.reapply && op.kind !== "composition").length;
+    live.queue = [];
+    return { dropped, sent:sent.filter(op => op.kind === "update" && !op.reapply) };
+  }
+
+  // What Studio saved before an import made while linked, and the values of the user edits sent before it and not
+  // yet acknowledged: the page may hold them after the import dropped them (reconcileImportedLinked). A patch
+  // value of null releases a property, so it is not a value the page can hold. Kept across imports until the user
+  // resolves the difference or syncs.
+  function rememberSavedBeforeImport(sentEdits = []) {
     const kept = live.importDropped || { overrides:{}, structure:[] };
     Object.entries(effectiveOverrides(live.overrides)).forEach(([id, patch]) => setOwn(kept.overrides, id, { ...(kept.overrides[id] || {}), ...patch }));
+    sentEdits.forEach(op => {
+      const values = Object.fromEntries(Object.entries(op.patch || {}).filter(([key, value]) => LIVE_KEYS.includes(key) && value !== null));
+      if (op.targetId && Object.keys(values).length) setOwn(kept.overrides, op.targetId, { ...(kept.overrides[op.targetId] || {}), ...values });
+    });
     live.structure.forEach(entry => {
       if (!kept.structure.some(item => item.selector === entry.selector && sameIds(item.ids, entry.ids))) kept.structure.push({ selector:entry.selector, ids:[...entry.ids] });
     });
@@ -3077,7 +3246,9 @@ if (remembered) kitId.value = remembered;
         // streams it to the page and no later acknowledgement from the page replaces it.
         const wasLinked = live.compositionLinked;
         endRunningReapply();
-        if (wasLinked) { endCompositionLink(); rememberSavedBeforeImport(); }
+        if (wasLinked) endCompositionLink();
+        const { dropped:droppedEdits, sent:sentEdits } = supersedeLiveOpsForImport(liveCandidate !== null);
+        if (wasLinked) rememberSavedBeforeImport(sentEdits);
         live.importLinked = wasLinked;
         // Only publish a fully hydrated candidate; failed validation leaves live state intact.
         Object.assign(state, { canvasWidth:width === "100%" ? width : String(rowNumber(width, 960, 240, 2400)),
@@ -3099,9 +3270,10 @@ if (remembered) kitId.value = remembered;
         populateSavedColors(canvasSavedColor, state.background.saved);
         syncCompositionControls();
         renderComposer();
-        composerStatus.textContent = wasLinked
+        composerStatus.textContent = (wasLinked
           ? "Imported; the link to the page is off. Press Sync to Live App to send this composition."
-          : "Composition imported. Image assets must be reselected in v0.1.1.";
+          : "Composition imported. Image assets must be reselected.")
+          + (droppedEdits ? ` ${droppedEdits} queued edit${droppedEdits === 1 ? " that had" : "s that had"} not reached the page ${droppedEdits === 1 ? "was" : "were"} dropped.` : "");
       } catch (err) {
         composerStatus.textContent = `Import failed: ${err.message}`;
       }
@@ -3128,7 +3300,7 @@ if (remembered) kitId.value = remembered;
 
   
   // ==========================================
-  // Design Bridge Protocol v1 — Studio protocol client (v0.2.0)
+  // Design Bridge Protocol v1 — Studio protocol client (added in v0.2.0)
   // Contract: docs/plans/2026-10-02-v0.2.0-live-preview-code-sync.md
   // ==========================================
   const NO_BRIDGE_MS = 4000;
@@ -3517,7 +3689,7 @@ if (remembered) kitId.value = remembered;
   function setBridgeStatus(text, kind = "connected", hint = false) {
     bridgeStatusBadge.textContent = text;
     bridgeStatusBadge.dataset.state = kind;
-    bridgeStatusBadge.title = hint ? "Add fontkit-bridge.js to the target page." : "";
+    bridgeStatusBadge.title = hint ? "Add fontkit-bridge.js to the Live App page." : "";
     if (bridgeHint) bridgeHint.hidden = !hint;
   }
 
@@ -3609,7 +3781,7 @@ if (remembered) kitId.value = remembered;
       && url.protocol === location.protocol && url.port === location.port && path(url.pathname) === path(location.pathname);
   }
 
-  // ---- first run: the Target URL field --------------------------------------
+  // ---- first run: the Live App URL field -------------------------------------
   // The field starts empty. Only a loopback dev server may offer the demo (detectDevServerSync); it never connects.
   let offeredDemoUrl = "";
   // Only the two hostnames are known, so this states browser blocking as one possible cause beside the other two.
@@ -3642,7 +3814,7 @@ if (remembered) kitId.value = remembered;
     const value = targetAppUrlInput.value.trim();
     btnConnectTarget.disabled = !value;
     btnConnectTarget.title = value ? "" : "Enter your app's URL";
-    btnConnectTarget.textContent = offeredDemoUrl && value === offeredDemoUrl && !live.url ? "Connect to the demo" : "Connect Target";
+    btnConnectTarget.textContent = offeredDemoUrl && value === offeredDemoUrl && !live.url ? "Connect to the demo" : "Connect Live App";
     if (targetUrlHint) targetUrlHint.hidden = Boolean(value);
   }
 
@@ -3664,18 +3836,28 @@ if (remembered) kitId.value = remembered;
 
   // One URL gate for the iframe and the pop-out: http(s) only (file: only from file:), never Studio itself.
   function resolveTarget(raw) {
+    showTargetUrlProblem("");
     if (!hasUrlScheme(raw)) { setBridgeStatus("Use a full URL starting with http:// or https://", "error"); return null; }
     const resolved = safeTargetUrl(raw);
-    if (!resolved) { setBridgeStatus("Invalid target URL", "error"); return null; }
+    if (!resolved) { setBridgeStatus("Invalid Live App URL", "error"); return null; }
     // Anti-recursion: never embed Font Kit Studio inside itself.
     if (isStudioDocument(resolved)) {
       setBridgeStatus("Recursion blocked", "error");
       console.warn("[FontKitStudio] Blocked recursive self-embedding:", resolved.href);
-      if (targetAppUrlInput) { targetAppUrlInput.value = ""; refreshConnectControl(); }
+      // The typed address stays in the field so it can be corrected; the message says why it was refused.
+      showTargetUrlProblem("That address is Font Kit Studio itself, and Studio cannot preview itself. Enter your own app's URL instead.");
       return null;
     }
     return resolved;
   }
+
+  function showTargetUrlProblem(text) {
+    const problem = q("targetUrlProblem");
+    if (!problem) return;
+    problem.textContent = text;
+    problem.hidden = !text;
+  }
+  targetAppUrlInput?.addEventListener("input", () => showTargetUrlProblem(""));
 
   function connectTargetApp(url) {
     if (!targetAppFrameEl) return;
@@ -3707,6 +3889,7 @@ if (remembered) kitId.value = remembered;
     live.selectedRect = null;
     live.hoverId = null;
     live.hoverRect = null;
+    refreshControlStates();
     if (!live.sessionId) live.sessionId = newSessionId();
     setBridgeStatus("Connecting…", "connecting");
     sendDesignMessage({ type:"design:hello" });
@@ -3740,10 +3923,18 @@ if (remembered) kitId.value = remembered;
   // after it was sent, so a click in the page that lands within one round trip of it is never overridden.
   // An entry waits for its echo. A target that does not echo requestId (an older bridge) never answers any of them, and
   // that must not pile up or stand in the way of a realign: entries are bounded (the oldest go past 20), cleared on
-  // every handshake, and dropped when a later request is answered (see the design:selected handler).
+  // every handshake, and dropped when a later request is answered (see the design:selected handler). A reply whose entry
+  // is gone is still recognised by its id (ownRequestSeq): it is never taken for the user's choice.
+  const SELECT_ID_PREFIX = "fks-sel-";
+  // The sequence number of a request id Studio itself issued (so far), else null.
+  function ownRequestSeq(id) {
+    if (typeof id !== "string" || !id.startsWith(SELECT_ID_PREFIX) || !/^\d+$/.test(id.slice(SELECT_ID_PREFIX.length))) return null;
+    const seq = Number(id.slice(SELECT_ID_PREFIX.length));
+    return seq >= 1 && seq <= live.selectSeq ? seq : null;
+  }
   function sendTrackedSelection(targetId) {
     const seq = ++live.selectSeq;
-    const requestId = `fks-sel-${seq}`;
+    const requestId = `${SELECT_ID_PREFIX}${seq}`;
     // Nothing was sent (no session): nothing will answer, so nothing is tracked.
     if (!sendDesignMessage({ type:"design:select", targetId, requestId })) return;
     live.refreshes.set(requestId, { targetId, seq, superseded:false });
@@ -3803,8 +3994,8 @@ if (remembered) kitId.value = remembered;
       if (live.inFlight !== op) return;
       live.inFlight = null;
       live.timedOut.set(op.requestId, op);   // stays tracked until its late reply arrives or the session ends
-      setBridgeStatus("No response from target", "error");
-      reapplyDone(op, false, `no response from the target while ${stepName(op)}`);
+      setBridgeStatus("No response from the Live App", "error");
+      reapplyDone(op, false, `no response from the Live App while ${stepName(op)}`);
       reseedLiveControls();
       pumpLiveQueue();
     }, REQUEST_TIMEOUT_MS);
@@ -3814,7 +4005,11 @@ if (remembered) kitId.value = remembered;
   function recordCanonical(op, data) {
     // Sent before the user imported (D035): what the page acknowledged is not the user's saved state, whatever the
     // request was. The ledger is already updated; only the comparison with the page is redone, so the banner follows it.
-    if (op.importSuperseded) { reconcileAfterImport(); return; }
+    if (op.importSuperseded) {
+      if (live.importLinked && op.kind === "move" && !op.reapply) rememberMoveHeldByPage(op, data);
+      reconcileAfterImport();
+      return;
+    }
     const targetId = typeof data.targetId === "string" && data.targetId !== "global" ? data.targetId : op.targetId;
     if (op.kind === "update" && targetId) {
       const entry = { ...(live.overrides[targetId] || {}) };
@@ -3851,7 +4046,7 @@ if (remembered) kitId.value = remembered;
         if (!Object.keys(live.overrides[id]).length) delete live.overrides[id];
       });
     }
-    // Acknowledged composition tokens (from ⚡ Sync, or cleared by a global reset) are saved state too;
+    // Acknowledged composition tokens (from Sync to Live App, or cleared by a global reset) are saved state too;
     // a later target reload that loses them is a reconnect conflict, not a smaller overrides file.
     if (op.kind === "composition" && op.reapply) {
       // Reapply never replaces Studio's saved tokens with the target's. When the target now holds exactly the saved
@@ -3867,6 +4062,32 @@ if (remembered) kitId.value = remembered;
     }
     live.canonicalRevision = live.revision;
     live.canonicalTarget = live.url;
+  }
+
+  // A move the user sent before a linked import and the page acknowledged after it: the page now holds an order the
+  // import does not save, so it is remembered the way rememberSavedBeforeImport remembers what the import dropped, and
+  // reconcileImportedLinked raises the banner. Reads the ledger the reply already refreshed (the same sources as
+  // syncOrderFromLedger and syncStructureFromLedger, which a superseded move does not run): the siblings' CSS order
+  // values for a css-order move, the touched containers' order for a DOM move.
+  function rememberMoveHeldByPage(op, data) {
+    const kept = live.importDropped || { overrides:{}, structure:[] };
+    if (op.strategy === "css-order") {
+      const group = new Set(siblingIds(op, data));
+      live.changes.targets.forEach(entry => {
+        if (!group.has(entry.targetId)) return;
+        const canonical = canonicalLiveValue("order", parseFloat(entry.declarations.order));
+        if (canonical.ok && canonical.value !== null) setOwn(kept.overrides, entry.targetId, { ...(kept.overrides[entry.targetId] || {}), order:canonical.value });
+      });
+    } else {
+      const fromLedger = savedStructureFrom(live.changes.structure);
+      const touched = structureTouchedBy(op, data, fromLedger);
+      fromLedger.forEach(entry => {
+        if (touched.has(entry.selector) && !kept.structure.some(item => item.selector === entry.selector && sameIds(item.ids, entry.ids))) {
+          kept.structure.push({ selector:entry.selector, ids:[...entry.ids] });
+        }
+      });
+    }
+    live.importDropped = kept;
   }
 
   // CSS-order moves assign `order` to every sibling; Studio's saved overrides mirror what the target acknowledged
@@ -4004,12 +4225,12 @@ if (remembered) kitId.value = remembered;
     let where;
     if (op.structureRefused === "elsewhere") {
       where = "This move is not saved: Studio's earlier saved DOM order still names these elements in another container. "
-        + "Reapply or Accept target state first, then move again. The HTML tab shows it, ";
+        + "Reapply or Accept Live App state first, then move again. The HTML tab shows it, ";
     } else if (op.structureRefused === "limit") {
       where = `This move is not saved: Studio already saves DOM order for ${MAX_STRUCTURE_ENTRIES} containers, the most its export can import. `
-        + "Reset a moved element or Accept target state first, then move again. The HTML tab shows it, ";
+        + "Reset a moved element or Accept Live App state first, then move again. The HTML tab shows it, ";
     } else if (!kept) {
-      where = "This move is not saved: the target's bridge does not report its children's ids, so Reapply cannot bring it back. The HTML tab shows it, ";
+      where = "This move is not saved: the Live App's bridge does not report its children's ids, so Reapply cannot bring it back. The HTML tab shows it, ";
     } else if (op.force === true) {
       where = "The move is kept in Studio, but Reapply cannot replay a guarded move, so a reload loses it from the page. The HTML tab shows it, ";
     } else {
@@ -4230,8 +4451,8 @@ if (remembered) kitId.value = remembered;
     if (!tokensEqual(live.savedTokens, live.changes.tokens)) {
       const extra = Object.keys(live.changes.tokens).filter(name => !Object.hasOwn(live.savedTokens, name));
       failReapply(extra.length
-        ? `the target still has composition tokens Studio does not save (${extra.slice(0, 3).join(", ")}${extra.length > 3 ? ", …" : ""})`
-        : "the target's composition tokens do not match the saved tokens");
+        ? `the Live App still has composition tokens Studio does not save (${extra.slice(0, 3).join(", ")}${extra.length > 3 ? ", …" : ""})`
+        : "the Live App's composition tokens do not match the saved tokens");
       return;
     }
     if (!structureHeld(live.structure, live.changes.structure)) {
@@ -4282,7 +4503,7 @@ if (remembered) kitId.value = remembered;
   // A rejection says which step, the bridge's reason code and its own message (a guard explains itself there).
   function rejectionText(op, data, reason) {
     const message = isPlainObject(data.detail) && typeof data.detail.message === "string" ? data.detail.message.slice(0, 200) : "";
-    return `the target rejected ${stepName(op)} (${reason}${message ? `: ${message}` : ""})`;
+    return `the Live App rejected ${stepName(op)} (${reason}${message ? `: ${message}` : ""})`;
   }
 
   // How far a stopped Reapply got: the page is only changed by the steps that were acknowledged.
@@ -4439,13 +4660,13 @@ if (remembered) kitId.value = remembered;
     const target = savedStructureFrom(live.changes.structure);
     const held = live.structure.filter(entry => target.some(item => item.selector === entry.selector && sameIds(item.ids, entry.ids))).length;
     const plural = n => `${n} container${n === 1 ? "" : "s"}`;
-    return `Studio also saved DOM order changes in ${plural(live.structure.length)}; the live target holds ${held} of them. `;
+    return `Studio also saved DOM order changes in ${plural(live.structure.length)}; the Live App holds ${held} of them. `;
   }
 
   // What happened, so the heading is true whichever way the mismatch came up.
   const CONFLICT_HEADINGS = {
-    reconnect: "Target reconnected.",
-    import: "Imported state differs from the target.",
+    reconnect: "Live App reconnected.",
+    import: "Imported state differs from the Live App.",
     page: "The page changed a saved DOM order."
   };
 
@@ -4461,15 +4682,15 @@ if (remembered) kitId.value = remembered;
       const savedTokens = Object.keys(live.savedTokens).length;
       const targetTokens = Object.keys(live.changes.tokens).length;
       reconnectText.textContent = `Studio has saved overrides for ${plural(count)} and ${tokenCount(savedTokens)}; `
-        + `the live target has ${plural(targetCount)} changed and ${tokenCount(targetTokens)}. `
+        + `the Live App has ${plural(targetCount)} changed and ${tokenCount(targetTokens)}. `
         + structureSentence()
         // A page styled by a synced overrides file has nothing for the bridge to count: say why it can look right.
         + (Object.keys(cssOnlyOverrides(live.overrides)).length && !targetCount && !targetTokens && !live.changes.structure.length
           ? "If you synced, the overrides file already styles the page, and the bridge counts only edits made through Studio, "
             + "so it reports 0 live edits; that is why the page can look right. " : "")
-        + "Nothing was applied automatically. Reapply sends Studio's saved overrides, composition tokens and DOM order to the target, "
+        + "Nothing was applied automatically. Reapply sends Studio's saved overrides, composition tokens and DOM order to the Live App, "
         + "so you can keep editing them. "
-        + "Accept target state replaces Studio's saved overrides, composition tokens and DOM order with what the page has now"
+        + "Accept Live App state replaces Studio's saved overrides, composition tokens and DOM order with what the page has now"
         + (acceptShrinksFile() ? ", so the next Sync writes a smaller file" : "")
         + "; the overrides file only changes when you sync."
         + (savedFontsWaiting() ? ` ${FONTS_WAIT_NOTE}` : "")
@@ -4501,10 +4722,12 @@ if (remembered) kitId.value = remembered;
         const listed = targets.filter(t => t.arrangementOnly !== true).length;
         setBridgeStatus(`Connected (${listed} target${listed === 1 ? "" : "s"})`, "connected");
         if (live.mode !== "select" || live.popoutMode) sendMode();
-        live.refreshes.clear();   // a new handshake: nothing asked earlier will be answered
+        live.refreshes.clear();   // a new handshake: earlier requests are no longer tracked (a late reply is still told apart by its id)
         if (live.selectedId && !live.targets.has(live.selectedId)) { live.selectedId = null; live.intent = null; }
-        // A kept selection (re-hello after a load) is re-sent so the bridge reports fresh bounds.
-        if (live.selectedId && !live.selectedRect) { live.intent = live.selectedId; refreshSelection(); }
+        // A kept selection (re-hello after a load) is re-sent so the bridge reports fresh bounds. What the user picked
+        // last stays their intent: only a missing one falls back to the kept selection (refreshSelection sends nothing
+        // when the two differ).
+        if (live.selectedId && !live.selectedRect) { if (live.intent === null) live.intent = live.selectedId; refreshSelection(); }
         reconcileSavedOverrides();
         renderOverlays();
         renderLiveCode();
@@ -4528,7 +4751,13 @@ if (remembered) kitId.value = remembered;
           live.targets.set(data.target.id, data.target);
           noteTargetMeta(data.target);
         }
-        const answerTo = typeof data.requestId === "string" ? live.refreshes.get(data.requestId) : undefined;
+        const picked = typeof data.targetId === "string" ? data.targetId : null;
+        let answerTo = typeof data.requestId === "string" ? live.refreshes.get(data.requestId) : undefined;
+        // A handshake forgets what was asked before it, and a long run of requests pushes the oldest out; a reply to
+        // one of those is still the answer to Studio's request, never the user's choice. It counts as superseded
+        // when it names a target other than the one the user last picked.
+        const ownSeq = answerTo ? null : ownRequestSeq(data.requestId);
+        if (ownSeq !== null) answerTo = { seq:ownSeq, superseded:picked !== live.intent };
         if (answerTo) {
           live.refreshes.delete(data.requestId);
           // The target answers requests in the order it received them, so an older one still waiting was never echoed
@@ -4542,7 +4771,6 @@ if (remembered) kitId.value = remembered;
           refreshLiveInspector();
           break;
         }
-        const picked = typeof data.targetId === "string" ? data.targetId : null;
         live.intent = picked;
         // Anything else the target selects is the user's choice: older requests no longer apply.
         if (!answerTo) live.refreshes.forEach(entry => { entry.superseded = true; });
@@ -4600,7 +4828,7 @@ if (remembered) kitId.value = remembered;
     placeOverlay(overlaySelected, live.selectedId ? live.selectedRect : null, selected?.name || live.selectedId || "");
   }
 
-  // ---- Live Target inspector -----------------------------------------------
+  // ---- Live App inspector --------------------------------------------------
   function liveSeed(target) {
     const c = isPlainObject(target?.computed) ? target.computed : {};
     const size = parseFloat(c.fontSize) || 16;
@@ -4665,6 +4893,7 @@ if (remembered) kitId.value = remembered;
     const shown = q("liveTargetName")?.dataset.targetId;
     if (live.ready && live.selectedId && shown === live.selectedId && live.targets.has(live.selectedId)) { reseedLiveControls(); refreshArrange(); }
     else renderLiveInspector();
+    refreshControlStates();
   }
 
   function reflectCanonical(targetId, canonicalPatch) {
@@ -4694,23 +4923,29 @@ if (remembered) kitId.value = remembered;
   }
 
   function renderLiveInspector() {
-    slotInspector.setAttribute("aria-label", "Live target inspector");
+    slotInspector.setAttribute("aria-label", "Live App inspector");
     if (!live.ready) {
       const message = live.expectedOrigin
-        ? "Waiting for the target's bridge. Controls appear once it answers the handshake."
-        : "Enter the URL of a localhost app that loads fontkit-bridge.js, then press Connect Target.";
-      slotInspector.innerHTML = `<div class="inspector-title-row"><h2>Target App</h2><span class="inspector-index">${escapeAttr(bridgeStatusBadge.textContent)}</span></div><p class="empty-inspector">${escapeAttr(message)}</p>`;
+        ? "Waiting for the Live App's bridge. Controls appear once it answers the handshake."
+        : "Enter the URL of a localhost app that loads fontkit-bridge.js, then press Connect Live App.";
+      slotInspector.innerHTML = `<div class="inspector-title-row"><h2>Live App</h2><span class="inspector-index">${escapeAttr(bridgeStatusBadge.textContent)}</span></div><p class="empty-inspector">${escapeAttr(message)}</p>`;
       return;
     }
     const target = live.selectedId ? live.targets.get(live.selectedId) : null;
     if (!target) {
       const listedTargets = [...live.targets.values()].filter(t => t.arrangementOnly !== true);
-      const items = listedTargets.map(t => `<button type="button" class="row-child-jump" data-live-target="${escapeAttr(t.id)}"><span>${escapeAttr(t.name || t.id)}</span><small>${escapeAttr(t.id)}</small></button>`).join("");
+      const item = t => `<button type="button" class="row-child-jump" data-live-target="${escapeAttr(t.id)}"><span>${escapeAttr(t.name || t.id)}</span><small>${escapeAttr(t.id)}</small></button>`;
+      // Ids the page marked itself come first: they are the stable ones. Found-by-scan targets follow (Rule 3).
+      const group = (title, list) => list.length ? `<section class="live-target-group"><h3>${title}</h3>${list.map(item).join("")}</section>` : "";
+      const items = group("Marked with data-design-id", listedTargets.filter(t => t.stable !== false))
+        + group("Auto-discovered", listedTargets.filter(t => t.stable === false));
       slotInspector.innerHTML = `
-        <div class="inspector-title-row"><h2>Target App</h2><span class="inspector-index">${listedTargets.length} TARGETS</span></div>
+        <div class="inspector-title-row"><h2>Live App</h2><span class="inspector-index">${listedTargets.length} TARGETS</span></div>
         <p class="empty-inspector">${live.mode === "select" ? "Click an element in the preview, or pick a target below." : "Interact mode: the preview behaves normally. Switch to Select to pick elements."}</p>
-        <div class="live-target-list">${items || '<p class="inspector-note">The target exposed no editable elements.</p>'}</div>`;
+        <div class="live-target-list">${items || '<p class="inspector-note">The Live App exposed no editable elements.</p>'}</div>`;
       slotInspector.querySelectorAll("[data-live-target]").forEach(button => {
+        const t = live.targets.get(button.dataset.liveTarget);
+        button.title = `${t.name || t.id} — ${t.id}`;   // the row may cut either one; a property, so the text is never parsed
         button.addEventListener("click", () => requestSelection(button.dataset.liveTarget));
       });
       return;
@@ -4728,7 +4963,7 @@ if (remembered) kitId.value = remembered;
         <div class="inspector-field full"><label for="liveFontFamily">Family</label><select id="liveFontFamily">${familyOptions}</select>${freeFontsAllowed ? "" : '<p class="inspector-note" data-load-note>Choosing a library family loads it from Google Fonts.</p>'}</div>
         <div class="inspector-field"><label for="liveFontSize">Size (px)</label><input id="liveFontSize" type="number" min="4" max="400" step="1" inputmode="decimal"></div>
         <div class="inspector-field"><label for="liveFontWeight">Weight</label><input id="liveFontWeight" type="number" min="1" max="1000" step="${weights.length ? 100 : 1}" inputmode="numeric"></div>
-        ${weights.length ? `<p id="liveWeightNote" class="inspector-note inspector-field full">Allowed weights: ${weights.map(Number).join(" · ")} — the target snaps to the nearest.</p>` : ""}
+        ${weights.length ? `<p id="liveWeightNote" class="inspector-note inspector-field full">Allowed weights: ${weights.map(Number).join(" · ")} — the Live App snaps to the nearest.</p>` : ""}
         <div class="inspector-field"><label for="liveLineHeight">Line height</label><input id="liveLineHeight" type="number" min="0.5" max="5" step="0.05" inputmode="decimal"></div>
         <div class="inspector-field"><label for="liveLetterSpacing">Tracking (em)</label><input id="liveLetterSpacing" type="number" min="-0.5" max="2" step="0.005" inputmode="decimal"></div>
         <div class="inspector-field full"><label for="liveTextTransform">Transform</label><select id="liveTextTransform">${optionsHtml(LIVE_TRANSFORM, values.textTransform)}</select></div>`;
@@ -4738,7 +4973,9 @@ if (remembered) kitId.value = remembered;
     }
     if (editable.color) {
       body += `
-        <div class="inspector-field full"><label for="liveColorHex">Colour</label><div class="color-grid"><input id="liveColorHex" type="text" spellcheck="false" aria-label="Colour value"><input id="liveColor" type="color" aria-label="Pick colour"></div></div>`;
+        <div class="inspector-field full"><label for="liveColorHex">Colour</label><div class="color-grid"><input id="liveColorHex" type="text" spellcheck="false" aria-label="Colour value"><input id="liveColor" type="color" aria-label="Pick colour"></div>
+          <p id="liveColorMessage" class="inspector-note" role="alert" hidden></p>
+          ${target.tag === "svg" ? '<p id="liveColorSvgNote" class="inspector-note">Colour only reaches parts of this SVG that use the current colour. If the SVG sets its own fills, its fills win.</p>' : ""}</div>`;
     }
     if (editable.text && target.kind === "text") {
       body += `<div class="inspector-field full"><label for="liveText">Text</label><textarea id="liveText" spellcheck="true"></textarea></div>`;
@@ -4747,7 +4984,7 @@ if (remembered) kitId.value = remembered;
     if (arrangement) body += `<div id="liveArrange" class="inspector-field full live-arrange">${arrangeHtml(target.id, arrangement)}</div>`;
     body += `
         <div class="inspector-field full"><button id="liveResetTarget" class="btn" type="button">Reset this element</button>
-          <p class="inspector-note">Edits apply live in the preview; only values the target acknowledges are kept and synced.</p></div>
+          <p class="inspector-note">Edits apply live in the preview; only values the Live App acknowledges are kept and synced.</p></div>
         <div class="inspector-field full"><button type="button" class="btn" data-live-back>All targets</button></div>
       </div>`;
     slotInspector.innerHTML = body;
@@ -4775,14 +5012,25 @@ if (remembered) kitId.value = remembered;
     });
     q("liveTextAlign")?.addEventListener("change", event => queueLivePatch(target.id, "textAlign", event.target.value));
     q("liveTextTransform")?.addEventListener("change", event => queueLivePatch(target.id, "textTransform", event.target.value));
+    // Text that is not a colour is never sent: the colour that is applied stays, and the message says so.
+    const colourMessage = text => { const el = q("liveColorMessage"); if (el) { el.textContent = text; el.hidden = !text; } };
     q("liveColor")?.addEventListener("input", event => {
       const hex = q("liveColorHex");
       if (hex) hex.value = event.target.value;
+      colourMessage("");
       queueLivePatch(target.id, "color", event.target.value);
     });
+    q("liveColorHex")?.addEventListener("input", () => colourMessage(""));
     q("liveColorHex")?.addEventListener("change", event => {
       const value = event.target.value.trim();
-      if (value) queueLivePatch(target.id, "color", value);
+      if (!value) return;
+      if (!canonicalLiveValue("color", value).ok || !CSS.supports("color", value)) {
+        const kept = liveValues(target.id).color;
+        colourMessage(`"${value.slice(0, 40)}" is not a colour Studio can apply. Use #rrggbb, rgb() or hsl().${kept ? ` Still ${kept}.` : ""}`);
+        return;
+      }
+      colourMessage("");
+      queueLivePatch(target.id, "color", value);
     });
     q("liveText")?.addEventListener("input", event => queueLivePatch(target.id, "text", event.target.value));
     // Leaving a field shows the acknowledged (canonical) value, e.g. 550 → 600 or a rejected entry.
@@ -4866,6 +5114,8 @@ if (remembered) kitId.value = remembered;
         </div>
         <p class="inspector-note">${escapeAttr(hint)}</p>
       </div>` : "";
+    // No container is preselected: the button stays off, and says why, until the person chooses one.
+    const moveIntoReason = destinations.length ? "Choose a container to move into first." : "There is no other container to move into.";
     const guard = live.moveGuard && arrangement.siblings.some(sibling => sibling.id === live.moveGuard.targetId) ? live.moveGuard : null;
     const guardHtml = guard
       ? `<p><strong>Move blocked${guard.guard ? ` (${escapeAttr(guard.guard)})` : ""}.</strong> ${escapeAttr(guard.message)}</p>`
@@ -4884,10 +5134,11 @@ if (remembered) kitId.value = remembered;
       <div class="live-move-container">
         <label for="liveMoveContainer">Move into another container</label>
         <select id="liveMoveContainer"${destinations.length ? "" : " disabled"}>${destinations.length
-          ? destinations.map(item => `<option value="${escapeAttr(item.key)}">${escapeAttr(item.name)}</option>`).join("")
-          : "<option>No other containers</option>"}</select>
-        <button id="liveMoveInto" class="btn" type="button"${destinations.length ? "" : " disabled"}>Move into</button>
+          ? `<option value="" selected>Choose a container…</option>` + destinations.map(item => `<option value="${escapeAttr(item.key)}">${escapeAttr(item.name)}</option>`).join("")
+          : '<option value="">No other containers</option>'}</select>
+        <button id="liveMoveInto" class="btn" type="button" title="${escapeAttr(moveIntoReason)}" aria-describedby="liveMoveIntoHint" disabled>Move into</button>
       </div>
+      <p id="liveMoveIntoHint" class="inspector-note">${escapeAttr(moveIntoReason)}</p>
       <div id="liveMoveGuard" class="live-move-guard" role="alert"${guardHtml ? "" : " hidden"}>${guardHtml}</div>`;
   }
 
@@ -4901,7 +5152,10 @@ if (remembered) kitId.value = remembered;
     const inside = active && box.contains(active) ? active : null;
     const focusSibling = inside?.dataset?.siblingId;
     const focusId = inside && !focusSibling ? inside.id : "";
+    const chosenContainer = q("liveMoveContainer")?.value || "";
     box.innerHTML = arrangeHtml(targetId, arrangement);
+    const containerSelect = q("liveMoveContainer");
+    if (chosenContainer && containerSelect && [...containerSelect.options].some(option => option.value === chosenContainer)) containerSelect.value = chosenContainer;
     bindArrange(targetId);
     let next = null;
     if (focusSibling) next = [...box.querySelectorAll("[data-sibling-id]")].find(item => item.dataset.siblingId === focusSibling);
@@ -4955,7 +5209,7 @@ if (remembered) kitId.value = remembered;
     const detail = isPlainObject(data.detail) ? data.detail : {};
     const guard = typeof detail.guard === "string" ? detail.guard.slice(0, 40) : "";
     const message = typeof detail.message === "string" && detail.message ? detail.message
-      : `The target refused the move (${typeof detail.reason === "string" && detail.reason ? detail.reason : reason}).`;
+      : `The Live App refused the move (${typeof detail.reason === "string" && detail.reason ? detail.reason : reason}).`;
     // Only the framework guard is overridable, and only when the bridge says so; every other guard protects form
     // ownership, radio groups or label/aria references and offers no override.
     live.moveGuard = { targetId:op.targetId, to:op.to, strategy:op.strategy, guard, message:message.slice(0, 300),
@@ -4986,6 +5240,8 @@ if (remembered) kitId.value = remembered;
       if (event.key === "End") { event.preventDefault(); items[items.length - 1]?.focus(); return; }
       if (event.key === "Enter" || event.key === " ") { event.preventDefault(); requestSelection(id); }
     });
+    // A click selects the sibling, the same as picking it on the page (the target answers with its manifest).
+    item.addEventListener("click", () => requestSelection(id));
     // HTML5 drag and drop: the upper half of an item drops before it, the lower half after it.
     item.addEventListener("dragstart", event => {
       live.dragId = id;
@@ -5022,6 +5278,17 @@ if (remembered) kitId.value = remembered;
       .forEach(([id, kind]) => q(id)?.addEventListener("click", () => moveSelectedBy(kind)));
     q("liveMoveStrategyDom")?.addEventListener("click", () => setMoveStrategy("dom"));
     q("liveMoveStrategyCss")?.addEventListener("click", () => setMoveStrategy("css-order"));
+    const syncMoveInto = () => {
+      const button = q("liveMoveInto");
+      const hint = q("liveMoveIntoHint");
+      if (!button || !hint) return;
+      const chosen = Boolean(q("liveMoveContainer")?.value);
+      button.disabled = !chosen;
+      hint.hidden = chosen;
+      if (chosen) button.removeAttribute("title"); else button.title = hint.textContent;
+    };
+    q("liveMoveContainer")?.addEventListener("change", syncMoveInto);
+    syncMoveInto();
     q("liveMoveInto")?.addEventListener("click", () => {
       const key = q("liveMoveContainer")?.value;
       // Re-parenting is a DOM move; CSS order cannot leave the container.
@@ -5031,7 +5298,7 @@ if (remembered) kitId.value = remembered;
     q("liveSiblingList")?.querySelectorAll("[data-sibling-id]").forEach(bindSibling);
   }
 
-  // Alt+Arrow moves the selected element while the Target App view has focus; text fields and the
+  // Alt+Arrow moves the selected element while the Live App view has focus; text fields and the
   // sibling list keep Alt+Arrow for themselves. Add Shift for first/last.
   const typingTarget = node => {
     if (!(node instanceof Element)) return false;
@@ -5068,7 +5335,7 @@ if (remembered) kitId.value = remembered;
     bridgeWarning.hidden = !latest;
     if (latest) {
       const label = warningLabel(latest);
-      bridgeWarningText.textContent = `Runtime error in the target${label ? ` after changing ${label}` : ""}: ${latest.message}`;
+      bridgeWarningText.textContent = `Runtime error in the Live App${label ? ` after changing ${label}` : ""}: ${latest.message}`;
     }
     liveCodeWarnings.hidden = !live.warnings.length;
     liveCodeWarnings.replaceChildren(...live.warnings.map(warning => {
@@ -5092,7 +5359,7 @@ if (remembered) kitId.value = remembered;
     if (layer) layer.hidden = on;
     if (popoutText) {
       popoutText.textContent = live.popup && !live.popup.closed
-        ? `The target is open in its own window ("${POPOUT_NAME}"). Pick elements there; the inspector here edits them.`
+        ? "The Live App is open in its own window. Pick elements there; the inspector here edits them."
         : "The pop-out window was closed. Dock back to the preview, or pop it out again.";
     }
   }
@@ -5185,7 +5452,7 @@ if (remembered) kitId.value = remembered;
   // A target that got an author data-design-id reports the id it replaced (manifest `previousId`, an additive v0.2
   // field). The saved override follows the element to the new id, so the edit is neither lost nor reported as a
   // conflict. True when something was re-keyed.
-  // An id that is still a live target in the same list was not replaced, so it is never re-keyed.
+  // An id that is still a target in the same list was not replaced, so it is never re-keyed.
   function followPromotedTargets(list) {
     let moved = false;
     const liveIds = new Set(list.map(target => target.id));
@@ -5284,11 +5551,11 @@ if (remembered) kitId.value = remembered;
       const selector = meta.selector ? safeCssText(meta.selector, MAX_SELECTOR_LENGTH, { selector:true }) : designIdSelector(targetId);
       lines.push("");
       if (!selector || safeCssText(selector, MAX_SELECTOR_LENGTH, { selector:true }) === null) {
-        lines.push(`/* ${commentText(name)} (${commentText(targetId)}) — skipped: the target reported no safe selector */`);
+        lines.push(`/* ${commentText(name)} (${commentText(targetId)}) — skipped: the Live App reported no safe selector */`);
         return;
       }
       const note = meta.stable === false ? " — auto-discovered — add data-design-id for a stable selector"
-        : assumed ? " — selector assumed from the id; connect the target to confirm" : "";
+        : assumed ? " — selector assumed from the id; connect the Live App to confirm" : "";
       lines.push(`/* ${commentText(name)} (${commentText(targetId)})${note} */`, `${selector} {`);
       declarations.forEach(([prop, value]) => lines.push(`  ${prop}: ${value} !important;`));
       lines.push("}");
@@ -5327,6 +5594,8 @@ if (remembered) kitId.value = remembered;
       button?.classList.toggle("active", key === live.codeTab);
       button?.setAttribute("aria-selected", String(key === live.codeTab));
     });
+    if (!savedStateEmpty()) live.heldSavedState = true;
+    refreshControlStates();
   }
 
   function setCodeStatus(text, kind = "") {
@@ -5371,12 +5640,13 @@ if (remembered) kitId.value = remembered;
   // ---- dev-server sync ------------------------------------------------------
   function setSyncAvailability(available, title) {
     live.syncAvailable = available;
-    if (liveCodeSync) { liveCodeSync.disabled = !available; liveCodeSync.title = title; }
+    live.syncTitle = title;   // refreshControlStates decides whether Sync to file is enabled and which reason it shows
     if (liveCodeAutoSync) {
       liveCodeAutoSync.disabled = !available;
       liveCodeAutoSync.title = title;
       if (!available) liveCodeAutoSync.checked = false;
     }
+    refreshControlStates();
   }
 
   async function detectDevServerSync() {
@@ -5414,6 +5684,9 @@ if (remembered) kitId.value = remembered;
     try {
       do {
         live.syncQueued = false;
+        // A session that never held saved state would write a placeholder over the user's file (Rule 6), whether Sync to
+        // file or Auto-sync asked.
+        if (emptyWriteRefused()) { setCodeStatus(NOTHING_TO_SAVE + " The overrides file was left as it is."); break; }
         const css = liveCss();
         setCodeStatus("Saving…", "saving");
         try {
@@ -5454,6 +5727,7 @@ if (remembered) kitId.value = remembered;
     renderReconnectBanner();
     renderLiveCode();
     if (live.viewActive) renderLiveInspector();
+    refreshControlStates();
   }
 
   q("liveReapply")?.addEventListener("click", reapplyStudioOverrides);
@@ -5597,17 +5871,17 @@ if (remembered) kitId.value = remembered;
 
   function syncToLiveApp() {
     if (!live.ready) {
-      composerStatus.textContent = "Connect a bridge-instrumented target app before syncing the composition.";
+      composerStatus.textContent = "Connect a bridge-instrumented Live App before syncing the composition.";
       return;
     }
     live.compositionLinked = true;
     live.importDropped = null;   // the user chose to send the composition; the next acknowledgement settles the banner
     broadcastLiveState(true);
-    composerStatus.textContent = "Composition sent to the live app. Specimen edits keep streaming until the target reconnects."
+    composerStatus.textContent = "Composition sent to the Live App. Specimen edits keep streaming until the Live App reconnects."
       + (!freeFontsAllowed && compositionUsesLibraryFonts() ? ` ${FONTS_WAIT_NOTE}` : "") + sheetLimitNote();
     if (syncBtnEl) {
       syncBtnEl.textContent = "✓ Synced!";
-      setTimeout(() => { syncBtnEl.textContent = "⚡ Sync to Live App"; }, 1400);
+      setTimeout(() => { syncBtnEl.textContent = "Sync to Live App"; }, 1400);
     }
   }
   if (syncBtnEl) syncBtnEl.addEventListener("click", syncToLiveApp);
@@ -5615,7 +5889,7 @@ if (remembered) kitId.value = remembered;
   const btnRestoreOriginalText = q("btnRestoreOriginalText");
   if (btnRestoreOriginalText) {
     btnRestoreOriginalText.addEventListener("click", () => {
-      if (!live.ready) { composerStatus.textContent = "Connect a target app before restoring its text."; return; }
+      if (!live.ready) { composerStatus.textContent = "Connect a Live App before restoring its text."; return; }
       state.slots.forEach(slot => { slot.textTouched = false; });
       enqueueLiveOp({ kind:"restore" });
       btnRestoreOriginalText.textContent = "✓ Restored!";
@@ -5718,20 +5992,24 @@ if (remembered) kitId.value = remembered;
     if (composerCanvasEl) composerCanvasEl.style.display = "";
     if (targetAppContainerEl) targetAppContainerEl.style.display = "none";
     live.viewActive = false;
+    composerView.classList.remove("is-live-view");
     if (liveCodePanel) liveCodePanel.hidden = true;
     slotInspector.setAttribute("aria-label", "Selected slot inspector");
     renderOverlays();
     renderReconnectBanner();
     renderInspector();
+    // The inspector's row and empty branches return before their own refresh, and the view-only controls change here.
+    refreshControlStates();
   }
 
-  // `connect: false` shows the Target view without loading the typed URL (fullscreen only changes the layout).
+  // `connect: false` shows the Live App view without loading the typed URL (fullscreen only changes the layout).
   function switchToTargetView(options) {
     if (viewTargetBtn) viewTargetBtn.classList.add("active");
     if (viewSpecimenBtn) viewSpecimenBtn.classList.remove("active");
     if (composerCanvasEl) composerCanvasEl.style.display = "none";
     if (targetAppContainerEl) targetAppContainerEl.style.display = "block";
     live.viewActive = true;
+    composerView.classList.add("is-live-view");
     if (liveCodePanel) liveCodePanel.hidden = false;
     if (options?.connect !== false && !targetAppFrameEl.getAttribute("src")) connectTargetApp(targetAppUrlInput.value);
     renderLivePanels();
@@ -5745,6 +6023,7 @@ if (remembered) kitId.value = remembered;
   renderCanvas = function() {
     originalRenderCanvas();
     broadcastLiveState(false);
+    refreshControlStates();
   };
 
   const originalApplyCompositionPreset = applyCompositionPreset;
@@ -5754,7 +6033,7 @@ if (remembered) kitId.value = remembered;
   };
 
   // Anti-recursion guard (the only one): if Studio itself is embedded in an iframe,
-  // hide the Target Bridge connector and preview so Studio never nests itself.
+  // hide the Live App Bridge connector and preview so Studio never nests itself.
   const studioEmbedded = window.self !== window.top;
   if (studioEmbedded) {
     const bridgeBar = q("targetAppBridgeBar");
@@ -5763,6 +6042,109 @@ if (remembered) kitId.value = remembered;
     if (viewTargetBtn) viewTargetBtn.style.display = "none";
     if (viewSpecimenBtn) viewSpecimenBtn.style.display = "none";
   }
+
+  // ---- controls that would do nothing ------------------------------------------------------------------------------
+  // A control with nothing to act on is disabled and says why in its title and, where a tooltip is easy to miss, in an
+  // adjacent hint ([data-hint-for]). refreshControlStates() decides every one of them from the current state; it runs
+  // wherever that state changes (connect, disconnect, selection, ledger, view, fonts, pop-out, colour source).
+  const CONNECT_FIRST = "Connect a page first: enter its URL and press Connect Live App.";
+  const NOTHING_TO_SAVE = "No changes to save yet.";
+  const LIVE_VIEW_ONLY = "Only for the Live App view: switch to the page preview first.";
+  const COLOUR_SOURCES = { custom:"Custom hex", tailwind:"Tailwind", saved:"Saved palette" };
+
+  // A focused control that is about to be disabled hands keyboard focus to the next usable control in its panel (or the
+  // last one before it), so a keyboard user is not dropped on the page.
+  const FOCUS_PANELS = "#slotInspector, #targetAppBridgeBar, .controls, .composer-toolbar, .live-code-panel";
+  function moveFocusAway(el) {
+    const panel = el.closest(FOCUS_PANELS);
+    if (!panel) return;
+    const usable = [...panel.querySelectorAll('button, input, select, textarea, a[href], [tabindex]:not([tabindex="-1"])')]
+      .filter(node => node !== el && !node.disabled && node.offsetParent !== null);
+    const next = usable.find(node => el.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING) || usable[usable.length - 1];
+    if (next) next.focus({ preventScroll:true });
+  }
+
+  // `reason` null enables the control and restores the title it had in the markup (or the one it was last given).
+  function setDisabledReason(el, reason) {
+    if (!el) return;
+    if (reason && el === document.activeElement) moveFocusAway(el);
+    if (el.dataset.normalTitle === undefined) el.dataset.normalTitle = el.getAttribute("title") || "";
+    el.disabled = Boolean(reason);
+    const title = reason || el.dataset.normalTitle;
+    if (title) el.title = title; else el.removeAttribute("title");
+    const hint = el.id ? document.querySelector(`[data-hint-for="${el.id}"]`) : null;
+    if (!hint) return;
+    hint.textContent = reason || "";
+    hint.hidden = !reason;
+    if (reason) el.setAttribute("aria-describedby", hint.id); else el.removeAttribute("aria-describedby");
+  }
+
+  // What Sync to file would write: Studio's saved overrides, saved composition tokens and DOM moves. These are exactly
+  // what the Changes count shows.
+  function savedStateEmpty() {
+    return !Object.keys(live.overrides).length && !Object.keys(live.savedTokens).length && !live.changes.structure.length;
+  }
+
+  // An empty write is refused only while Studio has never held saved state in this session (see live.heldSavedState).
+  function emptyWriteRefused() {
+    return savedStateEmpty() && !live.heldSavedState;
+  }
+
+  // What Copy and Download would hand over: the saved state, saved DOM order (the JSON tab carries it even with no
+  // page connected, after an import), or whatever the page's ledger still holds. Sync to file writes CSS only, so
+  // saved DOM order alone does not count for savedStateEmpty().
+  function ledgerEmpty() {
+    return savedStateEmpty() && !live.structure.length && !live.changes.targets.length && !Object.keys(live.changes.tokens).length;
+  }
+
+  // Reset sends the element back to the page's own look, so it needs something on this element: a saved override, a
+  // ledger entry, or a DOM order that names it.
+  function elementHasChanges(id) {
+    return Object.keys(live.overrides[id] || {}).length > 0
+      || live.changes.targets.some(entry => entry.targetId === id && (Object.keys(entry.declarations).length || entry.text !== null))
+      || live.changes.structure.some(entry => entry.orderIds.includes(id));
+  }
+
+  function applyColourSource(source, fields) {
+    const active = COLOUR_SOURCES[source] ? source : "custom";
+    Object.entries(fields).forEach(([name, elements]) => elements.forEach(el => setDisabledReason(el, name === active ? null
+      : `Not used: the colour source is ${COLOUR_SOURCES[active]}. Pick ${COLOUR_SOURCES[name]} as the source to use this field.`)));
+  }
+
+  function refreshControlStates() {
+    const ready = live.ready;
+    setDisabledReason(q("btnSyncToApp"), ready ? null : CONNECT_FIRST);
+    setDisabledReason(q("btnRestoreOriginalText"), !ready ? CONNECT_FIRST
+      : live.changes.targets.some(entry => entry.text !== null) ? null : "Nothing to restore: no page text has been edited.");
+    if (live.selectedId) setDisabledReason(q("liveResetTarget"), elementHasChanges(live.selectedId) ? null : "No changes on this element.");
+    [q("btnDeviceDesktop"), q("btnDeviceLaptop"), q("btnDeviceMobile"), q("btnDeviceFluid"), q("bridgeModeSelect"), q("bridgeModeInteract")]
+      .forEach(el => setDisabledReason(el, live.viewActive ? null : LIVE_VIEW_ONLY));
+    setDisabledReason(q("bridgeFocusPopout"), live.popup && !live.popup.closed ? null : "The pop-out window is closed. Dock back, or pop it out again.");
+    // Loaded means every family's stylesheet arrived; after a failed load the button stays, to try again.
+    const allLoaded = freeFontsAllowed && fonts.every(font => !fontStylesheetUrl(font) || fontLinks.get(font.family)?.dataset.state === "loaded");
+    ["loadFreeFontsLibrary", "loadFreeFonts"].forEach(id => setDisabledReason(q(id), allLoaded ? "Already loaded: every free font is on in this browser." : null));
+    const syncFile = q("liveCodeSync");
+    if (syncFile) {
+      syncFile.dataset.normalTitle = !savedStateEmpty() ? live.syncTitle
+        : `Writes an empty overrides file to ${live.syncPath}: nothing is saved in Studio now, so this clears what the file holds.`;
+      setDisabledReason(syncFile, !live.syncAvailable ? live.syncTitle : emptyWriteRefused() ? NOTHING_TO_SAVE : null);
+    }
+    setDisabledReason(q("liveCodeCopy"), ledgerEmpty() ? NOTHING_TO_SAVE : null);
+    setDisabledReason(q("liveCodeDownload"), ledgerEmpty() ? NOTHING_TO_SAVE : null);
+
+    applyColourSource(canvasBgSource.value, { custom:[canvasBgHex], tailwind:[canvasBgFamily, canvasBgShade], saved:[canvasSavedColor] });
+    const sourceSelect = slotInspector.querySelector('[data-bind="colorSource"]');
+    if (sourceSelect) {
+      const bound = name => slotInspector.querySelector(`[data-bind="${name}"]`);
+      applyColourSource(sourceSelect.value, { custom:[bound("colorHex")], tailwind:[bound("colorFamily"), bound("colorShade")], saved:[bound("savedColor")] });
+    }
+    const cut = slotInspector.querySelector('[data-bind="styleIndex"]');
+    if (cut) setDisabledReason(cut, cut.options.length <= 1 ? "This family has one cut only." : null);
+    const imageWidth = slotInspector.querySelector('[data-bind="imageWidth"]');
+    if (imageWidth) setDisabledReason(imageWidth, selectedSlot()?.assetDataUrl ? null : "Choose an image first: the width applies to the image.");
+  }
+  document.addEventListener("fontkit:font-state", refreshControlStates);
+  document.addEventListener("fontkit:free-fonts-allowed", refreshControlStates);
 
   renderLiveCode();
   detectDevServerSync();
@@ -5779,7 +6161,7 @@ if (remembered) kitId.value = remembered;
   applyCompositionPreset("rowdemo");
   if (compositionPreset) compositionPreset.value = "rowdemo";
 
-  // ?target=<url>: prefill the connector, open Composer → Target App and connect.
+  // ?target=<url>: prefill the connector, open Composer → Live App and connect.
   const initialTarget = new URLSearchParams(location.search).get("target");
   if (initialTarget && !studioEmbedded) {
     switchMode("composer");
@@ -5789,8 +6171,8 @@ if (remembered) kitId.value = remembered;
       connectTargetApp(initialTarget);
       switchToTargetView();
     } else {
-      setBridgeStatus("Invalid target URL", "error");
-      composerStatus.textContent = "Ignored ?target=: only http(s) target URLs can be previewed.";
+      setBridgeStatus("Invalid Live App URL", "error");
+      composerStatus.textContent = "Ignored ?target=: only http(s) Live App URLs can be previewed.";
     }
   }
 })();

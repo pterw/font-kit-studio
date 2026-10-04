@@ -5,7 +5,7 @@ module can assume a page that is already pointed at a running app and
 already isolated from the network.
 
 The server is the real `scripts/serve.py`, run as a subprocess on two
-OS-assigned loopback ports (Studio on one, the demo target on the other, so
+OS-assigned loopback ports (Studio on one, the demo app on the other, so
 they stay cross-origin exactly as a user runs them). A subprocess is stopped
 by signal and cannot outlive the gate's `finally`, and it is the same
 mechanism `tests/test_live_integration.py` already trusts. `--no-sync` makes

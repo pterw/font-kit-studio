@@ -17,7 +17,7 @@
   <a href="#roadmap">Roadmap</a>
 </p>
 
-![Studio connected to the demo app: the hero title is selected and the Live Target inspector is open](docs/assets/screenshots/target-app-desktop.png)
+![Studio connected to the demo app: the hero title is selected and the Live App inspector is open](docs/assets/screenshots/live-app-desktop.png)
 
 ## What it is
 
@@ -43,25 +43,27 @@ cd font-kit-studio
 python scripts/serve.py
 ```
 
-1. Open the URL on the line that starts with **`Open:`**, the last line the command prints. It looks like `http://localhost:8000/font_kit_studio_v0.1.1.html?target=http://localhost:8001/demo/`. The `Target:` line is the demo app on its own port; you do not open it yourself. To have the command open the browser for you, run `python scripts/serve.py --open`.
-2. Wait for the badge to say **Connected (N targets)**. The demo app, "Halyard", is already instrumented.
+1. Open the URL on the line that starts with **`Open:`**, the last line the command prints. It looks like `http://localhost:8000/font_kit_studio_v0.1.1.html?target=http://localhost:8001/demo/`. The `Demo:` line is the demo app's own address, on its own port; you do not open it yourself. The command never opens a browser on its own. To have it do so, run `python scripts/serve.py --open`.
+2. Studio opens the Composer in its **Live App** view and connects, because the URL names the demo. Wait for the badge to say **Connected (N targets)**. The demo app, "Halyard", is already instrumented.
 3. **Click** the big headline in the preview. Change its size, colour or text in the panel on the right.
-4. Watch the **Changes** panel under the preview. Press **Copy**, or press **Sync to file** to write the CSS to `demo/fontkit-overrides.css`, which the demo already links.
-5. Reload the preview. The style stays, because it now comes from the stylesheet. Studio asks whether to reapply the rest (see [Reconnect banner](#reconnect-banner)).
+4. Watch the **Changes** panel under the preview. Press **Copy**, or press **Sync to file** to write the CSS to `demo/fontkit-overrides.css`, which the demo already links. Both stay disabled until you have made a change.
+5. Press **Connect Live App** again to reload the preview. The style stays, because it now comes from the stylesheet. Studio asks whether to reapply the rest (see [Reconnect banner](#reconnect-banner)).
 
-To use your own app, add the one script tag from [Add fontkit to your app](#add-fontkit-to-your-app) and put your app's address in the **Target URL** box.
+To use your own app, add the one script tag from [Add fontkit to your app](#add-fontkit-to-your-app) and put your app's address in the **Live App URL** box and press **Connect Live App**.
 
 A few things Studio tells you on the way in:
 
-- The **Target URL** box starts empty, and **Connect Target** stays disabled with "Enter your app's URL" until you type one. A URL needs `http://` or `https://`.
-- When Studio is served by the dev server and opened without `?target=`, it prefills the demo address and the button reads **Connect to the demo**. It never connects on its own.
+- Studio opens on the **Library** tab. The Live App bridge bar is in the **Composer** tab. A URL with `?target=` opens the Composer and connects for you.
+- The **Live App URL** box starts empty. **Connect Live App** stays disabled, with "Enter your app's URL" in its tooltip and under the bar, until you type one. A URL needs `http://` or `https://`. Studio refuses its own address, and tells you why.
+- When Studio is served by the dev server on `localhost` and opened without `?target=`, it fills in the demo address and the button reads **Connect to the demo**. It never connects on its own. Edit the address and the button reads **Connect Live App** again.
 - If nothing answers within 4 seconds, the badge says `No bridge answered at <origin> within 4 s.` and the hint names both causes: nothing is running there, or the page does not load `fontkit-bridge.js`. Opened from disk, the hint adds how to start the dev server.
-- If Studio is hosted on the web and your app is on `localhost`, Chromium may block the reach; after 4 seconds with no answer, Studio says so. Open Studio from the dev server or from the file on disk instead.
-- Fullscreen no longer connects as a side effect; press **Connect Target** when you are ready.
+- If Studio is hosted on the web and your app is on `localhost`, Chromium may block the reach. After 4 seconds with no answer, Studio says so. Open Studio from the dev server or from the file on disk instead.
+- Fullscreen never connects as a side effect. It covers the bridge bar, so leave it with the **Exit** button or `Esc`, then press **Connect Live App** when you are ready.
+- A control that has nothing to act on is disabled, and its tooltip says why. **Sync to Live App** and **Restore Page Text** wait for a connected page, and Restore Page Text also waits for a text edit. **Reset this element**, **Copy**, **Download** and **Sync to file** wait for a change. **Select**, **Interact** and the width buttons work only in the Live App view. **Load free fonts** is off once every font has loaded. **Focus pop-out** is off while the pop-out is closed. **Sync to file** and **Auto-sync** also say when there is no dev server or sync is off. Because a tooltip is easy to miss, **Sync to file** and **Sync to Live App** also print their reason as a line of text next to the button.
 
 ### Open the Studio HTML file directly
 
-`font_kit_studio_v0.1.1.html` is a single file with no dependencies. You can double-click it, or open it from disk, and it works for the Library and the Composer. You can also connect it to a running app by typing the app's URL into **Target URL**, and the inspector, the Changes panel and Copy all work.
+`font_kit_studio_v0.1.1.html` is a single file with no dependencies. The file name keeps the old number for now; the version of the release shows in the browser tab's title and in the line above Studio's heading. You can double-click the file, or open it from disk, and it works for the Library and the Composer. You can also connect it to a running app by typing the app's URL into **Live App URL**, and the inspector, the Changes panel and Copy all work.
 
 What does **not** work from a file: **Sync to file** and **Auto-sync** are switched off, because there is no server to write the file. Use `python scripts/serve.py` for those.
 
@@ -70,7 +72,7 @@ What does **not** work from a file: **Sync to file** and **Auto-sync** are switc
 | Flag | Default | What it does |
 |---|---|---|
 | `--studio-port` | `8000` | Port for Studio. Also serves `/__fontkit/status` and the sync endpoint. |
-| `--target-port` | `8001` | Port for the demo and any file in this repo. Studio and the target use different ports on purpose, so they stay separate origins. |
+| `--target-port` | `8001` | Port for the demo and any file in this repo. Studio and the demo app use different ports on purpose, so they stay separate origins. |
 | `--overrides` | `demo/fontkit-overrides.css` | The one file Sync may write. It must be a `.css` file inside this repo. |
 | `--no-sync` | off | Refuses all writes. |
 | `--open` | off | Opens the `Open:` URL in your default browser once both ports are listening. |
@@ -80,12 +82,12 @@ What does **not** work from a file: **Sync to file** and **Auto-sync** are switc
 Two things to know:
 
 - **A different `--overrides` path is written, but the demo does not link it.** The demo always links `demo/fontkit-overrides.css`. For your own app, add `<link rel="stylesheet" href="http://localhost:8001/<your overrides path>">` after your own CSS (in development), or just use Copy.
-- **`--host 0.0.0.0` does not give your LAN access.** By default the server listens on loopback only. It accepts `localhost`, `127.0.0.1` and the exact name you pass to `--host`. A phone or another computer that uses your machine's IP address gets `421 Misdirected Request`. This blocks DNS-rebinding attacks. A browser sees a short page that names the accepted addresses and says to pass `--host`. To allow one address, pass it explicitly, for example `--host 192.168.1.20`.
+- **`--host 0.0.0.0` does not give your LAN access.** By default the server listens on loopback only. It accepts `localhost`, `127.0.0.1`, `[::1]` and the exact name you pass to `--host`. A phone or another computer that uses your machine's IP address gets `421 Misdirected Request`. This blocks DNS-rebinding attacks. A browser sees a short page that names the accepted addresses and says to pass `--host`. To allow one address, pass it explicitly, for example `--host 192.168.1.20`.
 - **A busy port stops the server with a message that names it**, for example `--studio-port 8000 is in use; pick another with --studio-port <port>`. Pass a free port with that flag (and `--target-port` for the demo port).
 
 ## Workflows
 
-### Live Target inspector
+### Live App inspector
 
 Click anything in the preview and the panel on the right becomes its inspector.
 
@@ -99,11 +101,11 @@ Click anything in the preview and the panel on the right becomes its inspector.
 | Arrange | Moves the element. See [Arrange](#arrange). |
 | Reset this element | Puts this element back exactly as it was. |
 
-Studio also works in a narrow window. At 390 px wide the inspector stacks under the preview, and nothing scrolls sideways:
+Studio also works in a narrow window. At 390 px wide the inspector stacks under the preview, and the connected view does not scroll sideways:
 
 <table>
   <tr>
-    <td><img alt="Preview with the hero title selected, 390 px wide" src="docs/assets/screenshots/target-app-mobile.png" width="220"></td>
+    <td><img alt="Preview with the hero title selected, 390 px wide" src="docs/assets/screenshots/live-app-mobile.png" width="220"></td>
     <td><img alt="Changes panel at 390 px wide" src="docs/assets/screenshots/code-panel-mobile.png" width="220"></td>
     <td><img alt="Arrange section at 390 px wide" src="docs/assets/screenshots/arrange-mobile.png" width="220"></td>
   </tr>
@@ -111,7 +113,7 @@ Studio also works in a narrow window. At 390 px wide the inspector stacks under 
 
 Values come back from the page, not from Studio. If the page snaps `550` to `600`, the box shows `600`. If the page rejects a value, the badge says `Rejected: <reason>` and nothing changes.
 
-Elements with a `data-design-id` have stable names. Others are discovered automatically (headings, paragraphs in sections, links in nav, buttons, images, badges and so on). Their selectors are built from the page structure, so the CSS tab marks them "auto-discovered, add data-design-id for a stable selector". If you add the attribute while editing, the target keeps its edits and moves to the new name; the next sync writes the stable selector. If you remove an author `data-design-id` while editing, the edit moves to an automatic id (the target's manifest carries `previousId`, naming the id you removed), and the unstable-selector hint comes back.
+Elements with a `data-design-id` have stable names. Others are discovered automatically (headings, paragraphs in sections, links in nav, buttons, images, badges and so on). Their selectors are built from the page structure, so the CSS tab marks them "auto-discovered, add data-design-id for a stable selector". If you add the attribute while editing, the element keeps its edits and moves to the new name; the next sync writes the stable selector. If you remove an author `data-design-id` while editing, the edit moves to an automatic id (the element's manifest carries `previousId`, naming the id you removed), and the unstable-selector hint comes back.
 
 The badge shows where you are: `Idle`, `Connecting…`, `Bridge detected`, `Connected (N targets)`, `Live · rev N`, `Rejected: <reason>`, `No bridge answered at <origin> within 4 s.` (with a hint that says what to check), `Disconnected (window closed)`.
 
@@ -119,7 +121,7 @@ The badge shows where you are: `Idle`, `Connecting…`, `Bridge detected`, `Conn
 
 The **Select / Interact** switch sits in the bar above the preview.
 
-![The bridge bar: status badge, target URL, Select and Interact, Pop out and device widths](docs/assets/screenshots/bridge-bar-desktop.png)
+![The bridge bar: status badge, Live App URL, Select and Interact, Pop out and device widths](docs/assets/screenshots/bridge-bar-desktop.png)
 
 - **Select** (default): clicks pick an element for editing. Links and buttons do not run.
 - **Interact**: the page behaves normally. Links, buttons, form fields and menus all work, and Studio stops reporting hover and selection.
@@ -136,7 +138,7 @@ Under the preview, **Changes** shows what you have done so far, built only from 
 |---|---|
 | **CSS** | `@import` lines first for the free fonts in use (only once you have asked for free fonts, see [Free fonts](#free-fonts)), then one rule per changed element with `!important` declarations. This is the file Sync writes. |
 | **HTML** | The changed elements as clean snippets: text edits, and the container for every element you moved. Bridge-added attributes and inline overrides are removed. |
-| **JSON** | `{ "target", "revision", "overrides" }`: the same changes keyed by target id. When a DOM move is saved it also holds `structure`, the saved DOM order. |
+| **JSON** | `{ "target", "revision", "overrides" }`: the Live App's URL, the revision, and the same changes keyed by element id. When a DOM move is saved it also holds `structure`, the saved DOM order. |
 
 Buttons: **Copy** (clipboard), **Download** (`fontkit-overrides.css`, `fontkit-changes.html` or `fontkit-overrides.json`), **Sync to file**, and **Auto-sync**.
 
@@ -144,9 +146,12 @@ Buttons: **Copy** (clipboard), **Download** (`fontkit-overrides.css`, `fontkit-c
 - **Auto-sync** rewrites the file about 400 ms after the last change. Writes never overlap, and the latest state wins.
 - Text changes go in the HTML tab, not the stylesheet. DOM moves also live in the HTML tab. Studio keeps them in its saved state and in the live JSON (`structure`), so **Reapply** puts them back after a reload, but Sync never writes them: it adds no CSS rules for a DOM move (the file only gains a comment that points to the HTML tab). CSS-order moves are plain CSS (`order`), so they are in the stylesheet.
 - A bridge from before `orderIds` (see [Bridge to Studio](#bridge-to-studio)) cannot have its DOM moves saved. Studio says so when you make one.
-- If the page itself changes the order of a container Studio saved (for example when the app re-renders it), Studio keeps its saved order instead of adopting the page's order, and shows the reconnect banner at the next DOM move or reset it processes, or when the page reconnects. A DOM move is not saved when it would put an element in two saved containers (possible while that banner is open) or save more than 100 containers; the status says so, and **Reapply** or **Accept target state** resolves the first case.
+- If the page itself changes the order of a container Studio saved (for example when the app re-renders it), Studio keeps its saved order instead of adopting the page's order, and shows the reconnect banner at the next DOM move or reset it processes, or when the page reconnects. A DOM move is not saved when it would put an element in two saved containers (possible while that banner is open) or save more than 100 containers; the status says so, and **Reapply** or **Accept Live App state** resolves the first case.
 
-Studio never writes the file until you press Sync (or turn on Auto-sync).
+Studio never writes the file until you press Sync (or turn on Auto-sync). It also never writes a placeholder over a file it has not changed:
+
+- **A fresh session writes nothing.** Until Studio has held a saved change since the page loaded, **Sync to file** is disabled with "No changes to save yet." If you turn on **Auto-sync** anyway, it writes nothing and says so. A stylesheet you wrote by hand is left as it is.
+- **After your own reset, Sync clears the file.** Once Studio has held a saved change, resetting the last one leaves nothing to save, but the file may still hold the old CSS. **Sync to file** then stays on, its tooltip says it writes an empty overrides file, and pressing it replaces the file with two comments: the header that names the Live App's URL, and `/* No live style overrides yet. */`. Auto-sync does the same on its own after the reset.
 
 ### Arrange
 
@@ -187,9 +192,9 @@ If the page throws an error within one second of a change, Studio shows it as a 
 
 ### Pop-out window
 
-**Pop out** asks your browser for a separate window (a pop-up of about 1280 by 860 pixels, placed near Studio, so the two can sit side by side). The browser decides in the end: some settings open a tab instead, and you can drag that tab out. The page then runs at its real size, and nothing is inside an iframe, which helps with apps that refuse to be framed.
+**Pop out** asks your browser for a separate window. Studio asks for a pop-up that is 80 pixels smaller than the available screen each way, never smaller than 600 by 400 or bigger than 1280 by 860, and offset 40 pixels from Studio's own window, so the two do not stack exactly. The browser decides in the end: some settings open a tab instead, and you can drag that tab out. The page then runs at its real size, and nothing is inside an iframe, which helps with apps that refuse to be framed.
 
-![Studio with the target popped out into its own window](docs/assets/screenshots/pop-out-desktop.png)
+![Studio with the Live App popped out into its own window](docs/assets/screenshots/pop-out-desktop.png)
 
 - Pick elements in the pop-out. The inspector in Studio edits them.
 - Studio cannot draw over another window, so the bridge draws a thin outline in the pop-out page. It is removed when you dock, and it never appears in the exported code.
@@ -205,7 +210,7 @@ When the preview reloads, the new page has none of your live edits. Studio does 
 | Button | Does |
 |---|---|
 | **Reapply Studio overrides** | Sends Studio's saved changes to the page again, so you can keep editing them. Text, fonts and CSS-order moves are replayed first, then DOM-order moves in order, then composition tokens. If a leftover CSS order has to be cleared first, the banner says so. That reset puts the element back where it started, so it undoes a DOM move only when the move is not saved; a saved DOM move is replayed after the resets. |
-| **Accept target state** | Replaces Studio's saved overrides and composition tokens with what the page has now, and keeps only the saved DOM order the page still holds exactly as saved. Saved overrides and tokens the page does not hold are dropped; containers that only the page reordered are not adopted. The overrides file is left alone until you press Sync, and the next Sync writes a smaller CSS file only when the page holds fewer style edits and tokens than Studio saved, and the banner says when (text edits never change the CSS file). |
+| **Accept Live App state** | Replaces Studio's saved overrides and composition tokens with what the page has now, and keeps only the saved DOM order the page still holds exactly as saved. Saved overrides and tokens the page does not hold are dropped; containers that only the page reordered are not adopted. The overrides file is left alone until you press Sync, and the next Sync writes a smaller CSS file only when the page holds fewer style edits and tokens than Studio saved, and the banner says when (text edits never change the CSS file). |
 
 After you press **Sync to file** and reload, the page can look right while the banner reports 0 live edits. The synced overrides file already styles the page, and the bridge counts only edits made through Studio, so there is nothing to count. That is expected. Nothing was applied automatically, and the overrides file only changes when you sync.
 
@@ -214,7 +219,7 @@ If Reapply fails, Studio keeps its saved state, writes nothing, and says what ha
 ### Free fonts
 
 - The default is **16 free open-source fonts** (SIL Open Font License) from Google Fonts: serif, sans, display and mono, several of them variable. Nothing is bundled and no kit ID is filled in.
-- **Studio is silent until you ask.** On first load it makes no request outside the server it came from. Specimens render in fallback fonts, and a short hint next to the Library and Composer font controls says so. Fonts load when you press **Load free fonts** (Library or Composer), switch the Composer's Kit preset to Free Google Fonts (from another preset), or pick a library family in the Live Target inspector (Target App view). Picking a family in the Composer's slot inspector does not load anything; it says the slot is shown in a fallback font until you load the free fonts. The target app stays silent too: Studio sends it no library-font stylesheet until you ask. **Sync to Live App** in the Composer, importing a composition, and applying one with Sync or Reapply do not count as asking. Until you ask, saved or imported overrides and tokens add no Google Fonts `@import` to the CSS tab or the synced overrides file (stylesheets the page itself already loaded are still listed), and the page shows the fallback of each font stack (the stack itself is still sent). The reconnect banner, the Reapply and Sync statuses and the Composer say so: "Library fonts are not loaded until you press Load free fonts, which contacts Google Fonts; until then the page shows each font stack's fallback." Studio then remembers that choice in this browser (`localStorage` key `fontkit-free-fonts`, guarded: if storage is blocked it simply asks again each visit), and later visits load cards as they scroll into view. To forget it, clear the site data for Studio.
+- **Studio is silent until you ask.** On first load it makes no request outside the server it came from. Specimens render in fallback fonts, and a short hint next to the Library and Composer font controls says so. Fonts load when you press **Load free fonts** (Library or Composer), switch the Composer's Kit preset to Free Google Fonts (from another preset), or pick a library family in the Live App inspector (Live App view). Picking a family in the Composer's slot inspector does not load anything; it says the slot is shown in a fallback font until you load the free fonts. The Live App stays silent too: Studio sends it no library-font stylesheet until you ask. **Sync to Live App** in the Composer, importing a composition, and applying one with Sync or Reapply do not count as asking. Until you ask, saved or imported overrides and tokens add no Google Fonts `@import` to the CSS tab or the synced overrides file (stylesheets the page itself already loaded are still listed), and the page shows the fallback of each font stack (the stack itself is still sent). The reconnect banner, the Reapply and Sync statuses and the Composer say so: "Library fonts are not loaded until you press Load free fonts, which contacts Google Fonts; until then the page shows each font stack's fallback." Studio then remembers that choice in this browser (`localStorage` key `fontkit-free-fonts`, guarded: if storage is blocked it simply asks again each visit), and later visits load cards as they scroll into view. To forget it, clear the site data for Studio.
 - Choosing one in the inspector loads its stylesheet in the page too, and the CSS tab starts with the matching `@import`. Saved or imported overrides that name a library font get their `@import` and page stylesheet only after you have asked.
 - **Adobe Fonts** is bring-your-own. Choose "Bring your own Adobe kit" in the Composer's Kit preset and paste your own kit ID. Studio ships with the field empty.
 
@@ -222,13 +227,23 @@ Loading Google Fonts needs a network connection, and it sends a request to Googl
 
 ### Library and Composer
 
-Both work with or without a target app:
+Both work with or without a Live App:
 
-- **Library**: browse specimens for the free families.
-- **Composer**: build flow layouts from 2 to 4 leaf slots per row, with PNG/SVG brand marks, rules and spacers. Export JSON or CSS, and import it again.
-- **Specimen / Target App** switches the Composer between its own canvas and your live app. **Sync to Live App** is the explicit button that sends the Composer's composition to the page. It sets the page's font tokens and each text slot's tracking, and once you have asked for free fonts it also loads the stylesheets of the library fonts the composition uses (before that it sends the font stacks only, and says so). It also reorders the page's main sections by slot order and adds a short CSS `transition` to them. That reordering does not show in the Changes panel. Reload the preview to undo it.
+- **Library**: browse specimens for the free families. It says which fonts are loaded, including any you loaded from the Composer.
+- **Composer**: build flow layouts from 2 to 4 leaf slots per row, with PNG/SVG brand marks, rules and spacers. Export JSON or CSS, and import it again. The **Composition preset** select applies the preset you pick as soon as you pick it. If you have edited the slots, the canvas width or the background since the last preset, Studio asks "Replace your edits?" first, and **Cancel** keeps them. **Apply preset** applies the showing preset again after the same question, or says there are no edits to reset.
+- **Specimen / Live App** switches the Composer between its own canvas and your running app. The Live App view hides the fields that only change the composition.
+- **Sync to Live App** is the explicit button that sends the Composer's composition to the page. Each slot finds its element by its role: a `data-design-id` that contains the role's name, or a role word such as title, body, brand, badge or image. A slot whose role finds nothing takes the element at its own position in the page's `data-design-id` elements (yours and the ones the bridge named itself), in page order, so the first slot takes the first one. Rule and Spacer slots usually land that way, so they can restyle an element you did not expect. In the page, Sync then does this:
+  - It sets the page's font tokens: `--font-display`, and `--font-sans`, `--font-serif` and `--font-mono` when a slot's role or font fits them.
+  - For a text slot, it restyles the element: family, size, weight, line height, tracking, colour, alignment and case. It changes the element's text only if you edited the slot's text.
+  - For an image slot with a PNG or SVG chosen, it puts that image into the element, at the slot's width and opacity. It replaces an `<img>`'s source, shows the image next to an inline `<svg>` (and hides the `<svg>`), and puts it inside any other element.
+  - For a spacer slot, it sets the element's `margin-top` to the spacer's height.
+  - For a rule slot, it sets the element's `width` (as a percentage), `border-top-width` and `border-color`.
+  - Once you have asked for free fonts, it loads the stylesheets of the library fonts the composition uses. Before that it sends the font stacks only, and says so.
+  - It adds a short CSS `transition` to the children of `<main>`, `#main-content-flow` and every element marked `data-design-order-container="true"` (each one with two or more children). It sets `order` on each child that holds a mapped element. When two or more children of one container do, it also moves them in the DOM into slot order, after that container's other children.
+
+  The Changes panel shows the tokens (CSS tab), a DOM move (HTML tab, with a note in the CSS tab) and a text you edited (HTML tab). It does not list the element styles, `order`, `transition` or the image, spacer and rule changes, so Copy and Sync to file do not carry them. A placed image can still appear inside the snippet of a DOM move or a text change. Press **Connect Live App** again to reload the preview, which undoes all of it in the page.
 - **Restore Page Text** (in the bar above the preview) puts every changed text back and keeps the styles.
-- Device buttons (390 / 1024 / 1440 / Fluid) set the preview width. A preview wider than the window scrolls sideways under its own scrollbar and is never scaled, so the inspector's measurements stay true to the page. **Fullscreen** uses the whole window; leave it with the **Exit** button in the top-left of the preview or with `Esc`.
+- Device buttons (1440 / 1024 / 390 / Fluid) set the preview width, in the Live App view. A preview wider than the window scrolls sideways under its own scrollbar and is never scaled, so the inspector's measurements stay true to the page. **Fullscreen** uses the whole window; leave it with the **Exit** button in the top-left of the preview or with `Esc`.
 - Importing a composition JSON while the Composer is linked to the page keeps the imported tokens and ends the link: nothing is sent, the status says so, and the reconnect banner appears if the page differs. Press **Sync to Live App** to send the import and link again.
 
 Exported JSON stays at version `0.1.1`. It can carry an optional `live` field with your saved overrides, tokens and DOM order (`live.structure`). Older files without it still import.
@@ -434,7 +449,7 @@ Separate several origins with spaces or commas. Origins are compared without reg
 
 For a page where you cannot add the tag, you can inject the bridge by hand. A bookmarklet cannot run inside Studio's iframe, so use it in a **pop-out**:
 
-1. In Studio, enter the page's URL and press **Connect Target**. It says `No bridge answered at <origin> within 4 s.`
+1. In Studio, enter the page's URL and press **Connect Live App**. It says `No bridge answered at <origin> within 4 s.`
 2. Press **Pop out**. The page opens in its own window.
 3. In that window, run the bookmarklet below. Create a bookmark whose URL is that line, and click the bookmark. Or open the DevTools console and paste only the part after `javascript:` (Chrome asks you to type `allow pasting` first). Browsers remove `javascript:` from text pasted into the address bar, so pasting the whole line there does nothing.
 
@@ -450,7 +465,7 @@ Two cautions. The script URL uses port 8000, the default `--studio-port`. If you
 
 Studio and the bridge talk with `window.postMessage`. This is a summary of what the code does today. The requirements are in [`font-kit-studio-v0.2.0-design-bridge-protocol-v1.md`](font-kit-studio-v0.2.0-design-bridge-protocol-v1.md), and the exact contract is in [the v0.2.0 plan](docs/plans/2026-10-02-v0.2.0-live-preview-code-sync.md).
 
-Every message has `protocolVersion: 1`. Every message except `design:bridge-ready` and `design:hello` also has the `sessionId` that Studio chose.
+Every message has `protocolVersion: 1`. Every message except `design:bridge-ready` also has the `sessionId` that Studio chose; Studio proposes it in `design:hello`.
 
 ```text
 Bridge                                   Studio
@@ -498,7 +513,7 @@ The change ledger in `design:ready` and `design:applied` lists each container wh
 |---|---|---|
 | `fontFamily` | text of 1 to 300 characters, no `; { } < > \`, `url(` or `expression(` | `font-family` |
 | `fontSize` | 4 to 400 | `font-size` in px |
-| `fontWeight` | 1 to 1000 | `font-weight`, snapped if the target limits weights |
+| `fontWeight` | 1 to 1000 | `font-weight`, snapped if the element limits weights |
 | `lineHeight` | 0.5 to 5 | `line-height`, no unit |
 | `letterSpacing` | -0.5 to 2 | `letter-spacing` in em |
 | `color` | `#rgb`, `#rrggbb`, `#rrggbbaa`, or `rgb()`, `rgba()`, `hsl()`, `hsla()` | `color` |
@@ -517,7 +532,7 @@ fontkit edits a live page from another window, so both sides check every message
 
 **Inert by default.** Before Studio connects, the bridge does not change the page or block clicks. The only thing it sends is a `design:bridge-ready` that carries no page data, to the window that framed or opened the page. Your app works as normal.
 
-**What gets through.** Studio only loads `http:` and `https:` targets (`file:` only when Studio itself is a file) and never itself. The bridge only accepts the values in the patch table above. Text goes in as text, never as markup. Font stylesheets, one per patch or a composition's list of up to 16, must each be a Google Fonts `css2` URL or an Adobe Fonts kit URL. Placed images are `<img>` elements with PNG or SVG data, never inserted markup.
+**What gets through.** Studio only loads `http:` and `https:` Live App URLs (`file:` only when Studio itself is a file) and never itself. The bridge only accepts the values in the patch table above. Text goes in as text, never as markup. Font stylesheets, one per patch or a composition's list of up to 16, must each be a Google Fonts `css2` URL or an Adobe Fonts kit URL. Placed images are `<img>` elements with PNG or SVG data, never inserted markup.
 
 **The dev server.** By default it listens on loopback only. It checks the `Host` header (so a hostile website cannot reach it by DNS rebinding), checks `Origin` on writes, limits a write to 1 MiB, writes atomically to the single `.css` file you named inside this repo, and sends `Cache-Control: no-store`. `--no-sync` turns writes off. It serves the files of this repo on both ports, so do not expose it to untrusted networks.
 
@@ -557,8 +572,16 @@ In a container with a browser already installed: `FKS_ENGINES=chromium FKS_CHROM
 | `test_bridge_runtime.py` | The bridge against a real cross-origin host page: handshake, validation, moves and guards, ledger, pop-out overlay, font stylesheets, re-render handling, hostile messages. |
 | `test_studio_live.py` | Studio against a fake bridge: protocol client, inspector, code panel, sync, reconnect, arrange, pop-out, free fonts, hostile messages. |
 | `test_preview_server.py` | `scripts/serve.py` and the demo: ports, sync endpoint, Host and Origin checks, size limit, atomic writes. |
+| `test_studio_first_run.py` | First run: the empty URL box, the demo offer, the no-bridge messages, fullscreen and the favicon. |
+| `test_studio_controls.py` | Controls that would do nothing: each is disabled with its reason, and Sync to file never writes a placeholder over a file. |
+| `test_studio_dead_controls.py` | The composition preset and its question, single-cut chips, Move into, sibling clicks and refused inputs. |
+| `test_studio_import_link.py` | Importing a composition while it is linked to the page. |
+| `test_studio_stage.py` | Width buttons never crop the preview, and the font tokens follow a slot's role. |
+| `test_studio_visual.py` | Version labels, one primary action per panel, control heights, focus rings, contrast and the width of the Live App URL box. |
+| `test_studio_review_findings.py` | Saved DOM order with a duplicate `data-design-id`, and the 16-stylesheet limit. |
+| `test_support.py` | The shared test harness: engine selection (an engine list that runs no browser is refused), the shared browser with a fresh context per test, the Firefox canary's test list, the Composer canvas snapshot helper, and a guard against reading a page's markup raw. |
 | `test_commit_messages.py` | The commit-message check, with a throwaway git repository: each forbidden form, allowed human co-authors, range parsing. |
-| `test_frontend_gate_*.py` | The gate's own logic, with no browser: colour maths, contrast and layout judgements, report lines, the exit-code rule, CLI flags and the check table. |
+| `test_frontend_gate_*.py` | The gate's own logic: colour maths, contrast and layout judgements, report lines, the exit-code rule, CLI flags and the check table. `test_frontend_gate_fonts.py` and `test_frontend_gate_theme_browser.py` run a real browser; the others need none. |
 | `test_live_integration.py` | Everything together, with nothing faked: real server, real Studio, real bridge, real demo and the real clipboard. It also runs the README's own script tag and bookmarklet. |
 
 **Screenshots** in this README come from `docs/assets/screenshots/capture.py`, which drives the same real setup.
@@ -584,7 +607,7 @@ Every finding is one line that names its check, profile and engine:
 [frontend_gate] ADVISORY <check> [<profile>, <engine>]: <detail>
 ```
 
-**Blocking and advisory.** Font Kit Studio is a desktop-first tool, so only Chromium at the desktop profile blocks: a `FAIL` there fails the gate. Every other run (Firefox, and the phone and wide-touch profiles) still runs and still prints what it finds, as `ADVISORY` lines that never change the exit code. The summary counts blocking and advisory results separately. `--enforce chromium:desktop` is the default; `--enforce all` (or a list such as `chromium:desktop,firefox:desktop`) makes more runs blocking, and `--enforce none` makes the whole gate advisory on purpose. A policy that leaves no blocking run among the selected engines is an error, so a typo cannot make the gate pass by checking nothing. If an engine with no blocking runs (Firefox by default) is not installed, the gate prints one `ADVISORY engine` line, counts its runs as not run, and carries on. In CI the Chromium gate and Chromium test suite block, and the Firefox suite runs in its own non-blocking step.
+**Blocking and advisory.** Font Kit Studio is a desktop-first tool, so only Chromium at the desktop profile blocks: a `FAIL` there fails the gate. Every other run (Firefox, and the phone and wide-touch profiles) still runs and still prints what it finds, as `ADVISORY` lines that never change the exit code. The summary counts blocking and advisory results separately. `--enforce chromium:desktop` is the default; `--enforce all` (or a list such as `chromium:desktop,firefox:desktop`) makes more runs blocking, and `--enforce none` makes the whole gate advisory on purpose. A policy that leaves no blocking run among the selected engines is an error, so a typo cannot make the gate pass by checking nothing. If an engine with no blocking runs (Firefox by default) is not installed, the gate prints one `ADVISORY engine` line, counts its runs as not run, and carries on. In CI the Chromium gate and Chromium test suite block, and the Firefox canary runs in its own non-blocking step.
 
 `FAIL` changes the exit code. `REPORT` is advisory and never does. `SKIP` says a check could not run. The last line, `SUMMARY`, counts runs passed, failed and skipped against the number planned, plus the REPORT and SKIP lines, so a check that silently stops running shows as a smaller number. A check that raises is a `FAIL`, not a crash. A failing run saves a screenshot under `work/frontend-gate/`.
 
@@ -592,11 +615,11 @@ Every finding is one line that names its check, profile and engine:
 |---|---|---|---|
 | network isolation | desktop | Studio (Library, Composer, connected) and the demo ask for nothing outside the two served origins on first load, Google Fonts included: fonts load only after the user asks. | yes |
 | free fonts load | desktop | After Load free fonts, every library family resolves a real face. Needs the network; `--offline` prints `SKIP`. | yes |
-| no horizontal overflow | all three | Library, Composer, the connected target view, the pop-out placeholder and the demo never scroll sideways. | yes |
+| no horizontal overflow | all three | Library, Composer, the connected Live App view, the pop-out placeholder and the demo never scroll sideways. | yes |
 | initial visibility | desktop, phone | Things a script reveals later (banner, code panel, pop-out placeholder, overlays) compute `display: none` on load. | yes |
 | live edit | all three | Select a demo element (by tap on touch), change its size, the iframe follows and the CSS tab shows the rule, Reset restores the page byte for byte. | yes |
 | logo paint | desktop | Both README logos have no text, script or external reference, and every painted colour reaches 3:1 on GitHub's light and dark pages, as an image and as inline markup. | yes |
-| theme contrast | desktop, phone | Light and dark: text on the v0.2 surfaces (bridge bar, Live Target inspector, code panel, reconnect banner, warning states) reaches 4.5:1. | v0.2 surfaces yes, legacy surfaces `REPORT` |
+| theme contrast | desktop, phone | Light and dark: text on the v0.2 surfaces (bridge bar, Live App inspector, code panel, reconnect banner, warning states) reaches 4.5:1. | v0.2 surfaces yes, legacy surfaces `REPORT` |
 | touch targets | phone, wide touch | Tappable elements are at least 44px on the smaller side. A label and its input count as one target. | no, `REPORT` only |
 
 A Google Fonts request on first load is a `FAIL`: Studio is silent until the user presses Load free fonts (see Free fonts).
@@ -611,6 +634,7 @@ Known gaps:
 
 - Reapply cannot replay a DOM move made with **Move anyway**, and cannot place an element in a container the page no longer holds (or one that holds none of the saved elements). It stops and says why.
 - Edits made while the page is reloading are dropped.
+- At 390 px wide, the "No bridge answered" badge can push the page sideways.
 - Rows hold 2 to 4 leaf slots. Nested rows and JPEG assets are out of scope.
 
 ## Roadmap
