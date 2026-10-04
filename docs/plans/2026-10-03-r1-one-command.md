@@ -67,7 +67,7 @@ Each task is one brief, one report and one independent review under
 `docs/implementation/tasks/r1-task-<n>-*.md`. Owned files are exclusive while a task runs.
 Node code lives under `packages/fontkitstudio/` (exact layout fixed in R1.1).
 
-- [ ] **R1.0 Name registration and publishing setup.** Owner actions (D042): publish the
+- [x] **R1.0 Name registration and publishing setup.** Owner actions (D042): publish the
   `0.0.0` placeholder of `fontkitstudio` by hand from the owner's npm account with 2FA,
   deprecate it ("not released yet"), configure the trusted publisher for this repository's
   release workflow, and set the package to require 2FA and disallow tokens. The controller
