@@ -746,7 +746,7 @@ class StudioPersistenceTests(LiveCase):
                 self.assertEqual(self.updates(frame), [])
                 self.assertEqual(errors, [])
 
-    ACCEPT = "Accept target state replaces Studio's saved overrides, composition tokens and DOM order with what the page has now"
+    ACCEPT = "Accept Live App state replaces Studio's saved overrides, composition tokens and DOM order with what the page has now"
 
     def test_the_banner_explains_zero_live_edits_only_when_the_target_has_none(self):
         for engine in ENGINES:
@@ -782,7 +782,7 @@ class StudioPersistenceTests(LiveCase):
                 frame = self.frame(page)
                 self.wait_connected(page)
                 zero = ' '.join(banner.inner_text().split())
-                self.assertIn('the live target has 0 targets changed', zero)
+                self.assertIn('the Live App has 0 targets changed', zero)
                 self.assertRegex(zero, r'overrides file already styles the page')
                 self.assertRegex(zero, r'0 live edits')
                 # ... but not when the page holds composition tokens: those are edits the bridge counts.
@@ -816,7 +816,7 @@ class StudioPersistenceTests(LiveCase):
                 page, errors = self.open(engine, sync=True)
                 text = self.banner_after_saved_edit_and_reload(page, [('#liveText', 'New headline')])
                 self.assertIn('Studio has saved overrides for 1 target', text)
-                self.assertIn('the live target has 0 targets changed', text)
+                self.assertIn('the Live App has 0 targets changed', text)
                 self.assertIn(self.ACCEPT, text)
                 # Accept drops the saved text, but the file has no text to lose: the next Sync does not write less.
                 self.assertNotRegex(text, r'smaller file')
@@ -925,7 +925,7 @@ class StudioFixRound1Tests(LiveCase):
                     page, errors = self.open(engine, target=probe)
                     page.wait_for_timeout(300)
                     self.assert_not_loaded(page)
-                    self.assertEqual(page.locator('#bridgeStatusBadge').inner_text(), 'Invalid target URL')
+                    self.assertEqual(page.locator('#bridgeStatusBadge').inner_text(), 'Invalid Live App URL')
                     self.assertEqual(errors, [])
                 # Same-origin blob: and javascript: through the URL field (Connect button and Enter).
                 page, errors = self.open(engine, target=None)
@@ -935,7 +935,7 @@ class StudioFixRound1Tests(LiveCase):
                     self.connect(page, probe)
                     page.wait_for_timeout(300)
                     self.assert_not_loaded(page)
-                    self.assertEqual(page.locator('#bridgeStatusBadge').inner_text(), 'Invalid target URL')
+                    self.assertEqual(page.locator('#bridgeStatusBadge').inner_text(), 'Invalid Live App URL')
                     page.locator('#targetAppUrl').press('Enter')
                     page.wait_for_timeout(200)
                     self.assert_not_loaded(page)
@@ -1007,7 +1007,7 @@ class StudioFixRound1Tests(LiveCase):
                 self.wait_connected(page)
                 frame = self.frame(page)
                 text = ' '.join(banner.inner_text().split())
-                self.assertIn("Accept target state replaces Studio's saved overrides, composition tokens and DOM order with what the page has now", text)
+                self.assertIn("Accept Live App state replaces Studio's saved overrides, composition tokens and DOM order with what the page has now", text)
                 self.assertRegex(text, r'next Sync writes a smaller file', 'the saved edit is the only difference, so the claim is true')
                 # While unresolved, Studio's saved overrides are what gets persisted.
                 self.select(page, frame, 'hero.lead')
@@ -1226,7 +1226,7 @@ class StudioFixRound1Tests(LiveCase):
                 page.wait_for_function('() => /rev 1$/.test(document.querySelector("#bridgeStatusBadge").textContent)')
                 frame.evaluate('window.fake.hold = true')
                 page.locator('#liveResetTarget').click()
-                self.wait_badge(page, '^No response from target$', timeout=10000)
+                self.wait_badge(page, '^No response from the Live App$', timeout=10000)
                 selects = len(self.received(frame, 'design:select'))
                 frame.evaluate('window.fake.hold = false')
                 frame.evaluate('window.fake.release()')
@@ -1247,7 +1247,7 @@ class StudioFixRound1Tests(LiveCase):
                 self.select(page, frame, 'hero.title')
                 frame.evaluate('window.fake.hold = true')
                 self.set_value(page, '#liveFontSize', 60)
-                self.wait_badge(page, '^No response from target$', timeout=10000)
+                self.wait_badge(page, '^No response from the Live App$', timeout=10000)
                 frame.evaluate('window.fake.hold = false')
                 frame.evaluate('window.fake.release()')
                 self.wait_badge(page, r'^Live · rev 1$')
@@ -2020,7 +2020,7 @@ class StudioPopoutTests(ArrangeCase):
                               'blob:http://studio.test/x', 'ftp://target.test/'):
                     page.locator('#targetAppUrl').fill(probe)
                     page.locator('#bridgePopOut').click()
-                    self.wait_badge(page, r'^Invalid target URL$')
+                    self.wait_badge(page, r'^Invalid Live App URL$')
                     self.assertEqual(page.evaluate('window.__opens'), [], probe)
                 page.wait_for_timeout(300)
                 self.assertEqual(opened, [])
@@ -2614,7 +2614,7 @@ class StudioReviewFixTests(LiveCase):
                         frame.evaluate('([id, value]) => window.fake.setSelector(id, value)', ['auto.h2.1', selector])
                         self.edit_size(page, frame, size)
                         css = self.code(page, 'Css')
-                        self.assertIn('skipped: the target reported no safe selector', css)
+                        self.assertIn('skipped: the Live App reported no safe selector', css)
                         self.assertNotIn(f'font-size: {size}px', css)
                         for hostile in ('{ color: red }', '<script>', 'evil.example', '/* x */', 'display: none'):
                             self.assertNotIn(hostile, css)
@@ -2650,7 +2650,7 @@ class StudioReviewFixTests(LiveCase):
                         css = self.code(page, 'Css')
                         page.evaluate('1 + 1')
                         self.assertLess(time.time() - started, 3, 'the page stayed responsive')
-                        self.assertIn('skipped: the target reported no safe selector', css)
+                        self.assertIn('skipped: the Live App reported no safe selector', css)
                         self.assertNotIn(f'font-size: {size}px', css)
                 self.assertEqual(errors, [])
 
@@ -2693,7 +2693,7 @@ class StudioReviewFixTests(LiveCase):
         banner.wait_for(state='visible')
         frame.evaluate('(values) => window.fake.setTokens(values)', self.LEFT_ON_TARGET)
         frame.evaluate('window.fake.reannounce()')
-        page.wait_for_function('() => /the live target has \\d+ targets? changed and 2 composition tokens/.test('
+        page.wait_for_function('() => /the Live App has \\d+ targets? changed and 2 composition tokens/.test('
                                'document.querySelector("#liveReconnectText").textContent)')
         self.assertEqual(self.updates(frame), [], 'reconnecting never applies anything by itself')
         return banner
@@ -2766,10 +2766,10 @@ class StudioReviewFixTests(LiveCase):
         self.select(page, frame, 'hero.lead')
         self.set_value(page, '#liveFontSize', 17)
         # The first request times out (8 s) and the second is sent; then the second times out as well.
-        self.wait_badge(page, '^No response from target$', timeout=15000)
+        self.wait_badge(page, '^No response from the Live App$', timeout=15000)
         frame.wait_for_function('window.fake.heldCount() === 2')
         page.evaluate('() => { document.querySelector("#bridgeStatusBadge").textContent = "Waiting for the second request"; }')
-        self.wait_badge(page, '^No response from target$', timeout=15000)
+        self.wait_badge(page, '^No response from the Live App$', timeout=15000)
 
     def test_every_timed_out_request_stays_tracked_until_its_late_reply_arrives(self):
         """A target that applies the queued requests in order, whatever revision they were based on."""
@@ -3086,7 +3086,7 @@ class StudioDomMovePersistenceTests(ArrangeCase):
                 banner.wait_for(state='visible')
                 frame = self.wait_ready(page, 11)
                 self.assertRegex(banner.inner_text(), r'(?i)DOM order')
-                self.assertEqual(page.locator('#liveReconnectHeading').inner_text(), 'Target reconnected.')
+                self.assertEqual(page.locator('#liveReconnectHeading').inner_text(), 'Live App reconnected.')
                 # Restoring a move stays an explicit choice.
                 page.wait_for_timeout(300)
                 self.assertEqual(self.moves(frame), [])
@@ -3203,7 +3203,7 @@ class StudioDomMovePersistenceTests(ArrangeCase):
                 self.wait_badge(page, r'^Live · rev 3$')
                 self.assertEqual(self.export(page)['live']['structure'], saved, 'the saved order is what the user saved, not the page\'s')
                 banner.wait_for(state='visible')
-                self.assertIn('the live target holds 0 of them', ' '.join(banner.inner_text().split()))
+                self.assertIn('the Live App holds 0 of them', ' '.join(banner.inner_text().split()))
                 self.assertEqual(self.dom(frame), ['card.d', 'card.b', 'card.a', 'card.c'], 'Studio did not touch the page')
                 page.wait_for_timeout(1000)                                # absence check: auto-sync waits 400 ms
                 self.assertEqual(len(self.puts), 1, 'an open mismatch blocks auto-sync')
@@ -3278,7 +3278,7 @@ class StudioDomMovePersistenceTests(ArrangeCase):
                 self.assertEqual(self.export(page).get('live', {}).get('structure'), self.saved_cards(self.CARDS_AS_SAVED))
                 banner = page.locator('#liveReconnectBanner')
                 banner.wait_for(state='visible')
-                self.assertIn('the live target holds 0 of them', ' '.join(banner.inner_text().split()))
+                self.assertIn('the Live App holds 0 of them', ' '.join(banner.inner_text().split()))
                 self.assertEqual(page.locator('#liveReconnectHeading').inner_text(), 'The page changed a saved DOM order.')
                 self.assertEqual(self.dom(frame, 'cards'), ['card.a', 'card.b', 'card.c', 'card.d'], 'Studio did not touch the page')
                 self.assertEqual(self.dom(frame, frame.evaluate('window.fake.arrangementOf("side.x").containerKey')), ['side.x', 'side.y'])
@@ -3317,7 +3317,7 @@ class StudioDomMovePersistenceTests(ArrangeCase):
                 banner.wait_for(state='visible')
                 frame = self.wait_ready(page, 11)
                 text = ' '.join(banner.inner_text().split())
-                self.assertIn("Accept target state replaces Studio's saved overrides, composition tokens and DOM order with what the page has now", text)
+                self.assertIn("Accept Live App state replaces Studio's saved overrides, composition tokens and DOM order with what the page has now", text)
                 self.assertNotRegex(text, r'smaller file', 'a DOM move is not in the file, so Accept cannot shrink it')
                 self.assertNotRegex(text, r'0 live edits', 'there are no saved overrides to explain')
                 page.locator('#liveAcceptTarget').click()
@@ -3356,7 +3356,7 @@ class StudioDomMovePersistenceTests(ArrangeCase):
                 self.assertEqual(self.export(page)['live']['structure'], good)
                 banner = page.locator('#liveReconnectBanner')
                 banner.wait_for(state='visible')
-                self.assertEqual(page.locator('#liveReconnectHeading').inner_text(), 'Imported state differs from the target.')
+                self.assertEqual(page.locator('#liveReconnectHeading').inner_text(), 'Imported state differs from the Live App.')
                 page.wait_for_timeout(300)
                 self.assertEqual(self.moves(frame), [], 'an import never moves the page by itself')
                 page.locator('#liveReapply').click()
@@ -3474,7 +3474,7 @@ class StudioDomMovePersistenceTests(ArrangeCase):
                 page.locator('#liveMoveFirst').click()
                 self.wait_badge(page, r'^Live · rev 1$')
                 self.assertEqual(self.dom(frame), ['card.d', 'card.a', 'card.b', 'card.c'], 'the page has the move')
-                self.assertEqual(page.locator('#liveReconnectHeading').inner_text(), 'Target reconnected.',
+                self.assertEqual(page.locator('#liveReconnectHeading').inner_text(), 'Live App reconnected.',
                                  'an open conflict keeps the cause it was raised with')
                 exported = self.export(page)
                 ids = [item for entry in exported['live']['structure'] for item in entry['ids']]
@@ -4243,7 +4243,7 @@ class StudioCompositionFontTests(LiveCase):
                 self.assertIn('Imported; the link to the page is off.', self.import_document(page, doc))
                 banner = page.locator('#liveReconnectBanner')
                 banner.wait_for(state='visible')
-                self.assertEqual(page.locator('#liveReconnectHeading').inner_text(), 'Imported state differs from the target.')
+                self.assertEqual(page.locator('#liveReconnectHeading').inner_text(), 'Imported state differs from the Live App.')
                 # Another editor then adds a token; Studio learns of it from the next acknowledgement.
                 frame.evaluate('window.fake.setTokens({"--extra-font": "Georgia, serif"})')
                 self.select(page, frame, 'hero.lead')

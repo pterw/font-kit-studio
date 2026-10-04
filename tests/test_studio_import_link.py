@@ -20,7 +20,7 @@ from test_live_integration import LiveIntegrationCase
 from test_studio_live import ARRANGE, FAKE, ArrangeCase, LiveCase
 
 STATUS = 'Imported; the link to the page is off. Press Sync to Live App to send this composition.'
-HEADING = 'Imported state differs from the target.'
+HEADING = 'Imported state differs from the Live App.'
 COMPOSITION_UPDATES = ('window.__received.filter(item => item.data && item.data.type === "design:update"'
                        ' && !("targetId" in item.data))')
 
@@ -112,7 +112,7 @@ class ImportWhileLinkedTests(ImportLinkCase):
         self.assertEqual(self.banner_heading(page), HEADING)
         text = page.locator('#liveReconnectText').inner_text()
         self.assertIn('Reapply', text)
-        self.assertIn('Accept target state', text)
+        self.assertIn('Accept Live App state', text)
         self.assertEqual(self.page_tokens(frame), before_import, 'nothing was applied to the page behind the user')
         self.assertEqual(errors, [])
 
@@ -294,7 +294,7 @@ class ImportWhileLinkedTests(ImportLinkCase):
                 page.locator('#compositionPreset').select_option('asteria')
                 page.locator('#applyPreset').click()
                 self.wait_composition_updates(frame, 2)
-                self.wait_badge(page, r'^No response from target$', timeout=15000)    # the request timed out
+                self.wait_badge(page, r'^No response from the Live App$', timeout=15000)    # the request timed out
                 self.import_b(page, self.blank_document(engine))
                 self.release_held(page, frame)       # the late reply of the superseded request
                 self.assert_b_is_saved(page, frame, 2)
@@ -421,7 +421,7 @@ class SupersededRejectionTests(ImportLinkCase):
                 page.locator('#compositionPreset').select_option('asteria')
                 page.locator('#applyPreset').click()
                 self.after_the_request_was_rejected(frame, 2)
-                self.wait_badge(page, r'^No response from target$', timeout=15000)    # the request timed out
+                self.wait_badge(page, r'^No response from the Live App$', timeout=15000)    # the request timed out
                 self.import_b(page, self.blank_document(engine))
                 self.release_held(page, frame)       # the late rejection of the superseded request
                 self.assert_nothing_was_resent(page, frame, before, 2)
@@ -628,7 +628,7 @@ class LateEditReplyTests(ImportLinkCase):
                 page, frame, errors = self.linked_page(engine)
                 document = self.imported_document(page)
                 self.hold_an_edit(page, frame)
-                self.wait_badge(page, r'^No response from target$', timeout=15000)    # the edit timed out
+                self.wait_badge(page, r'^No response from the Live App$', timeout=15000)    # the edit timed out
                 self.import_document(page, document)
                 self.watch_handled(page)
                 frame.evaluate('window.fake.hold = false')
@@ -671,7 +671,7 @@ class LateEditReplyTests(ImportLinkCase):
                 self.set_value(page, '#liveLineHeight', 1.5)
                 page.wait_for_timeout(200)     # absence window: the queued edit must not be sent while the first reply is held
                 status = self.import_document(page, document)
-                self.assertEqual(status, 'Composition imported. Image assets must be reselected in v0.1.1.'
+                self.assertEqual(status, 'Composition imported. Image assets must be reselected.'
                                  ' 1 queued edit that had not reached the page was dropped.')
                 self.assertEqual(errors, [])
 
@@ -873,7 +873,7 @@ class LateEditReplyTests(ImportLinkCase):
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, frame, errors, banner = self.check_move_after_import(engine, css_order=False)
-                # Accept target state clears the difference; a DOM order only the page holds is never adopted (Rule 6).
+                # Accept Live App state clears the difference; a DOM order only the page holds is never adopted (Rule 6).
                 page.locator('#liveAcceptTarget').click()
                 banner.wait_for(state='hidden')
                 self.assertNotIn('structure', self.export(page)['live'])
@@ -937,7 +937,7 @@ class LateEditReplyTests(ImportLinkCase):
             with self.subTest(engine=engine):
                 page, frame, errors, document = self.arranged_page(engine, css_order=True)
                 self.hold_a_move(page, frame)
-                self.wait_badge(page, r'^No response from target$', timeout=15000)    # the move timed out
+                self.wait_badge(page, r'^No response from the Live App$', timeout=15000)    # the move timed out
                 self.import_document(page, document)
                 self.release(page, frame)
                 self.assertEqual(self.export(page)['live']['overrides'], {}, 'the import is the saved CSS order')
@@ -1010,7 +1010,7 @@ class ImportWhileLinkedRealBridgeTests(LiveIntegrationCase):
                 self.assertEqual(status, 'Imported; the link to the page is off. Press Sync to Live App to send this composition.')
                 banner = page.locator('#liveReconnectBanner')
                 banner.wait_for(state='visible')
-                self.assertEqual(page.locator('#liveReconnectHeading').inner_text(), 'Imported state differs from the target.')
+                self.assertEqual(page.locator('#liveReconnectHeading').inner_text(), 'Imported state differs from the Live App.')
                 page.wait_for_timeout(300)     # absence window: a send would restyle the page within it
                 self.assertIn('Fraunces', self.family(frame), 'the import did not restyle the page')
                 self.assertEqual(page.locator('#bridgeStatusBadge').inner_text(), revision, 'the import sent no request')

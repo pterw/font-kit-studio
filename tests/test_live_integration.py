@@ -465,13 +465,13 @@ class SyncAndReloadTests(LiveIntegrationCase):
                                   'the page looks right because the file styles it, not because of a live edit')
                 banner = page.locator('#liveReconnectBanner')
                 text = ' '.join(banner.text_content().split())
-                self.assertIn('the live target has 0 targets changed', text)
+                self.assertIn('the Live App has 0 targets changed', text)
                 # Why the page looks right although the bridge counts nothing.
                 self.assertRegex(text, r'overrides file already styles the page')
                 self.assertRegex(text, r'0 live edits')
                 self.assertRegex(text, r'counts only edits (made )?through Studio')
                 # What Accept does, in plain words.
-                self.assertRegex(text, r"Accept target state replaces Studio's saved overrides, composition tokens and DOM order")
+                self.assertRegex(text, r"Accept Live App state replaces Studio's saved overrides, composition tokens and DOM order")
                 self.assertRegex(text, r'next Sync writes a smaller file')
                 # The words are true: accepting and syncing really does shrink the file.
                 page.locator('#liveAcceptTarget').click()
@@ -1107,7 +1107,7 @@ class StructureReplayTests(LiveIntegrationCase):
                 self.assertEqual(self.export(page).get('live', {}).get('structure'), saved,
                                  'an unrelated reset neither drops nor replaces what Studio saved')
                 banner.wait_for(state='visible', timeout=3000)
-                self.assertIn('the live target holds 0 of them', ' '.join(banner.inner_text().split()))
+                self.assertIn('the Live App holds 0 of them', ' '.join(banner.inner_text().split()))
                 self.assertEqual(self.order(frame), self.ORIGINAL, 'Studio did not touch the page')
                 # The mismatch is the user's to resolve: Reapply puts the saved order back.
                 page.locator('#liveReapply').click()
@@ -1757,7 +1757,7 @@ class ImportedTokensTests(LiveIntegrationCase):
                 self.assertEqual(frame.evaluate(token), '#123456', 'importing never changes the page')
                 # The bridge announces itself again (a reconnect without a reload), then the user presses Reapply.
                 frame.evaluate('window.parent.postMessage({type: "design:bridge-ready", protocolVersion: 1}, "*")')
-                page.wait_for_function('() => /the live target has \\d+ targets? changed and 1 composition token\\b/.test('
+                page.wait_for_function('() => /the Live App has \\d+ targets? changed and 1 composition token\\b/.test('
                                        'document.querySelector("#liveReconnectText").textContent)')
                 self.assertEqual(frame.evaluate(token), '#123456', 'reconnecting never changes the page')
                 page.locator('#liveReapply').click()

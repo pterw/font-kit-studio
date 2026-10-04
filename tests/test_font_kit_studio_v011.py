@@ -531,7 +531,7 @@ class BrowserCase(unittest.TestCase):
 class StructureTests(unittest.TestCase):
     def test_version_and_existing_model(self):
         source = HTML.read_text(encoding='utf-8')
-        self.assertTrue('<title>Font Kit Studio v0.1.1</title>' in source, 'Document title must match version 0.1.1')
+        self.assertTrue('<title>Font Kit Studio v0.2.1</title>' in source, 'Document title names the release it ships in (D039)')
         for symbol in ('makeRowSlot', 'findSlotById', 'selectedLocation', 'LEAF_SLOT_TYPES'):
             self.assertIn(symbol, source)
 

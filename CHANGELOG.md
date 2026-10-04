@@ -20,7 +20,7 @@ Not released yet. The first half is merged to `main`; the rest is in review.
   tooltip: Sync to Live App with no page, Restore Page Text, Reset this
   element, Sync to file, Copy and Download with no changes, Load free fonts
   once loaded, single-cut styles, Image Width with no image, Focus pop-out.
-- First-run help: the Target URL box starts empty and says what to enter;
+- First-run help: the Live App URL box starts empty and says what to enter;
   the dev server prints one `Open:` URL, names a busy port, and opens a
   browser only with `--open`; Studio offers "Connect to the demo" and never
   connects by itself.
@@ -28,6 +28,24 @@ Not released yet. The first half is merged to `main`; the rest is in review.
 
 ### Changed
 
+- Studio's title and eyebrow read v0.2.1. The limits "Rows cannot contain rows",
+  "Session-local", the PNG and SVG rejection and the image reselect note no
+  longer name a version.
+- One name for your page, "Live App": the bridge bar, the view button, the
+  inspector, the reconnect banner (Accept Live App state) and the Connect Live
+  App button no longer say Target App, Live Target or Connect Target.
+- Each panel has one primary action (Load free fonts in the Library, Connect
+  Live App in the bridge bar, Sync to Live App in the toolbar), drawn in the
+  accent colour. Buttons, fields and selects share two heights (34 px, and
+  28 px in compact panels); selects and textareas use the page font.
+- The Live App view hides the fields that only change the composition and
+  shrinks the header, so the page starts in the top half of a 900 px window.
+- The inspector is a 300 px column that stays beside the preview down to
+  900 px and scrolls when it is taller than the window. The element list is
+  grouped (marked with `data-design-id`, auto-discovered) and scrolls.
+- The bridge bar has no emoji, and no two actions share a glyph. Select and
+  Interact look disabled when they are. The reason Sync to file is off sits on
+  its own line, apart from Auto-sync.
 - Preview widths (390 / 1024 / 1440) scroll under the preview instead of
   cropping it. Nothing is scaled.
 - The `--font-serif` token comes from a slot's role or serif tag, never a
@@ -41,6 +59,9 @@ Not released yet. The first half is merged to `main`; the rest is in review.
 
 ### Fixed
 
+- Every control shows a focus ring for keyboard users (text fields had none).
+- Contrast: field borders reach 3:1; tags, placeholders and the asset
+  placeholder reach 4.5:1.
 - A late edit reply after an import no longer overwrites it (D038).
 - A selection made before a reload no longer pulls the inspector back.
 - Sync to file and Auto-sync never write a placeholder over an existing

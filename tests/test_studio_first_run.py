@@ -21,7 +21,7 @@ from test_studio_live import APP, DEV_SERVER_ANSWERED, EVIL, FAKE, TARGET, LiveC
 NEED_URL = "Enter your app's URL"
 FULL_URL = 'Use a full URL starting with http:// or https://'
 NO_BRIDGE_HINT = ('Either nothing is running there, or the page does not load fontkit-bridge.js. '
-                  'Add <script src="fontkit-bridge.js"></script> after the page\'s own scripts, reload it, then press Connect Target.')
+                  'Add <script src="fontkit-bridge.js"></script> after the page\'s own scripts, reload it, then press Connect Live App.')
 SERVE_LINE = 'Start the dev server: python scripts/serve.py'
 BLOCKED = ('No bridge answered. Nothing might be running there, the page may not load fontkit-bridge.js, '
            'or your browser may block a web page from reaching localhost. '
@@ -122,7 +122,7 @@ class TargetUrlFieldTests(LiveCase):
             with self.subTest(engine=engine):
                 page, errors = self.composer(engine)
                 self.connect(page, 'javascript:parent.__pwned=1')
-                self.assertEqual(page.locator('#bridgeStatusBadge').inner_text(), 'Invalid target URL')
+                self.assertEqual(page.locator('#bridgeStatusBadge').inner_text(), 'Invalid Live App URL')
                 self.assertIsNone(page.locator('#targetAppFrame').get_attribute('src'))
                 self.assertEqual(errors, [])
 
@@ -219,7 +219,7 @@ class NoDemoOfferTests(LiveCase):
                 page, errors = self.open(engine, target=None, sync=True)
                 page.wait_for_function(DEV_SERVER_ANSWERED)
                 self.assertEqual(page.locator('#targetAppUrl').input_value(), '')
-                self.assertEqual(page.locator('#btnConnectTarget').inner_text(), 'Connect Target')
+                self.assertEqual(page.locator('#btnConnectTarget').inner_text(), 'Connect Live App')
                 self.assertEqual(errors, [])
                 context = self.context(engine, sync=True)
                 page = context.new_page()
@@ -227,7 +227,7 @@ class NoDemoOfferTests(LiveCase):
                 page.locator('#modeComposer').click()
                 page.wait_for_timeout(300)  # proves a negative: no prefill may arrive late
                 self.assertEqual(page.locator('#targetAppUrl').input_value(), '')
-                self.assertEqual(page.locator('#btnConnectTarget').inner_text(), 'Connect Target')
+                self.assertEqual(page.locator('#btnConnectTarget').inner_text(), 'Connect Live App')
 
 
 class FullscreenTests(LiveCase):
@@ -311,7 +311,7 @@ class DemoOfferTests(LiveIntegrationCase):
                     self.assertEqual(page.locator('#targetAppUrl').input_value(), '')
                     button = page.locator('#btnConnectTarget')
                     self.assertTrue(button.is_disabled())
-                    self.assertEqual(button.inner_text(), 'Connect Target')
+                    self.assertEqual(button.inner_text(), 'Connect Live App')
                     self.assertIsNone(page.locator('#targetAppFrame').get_attribute('src'))
                     self.assertIsNone(page.evaluate('window.__pwned'))
                     self.assertEqual(page.errors, [])
@@ -337,7 +337,7 @@ class DemoOfferTests(LiveIntegrationCase):
                 page.locator('#targetAppUrl').click()
                 page.keyboard.press('End')
                 page.keyboard.type('x', delay=20)
-                self.assertEqual(page.locator('#btnConnectTarget').inner_text(), 'Connect Target')
+                self.assertEqual(page.locator('#btnConnectTarget').inner_text(), 'Connect Live App')
                 page.keyboard.press('Backspace')
                 self.assertEqual(page.locator('#btnConnectTarget').inner_text(), 'Connect to the demo')
                 self.assertEqual(page.errors, [])
@@ -347,7 +347,7 @@ class DemoOfferTests(LiveIntegrationCase):
             with self.subTest(engine=engine):
                 page = self.connected(engine)
                 self.assertEqual(page.locator('#targetAppUrl').input_value(), self.target)
-                self.assertEqual(page.locator('#btnConnectTarget').inner_text(), 'Connect Target')
+                self.assertEqual(page.locator('#btnConnectTarget').inner_text(), 'Connect Live App')
 
     def test_no_bridge_on_a_loopback_target_names_that_origin_and_is_not_blamed_on_localhost(self):
         (self.scratch / 'plain.html').write_text('<!doctype html><p>No script tag here.</p>', encoding='utf-8')
