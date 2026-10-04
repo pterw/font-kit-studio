@@ -20,7 +20,7 @@ from pathlib import Path
 from urllib.parse import urlsplit, unquote
 
 REPO = Path(__file__).resolve().parents[1]
-HTML = REPO / 'font_kit_studio_v0.1.1.html'
+HTML = REPO / 'fontkit-studio.html'
 KNOWN_ENGINES = ('chromium', 'firefox', 'webkit')
 
 

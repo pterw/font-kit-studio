@@ -84,7 +84,7 @@ def capture(browser, studio, target, rel, target_port, name, viewport):
     context.route(f'http://localhost:{target_port}/demo/fontkit-overrides.css',
                   lambda route: route.continue_(url=f'http://localhost:{target_port}/{rel}'))
     page = context.new_page()
-    page.goto(f'{studio}/font_kit_studio_v0.1.1.html?target={target}')
+    page.goto(f'{studio}/fontkit-studio.html?target={target}')
     badge(page, r'^Connected \(\d+ targets\)$')
     frame = page.locator('#targetAppFrame').element_handle().content_frame()
     frame.wait_for_function('document.readyState === "complete"', polling=POLL_MS)

@@ -12,6 +12,11 @@ Two things have their own version numbers:
 
 ## [Unreleased]
 
+### Changed
+
+- Studio is now `fontkit-studio.html`. The old name, `font_kit_studio_v0.1.1.html`,
+  forwards to it (query and hash kept) until the release after 0.3.0.
+
 ## [0.2.1] - 2026-10-04
 
 Fit and finish: a first run that works on every path, controls that say why

@@ -31,7 +31,7 @@ from urllib.parse import unquote
 import webbrowser
 
 REPO = Path(__file__).resolve().parents[1]
-STUDIO_HTML = "font_kit_studio_v0.1.1.html"
+STUDIO_HTML = "fontkit-studio.html"
 MAX_BYTES = 1024 * 1024
 ENDPOINTS = "/__fontkit/"
 INDEX_NAMES = ("index.html", "index.htm")  # what SimpleHTTPRequestHandler serves for a directory

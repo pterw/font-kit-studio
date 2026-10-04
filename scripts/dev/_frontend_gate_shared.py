@@ -18,7 +18,7 @@ from urllib.parse import quote
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-STUDIO_HTML = "font_kit_studio_v0.1.1.html"
+STUDIO_HTML = "fontkit-studio.html"
 DEMO_PATH = "/demo/"
 
 #: The device profiles every check can ask for.

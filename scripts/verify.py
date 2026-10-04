@@ -12,7 +12,8 @@ import tempfile
 
 
 ROOT = Path(__file__).resolve().parents[1]
-APP = "font_kit_studio_v0.1.1.html"
+APP = "fontkit-studio.html"
+SUPPLIED_APP = "font_kit_studio_v0.1.1.html"  # Studio's name at the supplied-v0.1.1 tag (D041)
 TAG = "supplied-v0.1.1"
 JS_TYPES = {"", "module", "text/javascript", "application/javascript",
             "text/ecmascript", "application/ecmascript"}
@@ -61,7 +62,7 @@ def provenance():
     manifest = json.loads((ROOT / "docs/reference/SOURCES.json").read_text(encoding="utf-8"))
     for entry in manifest["files"]:
         name = entry["source"].replace("\\", "/").rsplit("/", 1)[-1]
-        path = name if name == APP else "docs/reference/" + name
+        path = name if name == SUPPLIED_APP else "docs/reference/" + name
         baseline = run(["git", "show", f"{TAG}:{path}"])
         if baseline.returncode:
             raise ValueError(f"provenance: cannot read {TAG}:{path}")

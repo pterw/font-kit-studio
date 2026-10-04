@@ -43,7 +43,7 @@ cd font-kit-studio
 python scripts/serve.py
 ```
 
-1. Open the URL on the line that starts with **`Open:`**, the last line the command prints. It looks like `http://localhost:8000/font_kit_studio_v0.1.1.html?target=http://localhost:8001/demo/`. The `Demo:` line is the demo app's own address, on its own port; you do not open it yourself. The command never opens a browser on its own. To have it do so, run `python scripts/serve.py --open`.
+1. Open the URL on the line that starts with **`Open:`**, the last line the command prints. It looks like `http://localhost:8000/fontkit-studio.html?target=http://localhost:8001/demo/`. The `Demo:` line is the demo app's own address, on its own port; you do not open it yourself. The command never opens a browser on its own. To have it do so, run `python scripts/serve.py --open`.
 2. Studio opens the Composer in its **Live App** view and connects, because the URL names the demo. Wait for the badge to say **Connected (N targets)**. The demo app, "Halyard", is already instrumented.
 3. **Click** the big headline in the preview. Change its size, colour or text in the panel on the right.
 4. Watch the **Changes** panel under the preview. Press **Copy**, or press **Sync to file** to write the CSS to `demo/fontkit-overrides.css`, which the demo already links. Both stay disabled until you have made a change.
@@ -63,7 +63,7 @@ A few things Studio tells you on the way in:
 
 ### Open the Studio HTML file directly
 
-`font_kit_studio_v0.1.1.html` is a single file with no dependencies. The file name keeps the old number for now; the version of the release shows in the browser tab's title and in the line above Studio's heading. You can double-click the file, or open it from disk, and it works for the Library and the Composer. You can also connect it to a running app by typing the app's URL into **Live App URL**, and the inspector, the Changes panel and Copy all work.
+`fontkit-studio.html` is a single file with no dependencies. The old name, `font_kit_studio_v0.1.1.html`, is now a small page that forwards to it (keeping any query and hash) and goes away in the release after 0.3.0. The version of the release shows in the browser tab's title and in the line above Studio's heading. You can double-click the file, or open it from disk, and it works for the Library and the Composer. You can also connect it to a running app by typing the app's URL into **Live App URL**, and the inspector, the Changes panel and Copy all work.
 
 What does **not** work from a file: **Sync to file** and **Auto-sync** are switched off, because there is no server to write the file. Use `python scripts/serve.py` for those.
 
@@ -579,6 +579,7 @@ In a container with a browser already installed: `FKS_ENGINES=chromium FKS_CHROM
 | `test_studio_stage.py` | Width buttons never crop the preview, and the font tokens follow a slot's role. |
 | `test_studio_visual.py` | Version labels, one primary action per panel, control heights, focus rings, contrast and the width of the Live App URL box. |
 | `test_studio_review_findings.py` | Saved DOM order with a duplicate `data-design-id`, and the 16-stylesheet limit. |
+| `test_studio_rename.py` | The old Studio file name forwards to `fontkit-studio.html` with its query and hash. |
 | `test_support.py` | The shared test harness: engine selection (an engine list that runs no browser is refused), the shared browser with a fresh context per test, the Firefox canary's test list, the Composer canvas snapshot helper, and a guard against reading a page's markup raw. |
 | `test_commit_messages.py` | The commit-message check, with a throwaway git repository: each forbidden form, allowed human co-authors, range parsing. |
 | `test_frontend_gate_*.py` | The gate's own logic: colour maths, contrast and layout judgements, report lines, the exit-code rule, CLI flags and the check table. `test_frontend_gate_fonts.py` and `test_frontend_gate_theme_browser.py` run a real browser; the others need none. |
