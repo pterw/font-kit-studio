@@ -92,20 +92,20 @@ Node code lives under `packages/fontkitstudio/` (exact layout fixed in R1.1).
   and Origin checks as in `serve.py`. Hostile cases: missing and wrong token, wrong Host,
   wrong Origin. Owns: `packages/fontkitstudio/src/studio-server.*`, its tests.
 
-- [ ] **R1.4 Vite runner and plugin.** `npx fontkitstudio` finds the project's Vite, starts it
+- [x] **R1.4 Vite runner and plugin.** `npx fontkitstudio` finds the project's Vite, starts it
   through the JavaScript API with the plugin in memory, and opens Studio connected to it;
   `fontkitStudio()` in `vite.config` does the same through `npm run dev`. The plugin adds the
   bridge only in `serve` mode; `vite build` output contains no bridge (guarantee test,
   spec 4.2). Hot reload keeps the connection. Owns: `src/vite-*`, the Vite + React fixture.
 
-- [ ] **R1.5 Proxy mode.** A loopback proxy in front of an existing dev server: injects the
+- [x] **R1.5 Proxy mode.** A loopback proxy in front of an existing dev server: injects the
   bridge only into `text/html` responses, serves the bridge from the app's own origin so
   `script-src 'self'` allows it, passes the app's CSP header through unchanged, passes
   WebSocket upgrades (hot reload) through untouched, limits sizes. Hostile cases (spec
   4.3): non-loopback target, wrong Host (DNS rebinding), path traversal, non-HTML content,
   oversized response. Owns: `src/proxy.*`, the Bootstrap 5 and Next.js fixtures.
 
-- [ ] **R1.6 Dev-only refusal, visibility and failure messages.** The plugin and proxy
+- [x] **R1.6 Dev-only refusal, visibility and failure messages.** The plugin and proxy
   refuse to run for a production build or a non-loopback bind and say so; the terminal
   shows "Font Kit Studio · dev only" (no page marker, D051); every connection failure (another bridge, a security
   policy, an unsupported project) gets a message that says what and why. Owns: the CLI
