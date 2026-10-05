@@ -122,3 +122,13 @@ integrity and provenance recorded after the publish.
 
   The provenance attestation (`npm view fontkitstudio@0.3.0 dist.attestations`) is recorded
   in the ledger after that.
+
+## After the publish (2026-10-05)
+
+- Tag `v0.3.0` on the merge commit `94ac40c`. The release workflow's gates passed on it (12 jobs), and the owner approved the `npm-release` environment.
+- npm: `fontkitstudio@0.3.0`, tag `latest`.
+  - Integrity `sha512-dxnzb0ARzJ5n0jco0gYK36pMu6VH8luD2wExepq+FGQEaoCGXTiyWhNj5gnHVNiTgbByi+JOc3IbN28s3ULvVw==`, shasum `fc710a87811dd394edfe735bf643e80e4f2be051`.
+  - 16 files, 133.1 kB. The same file list as the dry run above.
+  - Provenance: SLSA v1 (`https://registry.npmjs.org/-/npm/v1/attestations/fontkitstudio@0.3.0`), Sigstore transparency log index 3081636184.
+- GitHub release `v0.3.0`: `fontkit-studio.html` and `fontkit-bridge.js`. Their SHA-256 are the ones in the table above.
+- `npx -y fontkitstudio@0.3.0 --version` from an empty folder prints `0.3.0`.
