@@ -317,6 +317,14 @@ describe('fontkitStudio Vite plugin', () => {
       fake.server.httpServer.emit('close');
     });
 
+    test('accepts the origin of a Studio on port 80, which has no port', () => {
+      const plugin = fontkitStudio({
+        studio: { origin: 'http://127.0.0.1', url: () => 'unused' },
+        bridgeFile,
+      });
+      assert.equal(plugin.transformIndexHtml('<html></html>')[0].attrs['data-allowed-origins'], 'http://127.0.0.1');
+    });
+
     test("the command's own instance never stands down", async () => {
       const commands = fontkitStudio({ studio: STUDIO, bridgeFile });
       commands.configResolved({ plugins: [commands, fontkitStudio({ studio: STUDIO, bridgeFile })] });
