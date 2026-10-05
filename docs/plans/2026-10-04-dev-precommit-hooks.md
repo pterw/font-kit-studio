@@ -130,3 +130,4 @@ when this branch is rebased on a `main` that has them), and `docs/reference/**`.
 |---|---|
 | 2026-10-04 | Plan drafted after the owner agreed to a narrow pre-commit check in its own small pull request, queued behind R1 PR B's ready checks. |
 | 2026-10-04 | P1 review: `git commit -m` and `-F` keep `#` lines in the stored message, so the planned skip of `#` lines in `--message-file` would let a `# Generated with ...` line reach history (caught only later by CI's range check). Changed: every line is checked; git's own comment template carries no signature and passes, and a commented-out signature is refused. |
+| 2026-10-04 | P1, P2 and P3 done and reviewed on this branch (local). Measured: the hooks over the whole tree take about 1.8 s on the dev machine (Windows 11, Git Bash); macOS is not tested. Left for after R1 PR B merges: rebase, `-whitespace` for PR B's lockfiles and vendored Bootstrap, the CLAUDE.md line, a sweep, push. |

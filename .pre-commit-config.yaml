@@ -1,0 +1,45 @@
+# Fast checks on every commit, and the signature check on every commit message.
+# Install once with `pre-commit install` (it sets both hooks). Every hook calls a tool
+# pinned in requirements-dev.txt or a script in this repository, so installing them
+# downloads nothing. The slow checks (browser suites, frontend gate, Firefox canary) stay
+# in CI and in CONTRIBUTING's "Before you open a pull request".
+default_install_hook_types: [pre-commit, commit-msg]
+
+repos:
+  - repo: local
+    hooks:
+      - id: whitespace
+        name: no trailing whitespace or conflict markers in staged lines
+        entry: git diff --cached --check
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+
+      - id: ruff
+        name: ruff (unused or undefined names, syntax errors)
+        entry: python -m ruff check
+        language: system
+        types: [python]
+        stages: [pre-commit]
+
+      - id: js-syntax
+        name: JavaScript syntax (node --check)
+        entry: python scripts/dev/check_js_syntax.py
+        language: system
+        files: ^(fontkit-bridge\.js|packages/fontkitstudio/.+\.(js|mjs|cjs))$
+        stages: [pre-commit]
+
+      - id: static-checks
+        name: static checks (ids, inline JS, provenance)
+        entry: python scripts/verify.py --static-only
+        language: system
+        pass_filenames: false
+        files: ^(fontkit-studio\.html|font_kit_studio_v0\.1\.1\.html|fontkit-bridge\.js|docs/reference/.+|scripts/verify\.py)$
+        stages: [pre-commit]
+
+      - id: commit-signatures
+        name: no agent or process signatures in the commit message
+        entry: python scripts/dev/check_commit_messages.py --message-file
+        language: system
+        stages: [commit-msg]
