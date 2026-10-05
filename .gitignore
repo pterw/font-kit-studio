@@ -10,3 +10,8 @@ packages/fontkitstudio/LICENSE
 fixtures/*/node_modules/
 fixtures/*/dist/
 fixtures/*/.fks-*/
+fixtures/*/.next/
+# `next dev` writes these agent notes into a project when it detects an AI
+# coding agent in its environment (never in CI); they are not the fixture's.
+fixtures/next-app/AGENTS.md
+fixtures/next-app/CLAUDE.md
