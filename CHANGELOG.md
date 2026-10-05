@@ -37,6 +37,9 @@ Two things have their own version numbers:
 
 ### Changed
 
+- Studio opened by `npx fontkitstudio` no longer points to `python scripts/serve.py` or
+  asks for a script tag the command already added. Its Sync to file, bridge hint, status
+  badge and empty Live App messages say what to do instead.
 - Studio is now `fontkit-studio.html`. The old name, `font_kit_studio_v0.1.1.html`,
   forwards to it (query and hash kept) until the release after 0.3.0.
 
