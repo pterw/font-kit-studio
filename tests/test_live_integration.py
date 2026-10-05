@@ -195,7 +195,7 @@ class LiveIntegrationCase(unittest.TestCase):
 
     def type_into(self, page, selector, text, delay=60):
         page.locator(selector).click()
-        page.keyboard.press('Control+A')
+        page.keyboard.press('ControlOrMeta+A')
         page.keyboard.type(text, delay=delay)
 
     def style(self, frame, selector, prop):

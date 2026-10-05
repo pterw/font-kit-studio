@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Font Kit Studio v0.2.1</title>
+<title>Font Kit Studio v0.3.0</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2314213d'/%3E%3Ctext x='16' y='24' font-family='Georgia,serif' font-size='22' font-weight='700' text-anchor='middle' fill='%23ffffff'%3EF%3C/text%3E%3C/svg%3E" />
 
 <!--
@@ -993,7 +993,7 @@ body.dark .live-overlay-label { color: #111; }
 <body>
 <header>
   <div class="wrap">
-    <p class="eyebrow">Font Kit Studio · v0.2.1</p>
+    <p class="eyebrow">Font Kit Studio · v0.3.0</p>
     <h1>Inspect the faces. Then make them live together.</h1>
     <p class="deck">
       A local-first free-font specimen library and flow-based brand typography composer.
@@ -3689,7 +3689,7 @@ if (remembered) kitId.value = remembered;
   function setBridgeStatus(text, kind = "connected", hint = false) {
     bridgeStatusBadge.textContent = text;
     bridgeStatusBadge.dataset.state = kind;
-    bridgeStatusBadge.title = hint ? "Add fontkit-bridge.js to the Live App page." : "";
+    bridgeStatusBadge.title = hint ? (SERVED_BY_PACKAGE ? NPX_BRIDGE_TITLE : "Add fontkit-bridge.js to the Live App page.") : "";
     if (bridgeHint) bridgeHint.hidden = !hint;
   }
 
@@ -3784,6 +3784,13 @@ if (remembered) kitId.value = remembered;
   // ---- first run: the Live App URL field -------------------------------------
   // The field starts empty. Only a loopback dev server may offer the demo (detectDevServerSync); it never connects.
   let offeredDemoUrl = "";
+  // npx fontkitstudio serves Studio from its own loopback server with a per-run ?token=. That is the only signal, read once.
+  // That server has no sync endpoint and Studio is on loopback there, so BLOCKED_LOOPBACK_TEXT cannot show under it.
+  const SERVED_BY_PACKAGE = Boolean(new URLSearchParams(location.search).get("token"));
+  const NPX_BRIDGE_HINT = "npx fontkitstudio adds the bridge to the page itself. If Font Kit Studio does not connect, the terminal where the command runs says why.";
+  const NPX_BRIDGE_TITLE = "npx fontkitstudio adds the bridge to the page itself.";
+  const NPX_EMPTY_INSPECTOR = "Enter the URL of a localhost app, then press Connect Live App. npx fontkitstudio adds the bridge to the page itself.";
+  const NPX_SYNC_TEXT = "Sync to file is not available under npx fontkitstudio. Use Copy or Download in the CSS tab.";
   // Only the two hostnames are known, so this states browser blocking as one possible cause beside the other two.
   const BLOCKED_LOOPBACK_TEXT = "No bridge answered. Nothing might be running there, the page may not load fontkit-bridge.js, or your browser may block a web page from reaching localhost. If it is the browser, open Studio from the dev server (python scripts/serve.py) or from the file on disk.";
 
@@ -3833,6 +3840,7 @@ if (remembered) kitId.value = remembered;
     refreshConnectControl();
   }
   if (bridgeHintServe) bridgeHintServe.hidden = location.protocol !== "file:";
+  if (SERVED_BY_PACKAGE && bridgeHint) { bridgeHint.textContent = NPX_BRIDGE_HINT; if (bridgeHintServe) bridgeHintServe.hidden = true; }
 
   // One URL gate for the iframe and the pop-out: http(s) only (file: only from file:), never Studio itself.
   function resolveTarget(raw) {
@@ -4927,6 +4935,7 @@ if (remembered) kitId.value = remembered;
     if (!live.ready) {
       const message = live.expectedOrigin
         ? "Waiting for the Live App's bridge. Controls appear once it answers the handshake."
+        : SERVED_BY_PACKAGE ? NPX_EMPTY_INSPECTOR
         : "Enter the URL of a localhost app that loads fontkit-bridge.js, then press Connect Live App.";
       slotInspector.innerHTML = `<div class="inspector-title-row"><h2>Live App</h2><span class="inspector-index">${escapeAttr(bridgeStatusBadge.textContent)}</span></div><p class="empty-inspector">${escapeAttr(message)}</p>`;
       return;
@@ -5673,7 +5682,8 @@ if (remembered) kitId.value = remembered;
         refreshConnectControl();
       }
     } catch {
-      setSyncAvailability(false, "No Font Kit dev server answered /__fontkit/status. Run python scripts/serve.py to enable Sync to file.");
+      setSyncAvailability(false, SERVED_BY_PACKAGE ? NPX_SYNC_TEXT
+        : "No Font Kit dev server answered /__fontkit/status. Run python scripts/serve.py to enable Sync to file.");
     }
   }
 

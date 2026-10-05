@@ -1,11 +1,11 @@
 {
   "name": "fontkitstudio",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Font Kit Studio: try type on your running web app, in development only.",
   "license": "MIT",
   "type": "module",
   "bin": { "fontkitstudio": "bin/fontkitstudio.js" },
-  "exports": { "./package.json": "./package.json", "./vite": "./src/vite-plugin.js" },
+  "exports": { "./package.json": "./package.json", "./vite": { "types": "./src/vite-plugin.d.ts", "default": "./src/vite-plugin.js" } },
   "files": ["bin/", "src/", "dist/"],
   "engines": { "node": ">=22.12" },
   "repository": {
@@ -16,6 +16,6 @@
   "homepage": "https://github.com/pterw/font-kit-studio#readme",
   "scripts": {
     "prepack": "node scripts/bundle.js",
-    "test": "node --test test/*.test.js"
+    "test": "node scripts/bundle.js && node --test test/*.test.js"
   }
 }

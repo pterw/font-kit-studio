@@ -1,0 +1,25 @@
+{
+  // Mirrors create-vite 9.2.1's react-ts tsconfig.node.json (typescript ~6.0.2) for
+  // vite.config.ts, with strict on and skipLibCheck off so an error in our .d.ts counts.
+  "compilerOptions": {
+    "target": "es2023",
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "skipLibCheck": false,
+    "module": "nodenext",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true,
+    // npm links a file: dependency as a symlink. Followed, tsc would resolve `vite` from
+    // packages/fontkitstudio/src, where no Vite is installed; an installed package never
+    // sees that. Keeping the link path makes `vite` resolve from this fixture's node_modules.
+    "preserveSymlinks": true
+  },
+  "include": ["vite.config.ts"]
+}

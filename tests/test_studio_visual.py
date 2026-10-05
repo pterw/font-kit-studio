@@ -467,8 +467,8 @@ class VersionLabelTests(StudioCase):
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page = self.studio(engine, mode='library')
-                self.assertEqual(page.title(), 'Font Kit Studio v0.2.1')
-                self.assertEqual(page.locator('.eyebrow').text_content(), 'Font Kit Studio · v0.2.1')   # CSS upper-cases the display
+                self.assertEqual(page.title(), 'Font Kit Studio v0.3.0')
+                self.assertEqual(page.locator('.eyebrow').text_content(), 'Font Kit Studio · v0.3.0')   # CSS upper-cases the display
 
     def test_limits_are_stated_without_a_version(self):
         for engine in ENGINES:

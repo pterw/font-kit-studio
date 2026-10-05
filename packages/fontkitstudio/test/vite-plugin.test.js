@@ -464,6 +464,50 @@ describe('fontkitStudio Vite plugin', () => {
       }
     });
 
+    describe('a policy that names the dev server', () => {
+      function listening(headers) {
+        const lines = [];
+        const plugin = fontkitStudio({ studio: STUDIO, bridgeFile, log: (line) => lines.push(line) });
+        plugin.configResolved({ plugins: [plugin], server: { headers } });
+        const fake = fakeViteServer();
+        return { plugin, lines, fake };
+      }
+
+      test('its own origin prints nothing; another port warns once', async () => {
+        const own = listening({ 'Content-Security-Policy': 'script-src http://localhost:5173' });
+        await own.plugin.configureServer(own.fake.server);
+        own.fake.listen();
+        own.plugin.transformIndexHtml('<html></html>');
+        assert.deepEqual(own.lines, []);
+
+        const other = listening({ 'Content-Security-Policy': 'script-src http://localhost:5174' });
+        await other.plugin.configureServer(other.fake.server);
+        other.fake.listen();
+        other.plugin.transformIndexHtml('<html></html>');
+        other.plugin.transformIndexHtml('<html></html>');
+        assert.deepEqual(other.lines, [CSP_MESSAGE]);
+      });
+
+      test('a meta policy naming the origin prints nothing too', async () => {
+        const { plugin, lines, fake } = listening();
+        await plugin.configureServer(fake.server);
+        fake.listen();
+        plugin.transformIndexHtml(
+          `<meta http-equiv="Content-Security-Policy" content="script-src localhost:5173">`,
+        );
+        assert.deepEqual(lines, []);
+      });
+
+      test('before the server listens the origin is unknown, so it warns', async () => {
+        const { plugin, lines, fake } = listening({
+          'Content-Security-Policy': 'script-src http://localhost:5173',
+        });
+        await plugin.configureServer(fake.server);
+        plugin.transformIndexHtml('<html></html>');
+        assert.deepEqual(lines, [CSP_MESSAGE]);
+      });
+    });
+
     test('an allowing or report-only policy says nothing', () => {
       const { plugin, lines } = plugged({
         headers: {

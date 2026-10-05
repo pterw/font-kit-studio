@@ -38,6 +38,20 @@ Firefox profiles; those, and the gate's phone and touch layouts, are
 reported as advisory. (The Chromium suite keeps a few 390px layout tests
 for the Composer, and those still block.)
 
+## The npm package
+
+`packages/fontkitstudio/` is the `fontkitstudio` command and the `fontkitstudio/vite` plugin.
+
+```bash
+npm --prefix packages/fontkitstudio test          # the package's own tests
+npm ci --prefix fixtures/vite-react               # install a fixture before its browser tests
+```
+
+- The package has zero dependencies, by rule. A test fails if one is added.
+- `prepack` bundles Studio and the bridge into the package and checks their versions.
+- Fixtures are installed with `npm ci --prefix fixtures/<name>`. Their tests skip without `node_modules`; CI sets `FKS_REQUIRE_FIXTURES=1`, so a missing install fails there.
+- Set `NEXT_TELEMETRY_DISABLED=1` when you run the Next.js fixture by hand, so Next.js sends nothing. The Next.js test sets it itself.
+
 ## Design constraints
 
 - Studio stays a single HTML file with no runtime dependencies or build step.

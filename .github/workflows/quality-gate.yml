@@ -8,6 +8,8 @@ on:
   # Manual escape hatch for re-running the gate on any ref. Note this trigger
   # only becomes usable once the workflow file is on the default branch.
   workflow_dispatch:
+  # The release workflow (release.yml) runs these same gates on a version tag.
+  workflow_call:
 
 # The gate only reads the repository. No token scope beyond that, no secrets.
 permissions:
@@ -201,17 +203,28 @@ jobs:
         working-directory: packages/fontkitstudio
         run: npm test
 
+  # The one command on real Vite projects, on the Node lines and systems D043
+  # fixes, with the friction test's time budget.
   fixtures:
-    name: Fixtures (Vite 7 and 8)
-    runs-on: ubuntu-latest
+    name: Fixtures, Vite 7 and 8 (${{ matrix.os }}, Node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, node: '22' }
+          - { os: ubuntu-latest, node: '24' }
+          - { os: ubuntu-latest, node: '26' }
+          - { os: macos-latest, node: '24' }
+          - { os: windows-latest, node: '24' }
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: ${{ matrix.node }}
           cache: npm
           cache-dependency-path: fixtures/*/package-lock.json
       - name: Set up Python
@@ -222,6 +235,7 @@ jobs:
         run: |
           npm ci --prefix fixtures/vite-react
           npm ci --prefix fixtures/vite7-react
+          npm ci --prefix fixtures/vite-ts
       - name: Bundle Studio and the bridge
         run: npm --prefix packages/fontkitstudio run prepack
       - name: Install the test tools and Chromium
@@ -233,4 +247,39 @@ jobs:
           FKS_ENGINES: chromium
           FKS_REQUIRE_FIXTURES: '1'
           PYTHONPATH: tests
-        run: python -m unittest test_vite_build_guarantee test_one_command_vite test_one_command_proxy -v
+        run: python -m unittest test_vite_build_guarantee test_one_command_vite test_one_command_proxy test_friction test_vite_types -v
+
+  # Proxy mode in front of a real Next.js dev server, including its hot reload
+  # over the proxy's WebSocket pass-through. Its own job: Next's install is large.
+  next-fixture:
+    name: Fixture, Next.js behind the proxy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: fixtures/next-app/package-lock.json
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install the fixture
+        run: npm ci --prefix fixtures/next-app
+      - name: Bundle Studio and the bridge
+        run: npm --prefix packages/fontkitstudio run prepack
+      - name: Install the test tools and Chromium
+        run: |
+          python -m pip install -r requirements-dev.txt
+          python -m playwright install --with-deps chromium
+      - name: Next.js fixture test (never skipped here)
+        env:
+          FKS_ENGINES: chromium
+          FKS_REQUIRE_FIXTURES: '1'
+          NEXT_TELEMETRY_DISABLED: '1'
+          PYTHONPATH: tests
+        run: python -m unittest test_one_command_next -v

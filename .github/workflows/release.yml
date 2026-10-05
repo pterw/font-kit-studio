@@ -1,0 +1,85 @@
+name: Release
+
+# The owner pushes a vX.Y.Z tag. The gates run on it, then the owner approves the
+# npm-release environment, then npm publishes by trusted publishing (OIDC, with
+# provenance, no token), then the GitHub Release is made (D039, D042).
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+# No top-level concurrency: the called gate's group is github.workflow-github.ref,
+# which evaluates to this caller's values, so the same group here would deadlock.
+
+jobs:
+  gates:
+    uses: ./.github/workflows/quality-gate.yml
+
+  publish:
+    needs: gates
+    runs-on: ubuntu-latest
+    environment: npm-release
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout the tag
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+
+      # Trusted publishing needs npm 11.5.1 or newer.
+      - name: Update npm
+        run: npm install -g npm@^11.5.1
+
+      # Values go through env, never interpolated into the script text.
+      - name: Check the tag matches the package version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version=$(node -p "require('./packages/fontkitstudio/package.json').version")
+          if [ "$TAG" != "v$version" ]; then
+            echo "::error::tag $TAG does not match package.json version v$version"
+            exit 1
+          fi
+
+      # A missing or undated CHANGELOG section must fail here, before the publish
+      # that cannot be undone, not after it in the release job.
+      - name: Check the CHANGELOG has this version's section
+        env:
+          TAG: ${{ github.ref_name }}
+        run: python3 scripts/dev/release_notes.py "${TAG#v}" > /dev/null
+
+      # Bundle Studio and the bridge now, and fail here if their labels differ from
+      # the package version, so the publish never depends on npm running prepack.
+      - name: Bundle Studio and the bridge
+        working-directory: packages/fontkitstudio
+        run: npm run prepack
+
+      - name: Publish to npm
+        working-directory: packages/fontkitstudio
+        run: npm publish
+
+  release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout the tag
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Make the GitHub Release
+        env:
+          TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/dev/release_notes.py "${TAG#v}" > notes.md
+          gh release create "$TAG" --verify-tag --notes-file notes.md --title "$TAG" \
+            fontkit-studio.html fontkit-bridge.js

@@ -1,0 +1,12 @@
+body {
+  font-family: sans-serif;
+  margin: 2rem;
+}
+
+h1 {
+  font-size: 40px;
+}
+
+.lead {
+  color: rgb(51, 51, 51);
+}

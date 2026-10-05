@@ -161,7 +161,7 @@ class ProxiedPageTest(unittest.TestCase):
                 frame = self.open_studio(studio, studio_url)
                 self.select_title(studio)
                 studio.locator('#liveFontSize').click()
-                studio.keyboard.press('Control+A')
+                studio.keyboard.press('ControlOrMeta+A')
                 studio.keyboard.type('56', delay=60)
                 frame.wait_for_function(
                     '(s) => getComputedStyle(document.querySelector(s)).fontSize === "56px"',

@@ -744,6 +744,9 @@ describe('warnings about pages the bridge may not reach (R1.6)', () => {
       },
       '/csp-meta': { headers: HTML, body: CSP_META_PAGE },
       '/csp-meta-fine': { headers: HTML, body: FINE_META_PAGE },
+      // The page is served from the proxy, so the proxy's address is the page's origin.
+      '/csp-names-target': () => ({ headers: csp(`script-src ${warn.origin}`), body: PAGE }),
+      '/csp-names-proxy': () => ({ headers: csp(`script-src ${warnProxy.origin}`), body: PAGE }),
       '/csp-and-own': { headers: csp("script-src 'nonce-q'"), body: OWN_BRIDGE_PAGE },
     });
   });
@@ -799,6 +802,18 @@ describe('warnings about pages the bridge may not reach (R1.6)', () => {
   test('a CSP that allows self, or only reports, says nothing', () =>
     fresh(async () => {
       for (const path of ['/csp-fine', '/csp-report-only', '/csp-meta-fine']) await page(path);
+      assert.deepEqual(lines, []);
+    }));
+
+  test("a CSP naming the target's own port still warns: the page comes from the proxy", () =>
+    fresh(async () => {
+      await page('/csp-names-target');
+      assert.deepEqual(lines, [CSP_MESSAGE]);
+    }));
+
+  test("a CSP naming the proxy's origin says nothing", () =>
+    fresh(async () => {
+      await page('/csp-names-proxy');
       assert.deepEqual(lines, []);
     }));
 

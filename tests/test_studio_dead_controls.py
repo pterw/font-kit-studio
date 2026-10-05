@@ -521,7 +521,7 @@ class ColourMessageTests(LiveIntegrationCase):
                 field = page.locator('#liveColorHex')
                 message = page.locator('#liveColorMessage')
                 field.click()
-                page.keyboard.press('Control+A')
+                page.keyboard.press('ControlOrMeta+A')
                 page.keyboard.type('#123456', delay=60)    # every prefix on the way is not yet a colour
                 self.assertFalse(message.is_visible(), 'no message while typing')
                 page.wait_for_timeout(300)                 # proves a negative: nothing is sent per keystroke
@@ -531,7 +531,7 @@ class ColourMessageTests(LiveIntegrationCase):
                 self.wait_style(frame, TITLE_SELECTOR, 'color', 'rgb(18, 52, 86)')
                 self.assertEqual(self.colour_updates(frame), ['#123456'])
                 # A half-typed value that is committed is refused, and the field goes back to the applied colour.
-                page.keyboard.press('Control+A')
+                page.keyboard.press('ControlOrMeta+A')
                 page.keyboard.type('#12', delay=60)
                 page.keyboard.press('Tab')
                 message.wait_for(state='visible')
@@ -544,7 +544,7 @@ class ColourMessageTests(LiveIntegrationCase):
                 page.keyboard.type('x', delay=60)
                 self.assertFalse(message.is_visible(), 'typing clears the message')
                 # And a valid commit clears it without any typing.
-                page.keyboard.press('Control+A')
+                page.keyboard.press('ControlOrMeta+A')
                 page.keyboard.type('#12', delay=60)
                 page.keyboard.press('Tab')
                 message.wait_for(state='visible')
