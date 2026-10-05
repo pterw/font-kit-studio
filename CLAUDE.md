@@ -20,7 +20,8 @@
   body right after creating it and remove the footer (edits do not add it back).
 - One Workflow run executes at most (CPUs - 2) agents at once. For more
   parallelism, start several workflows or background agents, and keep browser
-  test runs targeted while others run (4 CPUs are shared).
+  test runs targeted while others run (cloud containers share 4 CPUs; the owner's
+  Windows machine has 8, so gate-runners and browser modules can run side by side there).
 - Agents started with `isolation: "worktree"` can be cut from an older commit
   than the branch head. Tell them to check `git rev-parse HEAD` and fast-forward
   before editing. Keep `.claude/worktrees/` in `.git/info/exclude`, apply their
@@ -47,7 +48,7 @@
 - When asked what fontkit is, who it is for or how it competes, answer from
   `docs/roadmap/product-direction.md` ("Where it stands"), the typography system
   design and the README, and say plainly which parts are designed but not built.
-  Never present R1-R5 as shipped.
+  R1 shipped as 0.3.0 (npm `fontkitstudio`); never present R2-R5 as shipped.
 - After the owner merges a pull request from the session branch, bring the branch up to
   `main` with `git merge --ff-only origin/main`; resetting it (`checkout -B`) is refused as
   destructive.
@@ -80,3 +81,21 @@
 - The controller's commits run the git hooks (`pre-commit install` once per clone; never
   `--no-verify`): whitespace, ruff, `node --check`, the static checks and the commit-message
   signature check. Implementers never commit, so their worktrees need no hooks.
+- Landing gates: the workspace's `gates` block has a `focused` entry the controller rewrites
+  per landing (the task's modules plus `test_support`); the full suite halves run at the end
+  of each wave and before a pull request leaves draft. CI runs on every push, and a newer
+  push cancels the running one, so let one full run finish before leaving draft.
+- Install every fixture in the main checkout (`npm ci --prefix fixtures/<name>`) before
+  landing gates, so `FKS_REQUIRE_FIXTURES=1` holds locally. `next dev` writes `AGENTS.md`
+  and `CLAUDE.md` into `fixtures/next-app/` when it detects an AI agent; they are git-ignored
+  and are not instructions for this repository.
+- Sweepers may run at any time (owner). A version sweep includes fixture lockfiles (a
+  `file:`-linked package records its version there), and every sweep of live docs, the
+  ledger's Current state included, looks for tool and model names, review-round counts and
+  who approved what (AGENTS.md anti-pattern 15).
+- Browser tests select a field's text with `ControlOrMeta+A`: on macOS Ctrl+A moves the caret.
+- Releases (D042): the owner creates the `v*` tag and approves the `npm-release` environment;
+  `release.yml` gates, publishes with provenance and makes the GitHub release. Afterwards
+  check `npm view fontkitstudio@<v>` (the registry can lag a minute), `npx -y
+  fontkitstudio@<v> --version` from an empty folder, and the release assets' SHA-256 against
+  the verification record.
