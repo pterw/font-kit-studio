@@ -85,7 +85,7 @@ extension page before any build step. A spike at the start of R5 confirms both.
   permission list.
 - **Scope.** One maintainer cannot build three surfaces at once. Sequence them.
 
-## Where it stands (2026-10-04)
+## Where it stands (2026-10-05)
 
 Be exact about this when describing fontkit to anyone: the shipped product and the pitched
 product are not the same thing yet.
@@ -96,11 +96,11 @@ product are not the same thing yet.
   network isolation and contrast. v0.2.1 worked through the first-run, controls and visual
   audit (`docs/implementation/audit-2026-10-03-first-run-and-controls.md`); what it left
   for later is in `docs/implementation/sweep-v0.2.1-pr-b.md`.
-- **Built, not yet published (0.3.0, R1):** `npx fontkitstudio` opens Studio connected to
+- **Released (0.3.0, R1, 2026-10-05):** `npx fontkitstudio` opens Studio connected to
   a local Vite app, or through a loopback proxy to any other local dev server, with no
   config edit or script tag; `fontkitStudio()` keeps it in `vite.config`. Proven in CI on
-  Vite 7 and 8, a static Bootstrap page under a strict CSP and Next.js 16. It is released
-  only once the owner publishes 0.3.0 to npm; until then it runs from a clone.
+  Vite 7 and 8, a static Bootstrap page under a strict CSP and Next.js 16. Published on npm
+  as `fontkitstudio` with provenance; Studio and the bridge are also on the GitHub release.
 - **Designed, not built:** everything in "How it differs" above. Role detection (R2),
   pairing and type scales (R3), token output (R4), the extension (R5).
 - **Against "just looking", fontkit loses on pages you do not run.** For a local app the

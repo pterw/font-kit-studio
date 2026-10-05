@@ -1,8 +1,8 @@
 # R1 One command: implementation plan
 
-Status: **active** (2026-10-04). PR A (R1.0-R1.3) merged as PR #8, PR B (R1.4-R1.6) as
-PR #10. PR C (R1.7-R1.9 and the release point) runs from `2026-10-04-r1-pr-c-sdd.md`
-(addendum 3 in the ledger below). The package name, Studio's file name, publishing and the
+Status: **complete** (2026-10-05). Released as 0.3.0: PR A merged as PR #8, PR B as PR #10 and
+PR C (R1.7-R1.9 and the release point, `2026-10-04-r1-pr-c-sdd.md`; addendum 3 in the ledger
+below) as PR #12. The package name, Studio's file name, publishing and the
 versions under test are decided (D040 to D044 in
 `docs/implementation/deviations.md`; [roadmap register](2026-10-03-roadmap.md#decisions-register)),
 and the open questions below are answered. v0.2.1 is merged. This release is
@@ -131,7 +131,7 @@ Node code lives under `packages/fontkitstudio/` (exact layout fixed in R1.1).
   approves the run. Owns:
   `.github/workflows/release.yml`, `CHANGELOG.md`.
 
-- [ ] **R1 release point.** Full gates (Python suite, Node tests, fixtures, friction test,
+- [x] **R1 release point.** Full gates (Python suite, Node tests, fixtures, friction test,
   frontend gate), evidence in a new `docs/implementation/verification-r1.md`, roadmap
   updated. Owner merges and publishes.
 
@@ -185,3 +185,4 @@ R1.5 are created inside those tasks; R1.7 adds the CI wiring and the friction te
 | 2026-10-04 | PR A merged (PR #8). Addendum 2, binding once PR B's plan is approved: the Next.js fixture moves from R1.5 to R1.7 (it needs a large `npm ci` and its own CI job; the proxy is proven first on the static Bootstrap fixture), and the Vite fixture's CI job lands in PR B, so the one-command path is tested in CI from the PR that adds it. |
 | 2026-10-04 | PR B merged (PR #10). Addendum 3, from PR C's approved plan: R1.8 adds TypeScript declarations for `fontkitstudio/vite` and Studio wording for runs under `npx fontkitstudio` (no `scripts/serve.py` hint the package cannot honour); R1.7's fixture job runs on the D043 matrix and the Next.js fixture gets its own job; R1.9's workflow calls the quality gate, tests the tarball's file list and makes the GitHub Release after the publish; the false CSP warning for a `script-src` that names the page's own origin is fixed with R1.6's messages. |
 | 2026-10-04 | PR C (PR #12) at the 0.3.0 release point: R1.7-R1.9 done and reviewed, gates and evidence in `verification-r1.md`. The release-point box is checked once the owner merges and the publish has run. |
+| 2026-10-05 | Released. PR #12 merged at 94ac40c, tagged `v0.3.0`; `fontkitstudio@0.3.0` published from the release workflow with provenance; the GitHub release carries Studio and the bridge. |
