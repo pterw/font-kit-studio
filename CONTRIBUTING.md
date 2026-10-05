@@ -7,8 +7,16 @@ Thanks for helping. This page covers what you need to open a good pull request.
 ```bash
 python -m pip install -r requirements-dev.txt
 python -m playwright install chromium firefox   # Firefox is optional (advisory canary)
+pre-commit install               # or: python -m pre_commit install
 python scripts/serve.py          # Studio and the demo app on localhost
 ```
+
+`pre-commit install` sets two git hooks. Before each commit they check the staged
+changes for trailing whitespace, run ruff on Python files, `node --check` on the bridge
+and the package's JavaScript, and the static checks when Studio, the bridge or the
+provenance files change; they take a few seconds. The commit-message hook refuses a
+message that carries an agent or process signature (see Commit messages below). The
+slower checks below still run before you open a pull request, and in CI.
 
 ## Before you open a pull request
 

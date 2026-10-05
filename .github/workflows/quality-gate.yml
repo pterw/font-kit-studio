@@ -95,6 +95,29 @@ jobs:
             *)            python scripts/dev/check_commit_messages.py --base origin/main ;;
           esac
 
+      # The hooks in .pre-commit-config.yaml over the whole tree, so a hook that
+      # breaks on the repository fails here, not on a contributor's next commit.
+      - name: Pre-commit hooks
+        run: python -m pre_commit run --all-files
+
+      # The whitespace hook sees only staged lines, so it passes vacuously above.
+      # This checks the lines this change adds. Values go through env, never
+      # interpolated into the script text.
+      - name: No trailing whitespace in this change
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+        run: |
+          case "$EVENT" in
+            pull_request) git diff --check "origin/${BASE_REF}...HEAD" ;;
+            push)
+              if git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+                git diff --check "${BEFORE}" "${SHA}"
+              fi ;;
+          esac
+
       # Browsers are the expensive part, so they come after every cheaper
       # gate. --with-deps installs the system libraries Chromium and Firefox
       # need on a bare runner. Both are installed: Chromium blocks, Firefox runs
@@ -120,6 +143,7 @@ jobs:
         if: ${{ !cancelled() }}
         env:
           FKS_ENGINES: chromium
+          FKS_REQUIRE_PRECOMMIT: '1'
         run: python -m unittest discover -s tests -v
 
       # Advisory: a short Firefox canary, not the full suite (D037). The whole

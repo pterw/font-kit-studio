@@ -255,5 +255,115 @@ class RangeTests(unittest.TestCase):
         self.assertIn('line b', commits[0].message)
 
 
+class MessageFileTests(unittest.TestCase):
+    """--message-file checks the text git is about to commit, with the same rules."""
+
+    def run_main(self, text, *extra):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, 'COMMIT_EDITMSG')
+            with open(path, 'w', encoding='utf-8', newline='\n') as handle:
+                handle.write(text)
+            return self.run_args('--message-file', path, *extra)
+
+    def run_args(self, *argv):
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = check.main(list(argv))
+        return code, out.getvalue(), err.getvalue()
+
+    def test_a_clean_message_passes(self):
+        code, out, err = self.run_main('feat(dev): add a thing\n\nWhy it matters.\n')
+        self.assertEqual(code, 0)
+        self.assertEqual(out, 'commit-message check: OK: message checked\n')
+        self.assertEqual(err, '')
+
+    # `git commit -v` appends the staged diff below a scissors line, and git drops
+    # everything from that line on before it stores the message.
+    SCISSORS = '# ------------------------ >8 ------------------------\n'
+
+    def test_the_diff_below_gits_scissors_line_is_not_checked(self):
+        diff = ('# Do not modify or remove the line above.\n'
+                'diff --git a/notes.md b/notes.md\n'
+                '+🤖 Generated with [Claude Code](https://claude.com/claude-code)\n')
+        code, out, _ = self.run_main(f'test: add banner cases\n\nWhy.\n\n{self.SCISSORS}{diff}')
+        self.assertEqual(code, 0, out)
+
+    def test_a_signature_above_the_scissors_line_is_still_refused(self):
+        code, _, _ = self.run_main(f'test: x\n\nWhy.\n\nGenerated with Claude Code\n{self.SCISSORS}diff --git a b\n')
+        self.assertEqual(code, 1)
+
+    def test_an_ai_co_author_trailer_fails(self):
+        trailer = 'Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>'
+        code, out, _ = self.run_main(f'feat: x\n\nWhy.\n\n{trailer}\n')
+        self.assertEqual(code, 1)
+        lines = out.splitlines()
+        self.assertEqual(len(lines), 2)
+        self.assertTrue(lines[0].startswith('FAIL message: AI assistant co-author'))
+        self.assertIn('Claude Opus 5.5', lines[0])
+        self.assertEqual(lines[1], 'commit-message check: FAIL: the message carries agent or process signatures')
+
+    def test_a_session_trailer_fails(self):
+        code, out, _ = self.run_main('feat: x\n\nWhy.\n\nClaude-Session: https://claude.ai/code/session_x\n')
+        self.assertEqual(code, 1)
+        self.assertIn('FAIL message: session identifier in trailer', out)
+
+    def test_a_generated_with_banner_fails(self):
+        banner = '\U0001F916 Generated with [Claude Code](https://claude.com/claude-code)'
+        code, out, _ = self.run_main(f'feat: x\n\nWhy.\n\n{banner}\n')
+        self.assertEqual(code, 1)
+        self.assertIn('FAIL message: AI generation banner', out)
+
+    def test_a_human_co_author_passes(self):
+        code, out, _ = self.run_main('feat: x\n\nWhy.\n\nCo-authored-by: Claude Monet <claude@monet.example>\n')
+        self.assertEqual(code, 0)
+        self.assertIn('OK: message checked', out)
+
+    GIT_COMMENTS = (
+        '# Please enter the commit message for your changes. Lines starting\n'
+        "# with '#' will be ignored, and an empty message aborts the commit.\n"
+        '#\n'
+        '# On branch x\n'
+        '# Changes to be committed:\n'
+        '#\tmodified:   a.txt\n'
+    )
+
+    def test_gits_standard_editor_comment_block_passes(self):
+        code, out, _ = self.run_main('feat: x\n\nWhy.\n' + self.GIT_COMMENTS)
+        self.assertEqual(code, 0)
+        self.assertEqual(out, 'commit-message check: OK: message checked\n')
+
+    def test_signatures_in_comment_lines_are_refused(self):
+        # `git commit -m` and `-F` keep `#` lines in the stored message, so a
+        # commented-out signature would reach history: every line is checked.
+        text = (
+            'feat: x\n\nWhy.\n' + self.GIT_COMMENTS
+            + '# Generated with Claude Code\n'
+            + '# Co-Authored-By: Claude <noreply@anthropic.com>\n'
+        )
+        code, out, _ = self.run_main(text)
+        self.assertEqual(code, 1)
+        self.assertEqual(out.count('FAIL message:'), 1)
+        self.assertIn('FAIL message: AI generation banner: # Generated with Claude Code', out)
+
+    def test_an_indented_trailer_is_refused(self):
+        code, out, _ = self.run_main('feat: x\n\nWhy.\n\n  Co-Authored-By: Claude <noreply@anthropic.com>\n')
+        self.assertEqual(code, 1)
+        self.assertIn('FAIL message: AI assistant co-author', out)
+
+    def test_a_missing_file_is_an_error_on_stderr(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            code, out, err = self.run_args('--message-file', os.path.join(tmp, 'absent'))
+        self.assertEqual(code, 1)
+        self.assertEqual(out, '')
+        self.assertTrue(err.startswith('commit-message check: ERROR: '))
+
+    def test_it_cannot_be_combined_with_range_or_base(self):
+        for other in (('--range', 'a..b'), ('--base', 'origin/main')):
+            with self.subTest(other=other), contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as raised:
+                    check.main(['--message-file', 'x', *other])
+                self.assertEqual(raised.exception.code, 2)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -77,4 +77,6 @@
 - Windows quirks: the full suite passes on Windows (since the dev-hygiene PR); keep it
   that way. Python's `Path.write_text` writes CRLF (use
   `open(..., newline='\n')`); Git Bash's `/tmp` is not Python's `/tmp`; Git Bash has no `bc`.
-
+- The controller's commits run the git hooks (`pre-commit install` once per clone; never
+  `--no-verify`): whitespace, ruff, `node --check`, the static checks and the commit-message
+  signature check. Implementers never commit, so their worktrees need no hooks.

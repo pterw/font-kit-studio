@@ -1,1 +1,3 @@
 packages/fontkitstudio/** text eol=lf
+# Supplied provenance files: their bytes are fixed, so the whitespace check skips them.
+docs/reference/** -whitespace
