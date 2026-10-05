@@ -37,6 +37,9 @@ test('an untested Vite refuses before any Studio starts', async () => {
   }
 });
 
+// runVite changes the working directory, as `vite` does; give it back before the folder is removed.
+const startDir = process.cwd();
+
 test('when Vite fails to start, Studio is closed before the error is rethrown', async () => {
   const dir = fakeProject();
   const files = mkdtempSync(join(tmpdir(), 'fks-run-vite-'));
@@ -48,6 +51,7 @@ test('when Vite fails to start, Studio is closed before the error is rethrown', 
     await assert.rejects(runVite({ projectDir: dir, open: false, studioPort: port, studioFile }), TypeError);
     assert.equal(await canBind(port), true, 'Studio still holds its port');
   } finally {
+    process.chdir(startDir);
     rmSync(dir, { recursive: true, force: true });
     rmSync(files, { recursive: true, force: true });
   }
@@ -73,6 +77,7 @@ test('a Vite that reports no local address is closed with Studio and a plain mes
     assert.equal(globalThis.__viteClosed, true, 'Vite was not closed');
     assert.equal(await canBind(port), true, 'Studio still holds its port');
   } finally {
+    process.chdir(startDir);
     delete globalThis.__viteClosed;
     rmSync(dir, { recursive: true, force: true });
     rmSync(files, { recursive: true, force: true });

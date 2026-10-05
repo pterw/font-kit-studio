@@ -193,11 +193,13 @@ function sink() {
 
 // Starts the command in process; the runner keeps SIGTERM handlers, so emitting it closes it.
 async function startCommand(argv, cwd) {
+  const startDir = process.cwd(); // the Vite runner changes it, as `vite` does
   const opened = [];
   const out = sink();
   const err = sink();
   const code = await main(argv, { out, err, cwd, openUrl: (url) => opened.push(url) });
   const stop = async () => {
+    process.chdir(startDir);
     process.emit('SIGTERM');
     const studioPort = Number(/Open: http:\/\/127\.0\.0\.1:(\d+)\//.exec(out.text())?.[1]);
     const deadline = Date.now() + 5000;

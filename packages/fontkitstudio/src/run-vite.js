@@ -15,14 +15,19 @@ export async function runVite({
   studioFile,
   bridgeFile,
 } = {}) {
-  const { vite } = await loadVite(projectDir);
+  // The project is the nearest folder with a package.json, which may sit above the one the
+  // command runs in; Vite starts there.
+  const { vite, projectDir: foundDir } = await loadVite(projectDir);
   const studio = await startStudio({ studioPort, studioFile, err });
 
   let server;
   let appUrl;
   try {
+    // Start Vite as `vite` itself does when run in the project folder: it finds the config there
+    // and resolves the config's own `root` against the working directory. An inline `root` would
+    // win the merge and override the config's.
+    process.chdir(foundDir);
     server = await vite.createServer({
-      root: projectDir,
       plugins: [fontkitStudio({ studio, bridgeFile, log: (line) => err.write(`${line}\n`) })],
     });
     await server.listen();

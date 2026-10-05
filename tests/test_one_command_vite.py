@@ -12,8 +12,12 @@ import signal
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import unittest
+import urllib.error
+import urllib.request
+from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 import support
@@ -45,12 +49,12 @@ class OneCommandViteBrowserTest(unittest.TestCase):
         self.contexts = []
         self.addCleanup(lambda: close_contexts(self.contexts))
 
-    def start(self, fixture):
-        """Run the command in the fixture; return the Studio URL it prints."""
+    def start(self, fixture, cwd=None):
+        """Run the command in the fixture (or in cwd); return the Studio URL it prints."""
         require_fixture(self, fixture)
         flags = {'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP} if sys.platform == 'win32' else {}
         proc = subprocess.Popen(
-            [NODE, str(BIN), '--no-open'], cwd=FIXTURES / fixture, stdout=subprocess.PIPE,
+            [NODE, str(BIN), '--no-open'], cwd=cwd or FIXTURES / fixture, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, text=True, encoding='utf-8', **flags)
         self.lines = queue.Queue()
         self.collected = []
@@ -138,6 +142,54 @@ class OneCommandViteBrowserTest(unittest.TestCase):
         self.wait_badge(page, CONNECTED)
         self.assertEqual(frame.locator(BRIDGE_TAG).count(), 1)
         return page, frame, errors
+
+    def test_a_config_root_below_the_project_folder_is_served(self):
+        require_fixture(self, 'vite-react')
+        plugin = (PACKAGE / 'src' / 'vite-plugin.js').as_uri()
+        project = Path(tempfile.mkdtemp(prefix='.fks-', dir=FIXTURES / 'vite-react'))   # git-ignored
+        self.addCleanup(shutil.rmtree, project, ignore_errors=True)
+        (project / 'app').mkdir()
+        (project / 'package.json').write_text(
+            '{"name": "rooted", "private": true, "devDependencies": {"vite": "*"}}\n', encoding='utf-8')
+        (project / 'vite.config.js').write_text(
+            f"import {{ fontkitStudio }} from '{plugin}';\n"
+            "export default { root: 'app', plugins: [fontkitStudio()] };\n", encoding='utf-8')
+        (project / 'app' / 'index.html').write_text(
+            '<!doctype html><html><head></head><body>'
+            '<h1 data-design-id="root.marker">Root marker</h1></body></html>\n', encoding='utf-8')
+        url = self.start('vite-react', cwd=project)
+        self.assert_served(url, 'Root marker')
+
+    def test_a_command_run_in_a_subfolder_serves_the_project(self):
+        # The command finds the project above the folder it runs in; Vite must start there, as
+        # `vite` does in the project folder, not in the subfolder (which has no index.html).
+        require_fixture(self, 'vite-react')
+        plugin = (PACKAGE / 'src' / 'vite-plugin.js').as_uri()
+        project = Path(tempfile.mkdtemp(prefix='.fks-', dir=FIXTURES / 'vite-react'))   # git-ignored
+        self.addCleanup(shutil.rmtree, project, ignore_errors=True)
+        (project / 'src').mkdir()
+        (project / 'package.json').write_text(
+            '{"name": "nested", "private": true, "devDependencies": {"vite": "*"}}\n', encoding='utf-8')
+        (project / 'vite.config.js').write_text(
+            f"import {{ fontkitStudio }} from '{plugin}';\n"
+            "export default { plugins: [fontkitStudio()] };\n", encoding='utf-8')
+        (project / 'index.html').write_text(
+            '<!doctype html><html><head></head><body>'
+            '<h1 data-design-id="nested.marker">Project marker</h1></body></html>\n', encoding='utf-8')
+        url = self.start('vite-react', cwd=project / 'src')
+        self.assert_served(url, 'Project marker')
+
+    def assert_served(self, url, marker):
+        """The Open: line's target answers 200 with the marker and exactly one bridge tag."""
+        target = parse_qs(urlsplit(url).query)['target'][0]
+        try:
+            with urllib.request.urlopen(target, timeout=15) as response:
+                status, body = response.status, response.read().decode('utf-8')
+        except urllib.error.HTTPError as error:
+            status, body = error.code, ''
+        self.assertEqual(status, 200, f'{target} answered {status}')
+        self.assertIn(marker, body)
+        self.assertEqual(body.count('/@fontkit/fontkit-bridge.js'), 1)
 
     def test_vite7_connects_with_one_bridge_tag(self):
         url = self.start('vite7-react')
