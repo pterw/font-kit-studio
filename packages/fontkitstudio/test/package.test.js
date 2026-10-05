@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -98,4 +99,22 @@ test('declaration files import only vite, as types', () => {
     }
     assert.doesNotMatch(text, /\bimport\s*\(|\brequire\b/, `${file} loads a module by call`);
   }
+});
+
+// What the tarball holds is what users run: Studio, the bridge, the source and the docs, and
+// nothing else. The expected list comes from src/ and bin/, so a new source file needs no edit
+// here, but a stray file type (a fixture, a test, a scratch file) does.
+test('the tarball holds exactly the shipped files', () => {
+  // One command string with shell: true: npm is npm.cmd on Windows, and an args array with
+  // shell: true warns DEP0190. prepack prints a line before the JSON, so parse from the '['.
+  const out = execSync('npm pack --dry-run --json', {
+    cwd: PKG_DIR, encoding: 'utf8', shell: true, stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const [{ files }] = JSON.parse(out.slice(out.indexOf('[')));
+  const expected = [
+    'LICENSE', 'README.md', 'package.json',
+    ...['bin', 'src'].flatMap((dir) => readdirSync(join(PKG_DIR, dir)).map((name) => `${dir}/${name}`)),
+    'dist/fontkit-studio.html', 'dist/fontkit-bridge.js',
+  ].sort();
+  assert.deepEqual(files.map((f) => f.path).sort(), expected);
 });

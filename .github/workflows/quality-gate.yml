@@ -8,6 +8,8 @@ on:
   # Manual escape hatch for re-running the gate on any ref. Note this trigger
   # only becomes usable once the workflow file is on the default branch.
   workflow_dispatch:
+  # The release workflow (release.yml) runs these same gates on a version tag.
+  workflow_call:
 
 # The gate only reads the repository. No token scope beyond that, no secrets.
 permissions:
