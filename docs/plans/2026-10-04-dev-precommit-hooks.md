@@ -53,15 +53,15 @@ when this branch is rebased on a `main` that has them), and `docs/reference/**`.
 - **Interface:** `--message-file PATH` checks the text in PATH as one commit message with
   the same rules the range mode applies (session trailers, AI co-authors, "Generated with"
   lines), and prints `FAIL <message>: <reason>` lines and the usual summary; exit 0 clean,
-  1 on any finding or an unreadable file. Lines starting with `#` are ignored (git's comment
-  lines in an editor-written message). It reads no git history, so it works before the
+  1 on any finding or an unreadable file. Every line is checked, `#` lines included: `git commit -m`
+  and `-F` keep `#` lines in the stored message, so skipping them would let a signature
+  through (see the ledger, 2026-10-04). It reads no git history, so it works before the
   first commit. `--message-file` and `--range` together are a usage error (exit 2).
 - **Tests (test first; RED, then GREEN):** a clean message passes; each rejected kind fails
   with its reason (a `Co-Authored-By: Claude ... <noreply@anthropic.com>` trailer, a
   `Claude-Session:` URL trailer, a "Generated with [Claude Code]" line); a human co-author
-  named Claude with a personal address passes; a rejected trailer inside a `#` comment line
-  passes; a missing file exits 1 with a message; both flags exit 2. Mutation: drop the
-  comment-line skip and one test fails; route `--message-file` to an empty check and the
+  named Claude with a personal address passes; git's editor comment block alone passes and
+  a signature in a `#` line is refused; a missing file exits 1 with a message; both flags exit 2. Mutation: route `--message-file` to an empty check and the
   rejection tests fail. The range mode's existing tests still pass unchanged.
 - **Gates:** static, ruff, `test_commit_messages`, `test_support`, commit messages.
 
@@ -129,3 +129,4 @@ when this branch is rebased on a `main` that has them), and `docs/reference/**`.
 | Date | Event |
 |---|---|
 | 2026-10-04 | Plan drafted after the owner agreed to a narrow pre-commit check in its own small pull request, queued behind R1 PR B's ready checks. |
+| 2026-10-04 | P1 review: `git commit -m` and `-F` keep `#` lines in the stored message, so the planned skip of `#` lines in `--message-file` would let a `# Generated with ...` line reach history (caught only later by CI's range check). Changed: every line is checked; git's own comment template carries no signature and passes, and a commented-out signature is refused. |
