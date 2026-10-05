@@ -54,3 +54,41 @@ test('openBrowser writes one line to err when no browser can be started', () => 
   child.emit('error', new Error('spawn xdg-open ENOENT'));
   assert.deepEqual(written, ['Font Kit Studio could not open a browser; open the URL above.\n']);
 });
+
+const LINE = 'Font Kit Studio could not open a browser; open the URL above.\n';
+
+function opened() {
+  const { child, spawnFn } = fakeSpawn();
+  const written = [];
+  openBrowser('http://127.0.0.1:5000/', {
+    err: { write: (text) => written.push(text) },
+    spawnFn,
+    platform: 'linux',
+  });
+  return { child, written };
+}
+
+test('openBrowser reports a command that starts and exits nonzero', () => {
+  const { child, written } = opened();
+  child.emit('exit', 1, null);
+  assert.deepEqual(written, [LINE]);
+});
+
+test('openBrowser stays silent when the command exits 0', () => {
+  const { child, written } = opened();
+  child.emit('exit', 0, null);
+  assert.deepEqual(written, []);
+});
+
+test('openBrowser reports once when error is followed by exit', () => {
+  const { child, written } = opened();
+  child.emit('error', new Error('spawn xdg-open ENOENT'));
+  child.emit('exit', 1, null);
+  assert.deepEqual(written, [LINE]);
+});
+
+test('openBrowser reports a command ended by a signal', () => {
+  const { child, written } = opened();
+  child.emit('exit', null, 'SIGTERM');
+  assert.deepEqual(written, [LINE]);
+});

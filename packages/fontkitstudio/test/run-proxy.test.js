@@ -110,6 +110,16 @@ describe('runProxy', () => {
     await running.close();
   });
 
+  test('keeps a hash route in the proxied target', async () => {
+    const { running } = await start({ target: `http://localhost:${upstream.port}/app?x=1#/settings` });
+    try {
+      const target = new URL(running.studioUrl).searchParams.get('target');
+      assert.equal(target, `${running.proxyOrigin}/app?x=1#/settings`);
+    } finally {
+      await running.close();
+    }
+  });
+
   test('a GET of the printed target through the proxy is tagged', async () => {
     const { running } = await start();
     const target = new URL(running.studioUrl).searchParams.get('target');

@@ -41,7 +41,7 @@ export async function runProxy({
   }
 
   const targetUrl = new URL(String(target));
-  const studioUrl = studio.url(proxy.origin + targetUrl.pathname + targetUrl.search);
+  const studioUrl = studio.url(proxy.origin + targetUrl.pathname + targetUrl.search + targetUrl.hash);
 
   const signals = process.platform === 'win32' ? ['SIGINT', 'SIGTERM', 'SIGBREAK'] : ['SIGINT', 'SIGTERM'];
   let closing;

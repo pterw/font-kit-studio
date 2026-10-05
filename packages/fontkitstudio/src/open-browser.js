@@ -13,8 +13,16 @@ export function openBrowser(
 ) {
   const { command, args } = browserCommand(platform, url);
   const child = spawnFn(command, args, { detached: true, stdio: 'ignore', shell: false });
-  child.on('error', () => {
+  // One line at most, whether the command could not start (error) or started and failed (exit).
+  let reported = false;
+  const report = () => {
+    if (reported) return;
+    reported = true;
     err.write('Font Kit Studio could not open a browser; open the URL above.\n');
+  };
+  child.on('error', report);
+  child.on('exit', (code, signal) => {
+    if (code !== 0 || signal) report();
   });
   child.unref();
 }
