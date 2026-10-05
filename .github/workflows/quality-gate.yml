@@ -233,6 +233,7 @@ jobs:
         run: |
           npm ci --prefix fixtures/vite-react
           npm ci --prefix fixtures/vite7-react
+          npm ci --prefix fixtures/vite-ts
       - name: Bundle Studio and the bridge
         run: npm --prefix packages/fontkitstudio run prepack
       - name: Install the test tools and Chromium
@@ -244,7 +245,7 @@ jobs:
           FKS_ENGINES: chromium
           FKS_REQUIRE_FIXTURES: '1'
           PYTHONPATH: tests
-        run: python -m unittest test_vite_build_guarantee test_one_command_vite test_one_command_proxy test_friction -v
+        run: python -m unittest test_vite_build_guarantee test_one_command_vite test_one_command_proxy test_friction test_vite_types -v
 
   # Proxy mode in front of a real Next.js dev server, including its hot reload
   # over the proxy's WebSocket pass-through. Its own job: Next's install is large.

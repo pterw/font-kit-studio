@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -25,7 +25,7 @@ test('has no runtime dependencies (spec 4.5, D030)', () => {
 function sourceFiles(dir) {
   return readdirSync(dir).flatMap((name) => {
     const path = join(dir, name);
-    return statSync(path).isDirectory() ? sourceFiles(path) : /\.(c|m)?js$/.test(path) ? [path] : [];
+    return statSync(path).isDirectory() ? sourceFiles(path) : /\.(c|m)?js$|\.d\.ts$/.test(path) ? [path] : [];
   });
 }
 
@@ -41,6 +41,7 @@ const SPECIFIER = new RegExp([
 
 test('shipped code imports only node built-ins and its own files', () => {
   for (const file of ['bin', 'src'].flatMap((dir) => sourceFiles(join(PKG_DIR, dir)))) {
+    if (file.endsWith('.d.ts')) continue; // declarations have their own, stricter guard below
     for (const match of readFileSync(file, 'utf8').matchAll(SPECIFIER)) {
       const spec = match[1] ?? match[2] ?? match[3] ?? match[4];
       assert.ok(spec.startsWith('node:') || spec.startsWith('.'),
@@ -69,5 +70,32 @@ test('only src/project.js loads code by a computed path', () => {
     assert.doesNotMatch(text, /\bcreateRequire\b/, `${file} uses createRequire`);
     assert.doesNotMatch(text, /\bimport\(\s*(?!['"])/, `${file} has a computed import()`);
     assert.doesNotMatch(text, /\brequire\(\s*(?!['"])/, `${file} has a computed require()`);
+  }
+});
+
+test('exports["./vite"] ships its types and its code', () => {
+  const entry = pkg.exports['./vite'];
+  assert.equal(entry.default, './src/vite-plugin.js');
+  assert.equal(typeof entry.types, 'string', 'exports["./vite"].types is missing');
+  assert.ok(existsSync(join(PKG_DIR, entry.types)), `${entry.types} does not exist`);
+  assert.ok(pkg.files.some((f) => entry.types.startsWith(`./${f}`)),
+    `${entry.types} lies under no "files" entry, so npm would not ship it`);
+});
+
+// The one import a declaration may have is the project's own Vite, as a type: nothing to
+// install, nothing loaded at run time.
+test('declaration files import only vite, as types', () => {
+  const declarations = sourceFiles(join(PKG_DIR, 'src')).filter((f) => f.endsWith('.d.ts'));
+  assert.ok(declarations.length > 0, 'src/ has no .d.ts to guard');
+  for (const file of declarations) {
+    const text = readFileSync(file, 'utf8');
+    for (const match of text.matchAll(SPECIFIER)) {
+      const spec = match[1] ?? match[2] ?? match[3] ?? match[4];
+      assert.equal(spec, 'vite', `${file} imports ${spec}: a declaration may import only vite`);
+    }
+    for (const match of text.matchAll(/^\s*import\b(?!\s+type\s)[^\n]*$/gm)) {
+      assert.fail(`${file}: "${match[0].trim()}" must be an import type`);
+    }
+    assert.doesNotMatch(text, /\bimport\s*\(|\brequire\b/, `${file} loads a module by call`);
   }
 });

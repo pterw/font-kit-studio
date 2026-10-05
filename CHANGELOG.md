@@ -25,7 +25,7 @@ Two things have their own version numbers:
   bridge or Content-Security-Policy may stop Studio connecting.
 - `fontkitStudio()` from `fontkitstudio/vite` adds Studio to `vite.config` for good. It is
   left out of `vite build` (the build says so), and stands down when the command already
-  added it.
+  added it. It ships TypeScript declarations, so a strict `vite.config.ts` type-checks.
 
 ### Fixed
 

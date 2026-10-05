@@ -1,0 +1,11 @@
+{
+  "name": "fks-fixture-vite-ts",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@types/node": "24.19.1",
+    "fontkitstudio": "file:../../packages/fontkitstudio",
+    "typescript": "6.0.3",
+    "vite": "8.3.2"
+  }
+}

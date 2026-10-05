@@ -5,7 +5,7 @@
   "license": "MIT",
   "type": "module",
   "bin": { "fontkitstudio": "bin/fontkitstudio.js" },
-  "exports": { "./package.json": "./package.json", "./vite": "./src/vite-plugin.js" },
+  "exports": { "./package.json": "./package.json", "./vite": { "types": "./src/vite-plugin.d.ts", "default": "./src/vite-plugin.js" } },
   "files": ["bin/", "src/", "dist/"],
   "engines": { "node": ">=22.12" },
   "repository": {
