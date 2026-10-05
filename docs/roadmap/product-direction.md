@@ -96,12 +96,18 @@ product are not the same thing yet.
   network isolation and contrast. v0.2.1 worked through the first-run, controls and visual
   audit (`docs/implementation/audit-2026-10-03-first-run-and-controls.md`); what it left
   for later is in `docs/implementation/sweep-v0.2.1-pr-b.md`.
-- **Designed, not built:** everything in "How it differs" above. One-command start (R1),
-  role detection (R2), pairing and type scales (R3), token output (R4), the extension (R5).
-- **Against "just looking", fontkit loses today.** A font-swap extension is faster for a
-  quick peek because fontkit needs a script tag in the page. That is by design (Studio
-  never runs inside the page it edits) and R1 and R5 remove the friction without giving up
-  the design.
+- **Built, not yet published (0.3.0, R1):** `npx fontkitstudio` opens Studio connected to
+  a local Vite app, or through a loopback proxy to any other local dev server, with no
+  config edit or script tag; `fontkitStudio()` keeps it in `vite.config`. Proven in CI on
+  Vite 7 and 8, a static Bootstrap page under a strict CSP and Next.js 16. It is released
+  only once the owner publishes 0.3.0 to npm; until then it runs from a clone.
+- **Designed, not built:** everything in "How it differs" above. Role detection (R2),
+  pairing and type scales (R3), token output (R4), the extension (R5).
+- **Against "just looking", fontkit loses on pages you do not run.** For a local app the
+  one command removes the script tag. A site you do not run still needs one (or the
+  bookmarklet), so a font-swap extension is faster for a quick peek there. That is by
+  design (Studio never runs inside the page it edits), and R5 removes the friction without
+  giving up the design.
 - **The extension earns its place only with the engine.** Click-and-swap alone is a
   smaller DevTools. It ships after R2-R4 so it carries roles, pairings, scales and handoff
   into a tab the user does not own; built earlier it would be the DevTools remake it is

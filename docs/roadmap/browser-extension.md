@@ -7,9 +7,10 @@ and the order of work; this note owns the technical sketch.
 
 ## Why
 
-Today fontkit needs one script tag in the app you want to edit (or a bookmarklet run from a
-pop-out window). That is fine for your own project and awkward for everything else: a staging
-site you cannot change, a teammate's branch, or a quick look at a page you do not own.
+For an app you run locally, `npx fontkitstudio` adds the bridge for you (0.3.0). Anything
+else still needs one script tag in the app (or a bookmarklet run from a pop-out window), which
+is awkward: a staging site you cannot change, a teammate's deployed branch, or a quick look at
+a page you do not own.
 
 An extension could remove the script tag. You would click the toolbar button on the page you
 want to edit, and the extension would load the bridge into that tab for you.

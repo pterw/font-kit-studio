@@ -112,19 +112,19 @@ Node code lives under `packages/fontkitstudio/` (exact layout fixed in R1.1).
   policy, an unsupported project) gets a message that says what and why. Owns: the CLI
   messages (the bridge does not change: no page marker, D051).
 
-- [ ] **R1.7 Fixtures and the friction test.** Committed fixtures with lockfiles, installed
+- [x] **R1.7 Fixtures and the friction test.** Committed fixtures with lockfiles, installed
   with `npm ci` in CI: Vite + React (plain CSS), Bootstrap 5 static with vendored CSS behind
   the proxy and a `script-src 'self'` CSP, Next.js behind the proxy. The friction test runs
   the one command on the Vite fixture and measures the time until Studio shows the page
   connected, with no manual step; it fails over a budget fixed in this task. Owns:
   `fixtures/`, `tests/` for the friction test, the CI job.
 
-- [ ] **R1.8 Docs.** README Quickstart leads with the one command; `serve.py` and the script
+- [x] **R1.8 Docs.** README Quickstart leads with the one command; `serve.py` and the script
   tag stay documented as the no-Node path; CONTRIBUTING covers the Node package; user-facing
   text says Font Kit Studio, not the bare "fontkit" (D040). Owns:
   `README.md`, `CONTRIBUTING.md`.
 
-- [ ] **R1.9 Release pipeline.** Workflow triggered by a `v*` tag (D042): the gates on
+- [x] **R1.9 Release pipeline.** Workflow triggered by a `v*` tag (D042): the gates on
   the D043 matrix, then `npm publish` from `packages/fontkitstudio/` by trusted publishing
   (`id-token: write`, `contents: read`), in a GitHub environment that needs the owner's
   approval; the release notes come from `CHANGELOG.md`. The owner creates the tag and
@@ -184,3 +184,4 @@ R1.5 are created inside those tasks; R1.7 adds the CI wiring and the friction te
 | 2026-10-04 | Addendum 1: R1 ships as three PRs under D050 (material lines counted, churn reported): A = R1.1-R1.3 (`2026-10-04-r1-pr-a-sdd.md`), B = R1.4-R1.6, C = R1.7-R1.9 and the release point. R1.0 runs beside PR A; only R1.9 depends on it. Trusted publisher fields fixed for R1.9: workflow `release.yml`, environment `npm-release`; the publish job runs Node 24 (npm 11.5.1 or later is required). |
 | 2026-10-04 | PR A merged (PR #8). Addendum 2, binding once PR B's plan is approved: the Next.js fixture moves from R1.5 to R1.7 (it needs a large `npm ci` and its own CI job; the proxy is proven first on the static Bootstrap fixture), and the Vite fixture's CI job lands in PR B, so the one-command path is tested in CI from the PR that adds it. |
 | 2026-10-04 | PR B merged (PR #10). Addendum 3, from PR C's approved plan: R1.8 adds TypeScript declarations for `fontkitstudio/vite` and Studio wording for runs under `npx fontkitstudio` (no `scripts/serve.py` hint the package cannot honour); R1.7's fixture job runs on the D043 matrix and the Next.js fixture gets its own job; R1.9's workflow calls the quality gate, tests the tarball's file list and makes the GitHub Release after the publish; the false CSP warning for a `script-src` that names the page's own origin is fixed with R1.6's messages. |
+| 2026-10-04 | PR C (PR #12) at the 0.3.0 release point: R1.7-R1.9 done and reviewed, gates and evidence in `verification-r1.md`. The release-point box is checked once the owner merges and the publish has run. |
