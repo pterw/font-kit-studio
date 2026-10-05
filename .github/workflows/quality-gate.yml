@@ -201,17 +201,28 @@ jobs:
         working-directory: packages/fontkitstudio
         run: npm test
 
+  # The one command on real Vite projects, on the Node lines and systems D043
+  # fixes, with the friction test's time budget.
   fixtures:
-    name: Fixtures (Vite 7 and 8)
-    runs-on: ubuntu-latest
+    name: Fixtures, Vite 7 and 8 (${{ matrix.os }}, Node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, node: '22' }
+          - { os: ubuntu-latest, node: '24' }
+          - { os: ubuntu-latest, node: '26' }
+          - { os: macos-latest, node: '24' }
+          - { os: windows-latest, node: '24' }
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: ${{ matrix.node }}
           cache: npm
           cache-dependency-path: fixtures/*/package-lock.json
       - name: Set up Python
@@ -233,4 +244,4 @@ jobs:
           FKS_ENGINES: chromium
           FKS_REQUIRE_FIXTURES: '1'
           PYTHONPATH: tests
-        run: python -m unittest test_vite_build_guarantee test_one_command_vite test_one_command_proxy -v
+        run: python -m unittest test_vite_build_guarantee test_one_command_vite test_one_command_proxy test_friction -v
