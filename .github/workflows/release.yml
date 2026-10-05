@@ -56,8 +56,12 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: python3 scripts/dev/release_notes.py "${TAG#v}" > /dev/null
 
-      # prepack bundles Studio and the bridge and fails if their labels differ from
-      # the package version.
+      # Bundle Studio and the bridge now, and fail here if their labels differ from
+      # the package version, so the publish never depends on npm running prepack.
+      - name: Bundle Studio and the bridge
+        working-directory: packages/fontkitstudio
+        run: npm run prepack
+
       - name: Publish to npm
         working-directory: packages/fontkitstudio
         run: npm publish

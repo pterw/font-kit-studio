@@ -66,3 +66,34 @@ Body draft: "A v* tag now runs the same gates a pull request runs, then waits fo
 Other Minors: 2 and 3 fixed in release_notes.py (trailing `[x]: url` definitions and whitespace-only leading lines are dropped; two new tests; `release_notes.py 0.1.1` on the real CHANGELOG now ends at the section's last line). 4 fixed: both jobs call `python3`. 5, 6 and the npm@^11.5.1 range: left as is (5 stricter test kept; 6 optimisation; range is the brief's).
 
 Runs: `test_release test_support` 58 tests, 1 failure = QualityGateIsCallableTests (still waits for the landing edit). Node tests 248 pass, 0 fail. ruff clean. pre-commit on the staged files passes. Patch regenerated (`git apply --check -R` ok). Handoff otherwise unchanged; the release job's `python` is now `python3`.
+
+## Fix round 2 (CI)
+Worktree `C:/fks/t9a2` at 2014319. Patch: `task-9a-fix2.patch` (git diff --binary from 2014319; 3 files; `git apply --check -R` ok).
+
+**1. Does npm 11 skip prepack on `pack --dry-run`? No; I could not read a docs page (no web fetch tool), so I read npm's own source.** I fetched `npm@11.21.0` (`npm pack npm@11`, a read-only download) and read `node_modules/libnpmpack/lib/index.js`: for a directory spec, `prepack` runs whenever `!opts.ignoreScripts`, before the tarball is built, and `dryRun` only decides whether the file is written. `lib/commands/publish.js` (11.21.0) packs through the same libnpmpack, so `npm publish` runs prepack too (it also runs prepublishOnly/publish/postpublish). Measured with `npx -y npm@<v> pack --dry-run --json` in the package with dist/ and LICENSE removed: 11.5.1, 11.6.0, 11.8.0, 11.12.0, 11.19.1 (CI's npm) and 11.21.0 all list 16 files including LICENSE and both dist files. With `--ignore-scripts` and nothing bundled: 13 files, none of the three. With the bundle run first, then `--ignore-scripts`: 16 files.
+
+**Real cause of the CI failure: a race in the tests, not npm.** CI log (job 111594960626, npm 11.19.1) shows the tarball missing exactly LICENSE and both dist files. `node --test` runs test files in parallel; `bundle.test.js` "running the script through a directory link still bundles" does `rmSync(dist)` and `rmSync(LICENSE)` in the real package directory, and `package.test.js` packed that same directory, so prepack's output could be deleted before the tarball was read. Node 26 only changed the timing. The published 0.3.0 is not at risk from this: publish runs prepack right before reading files, with nothing racing it.
+
+**2. release.yml.** New publish step "Bundle Studio and the bridge" (`working-directory: packages/fontkitstudio`, `npm run prepack`) before `npm publish`; it also fails on a label mismatch earlier. Test `test_studio_is_bundled_before_publishing` (step exists, in the package directory, precedes publish). Mutation: step changed to `echo skipped` -> the test fails; restored.
+
+**3. package.test.js.** The tarball test now packs a scratch copy (root files, `bin/`, `src/`, `scripts/`, `package.json`, `README.md`) in a temp repo layout, runs `node scripts/bundle.js` explicitly, then `npm pack --dry-run --json`; exact list assertion kept. Isolated from the real dist/, so the race cannot hit it. Run with the real dist/ and LICENSE deleted: passes. Also fixed a flaw in my earlier version: the expected list came from every entry in `src/` and `bin/`, so a stray file could never fail it; it now keeps only `*.js` and `*.d.ts` as the brief said. Mutation: `src/stray.txt` -> fails; removed. (A `test/` entry in `files` is caught by "declares what npm needs", not here, since the copy has no test/.)
+
+**Runs.** `test_release test_support`: 59 tests OK (quality-gate test passes here because 2014319 has `workflow_call`). Node tests: 248 pass, 0 fail. ruff clean. pre-commit on the changed files passes. No registry or GitHub writes; the only network use was the npm package download and `gh run`/`gh api` reads.
+Note: the worktree checked out CRLF; the patch is made from the index (LF).
+
+## Fix round 3 (the race class)
+Worktree `C:/fks/t9a2`. `task-9a-fix2.patch` regenerated from 2014319 (8 files, `git apply --check -R` ok).
+
+**Audit.** Grepped every Node test for writes, deletes or copies touching dist/ or LICENSE. Real-directory writers found: `bundle.test.js` "running the script through a directory link" (deleted dist/ and LICENSE, then bundled into them), `bundle.test.js` "npm pack ships ..." (ran prepack, so rewrote them, via `copyFileSync`, which truncates first and so can expose an empty file to a parallel reader), and `cli.test.js` `before()` (called `bundle()` when dist/ was missing). `package.test.js` was fixed in round 2. Nothing else touches them (the other hits are `node_modules/vite/dist` fixtures and temp copies).
+
+**Changes.**
+- New `test/helpers/scratch-package.js`: a scratch repository (root Studio, bridge, LICENSE; package copy under `packages/fontkitstudio` without dist/ and LICENSE). `bundle.js` resolves its repo root as `../..`, so the layout is needed rather than an output option.
+- `bundle.test.js`: both real-directory tests now use the scratch package; the link test also asserts the scratch copy starts without dist/ and LICENSE, and compares with the scratch root's files. `package.test.js` uses the same helper.
+- `cli.test.js`: `before()` no longer bundles; it asserts dist/ exists with a message. To keep `npm test` working from a clean checkout, the package's test script is now `node scripts/bundle.js && node --test test/*.test.js` (the script, not a test, writes the real dist/, once, before any test file starts). README and CONTRIBUTING use `npm --prefix packages/fontkitstudio test`, unchanged. Running `node --test` on cli.test.js alone with no dist/ now fails with the message instead of writing.
+- Guard: `test/helpers/real-bundle-guard.js` `guardRealBundle()`, called at the top of `bundle.test.js`, `cli.test.js` and `package.test.js`. It snapshots the real LICENSE and every dist/ file (name, bytes, mtime) when the file loads and compares in an `after` hook. Not vacuous: it catches changes by any parallel file during the run, including same-byte rewrites.
+- Guard mutations (each reverted): a test doing `rmSync` on the real dist -> `real-bundle-guard.js` hook fails, "a test deleted or rewrote the real dist/ or LICENSE" (fail 1); a test rewriting the real LICENSE with identical bytes -> same failure (mtime). Restored: `bundle.test.js` 4 pass, 0 fail.
+
+**Five runs in a row**, `npm --prefix packages/fontkitstudio test`, dist/ and LICENSE deleted before the first:
+run 1: tests 250, pass 248, fail 0 (2 skipped, pre-existing); run 2: same; run 3: same; run 4: same; run 5: same.
+
+Also: `test_release test_support` 59 OK; ruff clean; pre-commit (whitespace, ruff, node --check) passes on the changed files.

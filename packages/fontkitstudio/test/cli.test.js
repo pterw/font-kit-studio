@@ -7,9 +7,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { bundle } from '../scripts/bundle.js';
 import { USAGE, main } from '../src/cli.js';
 import { fakeProject } from './helpers/fake-project.js';
+import { guardRealBundle } from './helpers/real-bundle-guard.js';
+
+guardRealBundle();
 
 const BIN = fileURLToPath(new URL('../bin/fontkitstudio.js', import.meta.url));
 const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
@@ -42,7 +44,9 @@ after(() => {
 
 before(() => {
   // Only the in-process tests that really start Studio need the bundled copy; refusals do not.
-  if (!existsSync(new URL('../dist/fontkit-studio.html', import.meta.url))) bundle();
+  // `npm test` bundles first (the package's test script); a test never writes the real dist/.
+  assert.ok(existsSync(new URL('../dist/fontkit-studio.html', import.meta.url)),
+    'dist/ is missing: run `npm test`, or `npm run prepack`, before running this file');
 });
 
 function project(options) {

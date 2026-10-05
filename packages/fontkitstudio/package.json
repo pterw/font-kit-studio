@@ -16,6 +16,6 @@
   "homepage": "https://github.com/pterw/font-kit-studio#readme",
   "scripts": {
     "prepack": "node scripts/bundle.js",
-    "test": "node --test test/*.test.js"
+    "test": "node scripts/bundle.js && node --test test/*.test.js"
   }
 }

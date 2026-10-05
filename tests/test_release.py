@@ -185,6 +185,12 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertEqual(step["env"], {"TAG": "${{ github.ref_name }}"})
         self.assertIn('"${TAG#v}"', step["run"])
 
+    def test_studio_is_bundled_before_publishing(self):
+        bundle = self.step_index(lambda s: s.get("run") == "npm run prepack", "bundle")
+        publish = self.step_index(lambda s: s.get("run") == "npm publish", "npm publish")
+        self.assertLess(bundle, publish)
+        self.assertEqual(self.publish_steps()[bundle]["working-directory"], "packages/fontkitstudio")
+
     def test_every_action_is_pinned_by_commit_sha(self):
         uses = [s["uses"] for job in self.jobs.values() for s in job.get("steps", []) if "uses" in s]
         self.assertTrue(uses)
