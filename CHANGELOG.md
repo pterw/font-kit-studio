@@ -12,6 +12,21 @@ Two things have their own version numbers:
 
 ## [Unreleased]
 
+### Added
+
+- `npx fontkitstudio` opens Studio connected to your app in one step, in development
+  only. In a Vite 7 or 8 project it runs the project's own dev server with Font Kit Studio
+  added in memory; nothing is written to the project. Given a local dev server's address
+  (`npx fontkitstudio http://localhost:3000`) it runs Studio through a loopback proxy, so
+  apps that do not use Vite work too, including pages whose Content-Security-Policy allows
+  only their own scripts. `--no-open` prints the URL instead of opening the browser;
+  `--studio-port <n>` keeps Studio on one port so its saved settings carry over. It
+  refuses to run on a Vite server opened to the network, and says once when a page's own
+  bridge or Content-Security-Policy may stop Studio connecting.
+- `fontkitStudio()` from `fontkitstudio/vite` adds Studio to `vite.config` for good. It is
+  left out of `vite build` (the build says so), and stands down when the command already
+  added it.
+
 ### Fixed
 
 - On Windows, `scripts/serve.py` also stops cleanly on Ctrl-Break.

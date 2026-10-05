@@ -1,7 +1,7 @@
 # R1 One command: implementation plan
 
-Status: **active** (2026-10-04). PR A (R1.1-R1.3) is running; R1.0, the owner's npm
-steps, runs beside it (addendum 1 in the ledger below). The package name, Studio's file name, publishing and the
+Status: **active** (2026-10-04). PR A (R1.0-R1.3) merged as PR #8. PR B (R1.4-R1.6) is
+planned in `2026-10-04-r1-pr-b-sdd.md` (addendum 2 in the ledger below). The package name, Studio's file name, publishing and the
 versions under test are decided (D040 to D044 in
 `docs/implementation/deviations.md`; [roadmap register](2026-10-03-roadmap.md#decisions-register)),
 and the open questions below are answered. v0.2.1 is merged. This release is
@@ -25,7 +25,7 @@ In:
   fontkit plugin added in memory.
 - `fontkitStudio()` from `fontkitstudio/vite` in `vite.config` for a permanent setup.
 - `npx fontkitstudio http://localhost:<port>`: proxy mode in front of any other local dev server.
-- A per-run token, the dev-only refusal, a visible "Font Kit Studio · dev only" marker, and clear
+- A per-run token, the dev-only refusal, a "Font Kit Studio · dev only" line in the terminal (D051), and clear
   failure messages.
 - Studio and the bridge bundled at matching versions; Studio renamed to `fontkit-studio.html` (D041).
 - Real-app fixtures (Vite + React, Bootstrap 5 static behind the proxy, Next.js behind the
@@ -92,24 +92,24 @@ Node code lives under `packages/fontkitstudio/` (exact layout fixed in R1.1).
   and Origin checks as in `serve.py`. Hostile cases: missing and wrong token, wrong Host,
   wrong Origin. Owns: `packages/fontkitstudio/src/studio-server.*`, its tests.
 
-- [ ] **R1.4 Vite runner and plugin.** `npx fontkitstudio` finds the project's Vite, starts it
+- [x] **R1.4 Vite runner and plugin.** `npx fontkitstudio` finds the project's Vite, starts it
   through the JavaScript API with the plugin in memory, and opens Studio connected to it;
   `fontkitStudio()` in `vite.config` does the same through `npm run dev`. The plugin adds the
   bridge only in `serve` mode; `vite build` output contains no bridge (guarantee test,
   spec 4.2). Hot reload keeps the connection. Owns: `src/vite-*`, the Vite + React fixture.
 
-- [ ] **R1.5 Proxy mode.** A loopback proxy in front of an existing dev server: injects the
+- [x] **R1.5 Proxy mode.** A loopback proxy in front of an existing dev server: injects the
   bridge only into `text/html` responses, serves the bridge from the app's own origin so
   `script-src 'self'` allows it, passes the app's CSP header through unchanged, passes
   WebSocket upgrades (hot reload) through untouched, limits sizes. Hostile cases (spec
   4.3): non-loopback target, wrong Host (DNS rebinding), path traversal, non-HTML content,
   oversized response. Owns: `src/proxy.*`, the Bootstrap 5 and Next.js fixtures.
 
-- [ ] **R1.6 Dev-only refusal, visibility and failure messages.** The plugin and proxy
-  refuse to run for a production build or a non-loopback bind and say so; the page and the
-  terminal show "Font Kit Studio · dev only"; every connection failure (another bridge, a security
+- [x] **R1.6 Dev-only refusal, visibility and failure messages.** The plugin and proxy
+  refuse to run for a production build or a non-loopback bind and say so; the terminal
+  shows "Font Kit Studio · dev only" (no page marker, D051); every connection failure (another bridge, a security
   policy, an unsupported project) gets a message that says what and why. Owns: the CLI
-  messages, a small bridge option for the marker (additive, protocol unchanged).
+  messages (the bridge does not change: no page marker, D051).
 
 - [ ] **R1.7 Fixtures and the friction test.** Committed fixtures with lockfiles, installed
   with `npm ci` in CI: Vite + React (plain CSS), Bootstrap 5 static with vendored CSS behind
@@ -181,3 +181,4 @@ R1.5 are created inside those tasks; R1.7 adds the CI wiring and the friction te
 | 2026-10-03 | Draft written from the approved design. Waits on PR B and decisions 1, 2, 4. |
 | 2026-10-04 | Decisions taken (D040 to D044); open questions answered. Waits on PR B. |
 | 2026-10-04 | Addendum 1: R1 ships as three PRs under D050 (material lines counted, churn reported): A = R1.1-R1.3 (`2026-10-04-r1-pr-a-sdd.md`), B = R1.4-R1.6, C = R1.7-R1.9 and the release point. R1.0 runs beside PR A; only R1.9 depends on it. Trusted publisher fields fixed for R1.9: workflow `release.yml`, environment `npm-release`; the publish job runs Node 24 (npm 11.5.1 or later is required). |
+| 2026-10-04 | PR A merged (PR #8). Addendum 2, binding once PR B's plan is approved: the Next.js fixture moves from R1.5 to R1.7 (it needs a large `npm ci` and its own CI job; the proxy is proven first on the static Bootstrap fixture), and the Vite fixture's CI job lands in PR B, so the one-command path is tested in CI from the PR that adds it. |

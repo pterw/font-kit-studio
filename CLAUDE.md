@@ -56,3 +56,25 @@
 - A release-point doc pass of small, already-located edits is faster done by the controller
   than dispatched: a docs agent can spend its whole run re-reading. Dispatch when edits need
   research the controller has not done.
+
+## Local sessions (Windows) and the SDD workspace
+
+- Each plan run has an untracked workspace `.superpowers/sdd/<plan>/` with
+  `constraints.md` (rulings, a "Repository rules" section naming the AGENTS.md sections and
+  global rules, test rules, shared files, a fenced `gates` block, lessons) and
+  `progress.md`, the controller's `## RESUME HERE` ledger. The compaction hook reads
+  exactly `.superpowers/sdd/*/progress.md`, newest first; any other name is not found.
+- Subagents run without CLAUDE.md or AGENTS.md (`omitClaudeMd`): a rule they must follow
+  goes in `constraints.md` or the dispatch.
+- Implementers never commit, in any mode (owner, 2026-10-04: follow AGENTS.md). Code
+  phases run in detached worktrees at `C:/fks/t<id>` and return a patch; the controller
+  applies it, does the bookkeeping, has haiku gate-runners run the gates on the staged tree
+  in parallel (`ONLY` per runner, `ALLOW_DIRTY: yes`), then commits.
+- Implementers run only their task's focused tests; a task that adds a `tests/*.py` module
+  also runs `test_support` (its guards scan every module).
+- Pull request size counts material lines (D050): measure with `git diff -B -M`, report
+  churn (renames, stubs, lockfiles, vendored files) separately in the PR body.
+- Windows quirks: the full suite passes on Windows (since the dev-hygiene PR); keep it
+  that way. Python's `Path.write_text` writes CRLF (use
+  `open(..., newline='\n')`); Git Bash's `/tmp` is not Python's `/tmp`; Git Bash has no `bc`.
+

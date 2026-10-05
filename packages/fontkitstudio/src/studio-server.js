@@ -13,6 +13,17 @@ const NO_STORE = {
   'X-Content-Type-Options': 'nosniff',
 };
 
+// The Host values a browser can send for this port; it omits the default port 80.
+export function allowedHosts(port) {
+  const hosts = [`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`];
+  return port === 80 ? [...hosts, '127.0.0.1', 'localhost', '[::1]'] : hosts;
+}
+
+// The origin a browser reports for the page: new URL drops the default port 80.
+export function studioOrigin(host, port) {
+  return new URL(`http://${host === '::1' ? '[::1]' : host}:${port}`).origin;
+}
+
 export function newToken() {
   return randomBytes(32).toString('base64url');
 }
@@ -56,8 +67,7 @@ export async function startStudioServer({
     };
 
     const requestHost = String(req.headers.host ?? '').toLowerCase();
-    const allowedHosts = [`127.0.0.1:${actualPort}`, `localhost:${actualPort}`, `[::1]:${actualPort}`];
-    if (!allowedHosts.includes(requestHost)) return send(421, 'Host header not allowed.');
+    if (!allowedHosts(actualPort).includes(requestHost)) return send(421, 'Host header not allowed.');
 
     const origin = req.headers.origin;
     if (origin !== undefined && origin.toLowerCase() !== `http://${requestHost}`) {
@@ -90,7 +100,7 @@ export async function startStudioServer({
   });
   actualPort = server.address().port;
 
-  const origin = `http://${host === '::1' ? '[::1]' : host}:${actualPort}`;
+  const origin = studioOrigin(host, actualPort);
   return {
     port: actualPort,
     token,

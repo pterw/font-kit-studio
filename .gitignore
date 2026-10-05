@@ -7,3 +7,6 @@ demo/fontkit-overrides.css
 .ruff_cache/
 packages/fontkitstudio/dist/
 packages/fontkitstudio/LICENSE
+fixtures/*/node_modules/
+fixtures/*/dist/
+fixtures/*/.fks-*/

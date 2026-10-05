@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { STUDIO_PATH, newToken, startStudioServer } from '../src/studio-server.js';
+import { STUDIO_PATH, allowedHosts, newToken, startStudioServer, studioOrigin } from '../src/studio-server.js';
 
 const MARKER = '<title>Font Kit Studio vT</title>';
 const BODY = Buffer.from(`<!doctype html>${MARKER}<p>caf\u00e9</p>`);
@@ -173,5 +173,47 @@ describe('studio server', () => {
     assert.equal(parsed.searchParams.get('token'), server.token);
     assert.equal(parsed.searchParams.get('target'), target);
     assert.equal(new URL(server.url()).searchParams.has('target'), false);
+  });
+});
+
+describe('port 80 and the forms browsers use', () => {
+  test('allowedHosts: the port-suffixed forms, plus the portless ones only on port 80', () => {
+    assert.deepEqual(allowedHosts(5123), ['127.0.0.1:5123', 'localhost:5123', '[::1]:5123']);
+    assert.deepEqual(allowedHosts(80), [
+      '127.0.0.1:80',
+      'localhost:80',
+      '[::1]:80',
+      '127.0.0.1',
+      'localhost',
+      '[::1]',
+    ]);
+  });
+
+  test('studioOrigin: the origin a browser reports, so :80 is dropped and ::1 is bracketed', () => {
+    assert.equal(studioOrigin('127.0.0.1', 5123), 'http://127.0.0.1:5123');
+    assert.equal(studioOrigin('127.0.0.1', 80), 'http://127.0.0.1');
+    assert.equal(studioOrigin('localhost', 80), 'http://localhost');
+    assert.equal(studioOrigin('::1', 5123), 'http://[::1]:5123');
+    assert.equal(studioOrigin('::1', 80), 'http://[::1]');
+  });
+
+  test('a server on another port reports the suffixed origin and refuses the portless Host', async () => {
+    const studio = await startStudioServer({ studioFile: pathToFileURL(join(dir, 'studio.html')) });
+    try {
+      assert.equal(studio.origin, studioOrigin('127.0.0.1', studio.port));
+      assert.equal(studio.url().startsWith(`${studio.origin}${STUDIO_PATH}?`), true);
+      // Off port 80 a Host without the port is not this server (DNS-rebinding guard).
+      const status = await new Promise((resolve, reject) => {
+        const req = request({
+          host: '127.0.0.1', port: studio.port, path: `${STUDIO_PATH}?token=${studio.token}`,
+          headers: { Host: '127.0.0.1' }, agent: false,
+        }, (res) => { res.resume(); resolve(res.statusCode); });
+        req.on('error', reject);
+        req.end();
+      });
+      assert.equal(status, 421);
+    } finally {
+      await studio.close();
+    }
   });
 });
