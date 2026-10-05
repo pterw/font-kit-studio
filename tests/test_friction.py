@@ -29,7 +29,7 @@ TITLE = '[data-design-id="vite.hero.title"]'
 # Seconds from starting the command to a connected Studio. In CI the budget is the slowest
 # fixtures cell of the first green run (0.8 s, Windows) plus 50 percent, rounded up (R1 plan,
 # question 4). A developer machine running other work is slower and noisier (1.2 to 4.6 s seen),
-# so locally the budget only catches a stuck or prompting start (owner, 2026-10-04).
+# so locally the budget only catches a stuck or prompting start.
 FRICTION_BUDGET_S = 2 if os.environ.get('CI') == 'true' else 10
 BADGE_WAIT_MS = 90000   # longer than the budget, so a slow start fails as a budget miss with its time
 

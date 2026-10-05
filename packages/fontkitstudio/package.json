@@ -1,6 +1,6 @@
 {
   "name": "fontkitstudio",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Font Kit Studio: try type on your running web app, in development only.",
   "license": "MIT",
   "type": "module",

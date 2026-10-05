@@ -12,6 +12,11 @@ Two things have their own version numbers:
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-04
+
+One command: `npx fontkitstudio` opens Studio connected to your running app, in
+development only, with no config edit and no script tag. First release on npm.
+
 ### Added
 
 - `npx fontkitstudio` opens Studio connected to your app in one step, in development
@@ -240,7 +245,8 @@ The supplied single-file Studio, preserved at the tag `supplied-v0.1.1`.
 
 - Nested rows and JPEG assets are out of scope.
 
-[Unreleased]: https://github.com/pterw/font-kit-studio/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/pterw/font-kit-studio/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/pterw/font-kit-studio/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/pterw/font-kit-studio/compare/a6d2751...v0.2.1
 [0.2.0]: https://github.com/pterw/font-kit-studio/compare/supplied-v0.1.1...a6d2751
 [0.1.1]: https://github.com/pterw/font-kit-studio/tree/supplied-v0.1.1
