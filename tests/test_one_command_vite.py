@@ -208,7 +208,7 @@ class OneCommandViteBrowserTest(unittest.TestCase):
                 page, frame, errors = self.open_studio(engine, url)
                 self.select_title(page)
                 page.locator('#liveFontSize').click()
-                page.keyboard.press('Control+A')
+                page.keyboard.press('ControlOrMeta+A')
                 page.keyboard.type('56', delay=60)
                 frame.wait_for_function(
                     '(s) => getComputedStyle(document.querySelector(s)).fontSize === "56px"',

@@ -106,7 +106,7 @@ def capture(browser, studio, target, rel, target_port, name, viewport):
 
     def type_into(selector, text):
         page.locator(selector).click()
-        page.keyboard.press('Control+A')
+        page.keyboard.press('ControlOrMeta+A')
         page.keyboard.type(text, delay=30)
 
     def below_sticky_tabs(selector, block='start'):

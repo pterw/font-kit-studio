@@ -200,7 +200,7 @@ class OneCommandNextBrowserTest(unittest.TestCase):
                 self.assertEqual(frame.locator(BRIDGE_TAG).count(), 1)
                 self.select_title(page)
                 page.locator('#liveFontSize').click()
-                page.keyboard.press('Control+A')
+                page.keyboard.press('ControlOrMeta+A')
                 page.keyboard.type('56', delay=60)
                 frame.wait_for_function(
                     '(s) => getComputedStyle(document.querySelector(s)).fontSize === "56px"',
@@ -220,7 +220,7 @@ class OneCommandNextBrowserTest(unittest.TestCase):
                     '56px')
                 # A second edit proves the live channel survived (the badge state is sticky).
                 page.locator('#liveFontSize').click()
-                page.keyboard.press('Control+A')
+                page.keyboard.press('ControlOrMeta+A')
                 page.keyboard.type('48', delay=60)
                 frame.wait_for_function(
                     '(s) => getComputedStyle(document.querySelector(s)).fontSize === "48px"',

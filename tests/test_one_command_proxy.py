@@ -106,7 +106,7 @@ class OneCommandProxyBrowserTest(unittest.TestCase):
                 self.wait_badge(page, CONNECTED)
                 self.select_title(page)
                 page.locator('#liveFontSize').click()
-                page.keyboard.press('Control+A')
+                page.keyboard.press('ControlOrMeta+A')
                 page.keyboard.type('56', delay=60)
                 frame.wait_for_function(
                     '(s) => getComputedStyle(document.querySelector(s)).fontSize === "56px"',

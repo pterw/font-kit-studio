@@ -106,7 +106,7 @@ def type_into(page, selector: str, text: str, delay_ms: int = 60) -> None:
     "56") are real updates a person causes, and some handlers react to them.
     """
     page.locator(selector).click(timeout=ACTION_TIMEOUT_MS)
-    page.keyboard.press("Control+A")
+    page.keyboard.press("ControlOrMeta+A")
     page.keyboard.type(text, delay=delay_ms)
 
 
