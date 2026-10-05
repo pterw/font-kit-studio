@@ -1,7 +1,7 @@
 <p align="center">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/fontkit-logo-dark.svg">
-  <img alt="fontkit" src="docs/assets/fontkit-logo-light.svg" width="420">
+  <img alt="Font Kit Studio" src="docs/assets/fontkit-logo-light.svg" width="420">
 </picture>
 </p>
 
@@ -11,7 +11,7 @@
   <a href="#quickstart">Quickstart</a> ·
   <a href="#workflows">Workflows</a> ·
   <a href="#faq">FAQ</a> ·
-  <a href="#add-fontkit-to-your-app">Add it to your app</a> ·
+  <a href="#add-font-kit-studio-to-your-app">Add it to your app</a> ·
   <a href="#protocol-v1">Protocol</a> ·
   <a href="#security-model">Security</a> ·
   <a href="#roadmap">Roadmap</a>
@@ -21,19 +21,54 @@
 
 ## What it is
 
-fontkit (Font Kit Studio) is a tool for changing how a web page looks while the page is running.
+Font Kit Studio is a tool for changing how a web page looks while the page is running.
 
 - You open your app next to Studio. **Studio runs in its own window or tab. It never runs inside the app you are tweaking.**
 - You click a heading, a button or a card in the live page. You change the font, size, colour or text, or move the element to another place. The page updates as you type.
 - Studio shows the CSS and HTML that those changes amount to. You copy it, download it, or let the dev server write it to a stylesheet.
 
-It works on pages that load one small script, `fontkit-bridge.js`. That script is the "bridge": it reports what is on the page and applies the changes Studio asks for. It does nothing until Studio connects, and you only add it in development.
+It works on pages that load one small script, `fontkit-bridge.js`. That script is the "bridge": it reports what is on the page and applies the changes Studio asks for. It does nothing until Studio connects, and it belongs in development only. `npx fontkitstudio` adds it for you while you run your app; without that command, you add one script tag yourself.
 
-fontkit does not change your source code. You decide what to apply.
+Font Kit Studio does not change your source code. You decide what to apply.
 
 Studio also still has the **Library** (a specimen browser for 16 free fonts) and the **Composer** (a layout tool for typographic specimens with rows, images and rules). Both still work without a bridge. The font library is free Google Fonts; see [Free fonts](#free-fonts).
 
 ## Quickstart
+
+You need Node 22.12 or later. In a Vite project (Vite 7 or 8), run this in the project folder:
+
+```bash
+npx fontkitstudio
+```
+
+It runs your project's own dev server with Studio added, and opens Studio in your browser. It writes nothing to your project. To print the address instead of opening it, add `--no-open`. The command needs `fontkitstudio` 0.3.0 or later.
+
+For any other local dev server, such as Next.js, start it as usual and give its address:
+
+```bash
+npx fontkitstudio http://localhost:3000
+```
+
+Studio runs a proxy in front of your app. The proxy adds the bridge script to your pages and passes everything else through, so you change nothing in your app.
+
+For a permanent setup in a Vite project, install the package and add the plugin to `vite.config`:
+
+```bash
+npm install --save-dev fontkitstudio
+```
+
+```js
+// vite.config.js
+import { fontkitStudio } from 'fontkitstudio/vite'
+
+export default {
+  plugins: [fontkitStudio()],
+}
+```
+
+Then run `npm run dev`. The dev server prints a `Font Kit Studio · dev only` line and an `Open:` address for Studio. The plugin is left out of `vite build`. See [Vite](#vite-react-vue-svelte), [Next.js](#nextjs) and [If Studio does not connect](#if-studio-does-not-connect).
+
+### Try the demo, or work without Node
 
 You need Python 3. It was developed and tested on Python 3.11, and nothing else is installed: the server uses only the standard library. If `python` is not found, use `python3`. On Windows, `python` may be the Microsoft Store stub that opens the Store instead of running; use `py -3` or `python3` there.
 
@@ -49,7 +84,7 @@ python scripts/serve.py
 4. Watch the **Changes** panel under the preview. Press **Copy**, or press **Sync to file** to write the CSS to `demo/fontkit-overrides.css`, which the demo already links. Both stay disabled until you have made a change.
 5. Press **Connect Live App** again to reload the preview. The style stays, because it now comes from the stylesheet. Studio asks whether to reapply the rest (see [Reconnect banner](#reconnect-banner)).
 
-To use your own app, add the one script tag from [Add fontkit to your app](#add-fontkit-to-your-app) and put your app's address in the **Live App URL** box and press **Connect Live App**.
+To use your own app without Node, add the one script tag from [Add Font Kit Studio to your app](#add-font-kit-studio-to-your-app), put your app's address in the **Live App URL** box and press **Connect Live App**.
 
 A few things Studio tells you on the way in:
 
@@ -65,7 +100,7 @@ A few things Studio tells you on the way in:
 
 `fontkit-studio.html` is a single file with no dependencies. The old name, `font_kit_studio_v0.1.1.html`, is now a small page that forwards to it (keeping any query and hash) and goes away in the release after 0.3.0. The version of the release shows in the browser tab's title and in the line above Studio's heading. You can double-click the file, or open it from disk, and it works for the Library and the Composer. You can also connect it to a running app by typing the app's URL into **Live App URL**, and the inspector, the Changes panel and Copy all work.
 
-What does **not** work from a file: **Sync to file** and **Auto-sync** are switched off, because there is no server to write the file. Use `python scripts/serve.py` for those.
+What does **not** work from a file: **Sync to file** and **Auto-sync** are switched off, because there is no server to write the file. Use `python scripts/serve.py` for those. The npm command does not serve Sync to file.
 
 ### Dev server options
 
@@ -142,7 +177,7 @@ Under the preview, **Changes** shows what you have done so far, built only from 
 
 Buttons: **Copy** (clipboard), **Download** (`fontkit-overrides.css`, `fontkit-changes.html` or `fontkit-overrides.json`), **Sync to file**, and **Auto-sync**.
 
-- **Sync to file** needs `python scripts/serve.py`. It writes the CSS tab to the overrides file in one atomic step.
+- **Sync to file** needs `python scripts/serve.py`. It writes the CSS tab to the overrides file in one atomic step. Under `npx fontkitstudio` Studio says Sync to file is not available and points to Copy and Download.
 - **Auto-sync** rewrites the file about 400 ms after the last change. Writes never overlap, and the latest state wins.
 - Text changes go in the HTML tab, not the stylesheet. DOM moves also live in the HTML tab. Studio keeps them in its saved state and in the live JSON (`structure`), so **Reapply** puts them back after a reload, but Sync never writes them: it adds no CSS rules for a DOM move (the file only gains a comment that points to the HTML tab). CSS-order moves are plain CSS (`order`), so they are in the stylesheet.
 - A bridge from before `orderIds` (see [Bridge to Studio](#bridge-to-studio)) cannot have its DOM moves saved. Studio says so when you make one.
@@ -248,18 +283,18 @@ Both work with or without a Live App:
 
 Exported JSON stays at version `0.1.1`. It can carry an optional `live` field with your saved overrides, tokens and DOM order (`live.structure`). Older files without it still import.
 
-## Why fontkit
+## Why Font Kit Studio
 
-Several kinds of tools touch a page's design. They solve different problems, and fontkit does not replace them.
+Several kinds of tools touch a page's design. They solve different problems, and Font Kit Studio does not replace them.
 
-| Kind of tool | What it is for | Where fontkit differs |
+| Kind of tool | What it is for | Where Font Kit Studio differs |
 |---|---|---|
-| **Visual builders** | Build whole pages or sites in their own editor and often their own runtime. | fontkit edits the app you already have, as it runs. It builds nothing and owns no pages. |
-| **Component workbenches** | Show components in isolation with different inputs. | fontkit works on the real, composed page with real data, not on a component in a sandbox. |
-| **DevTools-style extensions** | Change styles on any page, in the browser. | fontkit lives outside the page, in its own window. It focuses on type and layout, and turns your edits into code you can copy. |
-| **Code-writing visual editors** | Edit visually and write the result into your source files. | fontkit never touches your source. It gives you CSS and HTML to review and apply, so there is nothing to undo in your repo. |
+| **Visual builders** | Build whole pages or sites in their own editor and often their own runtime. | Font Kit Studio edits the app you already have, as it runs. It builds nothing and owns no pages. |
+| **Component workbenches** | Show components in isolation with different inputs. | Font Kit Studio works on the real, composed page with real data, not on a component in a sandbox. |
+| **DevTools-style extensions** | Change styles on any page, in the browser. | Font Kit Studio lives outside the page, in its own window. It focuses on type and layout, and turns your edits into code you can copy. |
+| **Code-writing visual editors** | Edit visually and write the result into your source files. | Font Kit Studio never touches your source. It gives you CSS and HTML to review and apply, so there is nothing to undo in your repo. |
 
-What fontkit is built around: **a separate window, the real page, small reviewable output, and a page that confirms every change.**
+What Font Kit Studio is built around: **a separate window, the real page, small reviewable output, and a page that confirms every change.**
 
 ## FAQ
 
@@ -271,15 +306,16 @@ It is a live editor for type and layout that sits next to your running app. You 
 
 Close to it, with some honesty about the steps:
 
-- **One script tag.** Your page needs `fontkit-bridge.js`, in development only. No backend changes, no build step, no npm package. See [Add fontkit to your app](#add-fontkit-to-your-app).
-- **A tiny dev server.** `python scripts/serve.py` gives you Studio and the Sync button. It is optional: Studio also opens from a file and works with the inspector and Copy.
+- **One command.** In a Vite project, `npx fontkitstudio` runs your dev server with Studio. For another local dev server, `npx fontkitstudio http://localhost:3000` puts a proxy in front of it. You change no source file, and nothing is written to your project. It needs Node 22.12 or later, and in a Vite project the project's own Vite 7 or 8.
+- **Or one script tag.** Without Node, your page needs `fontkit-bridge.js`, in development only. No backend changes and no build step. See [Add Font Kit Studio to your app](#add-font-kit-studio-to-your-app).
+- **A tiny dev server.** `python scripts/serve.py` gives you Studio and the Sync button, which the npm command does not serve. It is optional: Studio also opens from a file and works with the inspector and Copy.
 - **Pages you cannot edit.** A [bookmarklet](#bookmarklet) can inject the bridge into a pop-out window. It is a workaround, not a polished path.
-- **A simpler way is planned.** A [browser extension](docs/roadmap/browser-extension.md) that needs no script tag is on the roadmap. It does not exist yet.
-- **You apply the output yourself.** fontkit does not edit your source files. Sync writes one separate stylesheet. For anything else you copy CSS or an HTML snippet, review it, and put it where it belongs.
+- **Sites you do not run.** For your own local app the command already removes the script tag. A [browser extension](docs/roadmap/browser-extension.md) for sites you do not run is on the roadmap. It does not exist yet.
+- **You apply the output yourself.** Font Kit Studio does not edit your source files. Sync writes one separate stylesheet. For anything else you copy CSS or an HTML snippet, review it, and put it where it belongs.
 
 ### Will moving my custom segmented control break my form?
 
-It can, and fontkit tries to stop the common cases before they happen.
+It can, and Font Kit Studio tries to stop the common cases before they happen.
 
 - **Guards.** Moving a form control out of its form, splitting a radio group, taking a control out of its wrapping label, or putting a block element inside a paragraph or button is refused, with the reason shown. A segmented control made of radio buttons inside a form is the case these guards are for.
 - **CSS order.** When the parent is flex or grid, you can reorder with the CSS `order` strategy. The markup does not change, so the form still submits the same way. This is the default for framework-managed parents. It changes only the visual order, not the Tab or reading order.
@@ -290,13 +326,13 @@ It can, and fontkit tries to stop the common cases before they happen.
 
 The guards are checks, not proof. They look at the markup the page has right now. Test the result in your app before you ship it.
 
-## Add fontkit to your app
+## Add Font Kit Studio to your app
 
 > **Development only.** Do not ship the bridge to production. It stays inactive until Studio connects, but there is no reason to include it for real users. Do not load it from a CDN or a branch URL you do not control.
 
-The recipes below use `python scripts/serve.py`, which serves `fontkit-bridge.js` at `http://localhost:8000/fontkit-bridge.js`. You can also copy the file into your project.
+With `npx fontkitstudio` you add no script tag: the command or the plugin adds it while you develop. The recipes below add the tag by hand, or show the plugin. The tag recipes use `python scripts/serve.py`, which serves `fontkit-bridge.js` at `http://localhost:8000/fontkit-bridge.js`. You can also copy the file into your project.
 
-> **How these recipes were checked.** The plain HTML script tag, the `data-auto-init`, `data-allowed-origins`, `FONTKIT_BRIDGE_OPTIONS` and `allowedOrigins` settings, the overlay option and the bookmarklet were run in tests against the real bridge (see [Development and testing](#development-and-testing)). The other options (`autoDiscover`, `autoDiscoverSemantic`, `enableClickToSelect`, `tokens`, `onApplied`) and `data-design-kind` are implemented but have no test yet. The **Vite, Next.js, Astro, SvelteKit and Nuxt recipes are illustrative**: their syntax was checked against the frameworks' documentation, but they were not run in a real framework project. Try them and tell us what breaks.
+> **How these recipes were checked.** The plain HTML script tag, the `data-auto-init`, `data-allowed-origins`, `FONTKIT_BRIDGE_OPTIONS` and `allowedOrigins` settings, the overlay option and the bookmarklet were run in tests against the real bridge (see [Development and testing](#development-and-testing)). The other options (`autoDiscover`, `autoDiscoverSemantic`, `enableClickToSelect`, `tokens`, `onApplied`) and `data-design-kind` are implemented but have no test yet. What runs in CI: the plugin and the command on Vite 7 and Vite 8 fixtures, and the proxy command in front of a Next.js 16 fixture. The **Next.js script-tag layout, Astro, SvelteKit and Nuxt recipes are illustrative**: their syntax was checked against the frameworks' documentation, but no test runs them in a framework project. Try them and tell us what breaks.
 
 ### Plain HTML
 
@@ -307,30 +343,33 @@ The recipes below use `python scripts/serve.py`, which serves `fontkit-bridge.js
 
 ### Vite (React, Vue, Svelte)
 
-A plugin that adds the tag only while `vite dev` runs (illustrative):
+For a permanent setup, use the plugin from the package. It starts Studio with `npm run dev`, adds the bridge tag to your pages, and comes with TypeScript types. CI runs it on the fixtures (Vite 7 and 8):
 
 ```js
 // vite.config.js
-const fontkit = () => ({
-  name: 'fontkit-bridge',
-  apply: 'serve', // never part of `vite build`
-  transformIndexHtml: () => [{
-    tag: 'script',
-    attrs: { src: 'http://localhost:8000/fontkit-bridge.js' },
-    injectTo: 'body',
-  }],
-})
+import { fontkitStudio } from 'fontkitstudio/vite'
 
 export default {
-  plugins: [/* react(), vue(), svelte(), */ fontkit()],
+  plugins: [/* react(), vue(), svelte(), */ fontkitStudio()],
 }
 ```
 
-This works when Vite serves your `index.html`. Frameworks that handle the HTML entry themselves (SvelteKit, for example) do not call `transformIndexHtml`; see the recipes below.
+Install it with `npm install --save-dev fontkitstudio`. The plugin applies only to `vite dev`. A `vite build` leaves it out and prints `Font Kit Studio · dev only: not added to this build`. It refuses a dev server opened to the network (`server.host` or `--host`), because Studio runs on localhost only. To only try Studio, `npx fontkitstudio` in the project does the same with no change to `vite.config`.
+
+The plugin adds its tag in Vite's `transformIndexHtml` step, so it works when Vite serves your `index.html`. Frameworks that handle the HTML entry themselves (SvelteKit, for example) do not call `transformIndexHtml`, so the plugin does not inject there, and neither does `npx fontkitstudio` in such a project, which adds the same plugin. Use the proxy command or see the recipes below.
 
 ### Next.js
 
-In the root layout, only in development (illustrative):
+Start your app as usual, then run the proxy in front of it in a second terminal. Nothing in your app changes. CI runs this on a Next.js 16 fixture:
+
+```bash
+next dev
+npx fontkitstudio http://localhost:3000
+```
+
+Open the `Open:` address the command prints. The proxy passes Next's hot reload through.
+
+The alternative is the script tag, in the root layout, only in development:
 
 ```tsx
 // app/layout.tsx
@@ -400,14 +439,14 @@ export default defineNuxtConfig({
 
 ### Tailwind
 
-fontkit does not read or rewrite utility classes, and it does not patch class strings. It sets inline styles while you edit, and writes CSS rules that target `[data-design-id="…"]` or an auto-discovered selector. To bring the result into a Tailwind project:
+Font Kit Studio does not read or rewrite utility classes, and it does not patch class strings. It sets inline styles while you edit, and writes CSS rules that target `[data-design-id="…"]` or an auto-discovered selector. To bring the result into a Tailwind project:
 
 - Put the Copy or Sync output in any stylesheet. Every generated declaration is `!important`, so it wins over utility classes whatever the load order. Or
 - Better, route your fonts through **semantic tokens** (a `--font-display` custom property or a theme font family) and change the token's value. The bridge reports custom properties such as `--font-display` and `--font-sans`.
 
 ### Marking up elements (optional)
 
-Without any markup, fontkit discovers headings, paragraphs inside sections, nav links, buttons, images and badges. Add attributes where you want stable names:
+Without any markup, Font Kit Studio discovers headings, paragraphs inside sections, nav links, buttons, images and badges. Add attributes where you want stable names:
 
 | Attribute | Meaning |
 |---|---|
@@ -460,6 +499,24 @@ javascript:(()=>{if(window.__fontkitBridge)return;var s=document.createElement('
 Studio then says `Connected`. Reloading the page removes the bridge.
 
 Two cautions. The script URL uses port 8000, the default `--studio-port`. If you started the server on another port, change the number, and click the bookmark only on pages you trust: it runs whatever answers on that port, so anything else listening on 8000 would run inside the page. Pages with a strict Content-Security-Policy may refuse the script.
+
+### If Studio does not connect
+
+`npx fontkitstudio` and the plugin check the page and say what they find in the terminal where they run. Look there first:
+
+- **The page loads its own bridge.** The terminal says the page also loads its own `fontkit-bridge.js`. Remove that script while you use the command.
+- **A Content-Security-Policy blocks the bridge.** The terminal says the policy does not allow the page's own scripts. Add `'self'` to `script-src` while you develop.
+- **The address is not local.** Proxy mode accepts only an `http:` address on `localhost` or `127.0.0.1`. The plugin refuses a Vite server opened to the network and says to remove `--host` or `server.host`.
+- **No Vite project here.** Run the command in your Vite project, or give your dev server's address.
+- **Another Vite major.** Vite mode works with Vite 7 and 8, and refuses other versions with a message.
+
+### Known limits of the npm package
+
+- **No Sync to file.** The npm command does not serve it, and Studio says so. Use Copy or Download, or run `python scripts/serve.py` (see [Dev server options](#dev-server-options)).
+- **In proxy mode your app runs at the proxy's address.** The page loads from `http://127.0.0.1:<port>`, and the port changes each run; no flag sets it. The app's own localStorage, sessionStorage, IndexedDB and service workers are separate from the ones it has at its usual address, so they start empty. Cookies follow the host name, not the port: cookies the app set for `localhost` are not sent to `127.0.0.1`, and the proxy passes `Set-Cookie` through unchanged. A signed-in app can look signed out, and you sign in again in the proxied page. If you use your app at `http://127.0.0.1:<port>` and pass that address to the command, its cookies carry over, because they ignore the port; its browser storage still does not. Vite mode is not affected: the app stays at Vite's own address.
+- **Studio's saved settings follow Studio's address.** Studio keeps its settings (the free-font choice, kit IDs) with its own address, which changes with its port each run. `--studio-port <n>` keeps it on one port. If that port is busy, Studio picks another and says so on the terminal.
+- **A standalone plugin gets a new Studio address.** When Vite restarts after a config change, `fontkitStudio()` prints a new Studio URL.
+- **Policies set by middleware.** In Vite mode the Content-Security-Policy check reads the page's meta tag and `server.headers`. A policy that your own middleware sets is not checked.
 
 ## Protocol v1
 
@@ -526,7 +583,7 @@ The change ledger in `design:ready` and `design:applied` lists each container wh
 
 ## Security model
 
-fontkit edits a live page from another window, so both sides check every message.
+Font Kit Studio edits a live page from another window, so both sides check every message.
 
 **Messages.** Studio accepts a message only if it comes from the iframe (or pop-out) it opened, from the expected origin, with the right protocol version and session id. The bridge accepts `design:hello` only from its parent or opener, optionally only from `allowedOrigins`. After that it accepts only messages from the pinned window, origin and session. Each side posts to the pinned origin, never to `*`, except for the opaque `null` origin and the data-free `bridge-ready`.
 
@@ -538,7 +595,9 @@ fontkit edits a live page from another window, so both sides check every message
 
 **Pop-out and `window.opener`.** For the bridge to answer Studio, a pop-out keeps `window.opener`. A page you pop out can therefore navigate the Studio window. You choose the page, so only pop out pages you trust. A page that sends `Cross-Origin-Opener-Policy: same-origin` would sever the link. That was not tested.
 
-**No source rewriting.** fontkit never writes to your source files. The one file it can write is the overrides stylesheet, and only if you press Sync.
+**The npm package.** `npx fontkitstudio` and the plugin serve Studio on loopback, with a per-run token in its URL, and check the `Host` header and the `Origin` of requests. The token is not sent to your app. The command is for development only, and refuses a Vite server opened to the network. The proxy adds one script tag to HTML pages and serves the bridge from your app's own origin. It serves no local file but the bridge, passes your app's Content-Security-Policy header through unchanged, and passes WebSocket upgrades through.
+
+**No source rewriting.** Font Kit Studio never writes to your source files. The one file it can write is the overrides stylesheet, and only if you press Sync.
 
 ## Development and testing
 
@@ -548,11 +607,14 @@ python -m playwright install chromium firefox     # on your own machine
 pre-commit install                                # git hooks: the fast checks below on each commit, signatures on each message
 python scripts/verify.py --static-only            # unique IDs, inline JS syntax, provenance hashes
 node --check fontkit-bridge.js
+npm --prefix packages/fontkitstudio test          # the npm package's own tests
 python -m ruff check .                            # unused or undefined names, syntax errors
 python -m unittest discover -s tests -v           # all suites; or: python scripts/verify.py
 PYTHONPATH=tests FKS_ENGINES=firefox python -m unittest firefox_canary -v   # Firefox canary
 python scripts/dev/frontend_gate.py               # browser gate: phone, desktop, touch, dark mode, logos
 ```
+
+**Fixtures.** Tests that run the npm package on real framework projects use the apps in `fixtures/`. Install each one first, for example `npm ci --prefix fixtures/vite-react` (the others that need an install are `vite7-react`, `vite-ts` and `next-app`). Without `node_modules` those tests skip on your machine. CI sets `FKS_REQUIRE_FIXTURES=1`, so a missing install fails there. Next.js sends telemetry unless `NEXT_TELEMETRY_DISABLED=1`; the Next.js test sets it.
 
 `scripts/verify.py` checks the original v0.1.1 file against the `supplied-v0.1.1` tag. If your clone does not have it, run `git fetch origin tag supplied-v0.1.1`.
 
@@ -583,6 +645,15 @@ In a container with a browser already installed: `FKS_ENGINES=chromium FKS_CHROM
 | `test_studio_review_findings.py` | Saved DOM order with a duplicate `data-design-id`, and the 16-stylesheet limit. |
 | `test_studio_rename.py` | The old Studio file name forwards to `fontkit-studio.html` with its query and hash. |
 | `test_node_studio_server.py` | The npm package's Studio server in a real browser: the app never sees the per-run token, and a URL without it shows no Studio. |
+| `test_one_command_vite.py` | `npx fontkitstudio` in a real Vite project, on both fixtures: one bridge tag, and a hot update that keeps Studio connected. |
+| `test_one_command_proxy.py` | `npx fontkitstudio <url>` over a Bootstrap page with a strict Content-Security-Policy: select and edit, with no violation and no request to an https origin. |
+| `test_one_command_next.py` | `npx fontkitstudio <url>` in front of a real Next.js dev server: the proxy passes its hot reload through and Studio keeps its edit. |
+| `test_one_command_messages.py` | A Vite server opened to the network is refused by the real command with one plain line and exit 1; through the proxy a Bootstrap page gets exactly one script tag and an otherwise identical body, before and after a live edit; a page whose Content-Security-Policy blocks the bridge is reported once on the terminal and Studio does not connect. |
+| `test_vite_build_guarantee.py` | `vite build` with the plugin in the config ships nothing of Font Kit Studio. |
+| `test_vite_types.py` | The types of `fontkitstudio/vite`, checked by the TypeScript compiler on a strict fixture. |
+| `test_friction.py` | The one command with no person in the loop, within a time budget, from start until Studio shows the page connected. |
+| `test_studio_npx_hints.py` | Studio's hints under `npx fontkitstudio`: no pointer to `scripts/serve.py`, and Sync to file says it is not available. |
+| `test_precommit_hooks.py` | The pre-commit and commit-msg hooks refuse what they promise to, in a real git commit. |
 | `test_support.py` | The shared test harness: engine selection (an engine list that runs no browser is refused), the shared browser with a fresh context per test, the Firefox canary's test list, the Composer canvas snapshot helper, and a guard against reading a page's markup raw. |
 | `test_commit_messages.py` | The commit-message check, with a throwaway git repository: each forbidden form, allowed human co-authors, range parsing. |
 | `test_frontend_gate_*.py` | The gate's own logic: colour maths, contrast and layout judgements, report lines, the exit-code rule, CLI flags and the check table. `test_frontend_gate_fonts.py` and `test_frontend_gate_theme_browser.py` run a real browser; the others need none. |
@@ -643,7 +714,7 @@ Known gaps:
 
 ## Roadmap
 
-A simpler **browser extension**, with no script tag, is an idea and is not built. See [`docs/roadmap/browser-extension.md`](docs/roadmap/browser-extension.md) for goals, a sketch, security rules and open questions. Where fontkit is heading, and why typography stays at its centre, is in [`docs/roadmap/product-direction.md`](docs/roadmap/product-direction.md).
+For your own local app, `npx fontkitstudio` already removes the script tag. A **browser extension** for sites you do not run is an idea and is not built. See [`docs/roadmap/browser-extension.md`](docs/roadmap/browser-extension.md) for goals, a sketch, security rules and open questions. Where Font Kit Studio is heading, and why typography stays at its centre, is in [`docs/roadmap/product-direction.md`](docs/roadmap/product-direction.md).
 
 ## Provenance
 
