@@ -25,8 +25,10 @@ records. This file lists what they found and what became of it.
   sweep found a third place the 8b brief had missed: the status badge's tooltip. Fixed in
   task 8b.
 - **A wrong limit in the plan.** The plan said proxy mode keeps Studio's settings apart
-  from the app. In fact the app runs at the proxy's address, so its own storage and its
-  `localhost` cookies do not carry over. The plan and the README now say that (8c review).
+  from the app. In fact the app runs at the proxy's address, so its own storage does not
+  carry over, and, as a probe in Chromium and Firefox then showed, an app embedded in
+  Studio gets its `Lax`, `Strict` and (in Chromium) default cookies only when it runs on
+  the same host name as Studio (`127.0.0.1`), in Vite mode too. The README now says so.
 - **Select-all in browser tests on macOS.** `Control+A` in 11 lines of 8 files (tests, the
   frontend gate, the screenshot script) is now `ControlOrMeta+A`.
 - **The tarball test raced the bundle test** (Node tests share `dist/`). No test writes the
@@ -51,9 +53,12 @@ records. This file lists what they found and what became of it.
 
 ## Open, for after 0.3.0
 
-- **Proxy origin.** Serving the proxy as `http://localhost:<port>` instead of
-  `127.0.0.1` would let an app's `localhost` cookies through, since cookies ignore the
-  port. It is not in this release's scope; the README states the limit.
+- **Cookies of apps used at `localhost`.** Studio and the proxy are served at
+  `127.0.0.1`, so an app embedded in Studio from `localhost` loses its `Lax`, `Strict` and
+  default cookies (probe: only `SameSite=None` arrives). Serving Studio and the proxy at
+  `localhost` (still bound to loopback) would fix it in both modes, but it changes every
+  origin the package hands out and has to handle `localhost` resolving to `::1` first. A
+  task of its own after 0.3.0; the README states the limit.
 - **CSP checks in plugin mode** read the page's meta tag and `server.headers`, not a
   policy set by the app's own middleware (README, known limits).
 - **The co-author check** does not match a `#`-prefixed `Co-Authored-By:` line, which git
