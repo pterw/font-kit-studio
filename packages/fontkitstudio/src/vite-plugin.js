@@ -56,7 +56,8 @@ export function fontkitStudio(options = {}) {
   const standalone = !studio;
   let bridge;
   let standDown = false;
-  let headerBlocks = false;
+  let headers = [];
+  let viteServer;
   let logger;
   const said = new Set();
 
@@ -99,7 +100,7 @@ export function fontkitStudio(options = {}) {
     configResolved(config) {
       if (!LOCAL_SERVER_HOSTS.includes(config.server?.host)) throw new Error(HOST_ERROR);
       logger = config.logger;
-      headerBlocks = blocksSameOriginScript(headerPolicies(config.server?.headers));
+      headers = headerPolicies(config.server?.headers);
       if (!standalone) return;
       standDown = config.plugins.some(
         (plugin) => plugin.name === 'fontkit-studio' && plugin.api?.fontkitStudio?.fromCommand === true,
@@ -108,6 +109,7 @@ export function fontkitStudio(options = {}) {
 
     async configureServer(server) {
       if (standDown) return;
+      viteServer = server;
       const path = bridgeFile instanceof URL ? fileURLToPath(bridgeFile) : String(bridgeFile);
       try {
         bridge = await readFile(path);
@@ -147,7 +149,15 @@ export function fontkitStudio(options = {}) {
     transformIndexHtml(html) {
       if (standDown || !studio) return [];
       if (loadsOwnBridge(html)) warnOnce(BRIDGE_TWICE_MESSAGE);
-      if (headerBlocks || blocksSameOriginScript(metaPolicies(html))) warnOnce(CSP_MESSAGE);
+      // The address the dev server listens on is the one Studio opens the app at; without it
+      // (middleware mode, a page before listen) only 'self', '*' and 'http:' allow.
+      let pageOrigin;
+      try {
+        pageOrigin = new URL(viteServer?.resolvedUrls?.local?.[0]).origin;
+      } catch {
+        pageOrigin = undefined;
+      }
+      if (blocksSameOriginScript([...headers, ...metaPolicies(html)], pageOrigin)) warnOnce(CSP_MESSAGE);
       return [
         {
           tag: 'script',

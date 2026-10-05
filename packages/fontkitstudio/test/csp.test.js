@@ -49,6 +49,82 @@ describe('blocksSameOriginScript', () => {
   });
 });
 
+describe('blocksSameOriginScript with the page origin', () => {
+  const ORIGIN = 'http://localhost:5173';
+  const allows = [
+    'script-src http://localhost:5173',
+    'script-src localhost:5173',
+    'script-src HTTP://LOCALHOST:5173',
+    'script-src http://localhost:*',
+    'script-src localhost:*',
+    'script-src http://localhost:5173/',
+    'script-src http://localhost:5173/@fontkit/',
+    'script-src localhost:5173/@fontkit/fontkit-bridge.js',
+    "script-src-elem localhost:5173; script-src 'none'",
+    "default-src 'none'; script-src 'nonce-q' localhost:5173",
+  ];
+  for (const policy of allows) {
+    test(`allows ${JSON.stringify(policy)}`, () => {
+      assert.equal(blocksSameOriginScript(policy, ORIGIN), false);
+    });
+  }
+
+  const blocks = [
+    'script-src http://localhost:5174',
+    'script-src localhost',
+    'script-src http://127.0.0.1:5173',
+    'script-src https://localhost:5173',
+    'script-src https://localhost:*',
+    'script-src localhost:5173/js/',
+    'script-src localhost:5173/@fontkit/other.js',
+    'script-src localhost:5173/@fontkit',
+    'script-src localhost:5173/@FONTKIT/',
+    'script-src localhost:5173/@fontkit/Fontkit-Bridge.js',
+    'script-src *.localhost:5173',
+    'script-src *.localhost',
+    'script-src',
+    'script-src ;;',
+    "script-src 'strict-dynamic' localhost:5173",
+    'script-src http://:5173',
+    'script-src localhost:abc',
+    'script-src ://localhost:5173',
+    'script-src https:',
+    "script-src-elem 'none'; script-src localhost:5173",
+  ];
+  for (const policy of blocks) {
+    test(`blocks ${JSON.stringify(policy)}`, () => {
+      assert.equal(blocksSameOriginScript(policy, ORIGIN), true);
+    });
+  }
+
+  test('two policies: the second blocks', () => {
+    assert.equal(
+      blocksSameOriginScript("script-src localhost:5173, script-src 'nonce-q'", ORIGIN),
+      true,
+    );
+    assert.equal(blocksSameOriginScript(['script-src localhost:5173', "script-src 'none'"], ORIGIN), true);
+    assert.equal(blocksSameOriginScript(['script-src localhost:5173', 'script-src localhost:*'], ORIGIN), false);
+  });
+
+  test('a source for the default port matches a page without a port, and only that', () => {
+    assert.equal(blocksSameOriginScript('script-src localhost:80', 'http://localhost'), false);
+    assert.equal(blocksSameOriginScript('script-src localhost', 'http://localhost'), false);
+    assert.equal(blocksSameOriginScript('script-src localhost:80', ORIGIN), true);
+  });
+
+  test('IPv6 loopback matches by name, and not the other loopbacks', () => {
+    assert.equal(blocksSameOriginScript('script-src [::1]:5173', 'http://[::1]:5173'), false);
+    assert.equal(blocksSameOriginScript('script-src localhost:5173', 'http://[::1]:5173'), true);
+  });
+
+  test('without an origin, or with an unusable one, only self, * and http: allow', () => {
+    for (const origin of [undefined, 'nonsense', 'https://localhost:5173', 5]) {
+      assert.equal(blocksSameOriginScript('script-src localhost:5173', origin), true);
+      assert.equal(blocksSameOriginScript("script-src 'self'", origin), false);
+    }
+  });
+});
+
 describe('metaPolicies', () => {
   test('reads Content-Security-Policy meta tags only, in any case and quoting', () => {
     const html = [

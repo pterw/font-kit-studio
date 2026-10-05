@@ -123,7 +123,7 @@ export async function startProxy({
     const html = buffer.toString('latin1');
     if (loadsOwnBridge(html)) warnOnce(BRIDGE_TWICE_MESSAGE);
     const policies = [headers['content-security-policy'], ...metaPolicies(html)];
-    if (blocksSameOriginScript(policies)) warnOnce(CSP_MESSAGE);
+    if (blocksSameOriginScript(policies, proxyOrigin)) warnOnce(CSP_MESSAGE);
   }
   let proxyOrigin;
   let actualPort;

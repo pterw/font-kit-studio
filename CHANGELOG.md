@@ -30,6 +30,10 @@ Two things have their own version numbers:
 ### Fixed
 
 - On Windows, `scripts/serve.py` also stops cleanly on Ctrl-Break.
+- `npx fontkitstudio` no longer warns that a page's Content-Security-Policy blocks Studio
+  when the policy's `script-src` names the dev server's own address, which allows it. In
+  proxy mode a policy that names the dev server's address still warns: the page is served
+  from the proxy's address, so that policy does block Studio.
 
 ### Changed
 
