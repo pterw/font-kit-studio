@@ -79,6 +79,33 @@ before(async () => {
       status: 302,
       headers: { location: `http://127.0.0.1:${req.socket.localPort}/login?next=/a#x` },
     }),
+    '/redirect-netpath': (req) => ({
+      status: 302,
+      headers: { location: `//localhost:${req.socket.localPort}/login?next=/a#x` },
+    }),
+    '/redirect-netpath-ip': (req) => ({
+      status: 302,
+      headers: { location: `//127.0.0.1:${req.socket.localPort}/x` },
+    }),
+    '/redirect-netpath-other': { status: 302, headers: { location: '//example.com/x' } },
+    '/redirect-netpath-port': (req) => ({
+      status: 302,
+      headers: { location: `//localhost:${req.socket.localPort + 1}/x` },
+    }),
+    // Browsers read backslashes as slashes in http URLs, so this is a network-path redirect too.
+    '/redirect-backslash': (req) => ({
+      status: 302,
+      headers: { location: `\\\\localhost:${req.socket.localPort}/b` },
+    }),
+    '/redirect-https': (req) => ({
+      status: 302,
+      headers: { location: `https://localhost:${req.socket.localPort}/x` },
+    }),
+    // The target is 127.0.0.1; localhost on the same port is the same server.
+    '/redirect-abs-localhost': (req) => ({
+      status: 302,
+      headers: { location: `http://localhost:${req.socket.localPort}/c` },
+    }),
     '/redirect-rel': { status: 302, headers: { location: '/login' } },
     '/redirect-other': { status: 302, headers: { location: 'http://example.com/' } },
     '/redirect-html': (req) => ({
@@ -445,6 +472,14 @@ describe('forwarding', () => {
     assert.equal(absolute.headers.location, `${proxy.origin}/login?next=/a#x`);
     assert.equal((await get('/redirect-rel')).headers.location, '/login');
     assert.equal((await get('/redirect-other')).headers.location, 'http://example.com/');
+    assert.equal((await get('/redirect-netpath')).headers.location, `${proxy.origin}/login?next=/a#x`);
+    assert.equal((await get('/redirect-netpath-ip')).headers.location, `${proxy.origin}/x`);
+    assert.equal((await get('/redirect-netpath-other')).headers.location, '//example.com/x');
+    const otherPort = await get('/redirect-netpath-port');
+    assert.equal(otherPort.headers.location, `//localhost:${upstream.port + 1}/x`);
+    assert.equal((await get('/redirect-backslash')).headers.location, `${proxy.origin}/b`);
+    assert.equal((await get('/redirect-https')).headers.location, `https://localhost:${upstream.port}/x`);
+    assert.equal((await get('/redirect-abs-localhost')).headers.location, `${proxy.origin}/c`);
     const html = await get('/redirect-html');
     assert.equal(html.headers.location, `${proxy.origin}/where`);
     assert.ok(html.body.includes(TAG));

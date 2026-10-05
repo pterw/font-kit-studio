@@ -130,11 +130,20 @@ export async function startProxy({
   let allowedHosts;
   let ownOrigins;
 
-  // An absolute location at the dev server's origin points back at the proxy.
+  // An absolute or protocol-relative location at the dev server (under any of its loopback
+  // names) points back at the proxy. Relative locations stay as they are.
   function rewriteLocation(headers) {
     if (typeof headers.location !== 'string') return headers;
-    const location = parseUrl(headers.location);
-    if (!location || location.origin !== targetOrigin) return headers;
+    const networkPath = /^[\\/]{2}/.test(headers.location);
+    const location = parseUrl(networkPath ? `http:${headers.location}` : headers.location);
+    if (
+      !location ||
+      location.protocol !== 'http:' ||
+      !LOOPBACK_URL_HOSTNAMES.includes(location.hostname) ||
+      Number(location.port || 80) !== targetPort
+    ) {
+      return headers;
+    }
     return {
       ...headers,
       location: proxyOrigin + location.pathname + location.search + location.hash,
