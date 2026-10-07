@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { CSP_MESSAGE } from '../src/csp.js';
-import { runProxy } from '../src/run-proxy.js';
+import { runProxy, startStudio } from '../src/run-proxy.js';
 import { startUpstream } from './helpers/upstream.js';
 
 const HTML = { 'content-type': 'text/html; charset=utf-8' };
@@ -94,6 +94,47 @@ async function refuses(url) {
 }
 
 describe('runProxy', () => {
+  test('an IPv6-only fixed Studio conflict falls back with both listeners and the same warning', async () => {
+    const holder = createServer();
+    await new Promise((resolve, reject) => {
+      holder.once('error', reject);
+      holder.listen(0, '::1', resolve);
+    });
+    const port = holder.address().port;
+    let studio;
+    try {
+      const err = sink();
+      studio = await startStudio({ studioFile, studioPort: port, host: 'localhost', err });
+      assert.notEqual(studio.port, port);
+      assert.equal(new URL(studio.url()).hostname, 'localhost');
+      assert.match(err.text(), BUSY_TEXT);
+      for (const host of ['127.0.0.1', '[::1]']) {
+        assert.equal((await get(studio.url().replace('localhost', host))).status, 200);
+      }
+      const probe = createServer();
+      await new Promise((resolve, reject) => {
+        probe.once('error', reject);
+        probe.listen(port, '127.0.0.1', resolve);
+      });
+      await new Promise(resolve => probe.close(resolve));
+    } finally {
+      await studio?.close();
+      await new Promise(resolve => holder.close(resolve));
+    }
+  });
+  test('target hostname selects localhost only for localhost, preserving IP targets', async () => {
+    for (const [hostname, advertised] of [['localhost', 'localhost'], ['127.0.0.1', '127.0.0.1'], ['[::1]', '127.0.0.1']]) {
+      const { running } = await start({ target: `http://${hostname}:${upstream.port}/app?x=1#section` });
+      try {
+        assert.equal(new URL(running.studioUrl).hostname, advertised);
+        assert.equal(new URL(running.proxyOrigin).hostname, advertised);
+        assert.equal(new URL(running.studioUrl).searchParams.get('target'), `${running.proxyOrigin}/app?x=1#section`);
+        assert.equal((await get(running.proxyOrigin + '/@fontkit/fontkit-bridge.js')).status, 200);
+      } finally {
+        await running.close();
+      }
+    }
+  });
   test('prints exactly two lines; the Open URL has the token and the proxied target', async () => {
     const { running, out } = await start();
     assert.equal(out.chunks.length, 2);
@@ -127,7 +168,7 @@ describe('runProxy', () => {
     assert.equal(page.status, 200);
     assert.match(
       page.body,
-      /<script src="\/@fontkit\/fontkit-bridge\.js" data-allowed-origins="http:\/\/127\.0\.0\.1:\d+"><\/script>/,
+      /<script src="\/@fontkit\/fontkit-bridge\.js" data-allowed-origins="http:\/\/localhost:\d+"><\/script>/,
     );
     await running.close();
   });

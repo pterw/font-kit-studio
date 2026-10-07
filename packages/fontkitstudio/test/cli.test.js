@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { USAGE, main } from '../src/cli.js';
-import { fakeProject } from './helpers/fake-project.js';
+import { fakeProject, stubViteServer } from './helpers/fake-project.js';
 import { guardRealBundle } from './helpers/real-bundle-guard.js';
 
 guardRealBundle();
@@ -168,19 +168,7 @@ test('no message carries a stack trace', () => {
 });
 
 // ---- opening the browser, in process with an injected opener ----
-function stubVite(dir) {
-  writeFileSync(
-    join(dir, 'node_modules', 'vite', 'dist', 'node', 'index.js'),
-    `export async function createServer() {
-  return {
-    resolvedUrls: { local: ['http://localhost:5173/'] },
-    async listen() {},
-    printUrls() {},
-    async close() {},
-  };
-}\n`,
-  );
-}
+const stubVite = stubViteServer;
 
 function refused(port) {
   return new Promise((resolve) => {
@@ -205,7 +193,7 @@ async function startCommand(argv, cwd) {
   const stop = async () => {
     process.chdir(startDir);
     process.emit('SIGTERM');
-    const studioPort = Number(/Open: http:\/\/127\.0\.0\.1:(\d+)\//.exec(out.text())?.[1]);
+    const studioPort = Number(/Open: http:\/\/localhost:(\d+)\//.exec(out.text())?.[1]);
     const deadline = Date.now() + 5000;
     while (studioPort && !(await refused(studioPort))) {
       assert.ok(Date.now() < deadline, 'Studio did not stop');
@@ -223,7 +211,7 @@ test('a Vite project opens the browser on the Open: URL unless --no-open', async
     assert.equal(withOpen.code, 0, withOpen.err.text());
     const lines = withOpen.out.text().split('\n');
     assert.equal(lines[0], 'Font Kit Studio · dev only');
-    assert.match(lines[1], /^Open: http:\/\/127\.0\.0\.1:\d+\//);
+    assert.match(lines[1], /^Open: http:\/\/localhost:\d+\//);
     assert.deepEqual(withOpen.opened, [lines[1].slice('Open: '.length)]);
   } finally {
     await withOpen.stop();
@@ -231,7 +219,7 @@ test('a Vite project opens the browser on the Open: URL unless --no-open', async
   const quiet = await startCommand(['--no-open'], dir);
   try {
     assert.equal(quiet.code, 0, quiet.err.text());
-    assert.match(quiet.out.text(), /^Font Kit Studio · dev only\nOpen: http:\/\/127\.0\.0\.1:\d+\//);
+    assert.match(quiet.out.text(), /^Font Kit Studio · dev only\nOpen: http:\/\/localhost:\d+\//);
     assert.deepEqual(quiet.opened, []);
   } finally {
     await quiet.stop();
@@ -248,7 +236,7 @@ test('--studio-port reaches Studio in a Vite project', async () => {
   const started = await startCommand(['--no-open', `--studio-port=${port}`], dir);
   try {
     assert.equal(started.code, 0, started.err.text());
-    assert.match(started.out.text(), new RegExp(`Open: http://127\.0\.0\.1:${port}/`));
+    assert.match(started.out.text(), new RegExp(`Open: http://localhost:${port}/`));
   } finally {
     await started.stop();
   }
@@ -260,7 +248,7 @@ test('a URL argument runs the proxy and opens unless --no-open', async () => {
   try {
     assert.equal(withOpen.code, 0, withOpen.err.text());
     assert.equal(withOpen.opened.length, 1);
-    assert.match(withOpen.opened[0], /^http:\/\/127\.0\.0\.1:\d+\/.*target=/);
+    assert.match(withOpen.opened[0], /^http:\/\/localhost:\d+\/.*target=/);
   } finally {
     await withOpen.stop();
   }

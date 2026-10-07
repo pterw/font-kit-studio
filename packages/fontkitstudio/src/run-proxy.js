@@ -1,12 +1,12 @@
 // What `fontkitstudio <url>` runs: Studio, then the proxy in front of the user's dev server.
 import { openBrowser } from './open-browser.js';
-import { startProxy } from './proxy.js';
+import { parseProxyTarget, startProxy } from './proxy.js';
 import { startStudioServer } from './studio-server.js';
 
 // Starts Studio on the wanted port; a busy port falls back to a free one and says so.
-export async function startStudio({ studioPort = 0, studioFile, err = process.stderr } = {}) {
+export async function startStudio({ studioPort = 0, studioFile, host = '127.0.0.1', err = process.stderr } = {}) {
   // An undefined file falls back to the package's dist/ copy inside each starter.
-  const start = (port) => startStudioServer({ port, studioFile });
+  const start = (port) => startStudioServer({ port, studioFile, host });
 
   try {
     return await start(studioPort);
@@ -30,17 +30,18 @@ export async function runProxy({
   studioFile,
   bridgeFile,
 } = {}) {
-  const studio = await startStudio({ studioPort, studioFile, err });
+  const targetUrl = parseProxyTarget(target);
+  const host = targetUrl.hostname === 'localhost' ? 'localhost' : '127.0.0.1';
+  const studio = await startStudio({ studioPort, studioFile, host, err });
 
   let proxy;
   try {
-    proxy = await startProxy({ target, studio, bridgeFile, log: (line) => err.write(`${line}\n`) });
+    proxy = await startProxy({ target, studio, bridgeFile, host, log: (line) => err.write(`${line}\n`) });
   } catch (error) {
     await studio.close();
     throw error;
   }
 
-  const targetUrl = new URL(String(target));
   const studioUrl = studio.url(proxy.origin + targetUrl.pathname + targetUrl.search + targetUrl.hash);
 
   const signals = process.platform === 'win32' ? ['SIGINT', 'SIGTERM', 'SIGBREAK'] : ['SIGINT', 'SIGTERM'];

@@ -26,6 +26,7 @@ CANARY = (
     'test_live_integration.EditAndCodePanelTests',
     'test_live_integration.SyncAndReloadTests',
     'test_font_kit_studio_v011.BrowserCase',
+    'test_localhost_cookies.LocalhostCookiesTest',
 )
 
 

@@ -20,3 +20,27 @@ export function fakeProject({ vite = '8.3.2', field = 'devDependencies', package
   }
   return dir;
 }
+
+// The startup seam: resolve URLs during listen and invoke the configured plugin hooks,
+// as Vite does. It serves no app; real-browser tests own that separate boundary.
+export function stubViteServer(dir, { local = 'http://localhost:5173/' } = {}) {
+  writeFileSync(join(dir, 'node_modules', 'vite', 'dist', 'node', 'index.js'), `
+export async function createServer({ plugins = [] } = {}) {
+  const config = { plugins, server: { host: 'localhost' }, logger: { info() {}, warn() {} } };
+  const server = {
+    config, resolvedUrls: null, middlewares: { use() {} },
+    async listen() { server.resolvedUrls = { local: [${JSON.stringify(local)}] }; return server; },
+    printUrls() {}, async close() { globalThis.__viteClosed = true; },
+    async restart() {
+      await server.close();
+      Object.assign(server, await createServer({ plugins }));
+      await server.listen();
+    },
+  };
+  for (const plugin of plugins) plugin.configResolved?.(config);
+  for (const plugin of plugins) await plugin.configureServer?.(server);
+  globalThis.__viteServer = server;
+  return server;
+}
+`);
+}

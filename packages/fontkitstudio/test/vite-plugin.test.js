@@ -29,6 +29,10 @@ function fakeViteServer({ local = 'http://localhost:5173/', withHttpServer = tru
     httpServer: withHttpServer ? new EventEmitter() : null,
     middlewares: { use: (fn) => handlers.push(fn) },
     resolvedUrls: null,
+    async listen() {
+      server.resolvedUrls = { local: local ? [local] : [], network: [] };
+      return server;
+    },
     printUrls() {
       logs.push('vite urls');
     },
@@ -42,7 +46,7 @@ function fakeViteServer({ local = 'http://localhost:5173/', withHttpServer = tru
     logs,
     handlers,
     listen() {
-      server.resolvedUrls = { local: [local], network: [] };
+      return server.listen();
     },
   };
 }
@@ -218,7 +222,7 @@ describe('fontkitStudio Vite plugin', () => {
   test('standalone: starts Studio, prints its URL once, closes with the dev server', async () => {
     const { plugin, fake } = standalone();
     await plugin.configureServer(fake.server);
-    fake.listen();
+    await fake.listen();
     fake.server.printUrls();
     fake.server.printUrls();
 
@@ -237,9 +241,60 @@ describe('fontkitStudio Vite plugin', () => {
     await assertRefused(studioUrl);
   });
 
-  test('standalone without resolved URLs prints Studio without a target', async () => {
-    const { plugin, fake } = standalone();
+  test('standalone pins the final resolved host for localhost and both IP target kinds', async () => {
+    for (const [hostname, advertised] of [['localhost', 'localhost'], ['127.0.0.1', '127.0.0.1'], ['[::1]', '127.0.0.1']]) {
+      const { plugin, fake } = standalone({ local: `http://${hostname}:5173/` });
+      // Deliberately differs for the IP cases: the resolved URL must win over config.
+      fake.server.config.server = { host: 'localhost' };
+      await plugin.configureServer(fake.server);
+      assert.deepEqual(plugin.transformIndexHtml(''), []);
+      await fake.listen();
+      fake.server.printUrls();
+      const url = studioUrlFrom(fake.logs);
+      assert.equal(new URL(url).hostname, advertised);
+      assert.equal(plugin.transformIndexHtml('')[0].attrs['data-allowed-origins'], new URL(url).origin);
+      assert.equal((await fetchRaw(url)).status, 200);
+      await fake.server.close();
+      await assertRefused(url);
+    }
+  });
+
+  test('standalone can configure again after restart and frees both old listeners', async () => {
+    const plugin = fontkitStudio({ bridgeFile, studioFile });
+    const first = fakeViteServer();
+    await plugin.configureServer(first.server);
+    await first.listen();
+    first.server.printUrls();
+    const old = studioUrlFrom(first.logs);
+    await first.server.close();
+    for (const host of ['127.0.0.1', '[::1]']) await assertRefused(old.replace('localhost', host));
+    const second = fakeViteServer({ local: 'http://127.0.0.1:5173/' });
+    try {
+      await plugin.configureServer(second.server);
+      await second.listen();
+      second.server.printUrls();
+      const latest = studioUrlFrom(second.logs);
+      assert.equal(new URL(latest).hostname, '127.0.0.1');
+      assert.equal((await fetchRaw(latest)).status, 200);
+      assert.equal(plugin.transformIndexHtml('')[0].attrs['data-allowed-origins'], new URL(latest).origin);
+    } finally {
+      await second.server.close();
+    }
+  });
+
+  test('failed delayed Studio startup closes Vite and leaves no tag', async () => {
+    const plugin = fontkitStudio({ bridgeFile, startStudio: async () => { throw new Error('listen denied'); } });
+    const fake = fakeViteServer();
     await plugin.configureServer(fake.server);
+    await assert.rejects(fake.listen(), /listen denied/);
+    assert.ok(fake.logs.includes('vite closed'));
+    assert.deepEqual(plugin.transformIndexHtml(''), []);
+  });
+
+  test('standalone without resolved URLs prints Studio without a target', async () => {
+    const { plugin, fake } = standalone({ local: '' });
+    await plugin.configureServer(fake.server);
+    await fake.listen();
     fake.server.printUrls();
     const studioUrl = studioUrlFrom(fake.logs);
     assert.equal(new URL(studioUrl).searchParams.get('target'), null);
@@ -250,7 +305,7 @@ describe('fontkitStudio Vite plugin', () => {
   test('standalone in middleware mode closes Studio when the server closes', async () => {
     const { plugin, fake } = standalone({ withHttpServer: false });
     await plugin.configureServer(fake.server);
-    fake.listen();
+    await fake.listen();
     fake.server.printUrls();
     const studioUrl = studioUrlFrom(fake.logs);
     assert.equal((await fetchRaw(studioUrl)).status, 200);
@@ -292,7 +347,7 @@ describe('fontkitStudio Vite plugin', () => {
       mine.configResolved({ plugins: [{ name: 'other' }, mine, commands] });
       const fake = fakeViteServer();
       await mine.configureServer(fake.server);
-      fake.listen();
+      await fake.listen();
       fake.server.printUrls();
       assert.equal(fake.handlers.length, 0);
       assert.deepEqual(fake.logs, ['vite urls']);
@@ -312,6 +367,7 @@ describe('fontkitStudio Vite plugin', () => {
         ],
       });
       await plugin.configureServer(fake.server);
+      await fake.listen();
       assert.equal(fake.handlers.length, 1);
       assert.equal(plugin.transformIndexHtml('<html></html>').length, 1);
       fake.server.httpServer.emit('close');
@@ -407,13 +463,13 @@ describe('fontkitStudio Vite plugin', () => {
     test("standalone prints the two indented lines in order, once, after Vite's urls", async () => {
       const { plugin, fake } = standalone();
       await plugin.configureServer(fake.server);
-      fake.listen();
+      await fake.listen();
       fake.server.printUrls();
       fake.server.printUrls();
       assert.equal(fake.logs[0], 'vite urls');
       assert.equal(fake.logs[1], START_LINE);
       assert.equal(START_LINE, '  Font Kit Studio · dev only');
-      assert.match(fake.logs[2], /^ {2}Open: http:\/\/127\.0\.0\.1:\d+\/fontkit-studio\.html\?/);
+      assert.match(fake.logs[2], /^ {2}Open: http:\/\/localhost:\d+\/fontkit-studio\.html\?/);
       assert.equal(fake.logs.length, 4);
       fake.server.httpServer.emit('close');
     });
@@ -476,13 +532,13 @@ describe('fontkitStudio Vite plugin', () => {
       test('its own origin prints nothing; another port warns once', async () => {
         const own = listening({ 'Content-Security-Policy': 'script-src http://localhost:5173' });
         await own.plugin.configureServer(own.fake.server);
-        own.fake.listen();
+        await own.fake.listen();
         own.plugin.transformIndexHtml('<html></html>');
         assert.deepEqual(own.lines, []);
 
         const other = listening({ 'Content-Security-Policy': 'script-src http://localhost:5174' });
         await other.plugin.configureServer(other.fake.server);
-        other.fake.listen();
+        await other.fake.listen();
         other.plugin.transformIndexHtml('<html></html>');
         other.plugin.transformIndexHtml('<html></html>');
         assert.deepEqual(other.lines, [CSP_MESSAGE]);
@@ -491,7 +547,7 @@ describe('fontkitStudio Vite plugin', () => {
       test('a meta policy naming the origin prints nothing too', async () => {
         const { plugin, lines, fake } = listening();
         await plugin.configureServer(fake.server);
-        fake.listen();
+        await fake.listen();
         plugin.transformIndexHtml(
           `<meta http-equiv="Content-Security-Policy" content="script-src localhost:5173">`,
         );

@@ -7,7 +7,7 @@ import { join } from 'node:path';
 
 import { ProjectError } from '../src/project.js';
 import { runVite } from '../src/run-vite.js';
-import { fakeProject } from './helpers/fake-project.js';
+import { fakeProject, stubViteServer } from './helpers/fake-project.js';
 
 function freePort() {
   return new Promise((resolve, reject) => {
@@ -39,6 +39,51 @@ test('an untested Vite refuses before any Studio starts', async () => {
 
 // runVite changes the working directory, as `vite` does; give it back before the folder is removed.
 const startDir = process.cwd();
+
+for (const [hostname, advertised] of [['localhost', 'localhost'], ['127.0.0.1', '127.0.0.1'], ['[::1]', '127.0.0.1']]) {
+  test(`Vite resolved ${hostname} selects ${advertised} for Studio`, async () => {
+    const dir = fakeProject();
+    stubViteServer(dir, { local: `http://${hostname}:5173/` });
+    let running;
+    try {
+      running = await runVite({ projectDir: dir, open: false, out: { write() {} } });
+      assert.equal(new URL(running.studioUrl).hostname, advertised);
+      assert.equal(running.appUrl, `http://${hostname}:5173/`);
+      assert.equal((await fetch(running.studioUrl)).status, 200);
+    } finally {
+      await running?.close();
+      process.chdir(startDir);
+      rmSync(dir, { recursive: true, force: true });
+      delete globalThis.__viteServer;
+      delete globalThis.__viteClosed;
+    }
+  });
+}
+
+test('Vite configuration restart prints a usable new Studio URL and closes the previous listeners', async () => {
+  const dir = fakeProject();
+  stubViteServer(dir);
+  const lines = [];
+  let running;
+  try {
+    running = await runVite({ projectDir: dir, open: false, out: { write: line => lines.push(line) } });
+    const first = running.studioUrl;
+    await globalThis.__viteServer.restart();
+    assert.equal(lines.filter(line => line.startsWith('Open: ')).length, 2);
+    const latest = lines.at(-1).trim().slice('Open: '.length);
+    assert.equal(running.studioUrl, latest);
+    assert.equal((await fetch(latest)).status, 200);
+    for (const host of ['127.0.0.1', '[::1]']) {
+      await assert.rejects(fetch(first.replace('localhost', host)), /fetch failed/);
+    }
+  } finally {
+    await running?.close();
+    process.chdir(startDir);
+    rmSync(dir, { recursive: true, force: true });
+    delete globalThis.__viteServer;
+    delete globalThis.__viteClosed;
+  }
+});
 
 test('when Vite fails to start, Studio is closed before the error is rethrown', async () => {
   const dir = fakeProject();

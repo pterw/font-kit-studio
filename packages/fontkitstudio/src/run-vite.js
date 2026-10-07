@@ -18,17 +18,33 @@ export async function runVite({
   // The project is the nearest folder with a package.json, which may sit above the one the
   // command runs in; Vite starts there.
   const { vite, projectDir: foundDir } = await loadVite(projectDir);
-  const studio = await startStudio({ studioPort, studioFile, err });
+  let studio;
 
   let server;
   let appUrl;
+  let published = false;
+  const printStudio = () => {
+    const url = studio.url(appUrl);
+    out.write('Font Kit Studio · dev only\n');
+    out.write(`Open: ${url}\n`);
+    return url;
+  };
   try {
     // Start Vite as `vite` itself does when run in the project folder: it finds the config there
     // and resolves the config's own `root` against the working directory. An inline `root` would
     // win the merge and override the config's.
     process.chdir(foundDir);
     server = await vite.createServer({
-      plugins: [fontkitStudio({ studio, bridgeFile, log: (line) => err.write(`${line}\n`) })],
+      plugins: [fontkitStudio({
+        bridgeFile,
+        startStudio: async (host, local) => {
+          studio = await startStudio({ studioPort, studioFile, host, err });
+          appUrl = local;
+          if (published) printStudio();
+          return studio;
+        },
+        log: (line) => err.write(`${line}\n`),
+      })],
     });
     await server.listen();
     server.printUrls();
@@ -39,7 +55,7 @@ export async function runVite({
     try {
       await server?.close();
     } finally {
-      await studio.close();
+      await studio?.close();
     }
     throw error;
   }
@@ -61,9 +77,9 @@ export async function runVite({
   };
   for (const signal of signals) process.on(signal, close);
 
-  out.write('Font Kit Studio · dev only\n');
-  out.write(`Open: ${studioUrl}\n`);
+  printStudio();
+  published = true;
   if (open) openUrl(studioUrl, { err });
 
-  return { studioUrl, appUrl, close };
+  return { get studioUrl() { return studio.url(appUrl); }, get appUrl() { return appUrl; }, close };
 }

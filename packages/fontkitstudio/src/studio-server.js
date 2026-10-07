@@ -34,6 +34,44 @@ function tokenMatches(given, expected) {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+// Reserve every address localhost can resolve to before advertising it. A provisional
+// IPv4 port is released if IPv6 belongs to another server, so browsers cannot reach it.
+async function listenLoopback(makeServer, host, port) {
+  const close = async (servers) => Promise.all(servers.map((server) => new Promise((resolve) => {
+    server.close(() => resolve());
+    server.closeAllConnections();
+  })));
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const servers = [];
+    const listen = async (address, wanted) => {
+      const server = makeServer();
+      servers.push(server);
+      await new Promise((resolve, reject) => {
+        const failed = (error) => { server.off('listening', ready); reject(error); };
+        const ready = () => { server.off('error', failed); resolve(); };
+        server.once('error', failed);
+        server.once('listening', ready);
+        server.listen(wanted, address);
+      });
+      return server.address().port;
+    };
+    try {
+      const actualPort = await listen(host === 'localhost' ? '127.0.0.1' : host, port);
+      if (host === 'localhost') {
+        try {
+          await listen('::1', actualPort);
+        } catch (error) {
+          if (!['EADDRNOTAVAIL', 'EAFNOSUPPORT'].includes(error.code)) throw error;
+        }
+      }
+      return { port: actualPort, close: () => close(servers) };
+    } catch (error) {
+      await close(servers);
+      if (host !== 'localhost' || port !== 0 || error.code !== 'EADDRINUSE' || attempt === 19) throw error;
+    }
+  }
+}
+
 export async function startStudioServer({
   studioFile = new URL('../dist/fontkit-studio.html', import.meta.url),
   host = '127.0.0.1',
@@ -53,7 +91,7 @@ export async function startStudioServer({
     );
   }
 
-  const server = createServer((req, res) => {
+  const handle = (req, res) => {
     const send = (status, body, extra = {}) => {
       const isHtml = status === 200;
       res.writeHead(status, {
@@ -91,14 +129,10 @@ export async function startStudioServer({
       return send(403, 'Missing or wrong token. Open the URL the fontkitstudio command printed.');
     }
     return send(200, studio);
-  });
+  };
 
-  let actualPort;
-  await new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(port, host, resolve);
-  });
-  actualPort = server.address().port;
+  const listeners = await listenLoopback(() => createServer(handle), host, port);
+  const actualPort = listeners.port;
 
   const origin = studioOrigin(host, actualPort);
   return {
@@ -110,11 +144,6 @@ export async function startStudioServer({
       if (target !== undefined) query.set('target', target);
       return `${origin}${STUDIO_PATH}?${query}`;
     },
-    close() {
-      return new Promise((resolve) => {
-        server.close(() => resolve());
-        server.closeAllConnections();
-      });
-    },
+    close: listeners.close,
   };
 }

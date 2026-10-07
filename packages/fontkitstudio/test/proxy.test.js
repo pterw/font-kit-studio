@@ -2,7 +2,7 @@ import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { request } from 'node:http';
+import { createServer, request, Server } from 'node:http';
 import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -33,6 +33,23 @@ let upstream;
 let proxy;
 let small;
 const closers = [];
+
+test('localhost proxy reserves both loopback families and closes both', async () => {
+  const local = await startProxy({ target: upstream.origin, studio: STUDIO, bridgeFile, host: 'localhost' });
+  try {
+    assert.equal(new URL(local.origin).hostname, 'localhost');
+    for (const hostname of ['127.0.0.1', '[::1]']) {
+      const res = await fetch(local.origin.replace('localhost', hostname) + BRIDGE_PATH);
+      assert.equal(res.status, 200);
+      assert.equal(await res.text(), BRIDGE.toString());
+    }
+  } finally {
+    await local.close();
+  }
+  for (const hostname of ['127.0.0.1', '[::1]']) {
+    await assert.rejects(fetch(local.origin.replace('localhost', hostname) + BRIDGE_PATH), /fetch failed/);
+  }
+});
 
 before(async () => {
   dir = mkdtempSync(join(tmpdir(), 'fks-proxy-'));
@@ -583,8 +600,8 @@ describe('WebSocket upgrade', () => {
   }
 
   // Collects what the socket receives; waitFor resolves once `done(text)` holds.
-  function client(via, text) {
-    const socket = connect(via.port, '127.0.0.1');
+  function client(via, text, hostname = '127.0.0.1') {
+    const socket = connect(via.port, hostname);
     const chunks = [];
     let ended = false;
     const waiting = [];
@@ -628,7 +645,29 @@ describe('WebSocket upgrade', () => {
 
   const headEnd = (received) => received.includes('\r\n\r\n');
 
+  test('localhost proxy forwards and closes upgrades on both loopback listeners', async () => {
+    const local = await startProxy({ target: ws.origin, studio: { origin: 'http://localhost:5000' }, bridgeFile, host: 'localhost' });
+    try {
+      for (const hostname of ['127.0.0.1', '::1']) {
+        const c = client(local, upgradeRequest({ host: `localhost:${local.port}`, origin: local.origin }), hostname);
+        assert.match((await c.waitFor(headEnd)).toString('latin1'), /^HTTP\/1\.1 101 /);
+        assert.equal(ws.upgrades.at(-1).headers.origin, ws.origin);
+        c.socket.destroy();
+      }
+      const live = client(local, upgradeRequest({ host: `localhost:${local.port}` }), '::1');
+      await live.waitFor(headEnd);
+      await local.close();
+      await live.waitFor((received, ended) => ended);
+      for (const hostname of ['127.0.0.1', '[::1]']) {
+        await assert.rejects(fetch(local.origin.replace('localhost', hostname) + BRIDGE_PATH), /fetch failed/);
+      }
+    } finally {
+      await local.close();
+    }
+  });
+
   test('passes the handshake and the bytes through, as the dev server', async () => {
+    const seenBefore = ws.upgrades.length;
     const proxyHost = `127.0.0.1:${wsProxy.port}`;
     const c = client(
       wsProxy,
@@ -643,8 +682,8 @@ describe('WebSocket upgrade', () => {
     const received = await c.waitFor((r) => r.length >= mark + frame.length);
     assert.deepEqual(received.subarray(mark, mark + frame.length), frame);
 
-    assert.equal(ws.upgrades.length, 1);
-    const seen = ws.upgrades[0];
+    assert.equal(ws.upgrades.length, seenBefore + 1);
+    const seen = ws.upgrades.at(-1);
     assert.equal(seen.url, '/socket?x=1');
     assert.equal(seen.headers.host, `127.0.0.1:${ws.port}`);
     assert.equal(seen.headers.origin, ws.origin);
@@ -823,4 +862,81 @@ describe('warnings about pages the bridge may not reach (R1.6)', () => {
       await page('/csp-and-own');
       assert.deepEqual(lines, [BRIDGE_TWICE_MESSAGE, CSP_MESSAGE]);
     }));
+});
+
+// Faults are injected at the OS-listen seam; requests still hit real HTTP listeners.
+for (const code of ['EADDRNOTAVAIL', 'EAFNOSUPPORT', 'EACCES']) {
+  test(`localhost proxy: IPv6 ${code} has the specified cleanup/fallback`, async (t) => {
+    const original = Server.prototype.listen;
+    let provisional;
+    const created = [];
+    t.after(async () => {
+      for (const server of created) await new Promise(resolve => {
+        server.close(resolve); server.closeAllConnections();
+      });
+    });
+    t.mock.method(Server.prototype, 'listen', function (...args) {
+      created.push(this);
+      if (args[1] === '::1') {
+        queueMicrotask(() => this.emit('error', Object.assign(new Error(code), { code })));
+        return this;
+      }
+      this.once('listening', () => { provisional = this.address().port; });
+      return original.apply(this, args);
+    });
+    if (code === 'EACCES') {
+      await assert.rejects(startProxy({ host: 'localhost', target: upstream.origin, studio: STUDIO, bridgeFile }), { code });
+    } else {
+      const running = await startProxy({ host: 'localhost', target: upstream.origin, studio: STUDIO, bridgeFile });
+      try {
+        assert.equal(new URL(running.origin).hostname, 'localhost');
+        assert.equal((await fetch(`http://127.0.0.1:${running.port}${BRIDGE_PATH}`)).status, 200);
+      } finally {
+        await running.close();
+      }
+    }
+    t.mock.restoreAll();
+    const probe = createServer();
+    await new Promise((resolve, reject) => {
+      probe.once('error', reject);
+      probe.listen(provisional, '127.0.0.1', resolve);
+    });
+    await new Promise(resolve => probe.close(resolve));
+  });
+}
+
+test('localhost proxy retries an occupied IPv6 port and never reaches its owner', async (t) => {
+  let foreignRequests = 0;
+  const holder = createServer((req, res) => { foreignRequests += 1; res.end('foreign'); });
+  await new Promise((resolve, reject) => {
+    holder.once('error', reject);
+    holder.listen(0, '::1', resolve);
+  });
+  t.after(() => new Promise(resolve => holder.close(resolve)));
+  const occupied = holder.address().port;
+  const original = Server.prototype.listen;
+  let forced = false;
+  t.mock.method(Server.prototype, 'listen', function (...args) {
+    if (args[0] === 0 && args[1] === '127.0.0.1' && !forced) {
+      forced = true;
+      args[0] = occupied;
+    }
+    return original.apply(this, args);
+  });
+  const running = await startProxy({ host: 'localhost', target: upstream.origin, studio: STUDIO, bridgeFile });
+  try {
+    assert.notEqual(running.port, occupied);
+    assert.equal((await fetch(running.origin + BRIDGE_PATH)).status, 200);
+    assert.equal(foreignRequests, 0);
+    // The first IPv4 reservation was provisional and must already be gone.
+    t.mock.restoreAll();
+    const probe = createServer();
+    await new Promise((resolve, reject) => {
+      probe.once('error', reject);
+      probe.listen(occupied, '127.0.0.1', resolve);
+    });
+    await new Promise(resolve => probe.close(resolve));
+  } finally {
+    await running.close();
+  }
 });

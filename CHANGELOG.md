@@ -12,6 +12,13 @@ Two things have their own version numbers:
 
 ## [Unreleased]
 
+### Fixed
+
+- Apps used at `localhost` keep sign-in cookies inside Studio in Vite and proxy
+  modes. Studio and the proxy use `localhost` for those apps. If you used a
+  localhost app with `--studio-port` in 0.3.0, your prior Studio settings start
+  fresh once because the host changes.
+
 ## [0.3.0] - 2026-10-04
 
 One command: `npx fontkitstudio` opens Studio connected to your running app, in

@@ -67,6 +67,44 @@ export function insertTag(buffer, tag) {
   return Buffer.from(text.slice(0, at) + tag + text.slice(at), 'latin1');
 }
 
+// Reserve every address localhost can resolve to before advertising it. A provisional
+// IPv4 port is released if IPv6 belongs to another server, so browsers cannot reach it.
+async function listenLoopback(makeServer, host, port) {
+  const close = async (servers) => Promise.all(servers.map((server) => new Promise((resolve) => {
+    server.close(() => resolve());
+    server.closeAllConnections();
+  })));
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const servers = [];
+    const listen = async (address, wanted) => {
+      const server = makeServer();
+      servers.push(server);
+      await new Promise((resolve, reject) => {
+        const failed = (error) => { server.off('listening', ready); reject(error); };
+        const ready = () => { server.off('error', failed); resolve(); };
+        server.once('error', failed);
+        server.once('listening', ready);
+        server.listen(wanted, address);
+      });
+      return server.address().port;
+    };
+    try {
+      const actualPort = await listen(host === 'localhost' ? '127.0.0.1' : host, port);
+      if (host === 'localhost') {
+        try {
+          await listen('::1', actualPort);
+        } catch (error) {
+          if (!['EADDRNOTAVAIL', 'EAFNOSUPPORT'].includes(error.code)) throw error;
+        }
+      }
+      return { port: actualPort, close: () => close(servers) };
+    } catch (error) {
+      await close(servers);
+      if (host !== 'localhost' || port !== 0 || error.code !== 'EADDRINUSE' || attempt === 19) throw error;
+    }
+  }
+}
+
 export async function startProxy({
   target,
   studio,
@@ -259,7 +297,7 @@ export async function startProxy({
     req.pipe(proxied);
   }
 
-  const server = createServer((req, res) => {
+  const handle = (req, res) => {
     const send = (status, body, headers = {}) => {
       res.writeHead(status, {
         'content-type': 'text/plain; charset=utf-8',
@@ -286,7 +324,7 @@ export async function startProxy({
       return;
     }
     forward(req, res);
-  });
+  };
 
   // WebSocket upgrades (the app's own hot reload): the same Host and request-line checks,
   // then the same header rewrites, then raw bytes both ways until either side ends.
@@ -296,7 +334,7 @@ export async function startProxy({
       socket.destroy(),
     );
   };
-  server.on('upgrade', (req, socket, head) => {
+  const upgrade = (req, socket, head) => {
     socket.on('error', () => socket.destroy());
     const requestHost = String(req.headers.host ?? '').toLowerCase();
     if (!allowedHosts.includes(requestHost)) return refuse(socket, '421 Misdirected Request');
@@ -327,13 +365,20 @@ export async function startProxy({
       socket.pipe(upstream);
       upstream.pipe(socket);
     });
-  });
+  };
 
-  await new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(port, host, resolve);
-  });
-  actualPort = server.address().port;
+  let listeners;
+  try {
+    listeners = await listenLoopback(() => {
+      const server = createServer(handle);
+      server.on('upgrade', upgrade);
+      return server;
+    }, host, port);
+  } catch (error) {
+    agent.destroy();
+    throw error;
+  }
+  actualPort = listeners.port;
   allowedHosts = [`127.0.0.1:${actualPort}`, `localhost:${actualPort}`, `[::1]:${actualPort}`];
   ownOrigins = allowedHosts.map((allowed) => `http://${allowed}`);
   proxyOrigin = `http://${host === '::1' ? '[::1]' : host}:${actualPort}`;
@@ -341,15 +386,10 @@ export async function startProxy({
   return {
     origin: proxyOrigin,
     port: actualPort,
-    close() {
-      return new Promise((resolve) => {
-        server.close(() => {
-          agent.destroy();
-          resolve();
-        });
-        server.closeAllConnections();
-        for (const socket of upgraded) socket.destroy();
-      });
+    async close() {
+      for (const socket of upgraded) socket.destroy();
+      agent.destroy();
+      await listeners.close();
     },
   };
 }

@@ -53,7 +53,8 @@ export function fontkitStudio(options = {}) {
   } = options;
   let studio = options.studio;
   if (studio) checkLocalOrigin(studio.origin);
-  const standalone = !studio;
+  const standalone = !studio && !options.startStudio;
+  const ownsStudio = !studio;
   let bridge;
   let standDown = false;
   let headers = [];
@@ -119,26 +120,59 @@ export function fontkitStudio(options = {}) {
         );
       }
 
-      if (standalone) {
-        const started = await startStudioServer(studioFile === undefined ? {} : { studioFile });
-        studio = started;
-        const printUrls = server.printUrls.bind(server);
-        let printed = false;
-        server.printUrls = () => {
-          printUrls();
-          if (printed) return;
-          printed = true;
-          const local = server.resolvedUrls?.local?.[0];
-          server.config.logger.info(START_LINE);
-          server.config.logger.info(`  Open: ${started.url(local)}`);
+      if (ownsStudio) {
+        let started;
+        let starting;
+        const start = () => {
+          starting ??= (async () => {
+            const local = server.resolvedUrls?.local?.[0];
+            const host = local
+              ? (new URL(local).hostname === 'localhost' ? 'localhost' : '127.0.0.1')
+              : (server.config.server?.host ?? 'localhost') === 'localhost' ? 'localhost' : '127.0.0.1';
+            started = options.startStudio
+              ? await options.startStudio(host, local)
+              : await startStudioServer({ studioFile, host });
+            studio = started;
+          })();
+          return starting;
         };
-        if (server.httpServer) {
-          server.httpServer.on('close', () => started.close());
+        // listen resolves only after Vite has populated its final local URL. The command
+        // and standalone plugin then pin their bridge tag to the same advertised host.
+        if (typeof server.listen === 'function' && !server.config.server?.middlewareMode) {
+          const listen = server.listen.bind(server);
+          server.listen = async (...args) => {
+            await listen(...args);
+            try {
+              await start();
+            } catch (error) {
+              await server.close();
+              throw error;
+            }
+            return server;
+          };
         } else {
-          const close = server.close.bind(server);
-          server.close = async () => {
-            await started.close();
-            return close();
+          await start();
+        }
+        const close = server.close.bind(server);
+        server.close = async (...args) => {
+          try {
+            await starting?.catch(() => {});
+            await started?.close();
+          } finally {
+            await close(...args);
+          }
+        };
+        if (server.httpServer) server.httpServer.on('close', () => started?.close());
+        if (standalone) {
+          const printUrls = server.printUrls.bind(server);
+          let printed = false;
+          server.printUrls = () => {
+            printUrls();
+            if (printed || !started) return;
+            printed = true;
+            const local = server.resolvedUrls?.local?.[0];
+            server.config.logger.info(START_LINE);
+            server.config.logger.info(`  Open: ${started.url(local)}`);
           };
         }
       }
