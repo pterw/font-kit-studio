@@ -32,7 +32,7 @@ jobs:
       # v0.1.1 file against the `supplied-v0.1.1` tag, and a shallow clone has
       # no tag to compare, so provenance would be skipped instead of verified.
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -47,7 +47,7 @@ jobs:
       # Only for `node --check fontkit-bridge.js`. Studio and the bridge have
       # no runtime dependencies and no build step, so nothing else uses Node.
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
 
@@ -194,9 +194,9 @@ jobs:
           - { os: windows-latest, node: '24' }
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
       - name: Test the package
@@ -220,9 +220,9 @@ jobs:
           - { os: windows-latest, node: '24' }
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
           cache: npm
@@ -257,9 +257,9 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: npm
