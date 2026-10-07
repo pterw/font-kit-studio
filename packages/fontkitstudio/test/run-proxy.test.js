@@ -222,7 +222,7 @@ describe('runProxy', () => {
     const err = sink();
     await assert.rejects(
       runProxy({ target: 'http://example.com', open: false, out, err, studioFile, bridgeFile }),
-      { message: 'Font Kit Studio proxies only a local dev server (localhost or 127.0.0.1)' },
+      { message: 'Font Kit Studio proxies only a local dev server (localhost, 127.0.0.1 or [::1])' },
     );
     assert.deepEqual([out.chunks, err.chunks], [[], []]);
   });

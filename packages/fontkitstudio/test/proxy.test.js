@@ -519,7 +519,7 @@ describe('forwarding', () => {
 });
 
 describe('start-up refusals', () => {
-  const TARGET_TEXT = 'Font Kit Studio proxies only a local dev server (localhost or 127.0.0.1)';
+  const TARGET_TEXT = 'Font Kit Studio proxies only a local dev server (localhost, 127.0.0.1 or [::1])';
   const STUDIO_TEXT =
     'Font Kit Studio: studio.origin must be a local http origin such as http://127.0.0.1:5000';
 
@@ -753,7 +753,7 @@ test('parseProxyTarget returns local http targets and refuses the rest with a Pr
       () => parseProxyTarget(bad),
       (error) =>
         error instanceof ProxyTargetError &&
-        error.message === 'Font Kit Studio proxies only a local dev server (localhost or 127.0.0.1)',
+        error.message === 'Font Kit Studio proxies only a local dev server (localhost, 127.0.0.1 or [::1])',
     );
   }
 });

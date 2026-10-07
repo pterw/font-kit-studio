@@ -139,7 +139,7 @@ test('an https or remote address exits 2 with the proxy message', () => {
   for (const url of ['https://localhost:3000', 'http://example.com']) {
     const result = runIn(dir, url, '--no-open');
     assert.equal(result.status, 2, `${url}: ${result.stderr}`);
-    assert.equal(result.stderr, 'Font Kit Studio proxies only a local dev server (localhost or 127.0.0.1)\n');
+    assert.equal(result.stderr, 'Font Kit Studio proxies only a local dev server (localhost, 127.0.0.1 or [::1])\n');
     assert.equal(result.stdout, '');
   }
 });
@@ -270,7 +270,7 @@ test('a refused URL beside a busy --studio-port exits 2 with the refusal and no 
     for (const url of ['https://localhost:3000', 'http://example.com']) {
       const result = runIn(project({ vite: null }), url, '--studio-port', String(port));
       assert.equal(result.status, 2, result.stderr);
-      assert.equal(result.stderr, 'Font Kit Studio proxies only a local dev server (localhost or 127.0.0.1)\n');
+      assert.equal(result.stderr, 'Font Kit Studio proxies only a local dev server (localhost, 127.0.0.1 or [::1])\n');
       assert.doesNotMatch(result.stderr, /busy/);
     }
   } finally {
@@ -290,7 +290,7 @@ test('with no dist/ at all, a refused URL still exits 2 with the refusal', () =>
     timeout: 20000,
   });
   assert.equal(result.status, 2, result.stderr);
-  assert.equal(result.stderr, 'Font Kit Studio proxies only a local dev server (localhost or 127.0.0.1)\n');
+  assert.equal(result.stderr, 'Font Kit Studio proxies only a local dev server (localhost, 127.0.0.1 or [::1])\n');
 });
 
 test('an address that parses but is not http or https gets the not-a-URL message', () => {

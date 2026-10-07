@@ -124,6 +124,9 @@ jobs:
       # gate. --with-deps installs the system libraries Chromium and Firefox
       # need on a bare runner. Both are installed: Chromium blocks, Firefox runs
       # an advisory canary (see README "Firefox status", D037).
+      - name: Bound browser dependency acquisition
+        uses: ./.github/actions/configure-browser-apt
+
       - name: Install Playwright browsers
         run: python -m playwright install --with-deps chromium firefox
 
@@ -247,6 +250,8 @@ jobs:
           npm ci --prefix fixtures/vite-ts
       - name: Bundle Studio and the bridge
         run: npm --prefix packages/fontkitstudio run prepack
+      - name: Bound browser dependency acquisition
+        uses: ./.github/actions/configure-browser-apt
       - name: Install the test tools and Chromium
         run: |
           python -m pip install -r requirements-dev.txt
@@ -281,6 +286,8 @@ jobs:
         run: npm ci --prefix fixtures/next-app
       - name: Bundle Studio and the bridge
         run: npm --prefix packages/fontkitstudio run prepack
+      - name: Bound browser dependency acquisition
+        uses: ./.github/actions/configure-browser-apt
       - name: Install the test tools and Chromium
         run: |
           python -m pip install -r requirements-dev.txt

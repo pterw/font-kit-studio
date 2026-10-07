@@ -50,7 +50,7 @@ export function parseProxyTarget(target) {
     targetUrl.protocol !== 'http:' ||
     !LOOPBACK_URL_HOSTNAMES.includes(targetUrl.hostname)
   ) {
-    throw new ProxyTargetError('Font Kit Studio proxies only a local dev server (localhost or 127.0.0.1)');
+    throw new ProxyTargetError('Font Kit Studio proxies only a local dev server (localhost, 127.0.0.1 or [::1])');
   }
   return targetUrl;
 }
