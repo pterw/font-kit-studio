@@ -253,3 +253,72 @@ source, not newly run results here. Final exact-head CI must establish the mirro
 rewrite's effectiveness and read each new phase's logs. The setup-only delta is
 Approved for landing after the controller's gates; readiness/publication remain
 separate from this verdict.
+
+## Final readiness documentation review
+
+Date: 2026-10-07. Scoped verdict: **Approved**.
+HEAD: `f7d23babaa1e51d8af826087bcc7b345178a1004`; reviewed the uncommitted
+readiness-record delta. Critical: none. Important: none. Minor: none unresolved.
+
+Read the complete changed sections/diffs in the active plan, ledger Current
+state/latest 0.3.1 events, C report and verification-0.3.1.md. Did not read the
+full historical ledger. The changes are documentation only; no runtime/workflow
+delta or new test execution is part of this review.
+
+Independent evidence reconciliation reads the raw CI-mirror-jobs.json and the
+Node 22, Node 26 and quality logs under ignored .superpowers/sdd/v0-3-1:
+
+- Job data identifies exact SHA f7d23ba, completed/success, and all 12 jobs
+  completed successfully. All five Node package jobs, Vite matrix jobs and
+  Next.js pass in that job inventory.
+- Job timestamps prove Node 22 system dependencies/download take 18s/8s,
+  Node 26 59s/11s. Raw fixture logs report 14 tests OK in 10.471s/15.079s,
+  no skips, and include both cookie paths. The effective four APT settings and
+  official archive requests are present; neither log contains an Azure domain
+  attempt. Node 22 reports the mirror list as 34 bytes.
+- Raw quality log reports Chromium 859 in 625.167s, OK with 12 skips; Firefox
+  51 in 103.433s, OK without skips. Frontend summary is 30/30, seven blocking
+  passes, zero failure/skip/advisory lines, and 332 touch-target REPORT lines.
+  Remaining Node 20 warnings name setup-python@v5 and upload-artifact@v4, as
+  the new records disclose. These are hosted results, not tests rerun here.
+
+One minor evidence finding was corrected before approval. The submitted
+verification/report/latest ledger said all 12 main-job fixture skips were
+covered by the matrix. Raw skip names and the matrix command show that the
+HostRefusal case in test_one_command_messages is absent. The controller changed
+current claims to 11 of 12 and named the exception in verification-0.3.1.md.
+A dated correction clarifies earlier ledger summaries without changing their
+recorded test counts. Scoped re-review confirms this distinction in all live
+copies: verification-0.3.1.md:111,127,153, C report:75 and progress.md:61,63.
+C-suite-a.log independently shows the exact HostRefusal test as `... ok`
+and the local 474-test half as OK; this supports local coverage only.
+
+The plan's implementation-head CI and readiness records are checked with
+supporting evidence. Its separate condition still requires final documentation
+CI/advisory reading before PR #15 leaves draft. All three post-publication tasks
+remain unchecked. Current state/report/verification remain explicitly pre-merge
+and unpublished; no release-tag hashes or completed owner actions are claimed.
+The documentation does not create a recursive requirement to commit another
+readiness record after the final GitHub state transition.
+
+Plan evidence pointers: docs/plans/2026-10-07-v0.3.1-localhost-cookies.md:239
+records verified implementation CI, line 244 retains the final-documentation CI
+condition, and line 249 starts the separate unchecked post-merge section.
+
+Fresh verification was evidence/whitespace only: inline Python assertions check
+the exact SHA, 12 successful jobs, setup durations, counts/skips, effective APT
+values, no Azure attempts, frontend/advisory summary, unchecked publication tasks
+and four-doc whitespace. These pass. git diff --check passes after the correction.
+One log-print probe hit Windows console encoding and one literal assertion needed
+CRLF normalization; BOM-aware decoding, UTF-8 output and newline normalization
+resolve those probe issues. They are not product or hosted CI failures.
+
+MCP path coverage confirms the same generation and all five document paths are
+excluded; direct source/diff/raw-log evidence supplies the review. Only this
+review record is written. No local browser/Node/release test, system change,
+commit, push or external mutation occurred. The controller's fast gates and
+known exact Ruff limitation are reported elsewhere and not rerun here.
+
+The corrected readiness records are Approved for their documentation landing.
+Final documentation CI/advisories and PR readiness remain the controller's next
+steps. Owner merge/tag/publication and post-publication checks remain separate.

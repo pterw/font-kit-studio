@@ -1,7 +1,7 @@
 # 0.3.1 release verification
 
 Date: 2026-10-07. Branch: `fix/localhost-cookies`; base `7598ebb`.
-Status: local release checks complete, pre-merge; final CI pending.
+Status: pre-merge implementation verified; readiness-record CI pending.
 No tag or publication exists for this patch.
 This evidence covers the settled 0.3.1 working tree following `6485edf`.
 CI-only APT setup changed under Addenda 6-8 while app/browser-test source stayed
@@ -107,12 +107,12 @@ annotated merge tag with core.autocrlf=false and verified after publication.
 The preceding cookie-fix head `6485edf`, run 37664612240, passed ten jobs and
 timed out in Ubuntu APT setup on Node 22/26. Failed jobs alone were retried:
 Node 26 passes 14 Chromium fixture tests with no skips; Node 22 again times out
-before browser download/tests. Quality job Chromium 859 OK (12 fixture skips
-covered by matrix), Firefox 51 OK/no skips and frontend 30/30/no advisory failures
+before browser download/tests. Quality job Chromium 859 OK (12 fixture skips,
+11 covered by matrix), Firefox 51 OK/no skips and frontend 30/30/no advisory failures
 were read. This is not an all-green CI claim for that head.
 
-Addendum 6/D055 apply the upstream bounded APT configuration. Final exact-head
-CI remains pending and must be read, including advisories, before leaving draft.
+Addendum 6/D055 apply the upstream bounded APT configuration. The hosted run
+below tests that initial correction, including its advisory results.
 
 Release head `6ada9b3`, run 37672052396, completes with 11 successful jobs and
 one Ubuntu Node 22 fixture timeout. Its guardrail step prints all four intended
@@ -124,7 +124,7 @@ not evidence of a browser-CDN failure or a guardrail override by Playwright.
 The pinned installer's apt-get calls supply no overriding APT options.
 
 That run's completed Quality Gate is read: Chromium `Ran 859 tests in 588.799s`,
-`OK (skipped=12)`; the skips need fixtures and the matrix covers them. Firefox
+`OK (skipped=12)`; the skips need fixtures and the matrix covers 11. Firefox
 canary `Ran 51 tests in 95.592s`, `OK`, no skips; both cookie modes pass.
 Frontend: 30/30, seven blocking passes, 332 touch-target reports, zero advisory,
 skip or failure lines. Linux Node 24 fixture tests pass 14 with no skips and
@@ -137,7 +137,32 @@ static/provenance, bridge syntax, product lint, pre-commit, whitespace and
 message-range checks pass (four commits); exact Ruff retains the same four
 owner-skill findings. Independent scoped review is Approved: another 25 release
 tests OK/no skips, exact YAML normalization and Bash branch/failure checks pass.
-No full local browser rerun. New exact-head hosted CI remains pending.
+No full local browser rerun. Hosted effectiveness was pending at scoped review;
+the following exact-head run establishes it.
+
+The refinement is committed as `f7d23ba`; [run 37674885926](https://github.com/pterw/font-kit-studio/actions/runs/37674885926)
+is successful on that exact SHA. All 12 jobs pass. The Node 22 action log shows
+the effective four APT values and the 34-byte official-archive mirror list;
+metadata and packages come from archive.ubuntu.com, with no Azure attempts.
+System dependencies complete in 18s, Chromium downloads in 8s, then 14 fixture
+tests pass (`10.471s`, no skips). Node 26 completes those phases in 59s and 11s,
+then passes 14 fixture tests (`15.079s`, no skips). Mac/Windows fixtures, Next.js
+and all five Node package jobs pass. Required installation errors are not suppressed.
+
+Quality Gate logs read: Chromium `Ran 859 tests in 625.167s`, `OK (skipped=12)`;
+the matrix covers 11 fixture skips. The omitted host-refusal browser test
+(`test_one_command_messages.HostRefusalTest.test_a_server_opened_to_the_network_is_refused_in_one_line`)
+passes in local release half A with fixtures installed; it does not run in the
+CI matrix. No CI coverage is claimed for that case. Firefox canary `Ran 51 tests
+in 103.433s`, `OK`, no skips, both cookie modes pass. Frontend: 30/30, seven
+blocking passes, 332 touch-target reports and zero advisory/skip/failure lines.
+Advisories and setup warnings were read. Setup-python@v5 and upload-artifact@v4
+still emit Node 20 runtime notices; they are outside the checkout/setup-node scope.
+
+The remaining readiness-record landing changes documentation only. It receives
+fast checks and independent review, with no new local browser run. Read its
+exact-head CI and advisories before taking PR #15 out of draft. Implementation
+readiness is established by the run above; no release-tag hashes are claimed.
 
 Owner merge, annotated v0.3.1 tag, npm-release approval, registry/provenance checks
 and tag-derived release-asset hashes remain unperformed.

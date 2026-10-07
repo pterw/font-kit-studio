@@ -3,7 +3,8 @@
 Date: 2026-10-07. Base: `6485edf` on `fix/localhost-cookies`.
 Task brief: [C brief](v031-task-C-brief.md). [Independent review](v031-task-C-review.md)
 is Approved for the release diff and all scoped CI setup corrections. Local
-release checks are complete; final exact-head CI remains pending.
+release checks and exact implementation-head CI are complete; readiness-record
+CI remains required before leaving draft.
 
 ## Changes
 
@@ -28,8 +29,8 @@ release checks are complete; final exact-head CI remains pending.
   Required libraries, signatures, engines, test order and status remain intact.
 - Addenda 7/8 extend the same setup correction: use the official archive in the
   existing runner mirror list and expose pip, system libraries and browser
-  downloads as separate phases. Scoped review is Approved; hosted effectiveness
-  remains pending. Settled app/browser tests and local release evidence remain valid.
+  downloads as separate phases. Scoped review is Approved and hosted effectiveness
+  is verified below. Settled app/browser tests and local release evidence remain valid.
 
 ## Evidence so far
 
@@ -67,7 +68,13 @@ owner-installed skill; product-tree lint is recorded separately.
 
 The prior head's CI timed out in Ubuntu dependency downloads; only those jobs
 were retried. Node 26 passed 14 fixture tests; Node 22 repeated the APT stall.
-Both retry logs were read before the setup correction. Hosted effectiveness
-remains pending final CI. Browser checks remain
+Both retry logs were read before the setup correction. Hosted effectiveness is
+verified by run 37674885926 on `f7d23ba`, all 12 jobs successful. Node 22 system
+libraries finish in 18s and browser download in 8s; both Node 22/26 run all 14
+fixture tests. Quality Gate passes 859 Chromium with 12 fixture skips; the matrix
+covers 11. The host-refusal browser test passes in the local full release suite
+but is absent from the CI matrix. Firefox passes 51/no skips and frontend 30/30
+with no advisory failures.
+Browser checks remain
 focused at implementation landings, with one full release run and an advisory
 Firefox canary (plan Addendum 4).
