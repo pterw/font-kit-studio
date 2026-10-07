@@ -99,3 +99,25 @@
   check `npm view fontkitstudio@<v>` (the registry can lag a minute), `npx -y
   fontkitstudio@<v> --version` from an empty folder, and the release assets' SHA-256 against
   the verification record.
+
+## Working alongside Codex
+
+- The owner also runs Codex as controller on this repository under the same AGENTS.md
+  workflow, and moves work between the two. A session may pick up a release Codex started.
+  Bootstrap from git, the open PR and the ledger, never from memory.
+- Codex keeps its workspace under the same convention (`.superpowers/sdd/<plan>/progress.md`
+  with `## RESUME HERE`), so the compaction hook may inject a Codex block. Before mutating
+  anything, check `git status`, the PR head and that block for running agents or a source
+  freeze.
+- Never edit files on a branch the other controller is landing. Make Claude-side changes
+  (this file, for example) on their own branch from `main`, in a separate worktree.
+- Follow the record conventions already on the branch: task records
+  `docs/implementation/tasks/<release>-task-<ID>-{brief,report,review}.md` (for example
+  `v031-task-A-*`), with the controller's integration evidence appended to the report;
+  plan changes as dated `## Addendum N` sections; one ledger section per release, made of
+  dated events; raw gate logs in the workspace, never committed.
+- `.agents/` (untracked) holds the owner's Codex skills; never edit it. The exact
+  `python -m ruff check .` reports findings there. Report the product-tree result
+  (`--exclude .agents`) beside it, and never change lint policy to hide them.
+- Codex does not write this file, `MEMORY-local.md` or `~/.claude/`. A hand-off written
+  for a non-Claude controller goes in `work/` (git-ignored).
