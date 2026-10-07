@@ -176,3 +176,80 @@ The schema check is bounded structural validation, not a claim of a complete
 GitHub validator. Hosted mirror fallback and final matrix completion require
 the final exact-head CI. This necessary setup correction is approved for the
 same release landing after the remaining gates; publication remains separate.
+
+## Addenda 7/8 scoped re-review: mirror selection and setup phases
+
+Date: 2026-10-07. Scoped verdict: **Approved**.
+Reviewed HEAD: `6ada9b30c60fdf85373799d366f52ba5d824a796` plus the uncommitted
+Addenda 7/8 delta. Critical: none. Important: none. Minor: none.
+
+Read the action and quality-gate workflow in full, their diff against this HEAD,
+Addenda 7/8, D056/D057, changed C brief/report, and the verification/ledger
+controller deltas. The report distinguishes the initial approval from this new
+scope. The new records correctly withhold all-green CI and hosted effectiveness.
+Only this review record is written; no source, system APT or browser is modified.
+
+`.github/actions/configure-browser-apt/action.yml:12-15` rewrites the existing
+runner mirror-list file to one HTTPS official Ubuntu archive URL. It changes no
+distribution suite/component, source-file configuration, signing key, trusted
+flag or authentication policy. If the list is absent, the mirror rewrite is
+skipped and existing APT bounds still apply. The original Linux-only guard and
+the exact bounded-acquisition/DEP-11 configuration remain unchanged. Failures
+of either privileged write propagate under the explicit bash shell's errexit
+and pipefail behavior; there is no failure suppression.
+
+The official archive exposes
+[Ubuntu noble-security metadata](https://archive.ubuntu.com/ubuntu/dists/noble-security/Release)
+for the observed suite and architectures. This supports the selected endpoint;
+it is not a local apt signature check or proof that every hosted download works.
+Removing the Azure candidate from the runner list is consistent with the raw
+current CI setup log: guardrail values are present, Azure InRelease acquisition
+falls back, then Azure Packages indexes are attempted again before cancellation.
+The last output is at 19:07:42Z; cancellation is at 19:22:26Z. No browser-download
+or fixture-test phase begins there. The setup diagnosis is APT; no browser-CDN
+failure is established.
+
+Workflow lines 131-135, 259-264 and 297-302 separate system dependencies from
+browser binaries with the same engine lists: quality uses Chromium and Firefox,
+the fixture jobs use Chromium. Their existing pip commands stay before those
+phases. [Playwright documents](https://playwright.dev/python/docs/browsers#install-system-dependencies)
+that install-deps and install can run separately or together with --with-deps.
+The installed pinned Playwright 1.62.0 coreBundle.js:31677-31684 calls apt-get
+update and install -y --no-install-recommends without overriding these APT keys.
+The Linux action still precedes system-dependency acquisition; macOS/Windows do
+not execute its guarded shell. No engines, tests or required libraries are removed.
+
+Fresh independent verification:
+
+- Parsed both YAML files. Normalized each split setup block back to its exact
+  original block from `6ada9b3`; the complete workflow then equals the original.
+  This proves matrix, permissions, timeout budgets, checks/test order and
+  required/advisory conditions are unchanged outside the approved setup split.
+- Compared the action's APT configuration suffix byte for byte with the original,
+  checked the Linux guard and single official archive URL, and checked for source
+  or trust-policy rewrites. Bash `--noprofile --norc -n` on extracted stdin passes.
+- In-memory condition seams and sudo/apt-config stubs exercise present and absent
+  mirror-list branches without writing files: both pass with the expected writes
+  and exact official URL. Separate failing mirror/configuration writes exit 73/74
+  under `-e -o pipefail` and never reach apt-config. The first success-stub probe
+  incorrectly expected stdout despite the action's redirection; corrected stderr
+  observation passes. This was a probe expectation error, not a product regression.
+- `$env:PYTHONPATH='tests'; python -m unittest test_release -v`: 25 tests, OK,
+  zero skips, exit 0, 1.284 seconds. No existing assertion needs adaptation.
+  Literal search of tests/scripts finds no old combined-install assertion.
+- Both changed YAML files pass direct trailing-whitespace assertions and
+  `git diff --check -- .github/actions/configure-browser-apt/action.yml .github/workflows/quality-gate.yml`.
+
+Graph coverage was refreshed for both config paths: the same generation reports
+action not_tracked and workflow metadata_changed. Direct full source/diff fallback
+supports this verdict; graph completeness and hosted execution are not claimed.
+The pinned source was found in coreBundle.js after the older split-module path
+proved absent; the current bundled installer supplied the evidence.
+
+No full or focused browser suite, browser download, actual apt install or hosted
+action execution ran in this scoped review. The controller's settled 859 Chromium,
+51 Firefox and 30 frontend results are prior evidence for unchanged app/browser
+source, not newly run results here. Final exact-head CI must establish the mirror
+rewrite's effectiveness and read each new phase's logs. The setup-only delta is
+Approved for landing after the controller's gates; readiness/publication remain
+separate from this verdict.

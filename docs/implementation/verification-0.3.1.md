@@ -4,7 +4,7 @@ Date: 2026-10-07. Branch: `fix/localhost-cookies`; base `7598ebb`.
 Status: local release checks complete, pre-merge; final CI pending.
 No tag or publication exists for this patch.
 This evidence covers the settled 0.3.1 working tree following `6485edf`.
-CI-only APT setup changed under Addendum 6 while app/browser-test source stayed
+CI-only APT setup changed under Addenda 6-8 while app/browser-test source stayed
 frozen; its focused review and hosted execution are recorded separately.
 
 ## Environment and preparation
@@ -113,5 +113,31 @@ were read. This is not an all-green CI claim for that head.
 
 Addendum 6/D055 apply the upstream bounded APT configuration. Final exact-head
 CI remains pending and must be read, including advisories, before leaving draft.
+
+Release head `6ada9b3`, run 37672052396, completes with 11 successful jobs and
+one Ubuntu Node 22 fixture timeout. Its guardrail step prints all four intended
+APT values. Pip finishes at 19:07:20Z; APT starts at 19:07:21Z, falls back from
+Azure for InRelease metadata, then tries Azure again for Packages/Translation
+indexes. Output stops at 19:07:42Z until cancellation at 19:22:26Z. No Chromium
+download or fixture test begins on that runner. This is APT setup failure,
+not evidence of a browser-CDN failure or a guardrail override by Playwright.
+The pinned installer's apt-get calls supply no overriding APT options.
+
+That run's completed Quality Gate is read: Chromium `Ran 859 tests in 588.799s`,
+`OK (skipped=12)`; the skips need fixtures and the matrix covers them. Firefox
+canary `Ran 51 tests in 95.592s`, `OK`, no skips; both cookie modes pass.
+Frontend: 30/30, seven blocking passes, 332 touch-target reports, zero advisory,
+skip or failure lines. Linux Node 24 fixture tests pass 14 with no skips and
+the Next.js fixture passes; all other package/fixture jobs pass.
+
+Addenda 7/8 and D056/D057 refine setup: use the official archive in the existing
+runner mirror list and separate pip, install-deps and browser downloads.
+App/browser-test source remains identical to the settled release run. Fresh
+static/provenance, bridge syntax, product lint, pre-commit, whitespace and
+message-range checks pass (four commits); exact Ruff retains the same four
+owner-skill findings. Independent scoped review is Approved: another 25 release
+tests OK/no skips, exact YAML normalization and Bash branch/failure checks pass.
+No full local browser rerun. New exact-head hosted CI remains pending.
+
 Owner merge, annotated v0.3.1 tag, npm-release approval, registry/provenance checks
 and tag-derived release-asset hashes remain unperformed.

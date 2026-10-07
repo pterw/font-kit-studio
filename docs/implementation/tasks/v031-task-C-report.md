@@ -2,8 +2,8 @@
 
 Date: 2026-10-07. Base: `6485edf` on `fix/localhost-cookies`.
 Task brief: [C brief](v031-task-C-brief.md). [Independent review](v031-task-C-review.md)
-is Approved, including the CI setup correction. Local release checks are complete;
-final exact-head CI remains pending.
+is Approved for the release diff and all scoped CI setup corrections. Local
+release checks are complete; final exact-head CI remains pending.
 
 ## Changes
 
@@ -26,6 +26,10 @@ final exact-head CI remains pending.
   before the three browser-install jobs, through one local composite action.
   This follows the upstream runner-image correction for the reproduced stall.
   Required libraries, signatures, engines, test order and status remain intact.
+- Addenda 7/8 extend the same setup correction: use the official archive in the
+  existing runner mirror list and expose pip, system libraries and browser
+  downloads as separate phases. Scoped review is Approved; hosted effectiveness
+  remains pending. Settled app/browser tests and local release evidence remain valid.
 
 ## Evidence so far
 
@@ -45,6 +49,13 @@ reports. Firefox canary passes 51 with no skips (advisory). Static/provenance,
 bridge syntax, product-tree lint, pre-commit, whitespace and message checks pass.
 Exact Ruff retains the four known owner-skill findings. Evidence:
 [verification](../verification-0.3.1.md). CI setup changes no browser-test inventory.
+
+Addenda 7/8 review passes another 25 release tests, exact YAML normalization,
+Bash syntax, present/absent mirror-list branches and both write-failure paths.
+No findings or assertion adaptations. Complete hosted logs on `6ada9b3` confirm
+the guardrail values and isolate the remaining timeout to APT; no browser CDN
+failure is established. The controller read the entire appended review before
+landing this setup-only refinement.
 
 ## Scope and limits
 

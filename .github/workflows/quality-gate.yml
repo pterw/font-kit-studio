@@ -121,14 +121,18 @@ jobs:
           esac
 
       # Browsers are the expensive part, so they come after every cheaper
-      # gate. --with-deps installs the system libraries Chromium and Firefox
-      # need on a bare runner. Both are installed: Chromium blocks, Firefox runs
+      # gate. Separate system libraries from downloads so a stalled APT mirror
+      # and a stalled browser CDN have distinct live step status. Both engines
+      # are installed: Chromium blocks, Firefox runs
       # an advisory canary (see README "Firefox status", D037).
       - name: Bound browser dependency acquisition
         uses: ./.github/actions/configure-browser-apt
 
-      - name: Install Playwright browsers
-        run: python -m playwright install --with-deps chromium firefox
+      - name: Install Playwright system dependencies
+        run: python -m playwright install-deps chromium firefox
+
+      - name: Download Playwright browsers
+        run: python -m playwright install chromium firefox
 
       # Font Kit Studio is desktop-first (README "Frontend gate"): only
       # Chromium at the desktop profile can fail the gate. The same command
@@ -252,10 +256,12 @@ jobs:
         run: npm --prefix packages/fontkitstudio run prepack
       - name: Bound browser dependency acquisition
         uses: ./.github/actions/configure-browser-apt
-      - name: Install the test tools and Chromium
-        run: |
-          python -m pip install -r requirements-dev.txt
-          python -m playwright install --with-deps chromium
+      - name: Install the test tools
+        run: python -m pip install -r requirements-dev.txt
+      - name: Install Chromium system dependencies
+        run: python -m playwright install-deps chromium
+      - name: Download Chromium
+        run: python -m playwright install chromium
       - name: Fixture tests (never skipped here)
         env:
           FKS_ENGINES: chromium
@@ -288,10 +294,12 @@ jobs:
         run: npm --prefix packages/fontkitstudio run prepack
       - name: Bound browser dependency acquisition
         uses: ./.github/actions/configure-browser-apt
-      - name: Install the test tools and Chromium
-        run: |
-          python -m pip install -r requirements-dev.txt
-          python -m playwright install --with-deps chromium
+      - name: Install the test tools
+        run: python -m pip install -r requirements-dev.txt
+      - name: Install Chromium system dependencies
+        run: python -m playwright install-deps chromium
+      - name: Download Chromium
+        run: python -m playwright install chromium
       - name: Next.js fixture test (never skipped here)
         env:
           FKS_ENGINES: chromium

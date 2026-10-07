@@ -18,6 +18,8 @@ docs/plans/2026-10-07-v0.3.1-localhost-cookies.md. D052 keeps the forwarder to R
   in test/{proxy,cli,run-proxy}.test.js; no validation logic changes
 - Plan Addendum 6: quality-gate.yml and local configure-browser-apt action;
   bounded Ubuntu dependency setup, with existing engines/check order preserved
+- Plan Addenda 7/8: the same action's official Ubuntu mirror list and separate
+  pip, system-dependency and browser-download steps; no test inventory changes
 - README.md, packages/fontkitstudio/README.md, CHANGELOG.md
 - Active plan, ledger, phase pointers if required, verification-0.3.1.md,
   sweep-0.3.1.md and accepted C brief/report/review
