@@ -1,9 +1,14 @@
 # Library and Composer audit brief
 
-Date: 2026-10-08. Status: **draft for owner approval; not dispatched**.
+Date: 2026-10-08. Status: **complete; independently reviewed**.
 Plan: [R2 prerequisites](../../plans/2026-10-03-r2-engine.md#r20-approve-prerequisites-and-freeze-the-work-order).
 Baseline: published 0.3.1 at `13482685faff7519459804335ad54cfdc4f8dc0f`.
 Use the current planning HEAD if only reviewed documentation has changed.
+
+Execution branch: `docs/library-composer-audit`, from merged work-order PR #17
+at `142aa9dc0273efc19e14a67d88f66726b6d665ae`. Approval and audit progress are
+recorded in the [ledger](../progress.md#r2-engine-planning). No runtime changes.
+Evidence acceptance: [final review](r2-task-audit-review.md#final-scoped-verdict-2026-10-08).
 
 ## Goal and scope
 
