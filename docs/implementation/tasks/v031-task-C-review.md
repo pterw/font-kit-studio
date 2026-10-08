@@ -322,3 +322,82 @@ known exact Ruff limitation are reported elsewhere and not rerun here.
 The corrected readiness records are Approved for their documentation landing.
 Final documentation CI/advisories and PR readiness remain the controller's next
 steps. Owner merge/tag/publication and post-publication checks remain separate.
+
+## Publication closeout review
+
+Date: 2026-10-08. Scoped verdict: **Approved with fixes**.
+Branch: `docs/r2-engine-plan`; HEAD `13482685faff7519459804335ad54cfdc4f8dc0f`.
+Scope: only the new postpublication documentation delta, not R2 planning.
+Critical: none. Important: none. Minor: one current-wording correction below.
+
+Read the full changes in progress.md, verification-0.3.1.md and the completed
+0.3.1 plan, publication.json and check-publication.py in full, and final-doc
+CI job metadata. The existing source and earlier review verdicts are unaffected.
+AGENTS/global-rules have no working-tree delta from the rules read previously.
+
+Minor finding: docs/plans/2026-10-07-v0.3.1-localhost-cookies.md:5 still says
+the historical base 7598ebb is current origin/main. The merge is now 1348268.
+Replace that parenthetical with origin/main at plan creation, or remove it.
+This is the only requested correction; it does not question the release evidence.
+
+Fresh independent evidence checks pass:
+
+- Live gh pr view confirms PR #15 MERGED at 1348268 with final branch head
+  940501bc922d499394fe66af63e2845027b3cf01. Live gh release view confirms
+  v0.3.1 is not draft, published at 2026-10-08T10:55:36Z, with both assets
+  uploaded and the recorded digests matching the new verification table.
+- Local git cat-file reports an annotated tag; dereferencing v0.3.1 gives
+  the exact merge commit. A fresh binary git archive with core.autocrlf=false
+  is read in memory and both members compared byte for byte with the cached
+  downloaded release assets. Their recomputed SHA-256 values match both
+  publication.json and the live GitHub digests: Studio 1c42e7b516744512026f10d141a0ab868dbfffe4840f41a8b1f2f1621ae4d9d7;
+  bridge 61baed79e6341d1ca85a453d85fc1a4c5d7e9d590f92aaf93d1222e82976554b.
+- Captured registry/latest and empty-folder npx output all name 0.3.1.
+  Structured assertions check the decoded provenance workflow repository,
+  release.yml path, tag ref and resolved dependency's exact merge digest.
+  The statement's package subject and SHA-512 match the registry integrity.
+  The new docs correctly disclose that Sigstore signatures were not
+  independently verified. The captured checker enforces empty scratch contents,
+  tag annotation, byte equality and GitHub digest equality; it is not rerun here.
+- final-doc-ci-jobs.json identifies exact 940501b, completed/success, all
+  12 jobs successful. That is prior hosted evidence, not a browser rerun here.
+- All three postpublication checkboxes are checked with corresponding evidence.
+  Current state and the verification header now say released; the new publication
+  section and plan closeout explicitly distinguish historical pre-merge statements.
+  No fresh browser count, release-tag hash before publication or independent
+  signature-validation claim is manufactured. R2 remains separate.
+- Inline data/hash/checkbox/whitespace assertions and git diff --check pass.
+  No browser, Node suite, release test, runtime/source modification, download,
+  registry write, tag change, commit or push is performed by this reviewer.
+
+MCP path coverage confirms the same generation and all four document paths are
+excluded. Direct complete changed-source, raw metadata and independent read-only
+checks support this review; no graph completeness is claimed. Only this review
+record is written. No tool call was denied or retried through another tool.
+
+The publication closeout evidence is approved. Correct the historical-base
+parenthetical before the documentation landing; a scoped wording re-review is
+sufficient and requires no release or browser verification rerun.
+
+### Publication closeout wording re-review
+
+Date: 2026-10-08. Final scoped verdict: **Approved**.
+The current plan line 5 now states origin/main at plan creation, correctly
+making 7598ebb a historical base. Direct reread and scoped whitespace check
+confirm the correction; HEAD remains 13482685faff7519459804335ad54cfdc4f8dc0f.
+The preceding minor finding was based on the earlier diff; the corrected source
+is approved. No Critical, Important or Minor finding remains unresolved.
+All publication evidence conclusions above stand. No runtime, browser, release
+or network check was repeated; only this review record was written.
+
+### Final publication ledger confirmation
+
+Date: 2026-10-08. Scoped verdict remains **Approved**.
+Reread only progress.md:65, the final publication event. Its link names the
+Approved wording re-review and its publication claims retain the independently
+checked evidence and signature-verification limit. The controller's fresh fast
+checks are recorded as passing, with the known exact Ruff exception disclosed;
+they are not represented as a browser run or as this reviewer's gate execution.
+Zero new browser tests and no suite/frontend rerun are stated accurately.
+The scoped ledger whitespace check passes. No new finding, runtime check,
+other-file mutation or R2 review is introduced by this confirmation.

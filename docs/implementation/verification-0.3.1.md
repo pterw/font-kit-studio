@@ -1,8 +1,9 @@
 # 0.3.1 release verification
 
 Date: 2026-10-07. Branch: `fix/localhost-cookies`; base `7598ebb`.
-Status: pre-merge implementation verified; readiness-record CI pending.
-No tag or publication exists for this patch.
+Status: released (2026-10-08); postpublication checks complete.
+The original sections below record pre-merge checks. Current release
+evidence is in [Publication checks](#publication-checks-2026-10-08).
 This evidence covers the settled 0.3.1 working tree following `6485edf`.
 CI-only APT setup changed under Addenda 6-8 while app/browser-test source stayed
 frozen; its focused review and hosted execution are recorded separately.
@@ -166,3 +167,48 @@ readiness is established by the run above; no release-tag hashes are claimed.
 
 Owner merge, annotated v0.3.1 tag, npm-release approval, registry/provenance checks
 and tag-derived release-asset hashes remain unperformed.
+
+## Publication checks (2026-10-08)
+
+PR #15 merged at `13482685faff7519459804335ad54cfdc4f8dc0f`.
+`git cat-file -t v0.3.1` returns `tag`; `git rev-parse v0.3.1^{}` returns
+that merge commit. The GitHub release is published, not draft, at
+2026-10-08T10:55:36Z. The final pre-merge head was `940501b`; its CI run
+37678122309 completed all 12 jobs successfully before readiness. This closeout
+does not rerun or extend that dated browser evidence.
+
+Fresh read-only checks (exit 0):
+
+```powershell
+gh pr view 15 --json state,mergedAt,mergeCommit,headRefOid,url
+gh release view v0.3.1 --json tagName,publishedAt,url,isDraft,assets
+npm.cmd view fontkitstudio@0.3.1 version dist dist-tags --json
+# Run from a newly created empty scratch directory:
+npx.cmd --yes fontkitstudio@0.3.1 --version
+git cat-file -t v0.3.1
+git rev-parse 'v0.3.1^{}'
+git -c core.autocrlf=false archive v0.3.1 fontkit-studio.html fontkit-bridge.js
+gh release download v0.3.1 --dir <scratch-assets> --pattern fontkit-studio.html --pattern fontkit-bridge.js
+```
+
+Registry version and `dist-tags.latest` both return `0.3.1`. Npx from an empty
+folder prints `0.3.1`. The registry's SLSA v1 attestation is fetched from
+`https://registry.npmjs.org/-/npm/v1/attestations/fontkitstudio@0.3.1` and its
+DSSE statement decoded as data. It identifies `pterw/font-kit-studio`,
+`release.yml`, `refs/tags/v0.3.1` and the exact merge commit above.
+These checks verify attestation contents and source linkage; they do not
+independently verify the Sigstore signature.
+
+The archive command's binary stdout is captured directly, then each tar
+member compared byte for byte with its downloaded GitHub asset. Both match,
+as do GitHub's recorded asset digests. Tag-derived SHA-256:
+
+| File | SHA-256 |
+|---|---|
+| fontkit-studio.html | 1c42e7b516744512026f10d141a0ab868dbfffe4840f41a8b1f2f1621ae4d9d7 |
+| fontkit-bridge.js | 61baed79e6341d1ca85a453d85fc1a4c5d7e9d590f92aaf93d1222e82976554b |
+
+No registry write, tag change or browser test is performed during closeout.
+Raw metadata, decoded statement and downloaded assets remain in the ignored
+`.superpowers/sdd/r2-plan/` workspace. Current commands use npm.cmd/npx.cmd
+to avoid PowerShell's unsigned npm.ps1 shim; no execution policy is changed.
