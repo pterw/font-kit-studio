@@ -12,6 +12,19 @@ Two things have their own version numbers:
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-07
+
+Localhost apps keep sign-in cookies inside Studio.
+
+### Fixed
+
+- Apps used at `localhost` keep sign-in cookies inside Studio in Vite and proxy
+  modes. Studio and the proxy use `localhost` for those apps. If you used a
+  localhost app with `--studio-port` in 0.3.0, your prior Studio settings start
+  fresh once because the host changes.
+- Vite config changes restart Studio cleanly and print the current `Open:` URL
+  in command and standalone plugin modes.
+
 ## [0.3.0] - 2026-10-04
 
 One command: `npx fontkitstudio` opens Studio connected to your running app, in
@@ -245,7 +258,8 @@ The supplied single-file Studio, preserved at the tag `supplied-v0.1.1`.
 
 - Nested rows and JPEG assets are out of scope.
 
-[Unreleased]: https://github.com/pterw/font-kit-studio/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/pterw/font-kit-studio/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/pterw/font-kit-studio/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/pterw/font-kit-studio/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/pterw/font-kit-studio/compare/a6d2751...v0.2.1
 [0.2.0]: https://github.com/pterw/font-kit-studio/compare/supplied-v0.1.1...a6d2751

@@ -1,4 +1,4 @@
-"""The old Studio file name forwards to fontkit-studio.html for one release (D041)."""
+"""The old Studio file name forwards to fontkit-studio.html until R2 (D052)."""
 import unittest
 
 from support import ENGINES, HTML, REPO, close_contexts, new_context

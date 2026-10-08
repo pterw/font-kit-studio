@@ -1,6 +1,6 @@
 /**
  * Font Kit Studio — Design Bridge Protocol v1 Target SDK
- * fontkit-bridge.js version 0.3.0
+ * fontkit-bridge.js version 0.3.1
  * =======================================================
  * Standalone, zero-dependency bridge runtime for code-owned web applications.
  * Drop it into any web project with a <script> tag (or require it via CommonJS).

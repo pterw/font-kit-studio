@@ -1,0 +1,24 @@
+name: Configure browser dependency acquisition
+description: Bound Ubuntu mirror stalls before Playwright installs system libraries
+runs:
+  using: composite
+  steps:
+    - name: Bound Linux package acquisition
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        # A stalled Azure candidate can delay every index even after metadata
+        # falls back. Use Ubuntu's signed official archive for this runner list.
+        if [[ -f /etc/apt/apt-mirrors.txt ]]; then
+          printf '%s\n' 'https://archive.ubuntu.com/ubuntu' |
+            sudo tee /etc/apt/apt-mirrors.txt > /dev/null
+        fi
+        # APT retries a stalled mirror before trying its fallback. Match the
+        # runner-image fix and sort last so older image defaults cannot override it.
+        sudo tee /etc/apt/apt.conf.d/zzzz-fontkit-ci > /dev/null <<'APT'
+        Acquire::Retries "1";
+        Acquire::http::Timeout "15";
+        Acquire::https::Timeout "15";
+        Acquire::IndexTargets::deb::DEP-11::DefaultEnabled "false";
+        APT
+        apt-config dump Acquire::Retries Acquire::http::Timeout Acquire::https::Timeout Acquire::IndexTargets::deb::DEP-11::DefaultEnabled

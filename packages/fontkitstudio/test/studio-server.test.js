@@ -1,7 +1,7 @@
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { request } from 'node:http';
+import { createServer, request, Server } from 'node:http';
 import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -51,6 +51,43 @@ function assertHardened(res) {
 }
 
 describe('studio server', () => {
+  test('localhost listeners retain token, Host and Origin guards for every alias', async () => {
+    const studio = await startStudioServer({ host: 'localhost', studioFile: join(dir, 'studio.html') });
+    try {
+      for (const alias of ['localhost', '127.0.0.1', '[::1]']) {
+        const url = studio.url().replace('localhost', alias);
+        const own = new URL(url).origin;
+        assert.equal((await fetch(url, { headers: { Origin: own } })).status, 200);
+        assert.equal((await fetch(url, { headers: { Origin: 'http://evil.test' } })).status, 403);
+        assert.equal((await fetch(url.replace(studio.token, 'wrong'))).status, 403);
+        const status = await new Promise((resolve, reject) => {
+          const req = request(url, { headers: { Host: 'evil.test' }, agent: false }, res => {
+            res.resume(); resolve(res.statusCode);
+          });
+          req.on('error', reject); req.end();
+        });
+        assert.equal(status, 421);
+      }
+    } finally {
+      await studio.close();
+    }
+  });
+  test('localhost reserves both loopback families and close frees both', async () => {
+    const studio = await startStudioServer({ host: 'localhost', studioFile: join(dir, 'studio.html') });
+    try {
+      assert.equal(new URL(studio.url()).hostname, 'localhost');
+      for (const hostname of ['127.0.0.1', '[::1]']) {
+        const res = await fetch(studio.url().replace('localhost', hostname));
+        assert.equal(res.status, 200);
+        assert.equal(await res.text(), BODY.toString());
+      }
+    } finally {
+      await studio.close();
+    }
+    for (const hostname of ['127.0.0.1', '[::1]']) {
+      await assert.rejects(fetch(studio.url().replace('localhost', hostname)), /fetch failed/);
+    }
+  });
   test('the right token gets the Studio bytes with hardened headers', async () => {
     const res = await get(good());
     assert.equal(res.status, 200);
@@ -216,4 +253,81 @@ describe('port 80 and the forms browsers use', () => {
       await studio.close();
     }
   });
+});
+
+// Faults are injected at the OS-listen seam; requests still hit real HTTP listeners.
+for (const code of ['EADDRNOTAVAIL', 'EAFNOSUPPORT', 'EACCES']) {
+  test(`localhost Studio: IPv6 ${code} has the specified cleanup/fallback`, async (t) => {
+    const original = Server.prototype.listen;
+    let provisional;
+    const created = [];
+    t.after(async () => {
+      for (const server of created) await new Promise(resolve => {
+        server.close(resolve); server.closeAllConnections();
+      });
+    });
+    t.mock.method(Server.prototype, 'listen', function (...args) {
+      created.push(this);
+      if (args[1] === '::1') {
+        queueMicrotask(() => this.emit('error', Object.assign(new Error(code), { code })));
+        return this;
+      }
+      this.once('listening', () => { provisional = this.address().port; });
+      return original.apply(this, args);
+    });
+    if (code === 'EACCES') {
+      await assert.rejects(startStudioServer({ host: 'localhost', studioFile: join(dir, 'studio.html') }), { code });
+    } else {
+      const running = await startStudioServer({ host: 'localhost', studioFile: join(dir, 'studio.html') });
+      try {
+        assert.equal(new URL(running.origin).hostname, 'localhost');
+        assert.equal((await fetch(`http://127.0.0.1:${running.port}${new URL(running.url()).pathname}${new URL(running.url()).search}`)).status, 200);
+      } finally {
+        await running.close();
+      }
+    }
+    t.mock.restoreAll();
+    const probe = createServer();
+    await new Promise((resolve, reject) => {
+      probe.once('error', reject);
+      probe.listen(provisional, '127.0.0.1', resolve);
+    });
+    await new Promise(resolve => probe.close(resolve));
+  });
+}
+
+test('localhost Studio retries an occupied IPv6 port and never reaches its owner', async (t) => {
+  let foreignRequests = 0;
+  const holder = createServer((req, res) => { foreignRequests += 1; res.end('foreign'); });
+  await new Promise((resolve, reject) => {
+    holder.once('error', reject);
+    holder.listen(0, '::1', resolve);
+  });
+  t.after(() => new Promise(resolve => holder.close(resolve)));
+  const occupied = holder.address().port;
+  const original = Server.prototype.listen;
+  let forced = false;
+  t.mock.method(Server.prototype, 'listen', function (...args) {
+    if (args[0] === 0 && args[1] === '127.0.0.1' && !forced) {
+      forced = true;
+      args[0] = occupied;
+    }
+    return original.apply(this, args);
+  });
+  const running = await startStudioServer({ host: 'localhost', studioFile: join(dir, 'studio.html') });
+  try {
+    assert.notEqual(running.port, occupied);
+    assert.equal((await fetch(running.url())).status, 200);
+    assert.equal(foreignRequests, 0);
+    // The first IPv4 reservation was provisional and must already be gone.
+    t.mock.restoreAll();
+    const probe = createServer();
+    await new Promise((resolve, reject) => {
+      probe.once('error', reject);
+      probe.listen(occupied, '127.0.0.1', resolve);
+    });
+    await new Promise(resolve => probe.close(resolve));
+  } finally {
+    await running.close();
+  }
 });

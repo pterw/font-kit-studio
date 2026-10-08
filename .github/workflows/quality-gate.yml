@@ -32,7 +32,7 @@ jobs:
       # v0.1.1 file against the `supplied-v0.1.1` tag, and a shallow clone has
       # no tag to compare, so provenance would be skipped instead of verified.
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -47,7 +47,7 @@ jobs:
       # Only for `node --check fontkit-bridge.js`. Studio and the bridge have
       # no runtime dependencies and no build step, so nothing else uses Node.
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
 
@@ -121,11 +121,18 @@ jobs:
           esac
 
       # Browsers are the expensive part, so they come after every cheaper
-      # gate. --with-deps installs the system libraries Chromium and Firefox
-      # need on a bare runner. Both are installed: Chromium blocks, Firefox runs
+      # gate. Separate system libraries from downloads so a stalled APT mirror
+      # and a stalled browser CDN have distinct live step status. Both engines
+      # are installed: Chromium blocks, Firefox runs
       # an advisory canary (see README "Firefox status", D037).
-      - name: Install Playwright browsers
-        run: python -m playwright install --with-deps chromium firefox
+      - name: Bound browser dependency acquisition
+        uses: ./.github/actions/configure-browser-apt
+
+      - name: Install Playwright system dependencies
+        run: python -m playwright install-deps chromium firefox
+
+      - name: Download Playwright browsers
+        run: python -m playwright install chromium firefox
 
       # Font Kit Studio is desktop-first (README "Frontend gate"): only
       # Chromium at the desktop profile can fail the gate. The same command
@@ -148,6 +155,14 @@ jobs:
           FKS_REQUIRE_PRECOMMIT: '1'
         run: python -m unittest discover -s tests -v
 
+      # The cookie canary runs the real Vite command. Install its fixture and
+      # bundle the package so missing dependencies cannot silently skip it.
+      - name: Prepare the localhost cookie fixture
+        if: ${{ !cancelled() }}
+        run: |
+          npm ci --prefix fixtures/vite-react
+          npm --prefix packages/fontkitstudio run prepack
+
       # Advisory: a short Firefox canary, not the full suite (D037). The whole
       # suite on Gecko took about twice as long as on Chromium and pushed the
       # job toward its timeout, which would fail the blocking check. The list
@@ -163,6 +178,7 @@ jobs:
         timeout-minutes: 10
         env:
           FKS_ENGINES: firefox
+          FKS_REQUIRE_FIXTURES: '1'
           PYTHONPATH: tests
         run: python -m unittest firefox_canary -v
 
@@ -194,9 +210,9 @@ jobs:
           - { os: windows-latest, node: '24' }
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
       - name: Test the package
@@ -220,9 +236,9 @@ jobs:
           - { os: windows-latest, node: '24' }
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
           cache: npm
@@ -238,16 +254,20 @@ jobs:
           npm ci --prefix fixtures/vite-ts
       - name: Bundle Studio and the bridge
         run: npm --prefix packages/fontkitstudio run prepack
-      - name: Install the test tools and Chromium
-        run: |
-          python -m pip install -r requirements-dev.txt
-          python -m playwright install --with-deps chromium
+      - name: Bound browser dependency acquisition
+        uses: ./.github/actions/configure-browser-apt
+      - name: Install the test tools
+        run: python -m pip install -r requirements-dev.txt
+      - name: Install Chromium system dependencies
+        run: python -m playwright install-deps chromium
+      - name: Download Chromium
+        run: python -m playwright install chromium
       - name: Fixture tests (never skipped here)
         env:
           FKS_ENGINES: chromium
           FKS_REQUIRE_FIXTURES: '1'
           PYTHONPATH: tests
-        run: python -m unittest test_vite_build_guarantee test_one_command_vite test_one_command_proxy test_friction test_vite_types -v
+        run: python -m unittest test_vite_build_guarantee test_one_command_vite test_one_command_proxy test_localhost_cookies test_friction test_vite_types -v
 
   # Proxy mode in front of a real Next.js dev server, including its hot reload
   # over the proxy's WebSocket pass-through. Its own job: Next's install is large.
@@ -257,9 +277,9 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: npm
@@ -272,10 +292,14 @@ jobs:
         run: npm ci --prefix fixtures/next-app
       - name: Bundle Studio and the bridge
         run: npm --prefix packages/fontkitstudio run prepack
-      - name: Install the test tools and Chromium
-        run: |
-          python -m pip install -r requirements-dev.txt
-          python -m playwright install --with-deps chromium
+      - name: Bound browser dependency acquisition
+        uses: ./.github/actions/configure-browser-apt
+      - name: Install the test tools
+        run: python -m pip install -r requirements-dev.txt
+      - name: Install Chromium system dependencies
+        run: python -m playwright install-deps chromium
+      - name: Download Chromium
+        run: python -m playwright install chromium
       - name: Next.js fixture test (never skipped here)
         env:
           FKS_ENGINES: chromium

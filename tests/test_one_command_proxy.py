@@ -47,7 +47,7 @@ class OneCommandProxyBrowserTest(unittest.TestCase):
         self.addCleanup(self.stop_helper)
         self.assertEqual(self.proc.stdout.readline().strip(), 'Font Kit Studio · dev only')
         line = self.proc.stdout.readline().strip()
-        self.assertTrue(line.startswith('Open: http://127.0.0.1:'), line)
+        self.assertTrue(line.startswith('Open: http://localhost:'), line)
         self.url = line[len('Open: '):]
         self.proxied = parse_qs(urlsplit(self.url).query)['target'][0]
 
