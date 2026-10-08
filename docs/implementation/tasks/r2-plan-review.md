@@ -321,3 +321,78 @@ Coverage confirms these records remain excluded from the graph; direct files
 and command output supply this confirmation. HEAD remains `dc1da53` on
 `docs/r2-engine-plan`. No runtime gates were repeated, no new finding remains,
 and only this review record was written.
+
+## Opened-PR record review
+
+Date: 2026-10-08. Verdict: **Approved**. Reviewed the complete new ledger-event
+and roadmap-row/log diffs after the reviewed work-order commit `91cdd0e`.
+These changes record the opened draft PR without altering the plan or runtime.
+R2 remains planned; audit-brief approval, audit reconciliation and final
+product-plan approval remain pending. No audit or engine work is dispatched.
+
+Independent read-only checks confirm PR #17 is OPEN and draft, targets main,
+and uses docs/r2-engine-plan. Local HEAD, origin tracking ref, live remote branch
+and PR head all match `91cdd0e625b816e22967687cf3966b3ecdaacce7`. The roadmap
+owns the PR link; the ledger links to that owner instead of duplicating it.
+Run 37852968712 is still in_progress for that exact head: eleven jobs report
+success and quality-gate remains in progress at this observation. No completed
+CI or advisory-acceptance claim is made. The controller must read completion
+and advisory outcomes before landing the follow-up.
+
+`git diff --check` passes with checkout LF/CRLF warnings. The documentation-only
+scan again passes 29 existing relative links, with no completed R2 task or
+placeholder. Coverage marks the changed records excluded; current direct diffs
+and Git/GitHub metadata supply this review's evidence. No suite, browser or
+runtime gate was run. Only this review record was written; no denied call,
+process start, commit, push, merge, npm write or agent dispatch occurred.
+
+## Benchmark and review-location clarification
+
+Date: 2026-10-08. Verdict: **Approved**. Read the complete current changed diffs
+for the plan, preparation report, roadmap and latest ledger event at HEAD
+`91cdd0e` on docs/r2-engine-plan. The clarification removes the ambiguity that
+visible nested/threshold controls could enlarge the benchmark's population.
+
+F1 now keeps nested-parent/dedup cases inside the same 5,000 eligible parents
+and near-duplicate boundary tuples inside the same 20 styles of 250 parents.
+Hidden controls are outside eligibility; author-role splitting belongs in other
+fixtures. The JS heartbeat and aria-labelled input values add no eligible text.
+This is consistent with the binding light-DOM detector exclusions and literal
+acceptance oracle; no threshold or runtime behavior changes are proposed.
+
+The new report/plan ledger wording describes the clarification accurately.
+Roadmap PR location and pending audit/approval/CI status remain consistent with
+the prior opened-PR review. No R2 task or audit is reported complete. No material
+finding remains. Direct current diffs supply the evidence; coverage again marks
+these documents excluded from the graph. Whitespace passes, and the documentation
+scan passes 29 existing relative links with no completed R2 task or placeholder.
+No runtime gates, suite or browser ran; only this review record was written.
+
+## Completed-CI record confirmation
+
+Date: 2026-10-08. Verdict: **Approved**. Read the complete current report and
+latest R2 event diffs, focusing on the new completed-CI wording at
+`docs/implementation/progress.md:22` and `r2-plan-report.md:38-42,60`.
+No Critical, Important or Minor finding remains in this narrow scope.
+
+Saved metadata and independent read-only GitHub metadata agree: run
+37852968712 completed successfully at exact head
+`91cdd0e625b816e22967687cf3966b3ecdaacce7`, with all 12 jobs successful.
+The saved quality log records Chromium 859 tests in 636.185 s, 12 skips;
+Firefox canary 51 in 105.443 s, no skips; and frontend 30/30 runs with all
+seven blocking checks passing, no advisory failures or skips. Reran the
+UTF-8 summary script successfully and read all 332 grouped touch-target
+REPORT lines; its assertion checks the complete report count. These reports
+remain input to the upcoming audit, rather than evidence of a completed audit.
+
+Direct workflow reads and successful installed Vite/Next job log entries
+confirm coverage of 11 skipped cases. The twelfth, host refusal, is omitted
+from the installed-fixture module lists and is accurately disclosed as not
+run by this CI matrix. The report and ledger correctly limit CI evidence to
+the published head, exclude the subsequent documentation commit, and retain
+pending audit approval, final plan approval and all runtime tasks.
+
+Coverage marks the documents and scratch evidence excluded; workflow metadata
+is changed. Current direct diffs, logs, workflow source and GitHub receipts
+supply this confirmation. No local suite, browser or runtime gate was rerun.
+Only this review record was written; no audit or engine work was performed.

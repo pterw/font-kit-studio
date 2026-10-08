@@ -35,8 +35,10 @@ automatic replay, third-party font request or unreviewed runtime change.
 ## Verification and remaining work
 
 RED/GREEN and mutations: not applicable to a documentation-only draft.
-New tests: 0; no browser engine verified. Full suites, frontend and Firefox
-are not run for this change. Audit, plan approval and all R2 tasks remain open.
+New tests: 0; no browser engine verified locally. Full suites, frontend and
+Firefox were not rerun locally. The published work order's CI evidence is in
+the [ledger](../progress.md#r2-engine-planning); its completed run does not cover
+this subsequent documentation commit. Audit, approval and all R2 tasks remain open.
 
 Fresh planning checks (2026-10-08):
 
@@ -55,7 +57,7 @@ Existing handshake/reset/integration class references also pass a direct AST
 existence check. Raw command output is planning-gates.json in the ignored
 workspace. [Final review](r2-plan-review.md#final-scoped-verdict-task-and-example-corrections)
 is Approved; the entire dispatch report and scoped verdict were read before
-landing. No browser test, engine implementation or audit is claimed here.
+landing. No local browser test, engine implementation or audit is claimed here.
 
 ## Contract corrections
 
@@ -69,3 +71,11 @@ not runtime fixes or additional approved implementation.
 Follow-on task/example corrections remove the staged Studio completion cycle,
 keep already-working scan cancellation as passing, and supply ready identity
 plus a distinct fixture baseline in the protocol examples. All findings resolve.
+
+## Published draft clarification
+
+Commits dc1da53 and 91cdd0e are pushed with the draft review location recorded
+in the roadmap. The follow-up makes the literal performance oracle unambiguous:
+nested and near-duplicate cases stay inside the 5,000-parent/20-style count;
+hidden controls, JS heartbeat and input values add no eligible text. This changes
+no threshold, fixture/runtime source or implementation status.
