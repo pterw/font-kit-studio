@@ -171,3 +171,26 @@ Addendum 7/D062, CHANGELOG and candidate message agree; Current state now names
 completed gates and pending final review. Reviewed native PIDs are absent;
 this final read-only pass started no browser/server. No full Gecko, fresh macOS,
 universal animation tracking, publication or future PR B acceptance is claimed.
+
+## Scoped Graphify documentation audit (2026-10-09)
+
+**Approved:** the four-section triage correctly declines ten visible advisories
+at review 5466236663/check 113690963759, exact 60ed912. Independently read every
+cited range: AGENTS' current/add/tearDown/open guidance, CLAUDE workflow prose,
+CONTRIBUTING setup and README36-122 match unchanged CLI10-100/serve277-326/options.
+PR-base diff is empty for those references, support and all package source.
+CLAUDE's canonical SHA remains d4932f74a1d78b1ee7f3a2eddb97b4503267d629089afe1a3171be854d059595; no protected edit occurred.
+Both bodies omit ten further items; live annotations/comments are empty, so
+those items remain unchecked. Refreshed Tier2 coverage is stale/excluded;
+direct source decides. Zero tests/corrections; no hosted-CI acceptance here.
+
+## Publication-record review (2026-10-09)
+
+**Approved.** Complete four-document delta and candidate message agree with
+run 37890551427 at 60ed912: twelve completed successful jobs; Chromium
+924/657.884s with sixteen disclosed install skips, Firefox 51/89.739s without
+skips, frontend 30/30 and 336 reports. Reviewed job/quality evidence confirms
+168ms/input-before scan and 518.0625px fullscreen; fast CI's pre-event native
+completions establish no pending-invalidation proof. All 182 current canonical
+hashes still match. No tests rerun or resources started; this accepts records
+for 60ed912, not the future documentation commit, owner merge or PR B.

@@ -160,3 +160,20 @@ All gates exit normally; native PIDs 60504/58240/45092/43668/56748 are absent on
 post-wave inspection. Harness contexts/runtimes and owned servers close normally;
 no exhaustive unrelated-process claim. Root source/HEAD/branch remain unchanged.
 No full Gecko suite, npm publication, release/tag or future-source acceptance.
+
+## Published Studio head (2026-10-09)
+
+Atomic `60ed912` preserves all 182 accepted canonical source hashes. Hosted
+[run 37890551427](https://github.com/pterw/font-kit-studio/actions/runs/37890551427)
+passes all twelve jobs at that exact head: Chromium 924/657.884s, sixteen fixture
+install skips; Firefox canary 51/89.739s, zero skips. Eleven legacy skips have
+installed matrix coverage; host refusal is outside that matrix, and four React
+cases await R2.7I's installed job. Local required-install acceptance remains valid.
+First complete 5,000-parent scan is 168ms, heartbeat58 -> 61, input before reply;
+both fullscreen widths retain 518.0625px. Native cases finish before their events,
+so this run does not establish pending-invalidation proof for those cases.
+Frontend completes 30/30, all seven blocking pass, no advisory failures/skips;
+all 336 touch reports and action-deprecation/runner annotations are read.
+Full quality log/job metadata are retained as `studio-quality.log` and
+`studio-ci-jobs.json` in the named scratch workspace. Watcher exits0 and is reaped.
+This evidence covers the published Studio commit, not subsequent documentation.
