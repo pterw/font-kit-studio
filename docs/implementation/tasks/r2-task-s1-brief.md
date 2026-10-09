@@ -1,5 +1,20 @@
 # R2 S1 brief: explicit text detection in Studio
 
+## Fullscreen correction (2026-10-09)
+
+Addendum 7/D062 supersede the initial panel placement. Move only the new
+Detected roles section after composer-shell, inside Live App and outside the
+preview stage. Preserve its detection state, normal keyboard access and the
+existing fullscreen sibling-inert/exit behavior. Original fullscreen tests
+stay read-only; add one real Studio/bridge fullscreen-exit regression in the
+already owned test_r2_integration.py, before changing markup. Use the observed
+existing height failure as genuine RED, not a changed acceptance threshold.
+Run both owned modules, PreviewWidthTests, StudioFullscreenTests, first-run
+FullscreenTests, LiveAppViewTests and test_support in Chromium. One restored
+placement mutation must fail the new rendered regression. Return a compact
+correction report/three-path manifest; independent scoped review and fresh
+settled gates precede landing. No bridge or shared-helper change.
+
 Plan: docs/plans/2026-10-03-r2-engine.md R2.S1. Dispatch/landing requires
 R2.2 committed. The controller supplies detached worktree/BASE/outputs.
 Read the COMPLETE binding contract, S1 task and execution constraints.

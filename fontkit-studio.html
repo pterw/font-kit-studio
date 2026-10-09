@@ -775,6 +775,12 @@ footer {
 .bridge-bar .segmented { display: inline-flex; flex-shrink: 0; }
 .bridge-bar .device-bar { display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; }
 
+.detected-roles { margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
+.detected-roles h2 { margin: 0; font-size: 14px; }
+.detected-roles p { margin: 8px 0; }
+.detected-roles ul { padding-left: 20px; }
+.detected-roles li { margin: 12px 0; overflow-wrap: anywhere; }
+.detected-roles code { white-space: pre-wrap; }
 /* The Live App view: fields that only change the composition step aside and the header shrinks, so the page under
    edit starts in the top half of a 900px window. Specimen and the Library keep everything. */
 .composer-view.is-live-view .composition-only { display: none; }
@@ -1229,6 +1235,13 @@ body.dark .live-overlay-label { color: #111; }
       </div>
       <aside id="slotInspector" class="inspector" aria-label="Selected slot inspector"></aside>
     </div>
+    <section id="detectedRoles" class="detected-roles" aria-labelledby="roleHeading" hidden>
+      <div class="bridge-bar-row"><h2 id="roleHeading">Detected roles</h2>
+        <button id="detectTextStyles" class="btn" type="button" aria-describedby="roleStatus">Detect text styles</button></div>
+      <p id="roleStatus" role="status" aria-label="Role detection status" aria-live="polite">Connect a Live App to detect text styles.</p>
+      <p>Light-DOM text only</p>
+      <ul id="roleRows" aria-label="Detected text roles"></ul>
+    </section>
   </div>
 </section>
 
@@ -3350,7 +3363,7 @@ if (remembered) kitId.value = remembered;
   const LIVE_CONTROL = { fontFamily:"liveFontFamily", fontSize:"liveFontSize", fontWeight:"liveFontWeight", lineHeight:"liveLineHeight",
     letterSpacing:"liveLetterSpacing", color:"liveColorHex", textAlign:"liveTextAlign", textTransform:"liveTextTransform", text:"liveText" };
   const BRIDGE_TYPES = new Set(["design:bridge-ready", "design:ready", "design:applied", "design:rejected",
-    "design:hover", "design:selected", "design:bounds", "design:targets", "design:warning"]);
+    "design:hover", "design:selected", "design:bounds", "design:targets", "design:warning", "design:detected"]);
 
   const targetAppUrlInput = q("targetAppUrl");
   const btnConnectTarget = q("btnConnectTarget");
@@ -3693,6 +3706,238 @@ if (remembered) kitId.value = remembered;
     if (bridgeHint) bridgeHint.hidden = !hint;
   }
 
+  // Role observations never enter the mutation queue, saved overrides or exports.
+  const roleView = { origin:null, identity:null, pending:null, rows:[], ids:new Map(), nextId:0,
+    status:"Connect a Live App to detect text styles." };
+  const ROLE_UNSUPPORTED = "This bridge does not support role detection/preview.";
+  const ROLE_UNAVAILABLE = "Role detection/preview unavailable: unsupported page URL.";
+  const ROLE_REASONS = ["time-budget", "element-limit", "group-limit", "variant-limit", "identity-limit", "reply-limit", "page-changed"];
+  const ROLE_SELECTOR_PART = SELECTOR_PART.replace("data-design-id", "data-design-(?:id|role)");
+  const ROLE_SELECTOR_STEP = `(?:(?:[a-z][a-z0-9-]*|\\*)(?:${ROLE_SELECTOR_PART})*|(?:${ROLE_SELECTOR_PART})+)`;
+  const ROLE_SELECTOR_GRAMMAR = new RegExp(`^${ROLE_SELECTOR_STEP}(?: > ${ROLE_SELECTOR_STEP})*$`, "i");
+  const roleText = (value, limit) => typeof value === "string" && value.length > 0 && value.length <= limit;
+  const roleCount = (value, limit = Number.MAX_SAFE_INTEGER) => Number.isSafeInteger(value) && value >= 0 && value <= limit;
+  function exactRoleFields(value, keys) {
+    return isPlainObject(value) && Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key));
+  }
+  function safeRoleWire(value, limit) {
+    const stack = [value];
+    try {
+      if (new TextEncoder().encode(JSON.stringify(value)).length > limit) return false;
+      while (stack.length) {
+        const item = stack.pop();
+        if (!item || typeof item !== "object") continue;
+        for (const key of Object.keys(item)) {
+          if (["__proto__", "constructor", "prototype"].includes(key)) return false;
+          stack.push(item[key]);
+        }
+      }
+      return true;
+    } catch { return false; }
+  }
+  function validRoleURL(value, nullable = false) {
+    if (value === null) return nullable;
+    if (!roleText(value, 10000)) return false;
+    try {
+      const url = new URL(value);
+      return ["http:", "https:"].includes(url.protocol) && url.origin === live.expectedOrigin
+        && !url.username && !url.password && url.href === value
+        && (url.pathname + url.search + url.hash).length <= 2000;
+    } catch { return false; }
+  }
+  function validRoleSelector(value) {
+    if (!roleText(value, 2000) || UNSAFE_SELECTOR_TEXT.test(value) || !ROLE_SELECTOR_GRAMMAR.test(value)
+      || /^(?:html|body|\*)$/i.test(value) || /:nth-of-type\(0+\)/i.test(value)) return false;
+    if (/^(?:html|body)(?=[#.\[:]|$)/i.test(value.split(" > ").at(-1))) return false;
+    try { document.querySelector(value); return true; } catch { return false; }
+  }
+  function validRoleStyle(style) {
+    return exactRoleFields(style, ["fontFamily", "fontSize", "fontWeight", "textTransform", "letterSpacing"])
+      && roleText(style.fontFamily, 1024 * 1024) && style.fontFamily === style.fontFamily.replace(/\s+/g, " ").trim()
+      && Number.isFinite(style.fontSize) && style.fontSize >= 0 && roundTo(style.fontSize, 2) === style.fontSize
+      && Number.isInteger(style.fontWeight) && style.fontWeight >= 1 && style.fontWeight <= 1000
+      && LIVE_TRANSFORM.includes(style.textTransform) && Number.isFinite(style.letterSpacing)
+      && roundTo(style.letterSpacing, 4) === style.letterSpacing;
+  }
+  function roleIdentityKey(identity) {
+    if (identity.kind === "author-role") return JSON.stringify(["author-role", identity.name]);
+    const s = identity.style;
+    return JSON.stringify(["style", s.fontFamily, s.fontSize, s.fontWeight, s.textTransform, s.letterSpacing]);
+  }
+  function validRoleVariants(variants, count, limit = 8) {
+    if (!Array.isArray(variants) || variants.length > limit) return false;
+    const keys = new Set();
+    let sum = 0;
+    for (const variant of variants) {
+      if (!exactRoleFields(variant, ["style", "count"]) || !validRoleStyle(variant.style)
+        || !roleCount(variant.count, 10000) || variant.count === 0) return false;
+      const key = roleIdentityKey({ kind:"style", style:variant.style });
+      if (keys.has(key)) return false;
+      keys.add(key); sum += variant.count;
+    }
+    return sum === count;
+  }
+  function validDetectedGroup(group) {
+    if (!exactRoleFields(group, ["id", "identity", "suggestedName", "authorRole", "signatures", "elementCount",
+      "sampleText", "sharedClasses", "selectors", "bindingComplete", "nearDuplicateIds"])
+      || !roleText(group.id, 100) || !roleText(group.suggestedName, 200)
+      || typeof group.sampleText !== "string" || group.sampleText.length > 200
+      || !roleCount(group.elementCount, 10000) || group.elementCount === 0
+      || !validRoleVariants(group.signatures, group.elementCount)
+      || !Array.isArray(group.sharedClasses) || group.sharedClasses.length > 16
+      || !group.sharedClasses.every(value => roleText(value, 200)) || new Set(group.sharedClasses).size !== group.sharedClasses.length
+      || !Array.isArray(group.selectors) || group.selectors.length > 32 || typeof group.bindingComplete !== "boolean"
+      || group.bindingComplete && !group.selectors.length || !Array.isArray(group.nearDuplicateIds)
+      || group.nearDuplicateIds.length > 127 || new Set(group.nearDuplicateIds).size !== group.nearDuplicateIds.length) return false;
+    const identity = group.identity;
+    if (identity?.kind === "author-role") {
+      if (!exactRoleFields(identity, ["kind", "name"]) || !roleText(identity.name, 200)
+        || identity.name !== identity.name.trim() || identity.name !== group.authorRole) return false;
+    } else if (!exactRoleFields(identity, ["kind", "style"]) || identity.kind !== "style" || !validRoleStyle(identity.style)
+      || group.authorRole !== null || group.signatures.length !== 1
+      || roleIdentityKey(identity) !== roleIdentityKey({ kind:"style", style:group.signatures[0].style })) return false;
+    const selectors = new Set();
+    return group.selectors.every(binding => {
+      if (!exactRoleFields(binding, ["value", "stable", "reason"]) || !validRoleSelector(binding.value)
+        || typeof binding.stable !== "boolean" || !["author-role", "author-id", "class", "css-module", "dom-path"].includes(binding.reason)
+        || binding.stable !== !["css-module", "dom-path"].includes(binding.reason) || selectors.has(binding.value)) return false;
+      selectors.add(binding.value); return true;
+    });
+  }
+  function resetRoleSession() {
+    roleView.identity = null; roleView.pending = null; roleView.rows = [];
+    roleView.status = "Connect a Live App to detect text styles.";
+    renderDetectedRoles();
+  }
+  function acceptRoleReady(data) {
+    const state = data.roleState;
+    const valid = isPlainObject(data.capabilities) && safeRoleWire(data.capabilities, 1024 * 1024)
+      && data.capabilities.roleDetection === true && roleCount(data.revision) && safeRoleWire(state, 1024 * 1024)
+      && exactRoleFields(state, ["documentId", "pageVersion", "pageURL", "roles", "canonicalCss", "hashAlgorithm", "cssHash"])
+      && roleText(state.documentId, 200) && roleCount(state.pageVersion) && validRoleURL(state.pageURL, true)
+      && Array.isArray(state.roles) && state.roles.length === 0 && state.canonicalCss === ""
+      && state.hashAlgorithm === "fnv1a32" && state.cssHash === "811c9dc5";
+    if (valid && roleView.identity?.documentId === state.documentId && state.pageVersion < roleView.identity.pageVersion) return;
+    roleView.pending = null; roleView.rows = []; roleView.identity = null; roleView.status = ROLE_UNSUPPORTED;
+    if (!valid) return;
+    if (roleView.origin !== live.expectedOrigin) {
+      roleView.origin = live.expectedOrigin; roleView.ids.clear(); roleView.nextId = 0;
+    }
+    roleView.identity = { documentId:state.documentId, pageVersion:state.pageVersion, pageURL:state.pageURL };
+    roleView.status = state.pageURL === null ? ROLE_UNAVAILABLE : "Ready to detect text styles.";
+  }
+  function renderDetectedRoles() {
+    const section = q("detectedRoles"), button = q("detectTextStyles"), list = q("roleRows");
+    section.hidden = !live.viewActive;
+    button.disabled = !live.ready || !roleView.identity || roleView.identity.pageURL === null;
+    button.title = button.disabled ? roleView.status : "Read the current page's text styles without changing it";
+    q("roleStatus").textContent = roleView.status;
+    list.replaceChildren();
+    const rowIds = new Map(roleView.rows.map(group => [group.id, roleView.ids.get(roleIdentityKey(group.identity))]));
+    for (const group of roleView.rows) {
+      const row = document.createElement("li");
+      row.dataset.roleId = rowIds.get(group.id) || "";
+      const title = document.createElement("strong"); title.textContent = `${group.suggestedName} (${row.dataset.roleId || "unassigned"})`;
+      row.append(title);
+      const paragraph = text => { const node = document.createElement("p"); node.textContent = text; row.append(node); };
+      paragraph(`${group.elementCount} eligible text parent${group.elementCount === 1 ? "" : "s"}: ${group.sampleText}`);
+      for (const variant of group.signatures) {
+        const s = variant.style;
+        paragraph(`${variant.count} × ${s.fontFamily}: ${s.fontSize}px / ${s.fontWeight} / ${s.textTransform} / ${s.letterSpacing}em`);
+      }
+      for (const binding of group.selectors) {
+        const node = document.createElement("code");
+        node.textContent = `${binding.value} — ${binding.stable ? "stable" : "uncertain"} (${binding.reason})`;
+        const line = document.createElement("p"); line.append(node); row.append(line);
+      }
+      if (!group.bindingComplete) paragraph("Safe complete bindings unavailable.");
+      if (group.sharedClasses.length) paragraph(`Shared classes: ${group.sharedClasses.join(" ")}`);
+      if (group.nearDuplicateIds.length) paragraph(`Near duplicates (kept separate): ${group.nearDuplicateIds.map(id => rowIds.get(id) || id).join(", ")}`);
+      list.append(row);
+    }
+  }
+  q("detectTextStyles").addEventListener("click", () => {
+    const identity = roleView.identity;
+    if (!live.ready || !identity || identity.pageURL === null) return;
+    const requestId = `fks-detect-${++live.requestSeq}`;
+    const knownRoles = roleView.rows.map(group => ({ id:roleView.ids.get(roleIdentityKey(group.identity)),
+      selectors:group.selectors.map(binding => binding.value) })).filter(role => role.id);
+    const request = { type:"design:detect", protocolVersion:1, sessionId:live.sessionId,
+      requestId, documentId:identity.documentId, knownRoles };
+    if (!safeRoleWire(request, 256 * 1024)) { roleView.status = "Role detection request limit reached."; renderDetectedRoles(); return; }
+    roleView.pending = { requestId, ...identity, knownRoles };
+    roleView.status = "Detecting text styles…"; renderDetectedRoles();
+    sendDesignMessage(request);
+  });
+  function validDetectedReply(data, pending) {
+    if (!safeRoleWire(data, 1024 * 1024) || !exactRoleFields(data, ["type", "protocolVersion", "sessionId", "requestId", "revision",
+      "documentId", "pageVersion", "pageURL", "currentPageVersion", "currentPageURL", "complete", "reason", "elapsedMs", "scannedElements", "groups", "selectorChecks"])
+      || !roleCount(data.revision) || !roleCount(data.pageVersion) || !roleCount(data.currentPageVersion)
+      || data.pageVersion < pending.pageVersion || data.currentPageVersion < data.pageVersion
+      || !validRoleURL(data.pageURL) || !validRoleURL(data.currentPageURL, true) || typeof data.complete !== "boolean"
+      || data.pageVersion === pending.pageVersion && data.pageURL !== pending.pageURL
+      || data.currentPageURL !== data.pageURL && data.currentPageVersion === data.pageVersion
+      || !Number.isFinite(data.elapsedMs) || data.elapsedMs < 0 || data.complete && data.elapsedMs > 2000
+      || !roleCount(data.scannedElements, data.complete ? 10000 : 10001)
+      || (data.complete ? data.reason !== null || data.currentPageVersion !== data.pageVersion || data.pageURL !== data.currentPageURL
+        : !ROLE_REASONS.includes(data.reason))
+      || data.reason !== "page-changed" && (data.currentPageVersion !== data.pageVersion || data.currentPageURL !== data.pageURL)
+      || !Array.isArray(data.groups) || data.groups.length > 128 || !Array.isArray(data.selectorChecks) || data.selectorChecks.length > 4096
+      || !data.groups.every(validDetectedGroup)) return false;
+    if (data.currentPageURL === null && (data.reason !== "page-changed" || data.groups.length || data.selectorChecks.length)) return false;
+    const ids = new Set(), identities = new Set();
+    let count = 0;
+    for (const group of data.groups) {
+      const identity = roleIdentityKey(group.identity);
+      if (ids.has(group.id) || identities.has(identity)) return false;
+      ids.add(group.id); identities.add(identity); count += group.elementCount;
+    }
+    if (count > data.scannedElements || data.complete && count !== data.scannedElements
+      || data.groups.some(group => group.nearDuplicateIds.some(id => id === group.id || !ids.has(id)))) return false;
+    const checks = pending.knownRoles.flatMap(role => role.selectors.map(selector => JSON.stringify([role.id, selector])));
+    const remaining = new Map(); checks.forEach(key => remaining.set(key, (remaining.get(key) || 0) + 1));
+    for (const check of data.selectorChecks) {
+      if (!exactRoleFields(check, ["roleId", "selector", "matchCount", "signatures"]) || !roleText(check.roleId, 100)
+        || !validRoleSelector(check.selector) || !roleCount(check.matchCount, 10000)
+        || !validRoleVariants(check.signatures, check.matchCount, 128)) return false;
+      const key = JSON.stringify([check.roleId, check.selector]);
+      if (!remaining.get(key)) return false;
+      remaining.set(key, remaining.get(key) - 1);
+    }
+    return !data.complete || [...remaining.values()].every(count => count === 0);
+  }
+  function acceptDetectedRoles(data) {
+    const pending = roleView.pending, current = roleView.identity;
+    if (!pending || !current || data.requestId !== pending.requestId || data.documentId !== current.documentId
+      || data.documentId !== pending.documentId || !validDetectedReply(data, pending)
+      || data.currentPageVersion < current.pageVersion) return;
+    roleView.pending = null;
+    roleView.identity = { documentId:data.documentId, pageVersion:data.currentPageVersion, pageURL:data.currentPageURL };
+    if (data.currentPageURL === null) { roleView.rows = []; roleView.status = ROLE_UNAVAILABLE; }
+    else if (!data.complete) { roleView.rows = data.groups; roleView.status = `Incomplete detection (${data.reason}); this page has not been checked.`; }
+    else {
+      const newKeys = data.groups.map(group => roleIdentityKey(group.identity)).filter(key => !roleView.ids.has(key));
+      if (roleView.ids.size + newKeys.length > 128) roleView.status = "Collection limit reached; this page was not stored";
+      else {
+        for (const key of newKeys) roleView.ids.set(key, `role-${++roleView.nextId}`);
+        roleView.status = `Detected ${data.groups.length} roles from ${data.scannedElements} eligible text parents on this page. Other pages have not been checked.`;
+      }
+      roleView.rows = data.groups;
+    }
+    renderDetectedRoles();
+  }
+  function rejectRoleDetect(data) {
+    if (typeof data.requestId !== "string" || !data.requestId.startsWith("fks-detect-")) return false;
+    if (data.requestId !== roleView.pending?.requestId) return true;
+    if (!safeRoleWire(data, 1024 * 1024) || !roleCount(data.revision)
+      || !["invalid-message", "unsupported-value", "revision-conflict", "page-changed", "stylesheet-blocked", "size-limit"].includes(data.reason)
+      || !exactRoleFields(data, Object.hasOwn(data, "detail")
+        ? ["type", "protocolVersion", "sessionId", "requestId", "revision", "reason", "detail"]
+        : ["type", "protocolVersion", "sessionId", "requestId", "revision", "reason"])) return true;
+    roleView.pending = null; roleView.status = `Role detection rejected (${data.reason}); this page has not been checked.`;
+    renderDetectedRoles(); return true;
+  }
+
   // ---- transport ------------------------------------------------------------
   function newSessionId() {
     const bytes = new Uint8Array(8);
@@ -3724,6 +3969,7 @@ if (remembered) kitId.value = remembered;
   }
 
   function resetSessionState() {
+    resetRoleSession();
     live.ready = false;
     live.queue = [];
     live.inFlight = null;
@@ -3892,6 +4138,7 @@ if (remembered) kitId.value = remembered;
   targetAppFrameEl?.addEventListener("load", () => {
     if (live.popoutMode || !live.expectedOrigin || !targetAppFrameEl.getAttribute("src")) return;
     live.ready = false;
+    resetRoleSession();
     live.inFlight = null;
     clearTimeout(live.requestTimer);
     live.selectedRect = null;
@@ -4718,6 +4965,7 @@ if (remembered) kitId.value = remembered;
         startHandshake();
         break;
       case "design:ready": {
+        acceptRoleReady(data);
         const targets = Array.isArray(data.targets) ? data.targets.filter(t => isPlainObject(t) && typeof t.id === "string" && t.id) : [];
         live.ready = true;
         clearTimeout(live.noBridgeTimer);
@@ -4742,10 +4990,14 @@ if (remembered) kitId.value = remembered;
         refreshLiveInspector();
         fetchFullArrangement();
         pumpLiveQueue();
+        renderDetectedRoles();
         break;
       }
       case "design:applied": handleReply(data, true); break;
-      case "design:rejected": handleReply(data, false); break;
+      case "design:detected": acceptDetectedRoles(data); break;
+      case "design:rejected":
+        if (!rejectRoleDetect(data)) handleReply(data, false);
+        break;
       case "design:hover": {
         const target = typeof data.targetId === "string" ? live.targets.get(data.targetId) : null;
         live.hoverId = typeof data.targetId === "string" ? data.targetId : null;
@@ -5731,6 +5983,7 @@ if (remembered) kitId.value = remembered;
 
   // ---- panels -----------------------------------------------------------------
   function renderLivePanels() {
+    renderDetectedRoles();
     renderOverlays();
     renderPopoutState();
     renderWarnings();
@@ -6002,6 +6255,7 @@ if (remembered) kitId.value = remembered;
     if (composerCanvasEl) composerCanvasEl.style.display = "";
     if (targetAppContainerEl) targetAppContainerEl.style.display = "none";
     live.viewActive = false;
+    renderDetectedRoles();
     composerView.classList.remove("is-live-view");
     if (liveCodePanel) liveCodePanel.hidden = true;
     slotInspector.setAttribute("aria-label", "Selected slot inspector");
