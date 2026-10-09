@@ -12,6 +12,12 @@ Two things have their own version numbers:
 
 ## [Unreleased]
 
+### Added
+
+- The bridge detects rendered Light-DOM text styles with exact groups, safe
+  selector bindings and explicit incomplete or stale results. The existing
+  inspector stays available when a route is unsupported for role detection.
+
 ## [0.3.1] - 2026-10-07
 
 Localhost apps keep sign-in cookies inside Studio.

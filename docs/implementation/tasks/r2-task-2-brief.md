@@ -44,6 +44,20 @@ alone. Read-only detection additionally asserts unchanged author DOM/styles.
 
 ## Detection and safe bindings
 
+Read binding Addendum 5/D061 before continuing URL work. Validate actual current
+URL before serializing role state: authenticated target origin, HTTP(S), no
+credentials, pathname/search/hash <=2,000 characters. Ready pageURL is null only
+for actual unsupported URL; preserve detection capability, empty canonical state
+and legacy inspector/reset. Initial Detect rejects unsupported-value with fixed
+safe detail; a valid scan that becomes unsupported returns page-changed with
+captured valid pageURL/currentPageURL:null and empty groups/selectorChecks.
+Keep actual URL internally so unsupported-to-unsupported changes invalidate
+generations. Never send the unsupported URL or let null establish checked data.
+Test real initial oversized URL, valid-to-oversized, null-to-null generation,
+2,000/2,001 boundaries, preserved inspector/reset and supported-URL reconnect.
+Characterize working cases honestly; add hostile credential/foreign-origin
+inputs without widening source/origin/session trust. Apply/Clear remain PR B.
+
 Traverse eligible light-DOM direct-text parents once. Include below-viewport
 text and range-rendered display:contents; independently test every documented
 exclusion, nested/dedup case and transparent ancestor. Do not use legacy semantic
@@ -65,6 +79,30 @@ hostile fields/prototype keys/oversize requests, unknown document and stale
 messages without letting them establish identity or change author state.
 
 ## Cooperative work and freshness
+
+Independent source review also requires public behavior probes for native-invalid
+known selectors (.1/#1), preserving escaped numeric positive cases and safe
+correlated rejection. Probe native pseudo-state rendering during a pending scan:
+cached tuples/population cannot produce complete mixed evidence just because
+DOM/CSS-rule generations stayed equal. A later stable scan must complete against
+the actual current rendering. Reproduce before fixing; no private-method hooks
+or manufactured RED. Final wire payload, including terminal field updates, must
+respect the reply byte limit. These enforce the existing contract, not new scope.
+
+The [independent implementation review](r2-task-2-review.md) confirms a late
+native-focus failure after 16 fixture heartbeat frames: a still-pending scan
+returns complete 20px evidence after visible g00 has changed to 35px. Cover
+the whole observable cooperative window, with separate style-only and
+eligibility-only native stimuli and a later stable current scan. Another
+identical yielding pass alone moves this window. Preserve the original RED,
+first-scan benchmark and input-before-completion requirements. Return the fix
+to the same independent reviewer before landing; do not widen the contract
+to universal animation tracking or relax any threshold.
+Cover native pointer activation separately from focus/hover: an already hovered
+and focused control can change :active rendering without either transition.
+Reproduce that sibling through native input before extending the same guard.
+Include native button Space/Enter activation in this sibling check; ordinary
+textbox typing remains compatible with the complete responsiveness benchmark.
 
 Capture source/origin/session/document/page/revision/request generation and
 check at every yield and terminal post. Read actual URL/content/style freshness;
@@ -93,6 +131,7 @@ exact bytes in finally and close owned contexts/processes on every outcome.
 ```powershell
 $env:PYTHONPATH='tests'
 $env:FKS_ENGINES='chromium'
+$env:FKS_REQUIRE_FIXTURES='1'
 python -m unittest test_role_protocol test_role_detection test_r2_static_fixtures test_bridge_runtime.HandshakeTests test_support -v
 python scripts/verify.py --static-only
 node --check fontkit-bridge.js

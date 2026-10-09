@@ -48,6 +48,15 @@ cannot replace current state. No automatic replay, font request or persistence.
 
 ## Test-first acceptance
 
+Addendum 5/D061 is binding: authenticated ready pageURL:null establishes only
+document/version, never a route. Disable Detect with visible
+`Role detection/preview unavailable: unsupported page URL.` Preserve the real
+legacy inspector and reset. A page-changed detection with currentPageURL:null
+invalidates evidence; no complete detection may contain null. Test real initial
+over-limit target and valid-to-over-limit invalidation, safe text rendering,
+hostile credential/foreign-origin URLs and supported-URL reconnect recovery.
+Apply/Clear controls remain outside S1; later tasks implement their exceptions.
+
 Genuine RED: real Studio connected to real bridge lacks the accessible Detect
 button and visible role list. Add one rendered slice at a time. At least one
 real cross-origin Studio/bridge test drives the actual Connect/Detect UI and
