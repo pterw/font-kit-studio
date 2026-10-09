@@ -1,4 +1,4 @@
-﻿# R2 prerequisite Library/Composer audit: independent review
+# R2 prerequisite Library/Composer audit: independent review
 
 Date: 2026-10-08. Initial verdict: **Approved with fixes**.
 
@@ -219,3 +219,64 @@ classification. It permits the controller to close R2.0's audit execution and
 classification items after its final bookkeeping consistency check. Final R2
 engine-plan approval and execution constraints remain open. No runtime fix,
 merge, release, or external review is authorized by this verdict.
+
+## Publication-record scoped verdict (2026-10-08)
+
+**Approved for the currently pending-CI record.** Read the complete committed
+five-document reconciliation delta from 142aa9d to
+`e15d200db2ffb32e56ea0b17dcaecda5b652979f` and the complete current two-document
+publication delta. The committed closure matches the final audit verdict:
+only R2.0 audit execution/classification are checked; final engine approval and
+execution constraints remain unchecked. Current state, brief and roadmap agree
+that the bounded audit is accepted and R2 remains planned. No runtime scope
+or deviation beyond D059 is added.
+
+Direct read-only commands `gh pr view 18 --json number,url,state,isDraft,
+baseRefName,headRefName,headRefOid,additions,deletions,files` and
+`gh run view 37861702853 --json headSha,status,conclusion,url` confirm an open
+draft PR #18 against main on docs/library-composer-audit at the exact local
+HEAD e15d200. The run is in_progress with an empty conclusion at that same
+head. The publication event accurately says pending and claims no hosted pass.
+The PR link belongs in the roadmap and does not imply an engine PR or merge.
+
+PR additions1341 + deletions12 and local seven-file numstat confirm 1,353
+changed lines for the published audit baseline, with no generated/rename churn.
+The pending follow-up is separate from that baseline count. The report hash
+remains FE799AC9D94396E52ED170F633233F10E5ECD5528A844A0AEF558189B3467EA1.
+Fresh git diff --check exits0, and the runtime/test/demo diff from original
+BASE to current HEAD is empty. No local browser/full-suite rerun was performed
+for these publication records. The exact-head CI result/advisories still need
+the controller's completed log review and a scoped record confirmation before
+landing any replacement completed-CI wording.
+
+## Completed-CI record scoped verdict (2026-10-08)
+
+**Approved.** The completed-CI publication event matches the saved job metadata,
+quality-gate summaries and a fresh direct gh run view. Run 37861702853 is
+completed/success at exact HEAD e15d200db2ffb32e56ea0b17dcaecda5b652979f, with
+all 12 jobs completed/success. The event explicitly limits this proof to the
+published audit baseline and does not attribute it to a future metadata commit.
+
+Independently read all twelve job status/name/conclusion records, all thirty
+frontend PASS records and its summary, all twelve Chromium skip records, and
+both unittest summaries from audit-ci-jobs.json and audit-quality.log. Chromium
+reports Ran 859 in 615.786s, OK (skipped=12); Firefox reports Ran 51 in 103.326s and
+OK with no skip records. Frontend reports 30 of 30 finished, seven blocking passes,
+23 advisory runs, zero ADVISORY/SKIP/FAIL lines and 332 REPORT lines; counting
+actual frontend messages confirms 30 PASS and 332 touch reports. The controller
+read each advisory report; this scoped review confirms the complete count and
+summary rather than independently replaying the touch-target audit.
+
+The current workflow's installed-fixture selections at lines 270 and 309 include
+all eleven skipped fixture cases other than test_one_command_messages host
+refusal. That excluded case remains clearly disclosed; a successful job is
+not treated as proof of that omitted test. No workflow change follows. Coverage
+was checked for these additional evidence paths; raw scratch is excluded, so
+the results above rely on exact reads, not graph completeness.
+
+Read the complete final two-document publication diff: the PR #18 link and phase
+remain unchanged; final R2 work-order approval is open. Report hash remains
+FE799AC9D94396E52ED170F633233F10E5ECD5528A844A0AEF558189B3467EA1. Fresh
+git diff --check exits 0 with only LF/CRLF notices. No new local browser or full
+suite was run for this record confirmation. No issues found; the controller may
+land the reviewed publication records under existing task-branch authority.
