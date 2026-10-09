@@ -1,10 +1,4 @@
-.hero {
-  padding: 3rem 0;
-}
-
-.hero h1 {
-  font-size: 40px;
-}
+html { font-size: 16px; }
 
 /* Generic local families keep computed signatures independent of OS font lists. */
 body { font-family: sans-serif; }

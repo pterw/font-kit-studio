@@ -1,0 +1,75 @@
+{
+  "schema": "fontkit-static-style-oracle",
+  "schemaVersion": 1,
+  "metadata": {
+    "framework": "bootstrap",
+    "version": "4.6.2",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "fontAssets": "local generic families only",
+    "vendor": [
+      {
+        "path": "vendor/bootstrap.min.css",
+        "sourceURL": "https://raw.githubusercontent.com/twbs/bootstrap/v4.6.2/dist/css/bootstrap.min.css",
+        "sha256": "f886516f3d41e9e7bd994c7f7a39a89cafae9483f90396cb0ddeafe8d1ea5e72",
+        "bytes": 162264,
+        "license": "MIT"
+      },
+      {
+        "path": "vendor/LICENSE",
+        "sourceURL": "https://raw.githubusercontent.com/twbs/bootstrap/v4.6.2/LICENSE",
+        "sha256": "53d2513c8df48a817d70537cc906b8e9c7bf2513328ff66847894773e615b37e",
+        "bytes": 1131,
+        "license": "MIT"
+      }
+    ],
+    "unknownVersionVariant": {
+      "method": "remove Bootstrap CSS version banner in a disposable copy",
+      "expected": "same rendered tuples; no known version evidence; adapter detection deferred to R2.4"
+    }
+  },
+  "eligibleParentCount": 20,
+  "groupCount": 16,
+  "elements": [
+    {"id": "bs4.heading.1", "selector": ".type-corpus .h1", "signature": {"fontFamily": "sans-serif", "fontSize": 40, "fontWeight": 500, "textTransform": "none", "letterSpacing": 0}, "authorRole": null},
+    {"id": "bs4.heading.2", "selector": ".type-corpus .h2", "signature": {"fontFamily": "sans-serif", "fontSize": 32, "fontWeight": 500, "textTransform": "none", "letterSpacing": 0}, "authorRole": null},
+    {"id": "bs4.heading.3", "selector": ".type-corpus .h3", "signature": {"fontFamily": "sans-serif", "fontSize": 28, "fontWeight": 500, "textTransform": "none", "letterSpacing": 0}, "authorRole": null},
+    {"id": "bs4.heading.4", "selector": ".type-corpus .h4", "signature": {"fontFamily": "sans-serif", "fontSize": 24, "fontWeight": 500, "textTransform": "none", "letterSpacing": 0}, "authorRole": null},
+    {"id": "bs4.heading.5", "selector": ".type-corpus .h5", "signature": {"fontFamily": "sans-serif", "fontSize": 20, "fontWeight": 500, "textTransform": "none", "letterSpacing": 0}, "authorRole": null},
+    {"id": "bs4.heading.6", "selector": ".type-corpus .h6", "signature": {"fontFamily": "sans-serif", "fontSize": 16, "fontWeight": 500, "textTransform": "none", "letterSpacing": 0}, "authorRole": null},
+    {"id": "bs4.display.1", "selector": ".type-corpus .display-1", "signature": {"fontFamily": "sans-serif", "fontSize": 96, "fontWeight": 300, "textTransform": "none", "letterSpacing": 0}, "authorRole": null},
+    {"id": "bs4.display.2", "selector": ".type-corpus .display-2", "signature": {"fontFamily": "sans-serif", "fontSize": 88, "fontWeight": 300, "textTransform": "none", "letterSpacing": 0}, "authorRole": null},
+    {"id": "bs4.display.3", "selector": ".type-corpus .display-3", "signature": {"fontFamily": "sans-serif", "fontSize": 72, "fontWeight": 300, "textTransform": "none", "letterSpacing": 0}, "authorRole": null},
+    {"id": "bs4.display.4", "selector": ".type-corpus .display-4", "signature": {"fontFamily": "sans-serif", "fontSize": 56, "fontWeight": 300, "textTransform": "none", "letterSpacing": 0}, "authorRole": null},
+    {"id": "bs4.lead", "selector": ".type-corpus .lead", "signature": {"fontFamily": "sans-serif", "fontSize": 20, "fontWeight": 300, "textTransform": "none", "letterSpacing": 0}, "authorRole": null},
+    {"id": "bs4.small", "selector": ".type-corpus .small", "signature": {"fontFamily": "sans-serif", "fontSize": 14, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0}, "authorRole": null},
+    {"id": "bs4.button", "selector": ".type-corpus .btn", "signature": {"fontFamily": "sans-serif", "fontSize": 16, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0}, "authorRole": null},
+    {"id": "bs4.navigation", "selector": ".type-corpus .nav-link", "signature": {"fontFamily": "sans-serif", "fontSize": 16, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0}, "authorRole": null},
+    {"id": "bs4.brand", "selector": ".type-corpus .navbar-brand", "signature": {"fontFamily": "sans-serif", "fontSize": 20, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0}, "authorRole": null},
+    {"id": "bs4.card", "selector": ".type-corpus .card-title", "signature": {"fontFamily": "sans-serif", "fontSize": 20, "fontWeight": 500, "textTransform": "none", "letterSpacing": 0}, "authorRole": null},
+    {"id": "bs4.label", "selector": ".type-corpus .form-label", "signature": {"fontFamily": "sans-serif", "fontSize": 16, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0}, "authorRole": null},
+    {"id": "bs4.role.base", "selector": ".type-corpus .role-copy:not(.role-variant):not([data-design-role=\"editorial\"])", "signature": {"fontFamily": "sans-serif", "fontSize": 14, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0}, "authorRole": "Editorial"},
+    {"id": "bs4.role.variant", "selector": ".type-corpus .role-variant", "signature": {"fontFamily": "sans-serif", "fontSize": 20, "fontWeight": 600, "textTransform": "none", "letterSpacing": 0}, "authorRole": "Editorial"},
+    {"id": "bs4.role.case", "selector": ".type-corpus [data-design-role=\"editorial\"]", "signature": {"fontFamily": "sans-serif", "fontSize": 14, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0}, "authorRole": "editorial"}
+  ],
+  "groups": [
+    {"id": "expected-1", "identity": {"kind": "style", "style": {"fontFamily": "sans-serif", "fontSize": 40, "fontWeight": 500, "textTransform": "none", "letterSpacing": 0}}, "elementCount": 1, "variants": [{"signature": {"fontFamily": "sans-serif", "fontSize": 40, "fontWeight": 500, "textTransform": "none", "letterSpacing": 0}, "elementCount": 1}], "bindings": [{"selector": ".type-corpus .h1", "stable": true, "elementCount": 1, "authorId": "bs4.heading.1"}]},
+    {"id": "expected-2", "identity": {"kind": "style", "style": {"fontFamily": "sans-serif", "fontSize": 32, "fontWeight": 500, "textTransform": "none", "letterSpacing": 0}}, "elementCount": 1, "variants": [{"signature": {"fontFamily": "sans-serif", "fontSize": 32, "fontWeight": 500, "textTransform": "none", "letterSpacing": 0}, "elementCount": 1}], "bindings": [{"selector": ".type-corpus .h2", "stable": true, "elementCount": 1, "authorId": "bs4.heading.2"}]},
+    {"id": "expected-3", "identity": {"kind": "style", "style": {"fontFamily": "sans-serif", "fontSize": 28, "fontWeight": 500, "textTransform": "none", "letterSpacing": 0}}, "elementCount": 1, "variants": [{"signature": {"fontFamily": "sans-serif", "fontSize": 28, "fontWeight": 500, "textTransform": "none", "letterSpacing": 0}, "elementCount": 1}], "bindings": [{"selector": ".type-corpus .h3", "stable": true, "elementCount": 1, "authorId": "bs4.heading.3"}]},
+    {"id": "expected-4", "identity": {"kind": "style", "style": {"fontFamily": "sans-serif", "fontSize": 24, "fontWeight": 500, "textTransform": "none", "letterSpacing": 0}}, "elementCount": 1, "variants": [{"signature": {"fontFamily": "sans-serif", "fontSize": 24, "fontWeight": 500, "textTransform": "none", "letterSpacing": 0}, "elementCount": 1}], "bindings": [{"selector": ".type-corpus .h4", "stable": true, "elementCount": 1, "authorId": "bs4.heading.4"}]},
+    {"id": "expected-5", "identity": {"kind": "style", "style": {"fontFamily": "sans-serif", "fontSize": 20, "fontWeight": 500, "textTransform": "none", "letterSpacing": 0}}, "elementCount": 2, "variants": [{"signature": {"fontFamily": "sans-serif", "fontSize": 20, "fontWeight": 500, "textTransform": "none", "letterSpacing": 0}, "elementCount": 2}], "bindings": [{"selector": ".type-corpus .h5", "stable": true, "elementCount": 1, "authorId": "bs4.heading.5"}, {"selector": ".type-corpus .card-title", "stable": true, "elementCount": 1, "authorId": "bs4.card"}]},
+    {"id": "expected-6", "identity": {"kind": "style", "style": {"fontFamily": "sans-serif", "fontSize": 16, "fontWeight": 500, "textTransform": "none", "letterSpacing": 0}}, "elementCount": 1, "variants": [{"signature": {"fontFamily": "sans-serif", "fontSize": 16, "fontWeight": 500, "textTransform": "none", "letterSpacing": 0}, "elementCount": 1}], "bindings": [{"selector": ".type-corpus .h6", "stable": true, "elementCount": 1, "authorId": "bs4.heading.6"}]},
+    {"id": "expected-7", "identity": {"kind": "style", "style": {"fontFamily": "sans-serif", "fontSize": 96, "fontWeight": 300, "textTransform": "none", "letterSpacing": 0}}, "elementCount": 1, "variants": [{"signature": {"fontFamily": "sans-serif", "fontSize": 96, "fontWeight": 300, "textTransform": "none", "letterSpacing": 0}, "elementCount": 1}], "bindings": [{"selector": ".type-corpus .display-1", "stable": true, "elementCount": 1, "authorId": "bs4.display.1"}]},
+    {"id": "expected-8", "identity": {"kind": "style", "style": {"fontFamily": "sans-serif", "fontSize": 88, "fontWeight": 300, "textTransform": "none", "letterSpacing": 0}}, "elementCount": 1, "variants": [{"signature": {"fontFamily": "sans-serif", "fontSize": 88, "fontWeight": 300, "textTransform": "none", "letterSpacing": 0}, "elementCount": 1}], "bindings": [{"selector": ".type-corpus .display-2", "stable": true, "elementCount": 1, "authorId": "bs4.display.2"}]},
+    {"id": "expected-9", "identity": {"kind": "style", "style": {"fontFamily": "sans-serif", "fontSize": 72, "fontWeight": 300, "textTransform": "none", "letterSpacing": 0}}, "elementCount": 1, "variants": [{"signature": {"fontFamily": "sans-serif", "fontSize": 72, "fontWeight": 300, "textTransform": "none", "letterSpacing": 0}, "elementCount": 1}], "bindings": [{"selector": ".type-corpus .display-3", "stable": true, "elementCount": 1, "authorId": "bs4.display.3"}]},
+    {"id": "expected-10", "identity": {"kind": "style", "style": {"fontFamily": "sans-serif", "fontSize": 56, "fontWeight": 300, "textTransform": "none", "letterSpacing": 0}}, "elementCount": 1, "variants": [{"signature": {"fontFamily": "sans-serif", "fontSize": 56, "fontWeight": 300, "textTransform": "none", "letterSpacing": 0}, "elementCount": 1}], "bindings": [{"selector": ".type-corpus .display-4", "stable": true, "elementCount": 1, "authorId": "bs4.display.4"}]},
+    {"id": "expected-11", "identity": {"kind": "style", "style": {"fontFamily": "sans-serif", "fontSize": 20, "fontWeight": 300, "textTransform": "none", "letterSpacing": 0}}, "elementCount": 1, "variants": [{"signature": {"fontFamily": "sans-serif", "fontSize": 20, "fontWeight": 300, "textTransform": "none", "letterSpacing": 0}, "elementCount": 1}], "bindings": [{"selector": ".type-corpus .lead", "stable": true, "elementCount": 1, "authorId": "bs4.lead"}]},
+    {"id": "expected-12", "identity": {"kind": "style", "style": {"fontFamily": "sans-serif", "fontSize": 14, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0}}, "elementCount": 1, "variants": [{"signature": {"fontFamily": "sans-serif", "fontSize": 14, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0}, "elementCount": 1}], "bindings": [{"selector": ".type-corpus .small", "stable": true, "elementCount": 1, "authorId": "bs4.small"}]},
+    {"id": "expected-13", "identity": {"kind": "style", "style": {"fontFamily": "sans-serif", "fontSize": 16, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0}}, "elementCount": 3, "variants": [{"signature": {"fontFamily": "sans-serif", "fontSize": 16, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0}, "elementCount": 3}], "bindings": [{"selector": ".type-corpus .btn", "stable": true, "elementCount": 1, "authorId": "bs4.button"}, {"selector": ".type-corpus .nav-link", "stable": true, "elementCount": 1, "authorId": "bs4.navigation"}, {"selector": ".type-corpus .form-label", "stable": true, "elementCount": 1, "authorId": "bs4.label"}]},
+    {"id": "expected-14", "identity": {"kind": "style", "style": {"fontFamily": "sans-serif", "fontSize": 20, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0}}, "elementCount": 1, "variants": [{"signature": {"fontFamily": "sans-serif", "fontSize": 20, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0}, "elementCount": 1}], "bindings": [{"selector": ".type-corpus .navbar-brand", "stable": true, "elementCount": 1, "authorId": "bs4.brand"}]},
+    {"id": "expected-15", "identity": {"kind": "author-role", "name": "Editorial"}, "elementCount": 2, "variants": [{"signature": {"fontFamily": "sans-serif", "fontSize": 14, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0}, "elementCount": 1}, {"signature": {"fontFamily": "sans-serif", "fontSize": 20, "fontWeight": 600, "textTransform": "none", "letterSpacing": 0}, "elementCount": 1}], "bindings": [{"selector": ".type-corpus .role-copy:not(.role-variant):not([data-design-role=\"editorial\"])", "stable": true, "elementCount": 1, "authorId": "bs4.role.base"}, {"selector": ".type-corpus .role-variant", "stable": true, "elementCount": 1, "authorId": "bs4.role.variant"}]},
+    {"id": "expected-16", "identity": {"kind": "author-role", "name": "editorial"}, "elementCount": 1, "variants": [{"signature": {"fontFamily": "sans-serif", "fontSize": 14, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0}, "elementCount": 1}], "bindings": [{"selector": ".type-corpus [data-design-role=\"editorial\"]", "stable": true, "elementCount": 1, "authorId": "bs4.role.case"}]}
+  ]
+}
