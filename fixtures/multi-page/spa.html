@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Native history evidence</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body data-page="spa">
+  <nav aria-label="Document pages">
+    <a href="index.html" data-design-id="nav.home">Home</a>
+    <a href="article.html" data-design-id="nav.article">Article</a>
+    <a href="conflict.html" data-design-id="nav.conflict">Conflict</a>
+    <a href="spa.html" data-design-id="nav.spa">SPA</a>
+    <a href="unvisited.html" data-design-id="nav.unvisited">Unvisited</a>
+  </nav>
+  <div class="route-controls" aria-label="History actions">
+    <button type="button" id="push-detail">Push detail</button>
+    <button type="button" id="replace-note">Replace note</button>
+    <button type="button" id="back">Back</button>
+    <button type="button" id="forward">Forward</button>
+    <button type="button" id="replace-same">Replace same URL</button>
+    <button type="button" id="load-delayed">Load delayed content</button>
+    <button type="button" id="resolve-delayed" hidden>Resolve delayed content</button>
+    <a href="#section" id="hash-section">Hash section</a>
+  </div>
+  <main id="route-content" data-view="home" data-render-state="settled" aria-busy="false">
+    <h1 class="shared-title" data-design-id="route.title">SPA home evidence</h1>
+    <p class="route-body" data-design-id="route.body">SPA home paragraph</p>
+  </main>
+  <script src="spa.js"></script>
+</body>
+</html>

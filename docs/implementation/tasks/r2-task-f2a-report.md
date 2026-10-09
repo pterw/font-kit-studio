@@ -1,7 +1,7 @@
 # R2 F2a React corpus implementation report
 
 Date: 2026-10-08. BASE: 653d71610b409e59d542391b7010bcc8bd61c3a8.
-Status: independently Approved; controller landing pending.
+Status: independently Approved; landed as c8fe803.
 Scope: the nine paths in r2-task-f2a-brief.md. No runtime/shared-helper changes.
 
 ## Delivered behavior
@@ -101,5 +101,5 @@ AP13/14: normal resource cleanup and retained-copy/engine limits are explicit.
 R2.7I installs this fixture with npm ci, builds it and adds test_r2_react to the
 installed Chromium fixture job under FKS_REQUIRE_FIXTURES=1. This task changes
 no workflow/canary. F2b supplies real role preview after R2.4; fixture-only work
-needs no CHANGELOG line. Controller integration and independent review remain
-required before closing R2.7F2a.
+needs no CHANGELOG line. Integrated gates and independent review are complete;
+R2.7F2a is closed and its reviewed corpus is committed.
