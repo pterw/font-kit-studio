@@ -62,7 +62,8 @@
 
 - Each plan run has an untracked workspace `.superpowers/sdd/<plan>/` with
   `constraints.md` (rulings, a "Repository rules" section naming the AGENTS.md sections and
-  global rules, test rules, shared files, a fenced `gates` block, lessons) and
+  global rules, test rules, shared files, a fenced `gates` block, a fenced `ci` block under a
+  `CI` heading for `ci-watcher`, lessons) and
   `progress.md`, the controller's `## RESUME HERE` ledger. The compaction hook reads
   exactly `.superpowers/sdd/*/progress.md`, newest first; any other name is not found.
 - Subagents run without CLAUDE.md or AGENTS.md (`omitClaudeMd`): a rule they must follow
