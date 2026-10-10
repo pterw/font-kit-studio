@@ -1,0 +1,43 @@
+{
+  "schema": "fontkit-fixture-styles",
+  "version": 1,
+  "description": "Independent literal baseline. Style tuples follow R2 StyleSignature: family preserves case/quotes, size is px, weight is numeric, case is textTransform and tracking is em. Counts are direct text-bearing parents. Selectors are authored semantic probes, not predicted CSS-module hashes.",
+  "styles": [
+    {
+      "name": "display",
+      "selector": "h1[data-design-role=\"display\"]",
+      "count": 1,
+      "style": { "fontFamily": "serif", "fontSize": 40, "fontWeight": 600, "textTransform": "uppercase", "letterSpacing": 0.02 }
+    },
+    {
+      "name": "body",
+      "selector": "p[data-design-role=\"body\"]",
+      "count": 2,
+      "style": { "fontFamily": "sans-serif", "fontSize": 18, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0 }
+    },
+    {
+      "name": "hash-only",
+      "selector": "aside > p",
+      "count": 1,
+      "style": { "fontFamily": "monospace", "fontSize": 14, "fontWeight": 500, "textTransform": "lowercase", "letterSpacing": 0.04 }
+    },
+    {
+      "name": "stable-class",
+      "selector": "p.stable-copy",
+      "count": 1,
+      "style": { "fontFamily": "sans-serif", "fontSize": 18, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0 }
+    },
+    {
+      "name": "action",
+      "selector": "button[data-design-id=\"modules.replace\"]",
+      "count": 1,
+      "style": { "fontFamily": "sans-serif", "fontSize": 16, "fontWeight": 500, "textTransform": "none", "letterSpacing": 0 }
+    }
+  ],
+  "bindings": [
+    { "selector": "h1", "authorRole": "display", "authorIds": ["modules.title"], "sourceClass": "title" },
+    { "selector": "p[data-design-role=\"body\"]", "authorRole": "body", "authorIds": ["modules.body.first", "modules.body.second"], "sourceClass": "body" },
+    { "selector": "aside > p", "authorRole": null, "authorIds": [null], "sourceClass": "hashOnly" },
+    { "selector": "p.stable-copy", "authorRole": null, "authorIds": [null], "stableClass": "stable-copy" }
+  ]
+}

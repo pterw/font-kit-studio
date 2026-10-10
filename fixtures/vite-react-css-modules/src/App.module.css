@@ -1,0 +1,33 @@
+.title {
+  font-family: serif;
+  font-size: 40px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.body,
+:global(.stable-copy) {
+  font-family: sans-serif;
+  font-size: 18px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.hashOnly {
+  font-family: monospace;
+  font-size: 14px;
+  font-weight: 500;
+  text-transform: lowercase;
+  letter-spacing: 0.04em;
+}
+
+.action {
+  font-family: sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: normal;
+  padding: 8px 12px;
+}

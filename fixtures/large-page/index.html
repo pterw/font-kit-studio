@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Exactly 5000 text parents</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <input id="responsiveness" aria-label="Responsiveness probe" autocomplete="off">
+  <div id="exclusions">
+    <input type="hidden" id="hidden-control" value="Excluded native value">
+    <p id="hidden-direct" hidden>Hidden direct text</p>
+    <div hidden><p id="hidden-ancestor">Hidden ancestor text</p></div>
+    <p id="invisible">Visibility hidden</p>
+    <p id="collapsed">Visibility collapse</p>
+    <div class="transparent-chain"><p id="transparent-parent">Transparent ancestor</p></div>
+    <p id="transparent-color">Transparent foreground</p>
+    <p id="zero-text">Zero area text</p>
+    <div id="fontkit-bridge-overlay">Editor overlay text</div>
+    <div id="fontkit-bridge-hover">Hover overlay text</div>
+    <div id="placed-asset" class="fontkit-placed-asset">Placed asset text</div>
+    <textarea hidden id="excluded-textarea" aria-label="Excluded form value">Form value text</textarea>
+    <select hidden aria-label="Excluded selected value"><option id="excluded-option">Option value text</option></select>
+    <svg width="120" height="24" aria-hidden="true"><text id="svg-text" x="0" y="18">SVG text</text></svg>
+    <div id="shadow-host"></div>
+    <div id="pseudo-only"></div>
+    <template><p id="template-text">Template text</p></template>
+    <noscript><p>Inactive text</p></noscript>
+    <iframe title="Excluded child document" srcdoc="&lt;p&gt;Frame text&lt;/p&gt;"></iframe>
+  </div>
+  <main id="corpus" aria-label="Twenty style groups"></main>
+  <script src="app.js"></script>
+</body>
+</html>

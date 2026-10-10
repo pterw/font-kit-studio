@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>Role protocol host</title>
+<style>iframe { width: 1440px; height: 900px; border: 0; }</style>
+<iframe id="target" title="Role target"></iframe>
+<script>
+const frame = document.querySelector('#target');
+const targetURL = new URL(new URLSearchParams(location.search).get('target'));
+if (!['http:', 'https:'].includes(targetURL.protocol)) throw new Error('Invalid target URL');
+const targetOrigin = targetURL.origin;
+window.log = [];
+window.sessionId = null;
+window.revision = 0;
+window.roleState = null;
+function supportedRoleURL(value) {
+  if (typeof value !== 'string') return false;
+  try {
+    const url = new URL(value);
+    return ['http:', 'https:'].includes(url.protocol) && url.origin === targetOrigin
+      && !url.username && !url.password && (url.pathname + url.search + url.hash).length <= 2000;
+  } catch (e) { return false; }
+}
+function roleReceiptURL(data) {
+  if (data.type === 'design:ready' && data.roleState) {
+    return data.roleState.pageURL === null || supportedRoleURL(data.roleState.pageURL);
+  }
+  if (data.type !== 'design:detected') return true;
+  return supportedRoleURL(data.pageURL) && (supportedRoleURL(data.currentPageURL)
+    || data.currentPageURL === null && data.complete === false && data.reason === 'page-changed'
+      && Array.isArray(data.groups) && data.groups.length === 0
+      && Array.isArray(data.selectorChecks) && data.selectorChecks.length === 0);
+}
+function authenticated(entry, session = window.sessionId) {
+  const d = entry.data;
+  return entry.fromTarget && entry.origin === targetOrigin && d
+    && d.protocolVersion === 1 && d.sessionId === session && roleReceiptURL(d);
+}
+window.addEventListener('message', event => {
+  log.push({origin: event.origin, fromTarget: event.source === frame.contentWindow, data: event.data});
+});
+window.send = msg => frame.contentWindow.postMessage(msg, targetOrigin);
+window.waitFor = (pred, start = 0, timeout = 6000) => new Promise((resolve, reject) => {
+  const check = () => {
+    const entry = log.slice(start).find(e => pred(e.data, e));
+    if (!entry) return false;
+    clearTimeout(timer); window.removeEventListener('message', onMessage);
+    resolve(entry.data); return true;
+  };
+  const onMessage = () => queueMicrotask(check);
+  const timer = setTimeout(() => {
+    window.removeEventListener('message', onMessage); reject(new Error('reply timed out'));
+  }, timeout);
+  window.addEventListener('message', onMessage); check();
+});
+window.messages = (type, start = 0) => log.slice(start)
+  .filter(e => authenticated(e) && e.data.type === type).map(e => e.data);
+window.hello = async (session = 's1') => {
+  const start = log.length; window.sessionId = session;
+  send({type: 'design:hello', protocolVersion: 1, sessionId: session});
+  const reply = await waitFor((d, e) => authenticated(e, session) && d.type === 'design:ready', start);
+  if (window.sessionId === session) {
+    window.revision = reply.revision; window.roleState = reply.roleState || null;
+  }
+  return reply;
+};
+let counter = 0;
+window.request = async (msg, timeout = 6000) => {
+  const start = log.length;
+  const full = {protocolVersion: 1, sessionId: window.sessionId, requestId: `role-${++counter}`,
+    ...(msg.type === 'design:detect' ? {documentId: window.roleState?.documentId, knownRoles: []}
+      : {baseRevision: window.revision}), ...msg};
+  send(full);
+  const reply = await waitFor((d, e) => authenticated(e, full.sessionId)
+    && ['design:detected', 'design:roles-applied', 'design:applied', 'design:rejected'].includes(d.type)
+    && d.requestId === full.requestId, start, timeout).catch(() => ({type: 'timeout', requestId: full.requestId}));
+  if (window.sessionId === full.sessionId && Number.isInteger(reply.revision)
+    && reply.revision >= window.revision) window.revision = reply.revision;
+  return reply;
+};
+window.control = msg => send({protocolVersion: 1, sessionId: window.sessionId, ...msg});
+frame.src = targetURL.href;
+</script></html>

@@ -144,6 +144,26 @@
   const MAX_FONT_FAMILIES = 8;
   const MAX_COMPOSITION_SHEETS = 16;
 
+  // Deliberately separate from legacy patch validation: this is an exact read-only contract.
+  const ROLE_IDENT = /(?:[\w\u00A0-\uFFFF-]|\\(?:[0-9a-f]{6}|[0-9a-f]{1,5}(?![0-9a-f])) ?|\\[^0-9a-f\r\n\f])+/i.source;
+  const ROLE_PART = `#${ROLE_IDENT}|\\.${ROLE_IDENT}|\\[data-design-(?:id|role)="(?:[^"\\\\{};<>\\r\\n]|\\\\["\\\\]|\\\\(?:[0-9a-f]{6}|[0-9a-f]{1,5}(?![0-9a-f]))(?: |(?! )))*"\\]|:nth-of-type\\(\\d{1,4}\\)`;
+  const ROLE_STEP = `(?:(?:[a-z][a-z0-9-]*|\\*)(?:${ROLE_PART})*|(?:${ROLE_PART})+)`;
+  const ROLE_SELECTOR = new RegExp(`^${ROLE_STEP}(?: > ${ROLE_STEP})*$`, 'i');
+
+  function exactRoleObject(value, keys) {
+    return isPlainObject(value) && Object.keys(value).length === keys.length
+      && keys.every(key => Object.prototype.hasOwnProperty.call(value, key));
+  }
+
+  function roleSelector(value, checkRoots = true) {
+    if (!isNonEmptyString(value, 2000) || /url\(|expression\(|\/\*|\*\/|!important/i.test(value)
+      || !ROLE_SELECTOR.test(value) || /^(?:html|body|\*)$/i.test(value) || /:nth-of-type\(0+\)/i.test(value)) return false;
+    if (!checkRoots) return true;
+    try {
+      return !Array.from(document.querySelectorAll(value)).some(el => el === document.documentElement || el === document.body);
+    } catch (e) { return false; }
+  }
+
   // ---------------------------------------------------------------------------
   // Targeted patch rules (binding contract table).
   // canonical(value, record) returns the canonical value, or undefined when the
@@ -453,6 +473,13 @@
       this.initOptions = rawOptions; // initFontKitBridge() tells a reused object from a new one
       this.protocolVersion = PROTOCOL_VERSION;
       this.revision = 0;
+      this.documentId = `document-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+      this.pageVersion = 0;
+      this.roleGeneration = 0;
+      this.roleTimer = null;
+      this.roleObserver = null;
+      this.roleURL = typeof location === 'undefined' ? '' : location.href;
+      this.roleStyle = '';
       this.options = {
         autoDiscover: true,
         autoDiscoverSemantic: true,
@@ -596,6 +623,7 @@
       this.listeners.forEach(([target, type, handler, options]) => target.removeEventListener(type, handler, options));
       this.listeners = [];
       if (this.mutationObserver) this.mutationObserver.disconnect();
+      if (this.roleObserver) this.roleObserver.disconnect();
       if (this.resizeObserver) this.resizeObserver.disconnect();
       clearTimeout(this.discoveryTimer);
       clearInterval(this.openerTimer);
@@ -850,6 +878,7 @@
     }
 
     dropSession() {
+      this.cancelRoleJobs();
       this.studioSource = null;
       this.studioOrigin = null;
       this.sessionId = null;
@@ -904,6 +933,9 @@
       if (!this.isFromSession(event, data)) return;
 
       switch (data.type) {
+        case 'design:detect':
+          this.detectTextStyles(data);
+          break;
         case 'design:update':
           this.handleUpdate(data);
           break;
@@ -940,6 +972,8 @@
       // (a closed opener Studio unpins first, see studioAlive()).
       if (this.studioAlive() && (event.source !== this.studioSource || event.origin !== this.studioOrigin)) return;
 
+      this.cancelRoleJobs();
+
       this.studioSource = event.source;
       this.studioOrigin = event.origin;
       this.sessionId = data.sessionId;
@@ -954,10 +988,13 @@
       // activate() runs the first discovery itself; later hellos rediscover.
       if (this.active) this.discoverTargets();
       else this.activate();
+      this.observeRolePage();
+      this.refreshRolePage();
       this.post({
         type: 'design:ready',
         revision: this.revision,
-        capabilities: { inspect: true, patch: true, typography: true, text: true, tokens: true, reset: true },
+        capabilities: { inspect: true, patch: true, typography: true, text: true, tokens: true, reset: true, roleDetection: true },
+        roleState: this.roleState(),
         viewport: { width: window.innerWidth, height: window.innerHeight },
         tokens: { css: this.getCurrentTokens() },
         targets: this.getTargetManifest(false),
@@ -975,6 +1012,311 @@
       if (typeof targetId === 'string') message.targetId = targetId;
       if (detail) message.detail = detail;
       this.post(message);
+    }
+
+    roleState() {
+      return { documentId: this.documentId, pageVersion: this.pageVersion, pageURL: this.rolePageURL(),
+        roles: [], canonicalCss: '', hashAlgorithm: 'fnv1a32', cssHash: '811c9dc5' };
+    }
+
+    rolePageURL() {
+      try {
+        const url = new URL(location.href);
+        return ['http:', 'https:'].includes(url.protocol) && url.origin === location.origin
+          && !url.username && !url.password && (url.pathname + url.search + url.hash).length <= 2000 ? url.href : null;
+      } catch (e) { return null; }
+    }
+
+    cancelRoleJobs() {
+      this.roleGeneration += 1;
+      clearTimeout(this.roleTimer);
+      this.roleTimer = null;
+    }
+
+    noteRoleMutations(records) {
+      if (records.some(record => !this.isOverlayNode(record.target)
+        && !(record.type === 'attributes' && this.isBridgeAttr(record.target, record.attributeName)))) {
+        this.pageVersion += 1;
+      }
+    }
+
+    observeRolePage() {
+      if (this.roleObserver) return;
+      this.roleObserver = new MutationObserver(records => this.noteRoleMutations(records));
+      this.roleObserver.observe(document.documentElement,
+        { subtree: true, childList: true, characterData: true, attributes: true });
+      // Native pseudo-state can change an already checked parent during any later yield.
+      for (const type of ['focusin', 'focusout', 'pointerover', 'pointerout', 'pointerdown', 'pointerup', 'pointercancel', 'keydown', 'keyup']) {
+        this.listen(document, type, event => {
+          if (type.startsWith('key') && (![' ', 'Enter'].includes(event.key)
+            || !event.target?.closest?.('button,input[type="button"],input[type="submit"],input[type="reset"]'))) return;
+          if (this.active && this.studioSource) this.pageVersion += 1;
+        }, { capture: true, passive: true });
+      }
+      this.roleStyle = this.roleStyleStamp();
+    }
+
+    roleStyleStamp() {
+      return JSON.stringify([window.innerWidth, window.innerHeight, document.fonts && document.fonts.status,
+        Array.from(document.styleSheets, sheet => {
+          try { return [sheet.disabled, sheet.media.mediaText, Array.from(sheet.cssRules, rule => rule.cssText)]; }
+          catch (e) { return [sheet.href, sheet.disabled, sheet.media.mediaText]; }
+        })]);
+    }
+
+    refreshRolePage() {
+      if (this.roleObserver) this.noteRoleMutations(this.roleObserver.takeRecords());
+      const style = this.roleStyleStamp();
+      if (location.href !== this.roleURL || style !== this.roleStyle) {
+        this.pageVersion += 1; this.roleURL = location.href; this.roleStyle = style;
+      }
+    }
+
+    styleSignature(el) {
+      const style = getComputedStyle(el);
+      const size = parseFloat(style.fontSize);
+      return { fontFamily: style.fontFamily.replace(/\s+/g, ' ').trim(), fontSize: round(size, 2),
+        fontWeight: Math.round(Number(style.fontWeight)), textTransform: style.textTransform,
+        letterSpacing: style.letterSpacing === 'normal' ? 0 : round(parseFloat(style.letterSpacing) / size, 4) };
+    }
+
+    renderedRoleText(text, visibility = new WeakMap()) {
+      const el = text.parentElement;
+      if (!text.data.trim() || !el || el.closest(`${EXCLUDED_SELECTOR},textarea,select,option,svg`)) return false;
+      const visible = node => {
+        if (!node) return true;
+        if (visibility.has(node)) return visibility.get(node);
+        const css = getComputedStyle(node);
+        const result = css.display !== 'none' && Number(css.opacity) !== 0 && visible(node.parentElement);
+        visibility.set(node, result); return result;
+      };
+      const css = getComputedStyle(el);
+      const alpha = /\/\s*([^\s)]+)\s*\)$/.exec(css.color);
+      if (!visible(el) || ['hidden', 'collapse'].includes(css.visibility)
+        || /rgba\([^)]*,\s*0\)$/.test(css.color) || alpha && parseFloat(alpha[1]) === 0) return false;
+      // display:contents has no element box; the direct text range still renders.
+      const range = document.createRange(); range.selectNodeContents(text);
+      return Array.from(range.getClientRects()).some(rect => {
+        let { left, right, top, bottom } = rect;
+        for (let node = el; node && node !== document.body && node !== document.documentElement; node = node.parentElement) {
+          const style = getComputedStyle(node);
+          if (style.overflowX === 'visible' && style.overflowY === 'visible') continue;
+          const box = node.getBoundingClientRect();
+          const scaleX = node.offsetWidth ? box.width / node.offsetWidth : 1;
+          const scaleY = node.offsetHeight ? box.height / node.offsetHeight : 1;
+          const x = box.left + node.clientLeft * scaleX, y = box.top + node.clientTop * scaleY;
+          if (style.overflowX !== 'visible') { left = Math.max(left, x); right = Math.min(right, x + node.clientWidth * scaleX); }
+          if (style.overflowY !== 'visible') { top = Math.max(top, y); bottom = Math.min(bottom, y + node.clientHeight * scaleY); }
+        }
+        // Viewport scrolling is not clipping: below-viewport text remains eligible.
+        return right > left && bottom > top;
+      });
+    }
+
+    *roleBindings(group, elements, query) {
+      const members = new Set(elements);
+      const choose = function* (values, reason, stable) {
+        const unique = Array.from(new Set(values));
+        if (!unique.length || unique.length > 32) return false;
+        const covered = new Set();
+        for (const value of unique) {
+          yield;
+          if (!roleSelector(value)) return false;
+          const found = query(value);
+          if (!found.length || found.some(el => !members.has(el))) return false;
+          for (const el of found) { yield; covered.add(el); }
+        }
+        if (covered.size !== members.size) return false;
+        group.selectors = unique.map(value => ({ value, stable, reason }));
+        group.bindingComplete = true; return true;
+      };
+      let shared = Array.from(elements[0].classList).filter(name => name.length <= 200);
+      const roles = [], ids = [];
+      for (const el of elements) {
+        yield;
+        shared = shared.filter(name => el.classList.contains(name));
+        roles.push(this.authorAttr(el, 'data-design-role')); ids.push(this.authorAttr(el, 'data-design-id'));
+      }
+      group.sharedClasses = shared.slice(0, 16);
+      if (roles.every(value => value !== null) && (yield* choose(roles.map(value =>
+        designIdSelector(value).replace('data-design-id=', 'data-design-role=')), 'author-role', true))) return;
+      if (ids.every(value => value) && ids.length <= 32 && (yield* choose(ids.map(designIdSelector), 'author-id', true))) return;
+      for (const name of shared) {
+        const uncertain = /(?:_[A-Za-z0-9]{5,}_\d+$|__[\w-]+___[\w-]{5}$)/.test(name);
+        if (yield* choose([`.${cssEscape(name)}`], uncertain ? 'css-module' : 'class', !uncertain)) return;
+      }
+      // A long or mixed binding cannot silently broaden the group's match set.
+      if (elements.length <= 32) yield* choose(elements.map(el => this.computeSelector(el)), 'dom-path', false);
+    }
+
+    detectTextStyles(data) {
+      const started = performance.now();
+      let size;
+      try { size = new TextEncoder().encode(JSON.stringify(data)).length; }
+      catch (e) { this.reject(data.requestId, 'invalid-message'); return; }
+      if (size > 256 * 1024) { this.reject(data.requestId, 'size-limit'); return; }
+      if (!exactRoleObject(data, ['type', 'protocolVersion', 'sessionId', 'requestId', 'documentId', 'knownRoles'])
+        || !isNonEmptyString(data.requestId, 200) || !isNonEmptyString(data.documentId, 200)
+        || !Array.isArray(data.knownRoles) || data.knownRoles.length > 128) {
+        this.reject(data.requestId, 'invalid-message'); return;
+      }
+      const ids = new Set();
+      for (const role of data.knownRoles) {
+        if (!exactRoleObject(role, ['id', 'selectors']) || !isNonEmptyString(role.id, 100) || ids.has(role.id)
+          || !Array.isArray(role.selectors) || role.selectors.length > 32) {
+          this.reject(data.requestId, 'invalid-message'); return;
+        }
+        ids.add(role.id);
+        if (!role.selectors.every(value => roleSelector(value, false))) { this.reject(data.requestId, 'unsupported-value'); return; }
+      }
+      if (data.documentId !== this.documentId) { this.reject(data.requestId, 'page-changed'); return; }
+      if (this.rolePageURL() === null) { this.reject(data.requestId, 'unsupported-value', 'Unsupported page URL'); return; }
+      this.cancelRoleJobs();
+      this.refreshRolePage();
+      const job = { generation: this.roleGeneration, source: this.studioSource, origin: this.studioOrigin,
+        session: this.sessionId, documentId: this.documentId, pageVersion: this.pageVersion,
+        pageURL: location.href, revision: this.revision, started, requestId: data.requestId,
+        groups: new Map(), seen: new Set(), selectorChecks: [] };
+      const iterator = this.collectRoleStyles(job, data);
+      const current = () => !this.disposed && job.generation === this.roleGeneration
+        && job.source === this.studioSource && job.origin === this.studioOrigin
+        && job.session === this.sessionId && job.documentId === this.documentId;
+      const fresh = () => {
+        this.refreshRolePage();
+        return job.pageVersion === this.pageVersion && job.pageURL === location.href && job.revision === this.revision;
+      };
+      const finish = reason => {
+        if (!current()) return;
+        if (!fresh()) reason = 'page-changed';
+        const reply = { type: 'design:detected', requestId: job.requestId, revision: job.revision,
+          documentId: job.documentId, pageVersion: job.pageVersion, pageURL: job.pageURL,
+          currentPageVersion: this.pageVersion, currentPageURL: this.rolePageURL(),
+          complete: reason === null, reason, elapsedMs: performance.now() - started,
+          scannedElements: job.seen.size, groups: Array.from(job.groups.values()), selectorChecks: job.selectorChecks };
+        if (!current()) return;
+        if (!fresh()) { reply.complete = false; reply.reason = 'page-changed'; }
+        reply.currentPageVersion = this.pageVersion; reply.currentPageURL = this.rolePageURL();
+        if (reply.currentPageURL === null) { reply.groups = []; reply.selectorChecks = []; }
+        reply.elapsedMs = performance.now() - started;
+        if (reply.elapsedMs > 2000 && reply.reason !== 'page-changed') {
+          reply.complete = false; reply.reason = 'time-budget';
+        }
+        const scalarBytes = JSON.stringify([reply.elapsedMs, reply.complete, reply.reason]).length;
+        const bytes = new TextEncoder().encode(JSON.stringify({ protocolVersion: 1, sessionId: job.session, ...reply })).length;
+        // Include serialization time and its changed numeric/reason bytes without another full serialization.
+        reply.elapsedMs = performance.now() - started;
+        if (reply.elapsedMs > 2000 && reply.reason !== 'page-changed') { reply.complete = false; reply.reason = 'time-budget'; }
+        if (bytes + JSON.stringify([reply.elapsedMs, reply.complete, reply.reason]).length - scalarBytes > 1024 * 1024) {
+          reply.complete = false; reply.reason = 'reply-limit'; reply.groups = []; reply.selectorChecks = [];
+        }
+        this.roleTimer = null;
+        this.post(reply);
+      };
+      const run = () => {
+        if (!current()) return;
+        if (!fresh()) { finish('page-changed'); return; }
+        const slice = performance.now();
+        let step;
+        do {
+          if (performance.now() - started > 2000) { finish('time-budget'); return; }
+          step = iterator.next();
+        } while (!step.done && performance.now() - slice < 8);
+        if (step.done) finish(step.value);
+        else this.roleTimer = setTimeout(run, 0);
+      };
+      this.roleTimer = setTimeout(run, 0);
+    }
+
+    *collectRoleStyles(job, data) {
+      const { groups, seen } = job;
+      // Native syntax/root validation also runs cooperatively, before any evidence.
+      for (const role of data.knownRoles) for (const selector of role.selectors) {
+        yield;
+        if (!roleSelector(selector)) {
+          this.reject(job.requestId, 'unsupported-value'); this.cancelRoleJobs(); return null;
+        }
+      }
+      const visibility = new WeakMap(), members = new Map(), styles = new Map(), queries = new Map();
+      const query = value => {
+        if (!queries.has(value)) queries.set(value, Array.from(document.querySelectorAll(value)));
+        return queries.get(value);
+      };
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) {
+        const text = walker.currentNode, el = text.parentElement;
+        yield;
+        if (seen.has(el) || !this.renderedRoleText(text, visibility)) continue;
+        seen.add(el);
+        if (seen.size > 10000) return 'element-limit';
+        const style = this.styleSignature(el);
+        styles.set(el, style);
+        const rawRole = this.authorAttr(el, 'data-design-role');
+        const role = rawRole && rawRole.trim() || null;
+        if (role && role.length > 200 || !Number.isFinite(style.fontSize) || !Number.isFinite(style.fontWeight)
+          || !Number.isFinite(style.letterSpacing) || !['none', 'uppercase', 'lowercase', 'capitalize'].includes(style.textTransform)) return 'identity-limit';
+        const identity = role ? { kind: 'author-role', name: role } : { kind: 'style', style };
+        const key = JSON.stringify(identity);
+        let group = groups.get(key);
+        if (!group) {
+          if (groups.size >= 128) return 'group-limit';
+          group = { id: `group-${groups.size + 1}`, identity, suggestedName: role || 'Text', authorRole: role,
+            signatures: [], elementCount: 0, sampleText: collapse(text.data).slice(0, 200), sharedClasses: [],
+            selectors: [], bindingComplete: false, nearDuplicateIds: [] };
+          groups.set(key, group); members.set(group, []);
+        }
+        let variant = group.signatures.find(v => JSON.stringify(v.style) === JSON.stringify(style));
+        if (!variant) {
+          if (group.signatures.length >= 8) return 'variant-limit';
+          variant = { style, count: 0 }; group.signatures.push(variant);
+        }
+        members.get(group).push(el); variant.count += 1; group.elementCount += 1;
+      }
+      for (const group of groups.values()) { yield; yield* this.roleBindings(group, members.get(group), query); }
+      const list = Array.from(groups.values());
+      for (let i = 0; i < list.length; i += 1) for (let j = i + 1; j < list.length; j += 1) {
+        let near = false;
+        for (const left of list[i].signatures) for (const right of list[j].signatures) {
+          yield;
+          const a = left.style, b = right.style;
+          if (a.fontFamily === b.fontFamily && a.textTransform === b.textTransform
+            && Math.abs(Math.round(a.fontSize * 100) - Math.round(b.fontSize * 100)) <= 100
+            && Math.abs(a.fontWeight - b.fontWeight) <= 100
+            && Math.abs(Math.round(a.letterSpacing * 10000) - Math.round(b.letterSpacing * 10000)) <= 200) near = true;
+        }
+        if (near) { list[i].nearDuplicateIds.push(list[j].id); list[j].nearDuplicateIds.push(list[i].id); }
+      }
+      for (const role of data.knownRoles) for (const selector of role.selectors) {
+        yield;
+        const signatures = [];
+        const matched = query(selector);
+        if (matched.some(el => el === document.documentElement || el === document.body)) {
+          this.reject(job.requestId, 'unsupported-value'); this.cancelRoleJobs(); return null;
+        }
+        for (const el of matched) {
+          yield;
+          const style = styles.get(el);
+          if (!style) continue;
+          let variant = signatures.find(v => JSON.stringify(v.style) === JSON.stringify(style));
+          if (!variant) { variant = { style, count: 0 }; signatures.push(variant); }
+          variant.count += 1;
+        }
+        job.selectorChecks.push({ roleId: role.id, selector,
+          matchCount: signatures.reduce((sum, v) => sum + v.count, 0), signatures });
+      }
+      // Pseudo-state and animations can change rendering without changing DOM/rule text.
+      const rendered = new Set();
+      const check = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      while (check.nextNode()) {
+        yield;
+        const text = check.currentNode, el = text.parentElement;
+        if (rendered.has(el) || !this.renderedRoleText(text)) continue;
+        if (!styles.has(el) || JSON.stringify(this.styleSignature(el)) !== JSON.stringify(styles.get(el))) {
+          this.pageVersion += 1; return 'page-changed';
+        }
+        rendered.add(el);
+      }
+      if (rendered.size !== styles.size) { this.pageVersion += 1; return 'page-changed'; }
+      return null;
     }
 
     // Common request checks. Returns false (after replying) when rejected.
@@ -1201,6 +1543,7 @@
           this.reject(data.requestId, 'unknown-target', { targetId: data.targetId }, data.targetId);
           return;
         }
+        this.cancelRoleJobs();
         this.releaseCssOrder(record.element);
         this.resetElement(record.element);
         this.releaseFontRef(record.id);
@@ -1211,6 +1554,7 @@
         return;
       }
 
+      this.cancelRoleJobs();
       // Everything: placed assets, every bridge-touched element (styles, tokens
       // on :root, wireframe helpers), every text change and attribute write, every
       // moved child, every injected font stylesheet.

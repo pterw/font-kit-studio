@@ -1,0 +1,90 @@
+{
+  "schema": "fontkit-static-style-oracle",
+  "schemaVersion": 1,
+  "metadata": {
+    "framework": null,
+    "fontAssets": "local generic families only",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "probe": {
+      "inputSelector": "#responsiveness",
+      "state": "window.fixtureProbe",
+      "heartbeat": "requestAnimationFrame counter",
+      "acknowledged": "native input value copied on every input event"
+    },
+    "normalization": {
+      "family": "collapse whitespace, preserve quotes and case",
+      "size": "px rounded to two decimals",
+      "weight": "numeric integer",
+      "case": "computed text-transform",
+      "tracking": "normal=0, otherwise px/fontSize rounded to four decimals"
+    }
+  },
+  "eligibleParentCount": 5000,
+  "groupCount": 20,
+  "groups": [
+    {"id": "g00", "identity": {"kind": "style", "style": {"fontFamily": "serif", "fontSize": 20, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0}}, "signature": {"fontFamily": "serif", "fontSize": 20, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0}, "elementCount": 250, "variants": [{"signature": {"fontFamily": "serif", "fontSize": 20, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0}, "elementCount": 250}], "bindings": [{"selector": ".g00", "stable": true, "elementCount": 250, "authorIds": {"prefix": "g00.", "first": "000", "last": "249"}}]},
+    {"id": "g01", "identity": {"kind": "style", "style": {"fontFamily": "serif", "fontSize": 20.5, "fontWeight": 450, "textTransform": "none", "letterSpacing": 0.01}}, "signature": {"fontFamily": "serif", "fontSize": 20.5, "fontWeight": 450, "textTransform": "none", "letterSpacing": 0.01}, "elementCount": 250, "variants": [{"signature": {"fontFamily": "serif", "fontSize": 20.5, "fontWeight": 450, "textTransform": "none", "letterSpacing": 0.01}, "elementCount": 250}], "bindings": [{"selector": ".g01", "stable": true, "elementCount": 250, "authorIds": {"prefix": "g01.", "first": "000", "last": "249"}}]},
+    {"id": "g02", "identity": {"kind": "style", "style": {"fontFamily": "serif", "fontSize": 21, "fontWeight": 500, "textTransform": "none", "letterSpacing": 0.02}}, "signature": {"fontFamily": "serif", "fontSize": 21, "fontWeight": 500, "textTransform": "none", "letterSpacing": 0.02}, "elementCount": 250, "variants": [{"signature": {"fontFamily": "serif", "fontSize": 21, "fontWeight": 500, "textTransform": "none", "letterSpacing": 0.02}, "elementCount": 250}], "bindings": [{"selector": ".g02", "stable": true, "elementCount": 250, "authorIds": {"prefix": "g02.", "first": "000", "last": "249"}}]},
+    {"id": "g03", "identity": {"kind": "style", "style": {"fontFamily": "serif", "fontSize": 21.01, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0}}, "signature": {"fontFamily": "serif", "fontSize": 21.01, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0}, "elementCount": 250, "variants": [{"signature": {"fontFamily": "serif", "fontSize": 21.01, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0}, "elementCount": 250}], "bindings": [{"selector": ".g03", "stable": true, "elementCount": 250, "authorIds": {"prefix": "g03.", "first": "000", "last": "249"}}]},
+    {"id": "g04", "identity": {"kind": "style", "style": {"fontFamily": "serif", "fontSize": 20, "fontWeight": 501, "textTransform": "none", "letterSpacing": 0}}, "signature": {"fontFamily": "serif", "fontSize": 20, "fontWeight": 501, "textTransform": "none", "letterSpacing": 0}, "elementCount": 250, "variants": [{"signature": {"fontFamily": "serif", "fontSize": 20, "fontWeight": 501, "textTransform": "none", "letterSpacing": 0}, "elementCount": 250}], "bindings": [{"selector": ".g04", "stable": true, "elementCount": 250, "authorIds": {"prefix": "g04.", "first": "000", "last": "249"}}]},
+    {"id": "g05", "identity": {"kind": "style", "style": {"fontFamily": "serif", "fontSize": 20, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0.0201}}, "signature": {"fontFamily": "serif", "fontSize": 20, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0.0201}, "elementCount": 250, "variants": [{"signature": {"fontFamily": "serif", "fontSize": 20, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0.0201}, "elementCount": 250}], "bindings": [{"selector": ".g05", "stable": true, "elementCount": 250, "authorIds": {"prefix": "g05.", "first": "000", "last": "249"}}]},
+    {"id": "g06", "identity": {"kind": "style", "style": {"fontFamily": "sans-serif", "fontSize": 20, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0}}, "signature": {"fontFamily": "sans-serif", "fontSize": 20, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0}, "elementCount": 250, "variants": [{"signature": {"fontFamily": "sans-serif", "fontSize": 20, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0}, "elementCount": 250}], "bindings": [{"selector": ".g06", "stable": true, "elementCount": 250, "authorIds": {"prefix": "g06.", "first": "000", "last": "249"}}]},
+    {"id": "g07", "identity": {"kind": "style", "style": {"fontFamily": "serif", "fontSize": 20, "fontWeight": 400, "textTransform": "uppercase", "letterSpacing": 0}}, "signature": {"fontFamily": "serif", "fontSize": 20, "fontWeight": 400, "textTransform": "uppercase", "letterSpacing": 0}, "elementCount": 250, "variants": [{"signature": {"fontFamily": "serif", "fontSize": 20, "fontWeight": 400, "textTransform": "uppercase", "letterSpacing": 0}, "elementCount": 250}], "bindings": [{"selector": ".g07", "stable": true, "elementCount": 250, "authorIds": {"prefix": "g07.", "first": "000", "last": "249"}}]},
+    {"id": "g08", "identity": {"kind": "style", "style": {"fontFamily": "serif", "fontSize": 18, "fontWeight": 300, "textTransform": "capitalize", "letterSpacing": -0.01}}, "signature": {"fontFamily": "serif", "fontSize": 18, "fontWeight": 300, "textTransform": "capitalize", "letterSpacing": -0.01}, "elementCount": 250, "variants": [{"signature": {"fontFamily": "serif", "fontSize": 18, "fontWeight": 300, "textTransform": "capitalize", "letterSpacing": -0.01}, "elementCount": 250}], "bindings": [{"selector": ".g08", "stable": true, "elementCount": 250, "authorIds": {"prefix": "g08.", "first": "000", "last": "249"}}]},
+    {"id": "g09", "identity": {"kind": "style", "style": {"fontFamily": "monospace", "fontSize": 14, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0}}, "signature": {"fontFamily": "monospace", "fontSize": 14, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0}, "elementCount": 250, "variants": [{"signature": {"fontFamily": "monospace", "fontSize": 14, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0}, "elementCount": 250}], "bindings": [{"selector": ".g09", "stable": true, "elementCount": 250, "authorIds": {"prefix": "g09.", "first": "000", "last": "249"}}]},
+    {"id": "g10", "identity": {"kind": "style", "style": {"fontFamily": "monospace", "fontSize": 14, "fontWeight": 700, "textTransform": "none", "letterSpacing": 0}}, "signature": {"fontFamily": "monospace", "fontSize": 14, "fontWeight": 700, "textTransform": "none", "letterSpacing": 0}, "elementCount": 250, "variants": [{"signature": {"fontFamily": "monospace", "fontSize": 14, "fontWeight": 700, "textTransform": "none", "letterSpacing": 0}, "elementCount": 250}], "bindings": [{"selector": ".g10", "stable": true, "elementCount": 250, "authorIds": {"prefix": "g10.", "first": "000", "last": "249"}}]},
+    {"id": "g11", "identity": {"kind": "style", "style": {"fontFamily": "sans-serif", "fontSize": 24, "fontWeight": 600, "textTransform": "lowercase", "letterSpacing": 0.025}}, "signature": {"fontFamily": "sans-serif", "fontSize": 24, "fontWeight": 600, "textTransform": "lowercase", "letterSpacing": 0.025}, "elementCount": 250, "variants": [{"signature": {"fontFamily": "sans-serif", "fontSize": 24, "fontWeight": 600, "textTransform": "lowercase", "letterSpacing": 0.025}, "elementCount": 250}], "bindings": [{"selector": ".g11", "stable": true, "elementCount": 250, "authorIds": {"prefix": "g11.", "first": "000", "last": "249"}}]},
+    {"id": "g12", "identity": {"kind": "style", "style": {"fontFamily": "sans-serif", "fontSize": 28, "fontWeight": 700, "textTransform": "uppercase", "letterSpacing": 0.03}}, "signature": {"fontFamily": "sans-serif", "fontSize": 28, "fontWeight": 700, "textTransform": "uppercase", "letterSpacing": 0.03}, "elementCount": 250, "variants": [{"signature": {"fontFamily": "sans-serif", "fontSize": 28, "fontWeight": 700, "textTransform": "uppercase", "letterSpacing": 0.03}, "elementCount": 250}], "bindings": [{"selector": ".g12", "stable": true, "elementCount": 250, "authorIds": {"prefix": "g12.", "first": "000", "last": "249"}}]},
+    {"id": "g13", "identity": {"kind": "style", "style": {"fontFamily": "serif", "fontSize": 32, "fontWeight": 700, "textTransform": "none", "letterSpacing": 0}}, "signature": {"fontFamily": "serif", "fontSize": 32, "fontWeight": 700, "textTransform": "none", "letterSpacing": 0}, "elementCount": 250, "variants": [{"signature": {"fontFamily": "serif", "fontSize": 32, "fontWeight": 700, "textTransform": "none", "letterSpacing": 0}, "elementCount": 250}], "bindings": [{"selector": ".g13", "stable": true, "elementCount": 250, "authorIds": {"prefix": "g13.", "first": "000", "last": "249"}}]},
+    {"id": "g14", "identity": {"kind": "style", "style": {"fontFamily": "sans-serif", "fontSize": 12, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0.05}}, "signature": {"fontFamily": "sans-serif", "fontSize": 12, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0.05}, "elementCount": 250, "variants": [{"signature": {"fontFamily": "sans-serif", "fontSize": 12, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0.05}, "elementCount": 250}], "bindings": [{"selector": ".g14", "stable": true, "elementCount": 250, "authorIds": {"prefix": "g14.", "first": "000", "last": "249"}}]},
+    {"id": "g15", "identity": {"kind": "style", "style": {"fontFamily": "serif", "fontSize": 16, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0}}, "signature": {"fontFamily": "serif", "fontSize": 16, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0}, "elementCount": 250, "variants": [{"signature": {"fontFamily": "serif", "fontSize": 16, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0}, "elementCount": 250}], "bindings": [{"selector": ".g15", "stable": true, "elementCount": 250, "authorIds": {"prefix": "g15.", "first": "000", "last": "249"}}]},
+    {"id": "g16", "identity": {"kind": "style", "style": {"fontFamily": "serif", "fontSize": 16, "fontWeight": 500, "textTransform": "none", "letterSpacing": 0}}, "signature": {"fontFamily": "serif", "fontSize": 16, "fontWeight": 500, "textTransform": "none", "letterSpacing": 0}, "elementCount": 250, "variants": [{"signature": {"fontFamily": "serif", "fontSize": 16, "fontWeight": 500, "textTransform": "none", "letterSpacing": 0}, "elementCount": 250}], "bindings": [{"selector": ".g16", "stable": true, "elementCount": 250, "authorIds": {"prefix": "g16.", "first": "000", "last": "249"}}]},
+    {"id": "g17", "identity": {"kind": "style", "style": {"fontFamily": "sans-serif", "fontSize": 36, "fontWeight": 800, "textTransform": "none", "letterSpacing": -0.02}}, "signature": {"fontFamily": "sans-serif", "fontSize": 36, "fontWeight": 800, "textTransform": "none", "letterSpacing": -0.02}, "elementCount": 250, "variants": [{"signature": {"fontFamily": "sans-serif", "fontSize": 36, "fontWeight": 800, "textTransform": "none", "letterSpacing": -0.02}, "elementCount": 250}], "bindings": [{"selector": ".g17", "stable": true, "elementCount": 250, "authorIds": {"prefix": "g17.", "first": "000", "last": "249"}}]},
+    {"id": "g18", "identity": {"kind": "style", "style": {"fontFamily": "monospace", "fontSize": 16, "fontWeight": 500, "textTransform": "none", "letterSpacing": 0.01}}, "signature": {"fontFamily": "monospace", "fontSize": 16, "fontWeight": 500, "textTransform": "none", "letterSpacing": 0.01}, "elementCount": 250, "variants": [{"signature": {"fontFamily": "monospace", "fontSize": 16, "fontWeight": 500, "textTransform": "none", "letterSpacing": 0.01}, "elementCount": 250}], "bindings": [{"selector": ".g18", "stable": true, "elementCount": 250, "authorIds": {"prefix": "g18.", "first": "000", "last": "249"}}]},
+    {"id": "g19", "identity": {"kind": "style", "style": {"fontFamily": "cursive", "fontSize": 22, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0}}, "signature": {"fontFamily": "cursive", "fontSize": 22, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0}, "elementCount": 250, "variants": [{"signature": {"fontFamily": "cursive", "fontSize": 22, "fontWeight": 400, "textTransform": "none", "letterSpacing": 0}, "elementCount": 250}], "bindings": [{"selector": ".g19", "stable": true, "elementCount": 250, "authorIds": {"prefix": "g19.", "first": "000", "last": "249"}}]}
+  ],
+  "thresholdCases": [
+    {"left": "g00", "right": "g01", "nearDuplicate": true, "reason": "strictly inside all numeric boundaries"},
+    {"left": "g00", "right": "g02", "nearDuplicate": true, "reason": "size 1px, weight 100, tracking 0.02em inclusive boundaries"},
+    {"left": "g00", "right": "g03", "nearDuplicate": false, "reason": "size outside at 1.01px"},
+    {"left": "g00", "right": "g04", "nearDuplicate": false, "reason": "weight outside at 101"},
+    {"left": "g00", "right": "g05", "nearDuplicate": false, "reason": "tracking outside at 0.0201em"},
+    {"left": "g00", "right": "g06", "nearDuplicate": false, "reason": "family differs"},
+    {"left": "g00", "right": "g07", "nearDuplicate": false, "reason": "case differs"}
+  ],
+  "nested": {
+    "outer": "g00.000",
+    "inner": "g00.001",
+    "directTextNodesForOuter": 2,
+    "displayContents": "g00.002",
+    "hiddenDescendantOf": "g00.003"
+  },
+  "exclusions": [
+    "hidden-direct",
+    "hidden-ancestor",
+    "invisible",
+    "collapsed",
+    "transparent-parent",
+    "transparent-color",
+    "zero-text",
+    "nested-hidden",
+    "fontkit-bridge-overlay",
+    "fontkit-bridge-hover",
+    "placed-asset",
+    "excluded-textarea",
+    "excluded-option",
+    "svg-text",
+    "shadow-host",
+    "pseudo-only"
+  ],
+  "outsideScope": [
+    "form values/placeholders",
+    "pseudo text",
+    "shadow roots",
+    "nested frame documents",
+    "SVG text"
+  ]
+}

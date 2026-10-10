@@ -1,3 +1,5 @@
 packages/fontkitstudio/** text eol=lf
+# Keep tagged Bootstrap 4 fixture assets byte-identical to their upstream sources.
+fixtures/bootstrap4-static/vendor/** -text
 # Supplied provenance files: their bytes are fixed, so the whitespace check skips them.
 docs/reference/** -whitespace
