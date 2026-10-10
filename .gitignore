@@ -15,3 +15,5 @@ fixtures/*/.next/
 # coding agent in its environment (never in CI); they are not the fixture's.
 fixtures/next-app/AGENTS.md
 fixtures/next-app/CLAUDE.md
+# A maintainer's local Claude Code configuration; AGENTS.md holds the shared rules.
+/CLAUDE.md
