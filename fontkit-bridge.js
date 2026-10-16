@@ -1360,10 +1360,48 @@
 
     postRoleReceipt(job, complete, reason, outcomes) {
       this.refreshRolePage();
-      this.post({ type: 'design:roles-applied', requestId: job.requestId, operation: job.operation, revision: job.revision,
+      const message = { type: 'design:roles-applied', requestId: job.requestId, operation: job.operation, revision: job.revision,
         documentId: job.documentId, pageVersion: job.pageVersion, currentPageVersion: this.pageVersion,
         currentPageURL: this.rolePageURL(), roles: job.roles, canonicalCss: job.css, hashAlgorithm: 'fnv1a32',
-        cssHash: job.hash, outcomesComplete: complete, outcomeReason: reason, outcomes });
+        cssHash: job.hash, outcomesComplete: complete, outcomeReason: reason, outcomes };
+      this.fitRoleReceipt(message);
+      this.post(message);
+    }
+
+    // The reply limit is 1 MiB of UTF-8 JSON. Each outcome is serialized once; when the total is over the
+    // limit, loss entries collapse from the last role backwards (named groups first, then every entry)
+    // into one unnamed complex-cascade entry per role and property. Counts always sum.
+    fitRoleReceipt(message) {
+      // Headroom for the fields the bridge adds when it posts (protocolVersion, sessionId).
+      const limit = 1048576 - 1024;
+      const encoder = new TextEncoder();
+      const bytes = value => encoder.encode(JSON.stringify(value)).length;
+      const sizes = message.outcomes.map(bytes);
+      let total = bytes({ ...message, outcomes: [] }) + sizes.reduce((sum, size) => sum + size + 1, 0);
+      const collapse = (outcome, keep) => {
+        const merged = new Map(), kept = [];
+        for (const group of outcome.losses) {
+          if (keep(group)) { kept.push(group); continue; }
+          const into = merged.get(group.property) || { property: group.property, reason: 'complex-cascade', winningSelector: null, count: 0 };
+          into.count += group.count; merged.set(group.property, into);
+        }
+        // An existing unnamed complex-cascade group belongs with the merged one.
+        const rest = kept.filter(group => !(merged.has(group.property) && group.reason === 'complex-cascade' && group.winningSelector === null));
+        for (const group of kept) if (!rest.includes(group)) merged.get(group.property).count += group.count;
+        outcome.losses = rest.concat(Array.from(merged.values()));
+        const reasons = ['author-rule', 'inline', 'inherited', 'unreadable-sheet', 'complex-cascade', 'stylesheet-blocked', 'budget-exceeded'];
+        outcome.losses.sort((a, b) => ROLE_PROPERTY_KEYS.indexOf(a.property) - ROLE_PROPERTY_KEYS.indexOf(b.property)
+          || reasons.indexOf(a.reason) - reasons.indexOf(b.reason)
+          || (a.winningSelector === b.winningSelector ? 0 : a.winningSelector === null ? -1 : b.winningSelector === null ? 1
+            : a.winningSelector < b.winningSelector ? -1 : 1));
+      };
+      for (const keep of [group => group.winningSelector === null, () => false]) {
+        for (let i = message.outcomes.length - 1; i >= 0 && total > limit; i -= 1) {
+          collapse(message.outcomes[i], keep);
+          const size = bytes(message.outcomes[i]);
+          total += size - sizes[i]; sizes[i] = size;
+        }
+      }
     }
 
     // After a rendered frame and a freshness recheck. Hello or dropSession (the epoch) suppresses the
@@ -1391,28 +1429,211 @@
       setTimeout(once, 250); // a hidden page may never paint
     }
 
-    roleMismatches(style, props) {
-      const lost = [];
-      const size = parseFloat(style.fontSize);
-      const same = (actual, expected, tolerance) => Math.abs(actual - expected) <= tolerance;
-      if ('fontFamily' in props && familyNames(style.fontFamily) !== familyNames(props.fontFamily)) lost.push('fontFamily');
-      if ('fontSize' in props && !same(size, props.fontSize, 0.01)) lost.push('fontSize');
-      if ('fontWeight' in props && Number(style.fontWeight) !== props.fontWeight) lost.push('fontWeight');
-      if ('lineHeight' in props && !same(parseFloat(style.lineHeight), props.lineHeight * size, 0.05)) lost.push('lineHeight');
-      if ('letterSpacing' in props
-        && !same(style.letterSpacing === 'normal' ? 0 : parseFloat(style.letterSpacing), props.letterSpacing * size, 0.02)) lost.push('letterSpacing');
-      if ('textTransform' in props && style.textTransform !== props.textTransform) lost.push('textTransform');
-      return lost;
+    // One comparison for the whole preview: roleMismatches (computed vs requested) and loss attribution
+    // (declared vs computed) both reduce to absolute values and meet here, so they cannot drift.
+    roleComputed(key, style) {
+      switch (key) {
+        case 'fontFamily': return familyNames(style.fontFamily);
+        case 'fontSize': return parseFloat(style.fontSize);
+        case 'fontWeight': return Number(style.fontWeight);
+        case 'lineHeight': return style.lineHeight === 'normal' ? 'normal' : parseFloat(style.lineHeight);
+        case 'letterSpacing': return style.letterSpacing === 'normal' ? 0 : parseFloat(style.letterSpacing);
+        default: return style.textTransform;
+      }
     }
 
-    // Computed comparison over eligible rendered parents, deduplicated across each role's selector
-    // union. At most 10,000 parents and 2,000 ms; past either the result is incomplete, with true counts.
+    roleSame(key, actual, expected) {
+      if (typeof actual === 'string' || typeof expected === 'string') return actual === expected;
+      return Math.abs(actual - expected) <= ({ fontSize: 0.01, lineHeight: 0.05, letterSpacing: 0.02 }[key] || 0);
+    }
+
+    // Declared CSS text to the same absolute value, or null when it is not absolute and comparable.
+    roleDeclared(key, text, size) {
+      const value = text.trim();
+      if (/^(?:initial|revert|revert-layer|inherit|unset)$/i.test(value)) return null;
+      const px = /^[+-]?(?:\d+\.?\d*|\.\d+)px$/i.test(value) ? parseFloat(value) : null;
+      const number = /^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(value) ? parseFloat(value) : null;
+      const normal = value.toLowerCase() === 'normal';
+      switch (key) {
+        case 'fontFamily': return /[()]/.test(value) ? null : familyNames(value);
+        case 'fontSize': return px;
+        case 'fontWeight': return normal ? 400 : value.toLowerCase() === 'bold' ? 700 : number;
+        case 'lineHeight': return normal ? 'normal' : px !== null ? px : number === null ? null : number * size;
+        case 'letterSpacing': return normal ? 0 : px;
+        default: return /^[a-z-]+$/i.test(value) ? value.toLowerCase() : null;
+      }
+    }
+
+    roleMismatches(style, props) {
+      const size = parseFloat(style.fontSize);
+      const requested = key => ({ fontFamily: () => familyNames(props.fontFamily), lineHeight: () => props.lineHeight * size,
+        letterSpacing: () => props.letterSpacing * size }[key] || (() => props[key]))();
+      return ROLE_PROPERTY_KEYS.filter(key => key in props && !this.roleSame(key, this.roleComputed(key, style), requested(key)));
+    }
+
+    // Readable author style rules, collected once per job and indexed by declared property. A matching
+    // declaration inside @layer, @container, @scope or an unknown grouping rule is flagged complex, and a
+    // rule with nested rules is listed so that a match makes the element complex.
+    *collectAuthorRules(job) {
+      const found = { byProp: {}, nestedProps: new Set(), unreadable: false, budget: false, adopted: false };
+      const media = text => { try { return matchMedia(text).matches; } catch (e) { return true; } };
+      let visited = 0;
+      // The declared text, null when a shorthand hides it (all, or font holding var()), undefined when absent.
+      const declared = (style, key) => {
+        const value = style.getPropertyValue(ROLE_CSS_NAMES[key]);
+        const hidden = style.getPropertyValue('all') !== ''
+          || ['fontFamily', 'fontSize', 'fontWeight', 'lineHeight'].includes(key) && style.getPropertyValue('font') !== '';
+        return value !== '' ? value.trim() : hidden ? null : undefined;
+      };
+      const push = (rule, complex, text) => {
+        const entry = { text, complex };
+        for (const key of ROLE_PROPERTY_KEYS) {
+          const value = declared(rule.style, key);
+          if (value === undefined) continue;
+          const important = value === null || rule.style.getPropertyPriority(ROLE_CSS_NAMES[key]) === 'important';
+          (found.byProp[key] = found.byProp[key] || []).push({ entry, value, important });
+        }
+        return entry;
+      };
+      // Nested rules cannot be matched reliably, so a declaration inside any of them is complex for every element.
+      const nested = list => {
+        for (const child of list) {
+          if (child.style) for (const key of ROLE_PROPERTY_KEYS) if (declared(child.style, key) !== undefined) found.nestedProps.add(key);
+          if (child.cssRules) nested(child.cssRules);
+        }
+      };
+      const visit = function* (list, complex) {
+        for (const rule of list) {
+          if (found.budget) return;
+          visited += 1;
+          if (visited % 64 === 0) {
+            yield;
+            if (performance.now() - job.started > 1000) { found.budget = true; return; }
+          }
+          if (rule instanceof CSSStyleRule) {
+            push(rule, complex, rule.selectorText).match = rule.selectorText;
+            if (rule.cssRules && rule.cssRules.length) nested(rule.cssRules);
+          } else if (rule instanceof CSSMediaRule) {
+            if (media(rule.media.mediaText)) yield* visit(rule.cssRules, complex);
+          } else if (rule instanceof CSSSupportsRule) {
+            let holds = true;
+            try { holds = CSS.supports(rule.conditionText); } catch (e) { found.unreadable = true; holds = false; }
+            if (holds) yield* visit(rule.cssRules, complex);
+          } else if (rule instanceof CSSImportRule) {
+            if (!media(rule.media.mediaText) || rule.supportsText && !CSS.supports(rule.supportsText)) continue;
+            let rules = null;
+            try { rules = rule.styleSheet ? rule.styleSheet.cssRules : null; } catch (e) { /* unreadable below */ }
+            if (!rules) { found.unreadable = true; continue; }
+            yield* visit(rules, complex || !('layerName' in rule) || rule.layerName != null);
+          } else if (rule.cssRules && !(typeof CSSKeyframesRule === 'function' && rule instanceof CSSKeyframesRule)) {
+            yield* visit(rule.cssRules, true);
+          }
+        }
+      };
+      found.adopted = Array.isArray(document.adoptedStyleSheets) && document.adoptedStyleSheets.length > 0;
+      const bridged = node => this.roleOwned.has(node) || this.bridgeFontLinks.has(node);
+      // A stylesheet node that has no sheet (pending, failed or unsupported) is an unreadable source.
+      for (const node of document.querySelectorAll('link[rel~="stylesheet" i], style')) {
+        if (!bridged(node) && !node.sheet && !node.disabled && !/\balternate\b/i.test(node.getAttribute('rel') || '')) found.unreadable = true;
+      }
+      for (const sheet of document.styleSheets) {
+        if (bridged(sheet.ownerNode) || sheet.disabled || !media(sheet.media.mediaText)) continue;
+        let rules;
+        try { rules = sheet.cssRules; } catch (e) { found.unreadable = true; continue; }
+        yield* visit(rules, false);
+        if (found.budget) break;
+      }
+      return found;
+    }
+
+    // Why a checked element lost one property. A winner is named only when every source that could set it
+    // is readable and enumerated; anything else is complex-cascade or unreadable-sheet.
+    *attributeLoss(job, ctx, element, key) {
+      const none = reason => ({ reason, selector: null });
+      const name = ROLE_CSS_NAMES[key];
+      const { el, style } = element;
+      if (ctx.active === null) {
+        const node = this.roleSheet;
+        ctx.active = Boolean(node) && this.verifyRoleSheet(node, job.css, job.roles.length)
+          && !node.hasAttribute('media') && node.getRootNode() === document && Array.from(document.styleSheets).includes(node.sheet);
+      }
+      if (!ctx.active) return none('stylesheet-blocked');
+      if (el.style.getPropertyPriority(name) === 'important') return none('inline');
+      if (!ctx.animations) {
+        ctx.animations = new Map();
+        for (const animation of typeof document.getAnimations === 'function' ? document.getAnimations() : []) {
+          const effect = animation.effect;
+          if (!effect || !effect.target || effect.pseudoElement) continue;
+          let keys = [];
+          try { keys = animation.transitionProperty ? [animation.transitionProperty] : effect.getKeyframes().flatMap(frame => Object.keys(frame)); }
+          catch (e) { keys = ROLE_PROPERTY_KEYS; }
+          ctx.animations.set(effect.target, (ctx.animations.get(effect.target) || []).concat(keys));
+        }
+      }
+      if ((ctx.animations.get(el) || []).some(entry => entry === key || entry === name)) return none('complex-cascade');
+      if (performance.now() - job.started > 1000) { ctx.budget = true; return none('budget-exceeded'); }
+      if (!ctx.found) ctx.found = yield* this.collectAuthorRules(job);
+      const found = ctx.found;
+      if (found.budget) { ctx.budget = true; return none('budget-exceeded'); }
+      const fallback = () => none(found.unreadable ? 'unreadable-sheet' : 'complex-cascade');
+      const hit = entry => {
+        if (!element.memo.has(entry)) {
+          let state = 'throw';
+          try { state = el.matches(entry.match) ? 'yes' : 'no'; } catch (e) { /* unknowable: never skipped */ }
+          element.memo.set(entry, state);
+        }
+        return element.memo.get(entry);
+      };
+      const states = (found.byProp[key] || []).map(item => hit(item.entry));
+      const matching = (found.byProp[key] || []).filter((item, i) => states[i] === 'yes');
+      if (matching.some(item => item.entry.complex) || found.nestedProps.has(key)) return none('complex-cascade');
+      // An inline normal declaration wins unless a matching !important author rule could beat it.
+      const inline = el.style.getPropertyValue(name);
+      if (inline !== '' && !matching.some(item => item.important)) {
+        const value = this.roleDeclared(key, inline, parseFloat(style.fontSize));
+        if (value !== null && this.roleSame(key, value, this.roleComputed(key, style))) return none('inline');
+        return fallback();
+      }
+      const owners = job.roles.filter((role, i) => element.sets[i].has(el) && key in role.properties).length;
+      const inlineHidden = el.style.getPropertyValue('all') !== ''
+        || ['fontFamily', 'fontSize', 'fontWeight', 'lineHeight'].includes(key) && el.style.getPropertyValue('font') !== '';
+      if (found.unreadable || found.adopted || el.assignedSlot || el.shadowRoot || owners > 1 || inlineHidden || states.includes('throw')
+        || matching.some(item => item.value === null)) return fallback();
+      if (!matching.length) return fallback();
+      const texts = new Set(matching.map(item => item.entry.text));
+      const named = text => (text.length <= 2000 ? text : null);
+      if (matching.every(item => /^(?:inherit|unset)$/i.test(item.value))) {
+        const parent = el.parentElement;
+        const selector = texts.size === 1 ? named(matching[0].entry.text) : null;
+        if (selector !== null && parent) {
+          const above = getComputedStyle(parent);
+          // Line height inherits as a ratio, so compare ratios; everything else compares absolutely.
+          const ratio = css => (css.lineHeight === 'normal' ? 'normal' : parseFloat(css.lineHeight) / parseFloat(css.fontSize));
+          const same = key === 'lineHeight' ? ratio(style) === ratio(above) || Math.abs(ratio(style) - ratio(above)) < 0.001
+            : this.roleSame(key, this.roleComputed(key, style), this.roleComputed(key, above));
+          if (same) return { reason: 'inherited', selector };
+        }
+        return fallback();
+      }
+      const size = parseFloat(style.fontSize);
+      const declared = matching.map(item => this.roleDeclared(key, item.value, size));
+      if (declared.includes(null)) return fallback();
+      const computed = this.roleComputed(key, style);
+      const winners = new Set(matching.filter((item, i) => this.roleSame(key, declared[i], computed)).map(item => item.entry.text));
+      const selector = winners.size === 1 ? named(Array.from(winners)[0]) : null;
+      return selector === null ? fallback() : { reason: 'author-rule', selector };
+    }
+
+    // Computed comparison over eligible rendered parents. `matched` counts every distinct element a role's
+    // selectors match; `checked` the eligible ones measured, at most 10,000 within 2,000 ms. Every counted
+    // loss carries a reason, and a selector is named only when proven.
     *measureRoleOutcomes(job) {
       const roles = job.roles;
       const sets = roles.map(role => new Set(document.querySelectorAll(role.selectors.join(', '))));
       const union = document.querySelectorAll(Array.from(new Set(roles.flatMap(role => role.selectors))).join(', '));
-      const records = roles.map(role => ({ id: role.id, matched: 0, checked: 0, mismatched: 0, lost: new Map() }));
+      const records = roles.map((role, i) => ({ id: role.id, matched: sets[i].size, checked: 0, mismatched: 0, lost: new Map() }));
       const visibility = new WeakMap();
+      const ctx = { active: null, found: null, animations: null, budget: false };
       let eligible = 0, budget = false;
       for (const el of union) {
         yield;
@@ -1421,20 +1642,57 @@
         if (!rendered) continue;
         if (eligible >= 10000) { budget = true; break; }
         eligible += 1;
-        const style = getComputedStyle(el);
-        roles.forEach((role, i) => {
-          if (!sets[i].has(el)) return;
+        const element = { el, sets, style: getComputedStyle(el), memo: new Map(), reasons: new Map() };
+        for (let i = 0; i < roles.length; i += 1) {
+          if (!sets[i].has(el)) continue;
           const record = records[i];
-          record.matched += 1; record.checked += 1;
-          const lost = this.roleMismatches(style, role.properties);
+          record.checked += 1;
+          const lost = this.roleMismatches(element.style, roles[i].properties);
           if (lost.length) record.mismatched += 1;
-          for (const property of lost) record.lost.set(property, (record.lost.get(property) || 0) + 1);
-        });
+          for (const property of lost) {
+            if (!element.reasons.has(property)) element.reasons.set(property, yield* this.attributeLoss(job, ctx, element, property));
+            const { reason, selector } = element.reasons.get(property);
+            const id = JSON.stringify([property, reason, selector]);
+            const group = record.lost.get(id) || { property, reason, winningSelector: selector, count: 0 };
+            group.count += 1; record.lost.set(id, group);
+          }
+        }
       }
+      const reasons = ['author-rule', 'inline', 'inherited', 'unreadable-sheet', 'complex-cascade', 'stylesheet-blocked', 'budget-exceeded'];
+      const order = (a, b) => ROLE_PROPERTY_KEYS.indexOf(a.property) - ROLE_PROPERTY_KEYS.indexOf(b.property)
+        || reasons.indexOf(a.reason) - reasons.indexOf(b.reason)
+        || (a.winningSelector === b.winningSelector ? 0 : a.winningSelector === null ? -1 : b.winningSelector === null ? 1
+          : a.winningSelector < b.winningSelector ? -1 : 1);
+      // At most 16 groups per role and property: the largest keep their names, the rest merge into one unnamed group.
+      const capped = groups => ROLE_PROPERTY_KEYS.flatMap(property => {
+        const mine = groups.filter(group => group.property === property);
+        const pool = mine.find(group => group.reason === 'complex-cascade' && group.winningSelector === null);
+        const rest = mine.filter(group => group !== pool).sort((a, b) => b.count - a.count || order(a, b));
+        const room = 16 - (pool || rest.length > 16 ? 1 : 0);
+        const merged = rest.slice(room).reduce((sum, group) => sum + group.count, 0) + (pool ? pool.count : 0);
+        const out = rest.slice(0, room);
+        if (merged) out.push({ property, reason: 'complex-cascade', winningSelector: null, count: merged });
+        return out;
+      }).sort(order);
+      budget = budget || ctx.budget;
       const outcomes = records.map(record => ({ id: record.id, matched: record.matched, checked: record.checked,
-        mismatched: record.mismatched, complete: !budget,
-        losses: ROLE_PROPERTY_KEYS.filter(key => record.lost.has(key)).map(key => ({ property: key,
-          count: record.lost.get(key), winningSelector: null, reason: 'complex-cascade' })) }));
+        mismatched: record.mismatched, complete: !budget, losses: capped(Array.from(record.lost.values())) }));
+      // Receipt-wide bound on named selector text (the reply limit is 1 MiB): the largest counts keep their
+      // names, the rest merge into the unnamed complex-cascade group of their role and property.
+      const named = outcomes.flatMap(outcome => outcome.losses.filter(group => group.winningSelector !== null)
+        .map(group => ({ outcome, group })));
+      named.sort((a, b) => b.group.count - a.group.count);
+      let used = 0;
+      for (const { outcome, group } of named) {
+        used += group.winningSelector.length;
+        if (used <= 262144) continue;
+        outcome.losses.splice(outcome.losses.indexOf(group), 1);
+        const pool = outcome.losses.find(other => other.property === group.property && other.winningSelector === null
+          && other.reason === 'complex-cascade');
+        if (pool) pool.count += group.count;
+        else outcome.losses.push({ property: group.property, reason: 'complex-cascade', winningSelector: null, count: group.count });
+      }
+      outcomes.forEach(outcome => outcome.losses.sort(order));
       return { budget, outcomes };
     }
 

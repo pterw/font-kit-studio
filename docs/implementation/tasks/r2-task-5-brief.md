@@ -237,3 +237,23 @@ These replace pins 1, 3 and 4 and the ownership list where they conflict.
    Handoff, state that S2 must validate it as bounded text: at most 2,000
    characters, no control characters, rendered with `textContent`. It is
    never the role selector grammar.
+## Additions after review (2026-10-16)
+
+10. **Nested rules.** If any readable sheet contains a nested style rule that
+    declares the property, that property is complex-cascade. Whether the
+    nested rule matches cannot be enumerated.
+11. **Whole-receipt bound.** The named `winningSelector` characters across all
+    outcomes total at most 262,144. Past that, groups merge into
+    `{null, complex-cascade}` and the counts still sum. A serialized receipt
+    stays under the 1 MiB reply limit.
+12. **Inline normal.** `inline` is reported for an inline normal declaration
+    only when the computed value equals the inline value and no matching
+    readable author `!important` rule exists. Otherwise the remaining rules
+    of pin 3 apply. This corrects item 2.4.
+13. **Shadow and import.** An element inside a shadow root gives
+    complex-cascade. A pending `@import` is unreadable.14. **Serialized receipt bound.** Before posting, the bridge measures the
+    receipt's UTF-8 JSON length. Above 1 MiB, it merges each role's named
+    groups for each property into `{null, complex-cascade}`, starting with the
+    last role. If the receipt is still too large, it merges every remaining
+    entry for a role and property into one, again from the last role. Counts
+    always sum, and the receipt always fits.

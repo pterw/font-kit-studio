@@ -191,7 +191,7 @@ class ApplyAndClearTests(RoleSheetCase):
 
     def test_zero_matches_are_a_real_measured_result_and_selectors_dedupe_across_the_union(self):
         """Given a selector matching nothing and a union matching visible paragraphs, when
-        applied, then zero is reported as zero and hidden or repeated matches are not counted."""
+        applied, then zero is reported as zero and hidden matches count as matched but not checked, and repeats are not counted twice."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, frame = self.open(engine)
@@ -205,13 +205,13 @@ class ApplyAndClearTests(RoleSheetCase):
                                           role('union', [BODY, 'main > p', 'p.body-copy'], fontSize=24)])
                 self.assertEqual(reply['type'], 'design:roles-applied', reply)
                 self.assertEqual([(o['id'], o['matched'], o['checked'], o['mismatched'], o['complete']) for o in reply['outcomes']],
-                                 [('none', 0, 0, 0, True), ('union', 2, 2, 0, True)])
+                                 [('none', 0, 0, 0, True), ('union', 3, 2, 0, True)])
                 self.assertTrue(reply['outcomesComplete'])
                 self.assertEqual(len(self.owned(frame)), 1)
 
-    def test_a_winning_author_rule_is_a_counted_loss_with_an_unproven_cascade(self):
+    def test_a_winning_author_rule_is_a_counted_loss_named_as_the_proven_winner(self):
         """Given an author rule with higher specificity, when a role sets another size, then
-        the author's 18px renders and the receipt counts the loss as complex-cascade."""
+        the author's 18px renders and the receipt counts the loss as author-rule `.card p`."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, frame = self.open(engine)
@@ -229,8 +229,8 @@ class ApplyAndClearTests(RoleSheetCase):
                 body, card = reply['outcomes']
                 self.assertEqual((body['matched'], body['checked'], body['mismatched'], body['losses']), (2, 2, 0, []))
                 self.assertEqual((card['matched'], card['checked'], card['mismatched'], card['complete']), (1, 1, 1, True))
-                self.assertEqual(card['losses'], [{'property': 'fontSize', 'count': 1, 'winningSelector': None,
-                                                   'reason': 'complex-cascade'}])
+                self.assertEqual(card['losses'], [{'property': 'fontSize', 'count': 1, 'winningSelector': '.card p',
+                                                   'reason': 'author-rule'}])
                 self.assertEqual((reply['outcomesComplete'], reply['outcomeReason']), (True, None))
                 self.assertEqual(self.size(frame, '.card-copy'), '18px')
                 self.assertEqual(frame.locator('.card-copy').evaluate('el => getComputedStyle(el).fontWeight'), '700')
@@ -1005,24 +1005,41 @@ class SplitPageVersionTests(RoleSheetCase):
                 self.assertGreater(after, before)
 
     def test_native_hover_during_a_scan_still_makes_it_page_changed_with_equal_versions(self):
-        """Given a pending scan of the 5,000-parent page, when the user hovers in the target,
-        then the scan is incomplete as page-changed and its two versions are equal."""
+        """Given a pending scan of the 5,000-parent page, when the user hovers in the target
+        part-way through it, then the scan is incomplete as page-changed and its two versions
+        are equal; a hover that lands outside the scan fails the premise instead of passing."""
+        attempts = []
         for engine in ENGINES:
             with self.subTest(engine=engine):
-                page, frame = self.open(engine, target=TARGET + '/fixtures/large-page/index.html')
-                self.hello(page)
-                self.control(page, {'type': 'design:mode', 'mode': 'interact'})
-                frame.evaluate("""() => {
-                    addEventListener('message', event => { if (event.data.type === 'design:detect') window.scanStart = performance.now(); });
-                    document.addEventListener('pointerover', () => { window.hoverAt = window.hoverAt || performance.now(); }, true);
-                }""")
-                page.evaluate('() => { window.pendingDetect = request({type:"design:detect"}, 15000); }')
-                frame.wait_for_function('() => window.scanStart !== undefined')
-                frame.locator('#responsiveness').hover()
-                reply = page.evaluate('() => window.pendingDetect')
-                delay = frame.evaluate('window.hoverAt - window.scanStart')
-                self.assertLess(delay, reply['elapsedMs'], 'the hover must land while the scan is still pending')
-                self.assertEqual((reply['complete'], reply['reason']), (False, 'page-changed'), reply)
+                for fraction in (0.3, 0.2, 0.1):
+                    page, frame = self.open(engine, target=TARGET + '/fixtures/large-page/index.html')
+                    self.hello(page)
+                    self.control(page, {'type': 'design:mode', 'mode': 'interact'})
+                    frame.evaluate("""() => {
+                        window.probe = {};
+                        addEventListener('message', event => { if (event.data.type === 'design:detect') probe.scan = performance.now(); }, true);
+                        document.addEventListener('pointerover', () => { probe.hover = probe.hover || performance.now(); }, true);
+                    }""")
+                    box = frame.locator('#responsiveness').bounding_box()
+                    calibration = self.detect(page)
+                    self.assertTrue(calibration['complete'], calibration)
+                    frame.evaluate('() => { probe.scan = undefined; probe.hover = undefined; }')
+                    page.evaluate('() => { window.pendingDetect = request({type:"design:detect"}, 15000); }')
+                    frame.evaluate("""wait => new Promise(resolve => {
+                        const tick = () => (probe.scan !== undefined && performance.now() - probe.scan >= wait ? resolve() : requestAnimationFrame(tick));
+                        requestAnimationFrame(tick);
+                    })""", calibration['elapsedMs'] * fraction)
+                    page.mouse.move(box['x'] + box['width'] / 2, box['y'] + box['height'] / 2)
+                    reply = page.evaluate('() => window.pendingDetect')
+                    delay = frame.evaluate('probe.hover === undefined ? null : probe.hover - probe.scan')
+                    attempts.append({'fraction': fraction, 'calibrationMs': round(calibration['elapsedMs'], 1), 'hoverDelayMs': delay,
+                                     'replyMs': round(reply['elapsedMs'], 1)})
+                    # Margin: the hover must land in the first half of the calibrated scan, well before it ends.
+                    if delay is not None and delay <= calibration['elapsedMs'] / 2 and delay < reply['elapsedMs']:
+                        break
+                else:
+                    self.fail('the hover never landed while the scan was pending: ' + json.dumps(attempts))
+                self.assertEqual((reply['complete'], reply['reason']), (False, 'page-changed'), (reply, attempts))
                 self.assertEqual(reply['currentPageVersion'], reply['pageVersion'])
 
     def test_native_event_during_the_frame_wait_makes_the_receipt_stale_with_equal_versions(self):

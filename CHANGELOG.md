@@ -25,6 +25,10 @@ Two things have their own version numbers:
   before writing, reports measured matches and property losses, and clears
   the preview exactly. Detection keeps measuring the app's own styles. Only
   the plain adapter is accepted so far.
+- Role preview receipts count matched and measured elements separately and
+  explain each lost property: the winning author rule's selector when it can be
+  proven, or an inline style, inheritance, an unreadable or blocked stylesheet,
+  an unprovable cascade or a time limit. Receipts always stay within 1 MiB.
 
 ## [0.3.1] - 2026-10-07
 
