@@ -258,3 +258,18 @@ advertised truthfully.
    hover during a scan still makes it `page-changed` with equal versions.
    `tests/test_role_detection.py` stays read-only; R2.T1 relaxes its version
    comparisons.
+3. **Correction to item 1.** The bridge posts only to its pinned Studio
+   window, so a hostile reply would appear in the Studio host log, which the
+   existing filter already reads. The added reads of the evil child's and the
+   target frame's logs were removed; the host-log assertions stay.
+4. **Pins found in review, binding for R2.4, R2.5 and R2.S2.**
+   `losses[].property` uses the six RoleInput keys (camelCase). Every accepted
+   apply or clear bumps revision by exactly one, including a repeated clear
+   and `roles: []`. Outcome counts satisfy
+   `0 <= mismatched <= checked <= matched`, and `matched` equals `checked`
+   until R2.5. Render-only revalidation moves the internal epoch, not the wire
+   pageVersion. Bridge font links, like the owned sheet, are excluded from the
+   role style stamp. An author `options.onApplied` callback's DOM writes still
+   advance pageVersion. Known limits: asynchronous bridge writes outside a
+   message handler (SPA re-apply) and web-font status changes still advance
+   pageVersion.

@@ -164,6 +164,112 @@
     } catch (e) { return false; }
   }
 
+  // Role stylesheet input (binding contract). Intentionally separate from legacy PATCH_RULES: exact shapes,
+  // role-specific ranges and a stricter family grammar. Plain adapter only until R2.4.
+  const ROLE_PROPERTY_KEYS = ['fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'textTransform'];
+  const ROLE_CSS_NAMES = { fontFamily: 'font-family', fontSize: 'font-size', fontWeight: 'font-weight',
+    lineHeight: 'line-height', letterSpacing: 'letter-spacing', textTransform: 'text-transform' };
+  const ROLE_ADAPTERS = ['plain', 'bootstrap5-body', 'bootstrap5-mono', 'bootstrap5-heading'];
+  const ROLE_CASES = ['none', 'uppercase', 'lowercase', 'capitalize'];
+  const MAX_ROLE_CSS_BYTES = 128 * 1024;
+  const ROLE_FAMILY_UNSAFE = /[;{}<>\\\u0000-\u001f\u007f\u2028\u2029]|\/\*|\*\/|!\s*important|\b(?:url|expression|var|env|attr)\s*\(/i;
+
+  // Quotes must pair up; CSS.supports alone accepts an unterminated string.
+  function balancedQuotes(value) {
+    let open = null;
+    for (const ch of value) {
+      if (open) { if (ch === open) open = null; } else if (ch === '"' || ch === "'") open = ch;
+    }
+    return open === null;
+  }
+
+  function roleFamily(value) {
+    if (typeof value !== 'string') return undefined;
+    const trimmed = value.trim();
+    if (trimmed.length < 1 || trimmed.length > 300 || ROLE_FAMILY_UNSAFE.test(trimmed) || !balancedQuotes(trimmed)) return undefined;
+    return cssSupports('font-family', trimmed) ? trimmed : undefined;
+  }
+
+  // Family lists compare by name: computed values may drop or add quotes.
+  function familyNames(value) {
+    const names = [];
+    let current = '', open = null;
+    for (const ch of String(value)) {
+      if (open) { if (ch === open) open = null; else current += ch; }
+      else if (ch === '"' || ch === "'") open = ch;
+      else if (ch === ',') { names.push(current.replace(/\s+/g, ' ').trim()); current = ''; }
+      else current += ch;
+    }
+    names.push(current.replace(/\s+/g, ' ').trim());
+    return names.join(',');
+  }
+
+  // Shape pass (reason invalid-message): exact keys, counts, lengths, enums. True when malformed.
+  function roleShapeError(roles) {
+    if (!Array.isArray(roles) || roles.length > 128) return true;
+    const ids = new Set();
+    for (const role of roles) {
+      if (!exactRoleObject(role, ['id', 'name', 'selectors', 'adapter', 'properties'])
+        || !isNonEmptyString(role.id, 100) || ids.has(role.id) || !isNonEmptyString(role.name, 200)
+        || !Array.isArray(role.selectors) || role.selectors.length < 1 || role.selectors.length > 32
+        || !ROLE_ADAPTERS.includes(role.adapter) || !isPlainObject(role.properties)) return true;
+      ids.add(role.id);
+      const keys = Object.keys(role.properties);
+      if (!keys.length || !keys.every(key => ROLE_PROPERTY_KEYS.includes(key))) return true;
+      if ('textTransform' in role.properties && !ROLE_CASES.includes(role.properties.textTransform)) return true;
+    }
+    return false;
+  }
+
+  const ROLE_PROPERTY_RULES = {
+    fontFamily: roleFamily,
+    fontSize: value => (numberIn(value, 4, 400) ? round(value, 2) : undefined),
+    fontWeight: value => (numberIn(value, 1, 1000) ? Math.round(value) : undefined),
+    lineHeight: value => (numberIn(value, 0.5, 5) ? round(value, 3) : undefined),
+    letterSpacing: value => (numberIn(value, -0.5, 2) ? round(value, 4) : undefined),
+    textTransform: value => value
+  };
+
+  // Value pass over a shaped request. Returns {roles} (canonical, request order) or {reason, detail}.
+  function canonicalizeRoles(roles) {
+    const checked = new Map(), out = [];
+    for (const role of roles) {
+      if (role.adapter !== 'plain') return { reason: 'unsupported-value', detail: 'Unsupported adapter' };
+      const selectors = Array.from(new Set(role.selectors));
+      for (const selector of selectors) {
+        if (!checked.has(selector)) checked.set(selector, roleSelector(selector, true));
+        if (!checked.get(selector)) return { reason: 'unsupported-value', detail: 'Unsupported selector' };
+      }
+      const properties = {};
+      for (const key of ROLE_PROPERTY_KEYS) {
+        if (!(key in role.properties)) continue;
+        const value = ROLE_PROPERTY_RULES[key](role.properties[key]);
+        if (value === undefined) return { reason: 'unsupported-value', detail: 'Unsupported property value' };
+        properties[key] = value;
+      }
+      out.push({ id: role.id, name: role.name, selectors, adapter: 'plain', properties });
+    }
+    return { roles: out };
+  }
+
+  function roleDeclaration(key, value) {
+    const text = { fontSize: `${value}px`, letterSpacing: `${value}em` }[key];
+    return `${ROLE_CSS_NAMES[key]}: ${text === undefined ? value : text}`;
+  }
+
+  // The exact string assigned with textContent: request role order, fixed property order, LF, two-space indent.
+  function serializeRoleCss(roles) {
+    return roles.map(role => `${role.selectors.join(', ')} {\n${ROLE_PROPERTY_KEYS
+      .filter(key => key in role.properties).map(key => `  ${roleDeclaration(key, role.properties[key])};\n`).join('')}}\n`).join('');
+  }
+
+  // FNV-1a over UTF-8 bytes; a non-security comparison value, needing no WebCrypto.
+  function fnv1a32(text) {
+    let hash = 0x811c9dc5;
+    for (const byte of new TextEncoder().encode(text)) hash = Math.imul(hash ^ byte, 16777619) >>> 0;
+    return hash.toString(16).padStart(8, '0');
+  }
+
   // ---------------------------------------------------------------------------
   // Targeted patch rules (binding contract table).
   // canonical(value, record) returns the canonical value, or undefined when the
@@ -480,6 +586,13 @@
       this.roleObserver = null;
       this.roleURL = typeof location === 'undefined' ? '' : location.href;
       this.roleStyle = '';
+      this.roleOwned = new WeakSet(); // every style node this bridge created; found only by reference
+      this.bridgeFontLinks = new WeakSet(); // <link data-fontkit-font> nodes this bridge injected
+      this.ownSettled = false;
+      this.roleSheet = null;
+      this.roleAccepted = { roles: [], css: '', hash: '811c9dc5' };
+      this.roleNative = 0; // internal epoch for native pseudo-state events; never on the wire
+      this.roleEpoch = 0; // bumped by hello and dropSession: they suppress pending role receipts
       this.options = {
         autoDiscover: true,
         autoDiscoverSemantic: true,
@@ -624,6 +737,7 @@
       this.listeners = [];
       if (this.mutationObserver) this.mutationObserver.disconnect();
       if (this.roleObserver) this.roleObserver.disconnect();
+      this.removeRoleSheet();
       if (this.resizeObserver) this.resizeObserver.disconnect();
       clearTimeout(this.discoveryTimer);
       clearInterval(this.openerTimer);
@@ -879,6 +993,7 @@
 
     dropSession() {
       this.cancelRoleJobs();
+      this.roleEpoch += 1;
       this.studioSource = null;
       this.studioOrigin = null;
       this.sessionId = null;
@@ -932,9 +1047,21 @@
       }
       if (!this.isFromSession(event, data)) return;
 
+      // Writes this handler makes (inline styles, text, attributes) are recorded by `revision`, not by the
+      // wire pageVersion: flush earlier author records first, then drop the records of our own writes.
+      const ownWrites = !['design:detect', 'design:roles-apply', 'design:roles-clear'].includes(data.type);
+      // Earlier author records are counted before this handler's own writes are dropped.
+      if (ownWrites && this.roleObserver) this.noteRoleMutations(this.roleObserver.takeRecords());
+      this.ownSettled = false;
       switch (data.type) {
         case 'design:detect':
           this.detectTextStyles(data);
+          break;
+        case 'design:roles-apply':
+          this.handleRolesApply(data);
+          break;
+        case 'design:roles-clear':
+          this.handleRolesClear(data);
           break;
         case 'design:update':
           this.handleUpdate(data);
@@ -963,6 +1090,12 @@
         default:
           break;
       }
+      if (ownWrites && !this.ownSettled) this.settleOwnWrites();
+    }
+
+    // Discards pending observer records: only called right after the bridge's own synchronous writes.
+    settleOwnWrites() {
+      if (this.roleObserver) this.roleObserver.takeRecords();
     }
 
     handleHello(event, data) {
@@ -973,6 +1106,7 @@
       if (this.studioAlive() && (event.source !== this.studioSource || event.origin !== this.studioOrigin)) return;
 
       this.cancelRoleJobs();
+      this.roleEpoch += 1;
 
       this.studioSource = event.source;
       this.studioOrigin = event.origin;
@@ -993,7 +1127,7 @@
       this.post({
         type: 'design:ready',
         revision: this.revision,
-        capabilities: { inspect: true, patch: true, typography: true, text: true, tokens: true, reset: true, roleDetection: true },
+        capabilities: { inspect: true, patch: true, typography: true, text: true, tokens: true, reset: true, roleDetection: true, roleStylesheet: true },
         roleState: this.roleState(),
         viewport: { width: window.innerWidth, height: window.innerHeight },
         tokens: { css: this.getCurrentTokens() },
@@ -1016,7 +1150,8 @@
 
     roleState() {
       return { documentId: this.documentId, pageVersion: this.pageVersion, pageURL: this.rolePageURL(),
-        roles: [], canonicalCss: '', hashAlgorithm: 'fnv1a32', cssHash: '811c9dc5' };
+        roles: JSON.parse(JSON.stringify(this.roleAccepted.roles)), canonicalCss: this.roleAccepted.css,
+        hashAlgorithm: 'fnv1a32', cssHash: this.roleAccepted.hash };
     }
 
     rolePageURL() {
@@ -1034,7 +1169,7 @@
     }
 
     noteRoleMutations(records) {
-      if (records.some(record => !this.isOverlayNode(record.target)
+      if (records.some(record => !this.isOverlayNode(record.target) && !this.isOwnedRoleMutation(record)
         && !(record.type === 'attributes' && this.isBridgeAttr(record.target, record.attributeName)))) {
         this.pageVersion += 1;
       }
@@ -1050,7 +1185,7 @@
         this.listen(document, type, event => {
           if (type.startsWith('key') && (![' ', 'Enter'].includes(event.key)
             || !event.target?.closest?.('button,input[type="button"],input[type="submit"],input[type="reset"]'))) return;
-          if (this.active && this.studioSource) this.pageVersion += 1;
+          if (this.active && this.studioSource) this.roleNative += 1;
         }, { capture: true, passive: true });
       }
       this.roleStyle = this.roleStyleStamp();
@@ -1058,7 +1193,7 @@
 
     roleStyleStamp() {
       return JSON.stringify([window.innerWidth, window.innerHeight, document.fonts && document.fonts.status,
-        Array.from(document.styleSheets, sheet => {
+        Array.from(document.styleSheets).filter(sheet => !this.roleOwned.has(sheet.ownerNode) && !this.bridgeFontLinks.has(sheet.ownerNode)).map(sheet => {
           try { return [sheet.disabled, sheet.media.mediaText, Array.from(sheet.cssRules, rule => rule.cssText)]; }
           catch (e) { return [sheet.href, sheet.disabled, sheet.media.mediaText]; }
         })]);
@@ -1111,6 +1246,196 @@
         // Viewport scrolling is not clipping: below-viewport text remains eligible.
         return right > left && bottom > top;
       });
+    }
+
+    // True for mutations of the owned role sheet itself (its node, its text, its insertion or removal).
+    isOwnedRoleMutation(record) {
+      if (this.roleOwned.has(record.target)) return true;
+      if (record.type !== 'childList') return false;
+      const nodes = [...record.addedNodes, ...record.removedNodes];
+      return nodes.length > 0 && nodes.every(node => this.roleOwned.has(node));
+    }
+
+    // Detection measures the app baseline: only the owned sheet is disabled, only around one
+    // synchronous batch. The returned function restores it and runs in finally before any yield.
+    suspendRoleSheet() {
+      const sheet = this.roleSheet && this.roleSheet.sheet;
+      if (!sheet || sheet.disabled) return () => {};
+      sheet.disabled = true;
+      return () => { sheet.disabled = false; };
+    }
+
+    removeRoleSheet() {
+      if (this.roleSheet) this.roleSheet.remove();
+      this.roleSheet = null;
+    }
+
+    // CSSOM-only verification: attached, enabled, and the parsed rules equal a reference parse of the
+    // canonical CSS. It never depends on what the rules match.
+    verifyRoleSheet(node, css, ruleCount) {
+      const sheet = node.sheet;
+      if (!node.isConnected || node.textContent !== css || !sheet || sheet.ownerNode !== node || sheet.disabled) return false;
+      try {
+        const actual = Array.from(sheet.cssRules, rule => rule.cssText);
+        if (typeof CSSStyleSheet === 'function') {
+          const reference = new CSSStyleSheet();
+          reference.replaceSync(css);
+          const expected = Array.from(reference.cssRules, rule => rule.cssText);
+          return actual.length === expected.length && actual.every((text, i) => text === expected[i]);
+        }
+        return actual.length === ruleCount;
+      } catch (e) { return false; }
+    }
+
+    // The candidate is built beside the accepted node; the old node is replaced only after verification.
+    installRoleSheet(css, ruleCount) {
+      const node = document.createElement('style');
+      node.id = 'fontkit-role-styles';
+      node.setAttribute('data-fontkit-role-styles', '');
+      this.roleOwned.add(node);
+      node.textContent = css;
+      (document.head || document.documentElement).appendChild(node);
+      if (this.verifyRoleSheet(node, css, ruleCount)) return node;
+      node.remove();
+      return null;
+    }
+
+    handleRolesApply(data) { this.handleRoleMutation(data, 'apply'); }
+
+    handleRolesClear(data) { this.handleRoleMutation(data, 'clear'); }
+
+    // Apply and clear: validate the whole request, then commit (install verified, state replaced, one
+    // revision). They share checkRevision with the queue but never use acknowledge().
+    handleRoleMutation(data, operation) {
+      let size;
+      try { size = new TextEncoder().encode(JSON.stringify(data)).length; }
+      catch (e) { this.reject(data.requestId, 'invalid-message'); return; }
+      if (size > 256 * 1024) { this.reject(data.requestId, 'size-limit'); return; }
+      const keys = ['type', 'protocolVersion', 'sessionId', 'requestId', 'baseRevision', 'documentId', 'pageVersion'];
+      if (operation === 'apply') keys.push('roles');
+      if (!exactRoleObject(data, keys) || !isNonEmptyString(data.requestId, 200) || !isNonEmptyString(data.documentId, 200)
+        || !Number.isInteger(data.pageVersion) || data.pageVersion < 0
+        || !Number.isInteger(data.baseRevision) || data.baseRevision < 0
+        || operation === 'apply' && roleShapeError(data.roles)) {
+        this.reject(data.requestId, 'invalid-message'); return;
+      }
+      if (!this.checkRevision(data)) return;
+      this.refreshRolePage();
+      if (data.documentId !== this.documentId || data.pageVersion !== this.pageVersion) { this.reject(data.requestId, 'page-changed'); return; }
+      let roles = [], css = '', node = null;
+      if (operation === 'apply') {
+        if (this.rolePageURL() === null) { this.reject(data.requestId, 'unsupported-value', 'Unsupported page URL'); return; }
+        const built = canonicalizeRoles(data.roles);
+        if (built.reason) { this.reject(data.requestId, built.reason, built.detail); return; }
+        roles = built.roles; css = serializeRoleCss(roles);
+        if (new TextEncoder().encode(css).length > MAX_ROLE_CSS_BYTES) { this.reject(data.requestId, 'size-limit'); return; }
+        if (roles.length) {
+          node = this.installRoleSheet(css, roles.length);
+          if (!node) { this.reject(data.requestId, 'stylesheet-blocked'); return; }
+        }
+      }
+      // Commit point: install verified. Replace the accepted state and bump the revision once.
+      if (this.roleSheet && this.roleSheet !== node) this.roleSheet.remove();
+      this.roleSheet = node;
+      this.roleAccepted = { roles, css, hash: fnv1a32(css) };
+      this.revision += 1;
+      const job = { epoch: this.roleEpoch, source: this.studioSource, origin: this.studioOrigin, session: this.sessionId,
+        requestId: data.requestId, operation, revision: this.revision, documentId: this.documentId,
+        pageVersion: data.pageVersion, pageURL: location.href, native: this.roleNative, roles: JSON.parse(JSON.stringify(roles)),
+        css, hash: this.roleAccepted.hash };
+      if (roles.length === 0) this.postRoleReceipt(job, true, null, []);
+      else this.measureRoleReceipt(job);
+    }
+
+    roleJobAlive(job) {
+      return !this.disposed && job.epoch === this.roleEpoch && job.source === this.studioSource
+        && job.origin === this.studioOrigin && job.session === this.sessionId;
+    }
+
+    roleJobFresh(job) {
+      this.refreshRolePage();
+      return job.revision === this.revision && job.pageVersion === this.pageVersion && job.pageURL === location.href
+        && job.native === this.roleNative;
+    }
+
+    postRoleReceipt(job, complete, reason, outcomes) {
+      this.refreshRolePage();
+      this.post({ type: 'design:roles-applied', requestId: job.requestId, operation: job.operation, revision: job.revision,
+        documentId: job.documentId, pageVersion: job.pageVersion, currentPageVersion: this.pageVersion,
+        currentPageURL: this.rolePageURL(), roles: job.roles, canonicalCss: job.css, hashAlgorithm: 'fnv1a32',
+        cssHash: job.hash, outcomesComplete: complete, outcomeReason: reason, outcomes });
+    }
+
+    // After a rendered frame and a freshness recheck. Hello or dropSession (the epoch) suppresses the
+    // receipt; a real change (revision, page version, URL) makes it a committed receipt with stale outcomes.
+    measureRoleReceipt(job) {
+      const go = () => {
+        if (!this.roleJobAlive(job)) return;
+        if (!this.roleJobFresh(job)) { this.postRoleReceipt(job, false, 'page-changed', []); return; }
+        job.started = performance.now();
+        const iterator = this.measureRoleOutcomes(job);
+        const run = () => {
+          if (!this.roleJobAlive(job)) return;
+          const slice = performance.now();
+          let step;
+          do { step = iterator.next(); } while (!step.done && performance.now() - slice < 8);
+          if (!step.done) { setTimeout(run, 0); return; }
+          if (!this.roleJobFresh(job)) { this.postRoleReceipt(job, false, 'page-changed', []); return; }
+          this.postRoleReceipt(job, !step.value.budget, step.value.budget ? 'budget-exceeded' : null, step.value.outcomes);
+        };
+        run();
+      };
+      let fired = false;
+      const once = () => { if (!fired) { fired = true; go(); } };
+      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(once);
+      setTimeout(once, 250); // a hidden page may never paint
+    }
+
+    roleMismatches(style, props) {
+      const lost = [];
+      const size = parseFloat(style.fontSize);
+      const same = (actual, expected, tolerance) => Math.abs(actual - expected) <= tolerance;
+      if ('fontFamily' in props && familyNames(style.fontFamily) !== familyNames(props.fontFamily)) lost.push('fontFamily');
+      if ('fontSize' in props && !same(size, props.fontSize, 0.01)) lost.push('fontSize');
+      if ('fontWeight' in props && Number(style.fontWeight) !== props.fontWeight) lost.push('fontWeight');
+      if ('lineHeight' in props && !same(parseFloat(style.lineHeight), props.lineHeight * size, 0.05)) lost.push('lineHeight');
+      if ('letterSpacing' in props
+        && !same(style.letterSpacing === 'normal' ? 0 : parseFloat(style.letterSpacing), props.letterSpacing * size, 0.02)) lost.push('letterSpacing');
+      if ('textTransform' in props && style.textTransform !== props.textTransform) lost.push('textTransform');
+      return lost;
+    }
+
+    // Computed comparison over eligible rendered parents, deduplicated across each role's selector
+    // union. At most 10,000 parents and 2,000 ms; past either the result is incomplete, with true counts.
+    *measureRoleOutcomes(job) {
+      const roles = job.roles;
+      const sets = roles.map(role => new Set(document.querySelectorAll(role.selectors.join(', '))));
+      const union = document.querySelectorAll(Array.from(new Set(roles.flatMap(role => role.selectors))).join(', '));
+      const records = roles.map(role => ({ id: role.id, matched: 0, checked: 0, mismatched: 0, lost: new Map() }));
+      const visibility = new WeakMap();
+      let eligible = 0, budget = false;
+      for (const el of union) {
+        yield;
+        if (performance.now() - job.started > 2000) { budget = true; break; }
+        const rendered = Array.from(el.childNodes).some(node => node.nodeType === 3 && this.renderedRoleText(node, visibility));
+        if (!rendered) continue;
+        if (eligible >= 10000) { budget = true; break; }
+        eligible += 1;
+        const style = getComputedStyle(el);
+        roles.forEach((role, i) => {
+          if (!sets[i].has(el)) return;
+          const record = records[i];
+          record.matched += 1; record.checked += 1;
+          const lost = this.roleMismatches(style, role.properties);
+          if (lost.length) record.mismatched += 1;
+          for (const property of lost) record.lost.set(property, (record.lost.get(property) || 0) + 1);
+        });
+      }
+      const outcomes = records.map(record => ({ id: record.id, matched: record.matched, checked: record.checked,
+        mismatched: record.mismatched, complete: !budget,
+        losses: ROLE_PROPERTY_KEYS.filter(key => record.lost.has(key)).map(key => ({ property: key,
+          count: record.lost.get(key), winningSelector: null, reason: 'complex-cascade' })) }));
+      return { budget, outcomes };
     }
 
     *roleBindings(group, elements, query) {
@@ -1175,7 +1500,7 @@
       this.refreshRolePage();
       const job = { generation: this.roleGeneration, source: this.studioSource, origin: this.studioOrigin,
         session: this.sessionId, documentId: this.documentId, pageVersion: this.pageVersion,
-        pageURL: location.href, revision: this.revision, started, requestId: data.requestId,
+        pageURL: location.href, revision: this.revision, native: this.roleNative, started, requestId: data.requestId,
         groups: new Map(), seen: new Set(), selectorChecks: [] };
       const iterator = this.collectRoleStyles(job, data);
       const current = () => !this.disposed && job.generation === this.roleGeneration
@@ -1183,7 +1508,8 @@
         && job.session === this.sessionId && job.documentId === this.documentId;
       const fresh = () => {
         this.refreshRolePage();
-        return job.pageVersion === this.pageVersion && job.pageURL === location.href && job.revision === this.revision;
+        return job.pageVersion === this.pageVersion && job.pageURL === location.href && job.revision === this.revision
+          && job.native === this.roleNative;
       };
       const finish = reason => {
         if (!current()) return;
@@ -1216,11 +1542,16 @@
         if (!current()) return;
         if (!fresh()) { finish('page-changed'); return; }
         const slice = performance.now();
-        let step;
-        do {
-          if (performance.now() - started > 2000) { finish('time-budget'); return; }
-          step = iterator.next();
-        } while (!step.done && performance.now() - slice < 8);
+        let step, expired = false;
+        // Baseline: only the owned sheet is off, only inside this synchronous batch.
+        const restore = this.suspendRoleSheet();
+        try {
+          do {
+            if (performance.now() - started > 2000) { expired = true; break; }
+            step = iterator.next();
+          } while (!step.done && performance.now() - slice < 8);
+        } finally { restore(); }
+        if (expired) { finish('time-budget'); return; }
         if (step.done) finish(step.value);
         else this.roleTimer = setTimeout(run, 0);
       };
@@ -1311,11 +1642,11 @@
         const text = check.currentNode, el = text.parentElement;
         if (rendered.has(el) || !this.renderedRoleText(text)) continue;
         if (!styles.has(el) || JSON.stringify(this.styleSignature(el)) !== JSON.stringify(styles.get(el))) {
-          this.pageVersion += 1; return 'page-changed';
+          this.roleNative += 1; return 'page-changed';
         }
         rendered.add(el);
       }
-      if (rendered.size !== styles.size) { this.pageVersion += 1; return 'page-changed'; }
+      if (rendered.size !== styles.size) { this.roleNative += 1; return 'page-changed'; }
       return null;
     }
 
@@ -1356,6 +1687,8 @@
       };
       this.post(message);
       this.scheduleBounds();
+      this.settleOwnWrites(); // our writes are done; the author callback below is not ours
+      this.ownSettled = true;
       if (typeof this.options.onApplied === 'function') {
         try {
           this.options.onApplied(fields.canonicalPatch, this.revision);
@@ -1568,7 +1901,10 @@
       this.lost.clear();
       this.reapplyLog.clear();
       this.cssOrderGroups = new WeakMap();
-      this.acknowledge(data, { targetId: 'global', canonicalPatch: {}, reset: true });
+      this.removeRoleSheet();
+      this.roleAccepted = { roles: [], css: '', hash: '811c9dc5' };
+      this.settleOwnWrites();
+      this.acknowledge(data, { targetId: 'global', canonicalPatch: {}, reset: true, roleState: this.roleState() });
     }
 
     handleRestoreText(data) {
@@ -2001,6 +2337,7 @@
       link.setAttribute('rel', 'stylesheet');
       link.setAttribute('href', url);
       link.setAttribute('data-fontkit-font', '');
+      this.bridgeFontLinks.add(link);
       (document.head || document.documentElement).appendChild(link);
       this.fontSheets.set(url, link);
     }

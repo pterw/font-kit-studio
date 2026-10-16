@@ -8,6 +8,7 @@ from role_support import EVIL, REPO, STUDIO, ROLE_PAGE, RoleBridgeCase
 
 class RoleProtocolTests(RoleBridgeCase):
     def test_final_wire_payload_stays_bounded_near_exact_utf8_reply_limit(self):
+        """Given 128 roles of 32 selectors, when detect replies near the 1 MiB limit, then no complete reply exceeds it and the page still renders 16px."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, frame = self.open(engine)
@@ -39,6 +40,7 @@ class RoleProtocolTests(RoleBridgeCase):
                 self.assertEqual(frame.locator('.body-copy').first.inner_text(), 'Author body')
 
     def test_correlated_hostile_url_receipts_cannot_advance_receiver_state(self):
+        """Given a hostile matching receipt with a foreign, credentialed or null URL, when the real detect runs, then the receiver ignores it and takes the bridge's own reply."""
         for engine in ENGINES:
             for hostile in ('http://evil.test/path', 'http://alice:secret@target.test/path', None):
                 with self.subTest(engine=engine, url=hostile):
@@ -56,11 +58,13 @@ class RoleProtocolTests(RoleBridgeCase):
                     self.assertEqual(reply['revision'], 0, reply)
                     self.assertEqual(reply['scannedElements'], 2)
                     self.assertEqual(page.evaluate('revision'), 0)
-                    self.assertEqual(page.evaluate('roleState'), ready['roleState'])
+                    again = self.hello(page)
+                    self.assertEqual((again['roleState'], again['revision']), (ready['roleState'], 0))
                     self.assertEqual(frame.locator('.body-copy').first.evaluate('el => getComputedStyle(el).fontSize'), '16px')
                     self.assertEqual(frame.locator('.body-copy').first.inner_text(), 'Author body')
 
     def test_unavailable_actual_url_preserves_inspector_and_recovers_at_exact_boundary(self):
+        """Given a real 2,001-character route, when detect, inspector edit and reset run, then detect is refused, the inspector works and the exact 2,000 route recovers."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 path = '/tests/fixtures/bridge/target-role-protocol.html'
@@ -94,6 +98,7 @@ class RoleProtocolTests(RoleBridgeCase):
                 self.assertEqual(frame.locator('.body-copy').first.inner_text(), 'Author body')
 
     def test_native_invalid_numeric_selectors_reject_and_escaped_forms_measure_rendering(self):
+        """Given selectors .1 and #1, when sent, then they reject while the escaped forms match the rendered paragraph."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, frame = self.open(engine)
@@ -114,6 +119,7 @@ class RoleProtocolTests(RoleBridgeCase):
                 self.assertEqual(frame.locator(r'.\31 ').evaluate('el => getComputedStyle(el).fontSize'), '16px')
 
     def test_unsupported_old_bridge_and_script_csp_remain_truthful(self):
+        """Given an old bridge or a script-blocking policy, when Studio connects, then no role capability appears and the page still renders its own styles."""
         old = subprocess.check_output(['git', 'show', '6a7327bd:fontkit-bridge.js'], cwd=REPO)
         for engine in ENGINES:
             with self.subTest(engine=engine):
@@ -130,9 +136,11 @@ class RoleProtocolTests(RoleBridgeCase):
                 self.assertFalse(target.evaluate('Boolean(window.__fontkitBridge)'))
                 self.assertEqual(target.locator('.body-copy').first.inner_text(), 'Author body')
                 self.assertEqual(target.locator('.body-copy').first.evaluate('el => getComputedStyle(el).fontSize'), '16px')
-                self.assertEqual(blocked.evaluate('messages("design:bridge-ready")'), [])
+                self.assertEqual(blocked.evaluate("log.filter(e => e.fromTarget && e.data && e.data.type === 'design:bridge-ready')"), [])
 
     def test_detect_authentication_and_matching_revision_ignore_hostile_traffic(self):
+        """Given hostile detects from a wrong session, protocol, script or foreign frame, when a real
+        detect runs, then no hostile reply appears in the Studio host log and the page is unchanged."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, frame = self.open(engine)
@@ -168,6 +176,7 @@ class RoleProtocolTests(RoleBridgeCase):
                 self.assertEqual(frame.locator('.body-copy').first.evaluate('el => getComputedStyle(el).fontSize'), '16px')
 
     def test_reload_issues_new_document_and_unknown_identity_cannot_replace_ready(self):
+        """Given a reload, when the old document ID is sent, then it is page-changed and the new ready identity stays."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, frame = self.open(engine)
@@ -185,12 +194,13 @@ class RoleProtocolTests(RoleBridgeCase):
                 self.assertEqual(frame.locator('[data-design-id="ordinary.body"]').evaluate('el => getComputedStyle(el).fontSize'), '16px')
 
     def test_ready_identity_and_exact_hostile_requests_preserve_rendered_author_state(self):
+        """Given a ready bridge, when each malformed detect arrives, then it is rejected with its reason and the page and revision are unchanged."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, frame = self.open(engine)
                 ready = self.hello(page)
                 self.assertTrue(ready['capabilities']['roleDetection'])
-                self.assertNotIn('roleStylesheet', ready['capabilities'])
+                self.assertTrue(ready['capabilities']['roleStylesheet'])
                 state = ready['roleState']
                 self.assertEqual(state, {'documentId': state['documentId'], 'pageVersion': 0,
                     'pageURL': frame.url, 'roles': [], 'canonicalCss': '',
@@ -232,6 +242,7 @@ class RoleProtocolTests(RoleBridgeCase):
                         self.assertEqual(page.evaluate('revision'), 0)
 
     def test_valid_detect_returns_literal_rendered_baseline_without_author_changes(self):
+        """Given the literal fixture, when detect runs, then it reports the rendered 16px baseline and leaves the author DOM unchanged."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, frame = self.open(engine)

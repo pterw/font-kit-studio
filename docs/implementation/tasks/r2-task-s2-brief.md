@@ -120,8 +120,10 @@ with a valid empty `roleState` (pageURL may be null, Addendum 5), the
 visible role preview clears and the accepted revision moves to the reply's.
 If the ack has no or an invalid `roleState`, keep the preview shown and mark
 it unconfirmed. It never runs on reconnect, import or any implicit path.
-Clear preview, reset-all, a valid ready snapshot or a new document are the
-only acknowledgements that change the shown preview.
+A valid Apply or Clear receipt, reset-all, a valid ready snapshot or a new
+document are the only acknowledgements that change the shown preview. A
+role op in flight when the page reloads is dropped with a visible status;
+its late receipt for the old document changes nothing.
 
 The preview block has the exact heading `Role preview; file output comes
 later`, a `pre` showing acknowledged `canonicalCss` (focusable, overflow auto

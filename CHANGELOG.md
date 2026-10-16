@@ -20,6 +20,11 @@ Two things have their own version numbers:
 - Live App shows detected text styles as read-only roles with samples, counts,
   selector stability and explicit incomplete or unsupported-page status.
   Observations sit below the preview and remain available after fullscreen exit.
+- The bridge previews text-style roles from one stylesheet it owns
+  (`design:roles-apply`, `design:roles-clear`). It validates the whole request
+  before writing, reports measured matches and property losses, and clears
+  the preview exactly. Detection keeps measuring the app's own styles. Only
+  the plain adapter is accepted so far.
 
 ## [0.3.1] - 2026-10-07
 
