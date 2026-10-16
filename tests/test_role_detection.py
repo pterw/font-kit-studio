@@ -3,6 +3,7 @@ import json
 
 from support import ENGINES, REPO
 from role_support import RoleBridgeCase, TARGET
+from test_role_stylesheet import RoleSheetCase, role
 
 
 class RoleDetectionTests(RoleBridgeCase):
@@ -629,3 +630,79 @@ class RoleDetectionTests(RoleBridgeCase):
                                  {'Author body': 1, 'Ordinary body': 1, 'Prefix': 1, 'Nested': 1, 'Contents': 1,
                                   'Below viewport': 1, 'Visible child': 1})
                 self.assertEqual(frame.locator('main').evaluate('el => el.outerHTML'), before)
+
+
+class TransitionBaselineTests(RoleSheetCase):
+    def test_detect_with_a_live_preview_reads_the_baseline_on_a_page_with_transitions(self):
+        """Given a page whose paragraphs transition font-size and a live 30px preview, when Studio
+        detects again, then the baseline is the app's 16px (not the preview), no new group appears,
+        and the page renders 30px again with no transition left running."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                frame.evaluate("""() => { const style = document.createElement('style');
+                    style.textContent = 'p { font-size: 16px; transition: font-size .2s linear; }';
+                    document.head.appendChild(style); }""")
+                self.hello(page)
+                sizes = lambda reply: sorted({sig['style']['fontSize'] for group in reply['groups'] for sig in group['signatures']})  # noqa: E731
+                before = self.detect(page)
+                self.assertEqual(sizes(before), [16])
+                self.assertEqual(self.apply(page, [role(fontSize=30)])['type'], 'design:roles-applied')
+                frame.wait_for_function("() => getComputedStyle(document.querySelector('.body-copy')).fontSize === '30px'")
+                after = self.detect(page)
+                self.assertTrue(after['complete'], after)
+                self.assertEqual(sizes(after), [16])
+                self.assertEqual(len(after['groups']), len(before['groups']))
+                self.assertEqual(frame.evaluate("() => getComputedStyle(document.querySelector('.body-copy')).fontSize"), '30px')
+                self.assertEqual(frame.evaluate('() => document.getAnimations().length'), 0)
+                self.assertFalse(frame.evaluate("() => Array.from(document.querySelectorAll('style')).some(s => s.textContent.includes('transition: none'))"))
+
+    def test_a_page_that_throws_inside_the_scan_ends_the_job_and_leaves_no_transition_ban(self):
+        """Given a live preview and a page whose createTreeWalker throws, when Studio detects,
+        then the reply is incomplete as page-changed rather than a hang, and no bridge
+        transition-ban style is left in the document."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                self.assertEqual(self.apply(page, [role(fontSize=30)])['type'], 'design:roles-applied')
+                frame.evaluate("() => { document.createTreeWalker = () => { throw new Error('page broke the scan'); }; }")
+                reply = self.detect(page)
+                self.assertEqual((reply['type'], reply['complete'], reply['reason']), ('design:detected', False, 'page-changed'), reply)
+                self.assertEqual(self.ban_nodes(frame), 0)
+                self.assertEqual(frame.evaluate("() => getComputedStyle(document.querySelector('.body-copy')).fontSize"), '30px')
+
+    def test_a_reset_during_a_scan_removes_the_transition_ban_at_once(self):
+        """Given a live preview and a scan that has installed the transition ban, when a global
+        reset arrives mid-scan, then the ban style is gone as soon as the reset is acknowledged."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, target=TARGET + '/fixtures/large-page/index.html')
+                self.hello(page)
+                self.assertEqual(self.apply(page, [role('big', ['.g00'], fontSize=30)])['type'], 'design:roles-applied')
+                page.evaluate('() => { window.pendingDetect = request({type:"design:detect"}, 15000).catch(() => null); }')
+                frame.wait_for_function("() => Array.from(document.querySelectorAll('style')).some(s => s.textContent.includes('transition: none'))")
+                self.assertEqual(self.request(page, {'type': 'design:reset'})['type'], 'design:applied')
+                self.assertEqual(self.ban_nodes(frame), 0)
+
+    def test_the_transition_ban_is_installed_only_while_a_preview_is_live(self):
+        """Given a page with no preview, when Studio detects, then no transition-ban style is ever
+        inserted; and once a preview is live, the same detect does insert one (and removes it)."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                frame.evaluate("""() => {
+                    window.banSeen = 0;
+                    new MutationObserver(records => { for (const record of records) for (const node of record.addedNodes) {
+                        if (node.tagName === 'STYLE' && node.textContent.includes('transition: none')) window.banSeen += 1;
+                    } }).observe(document.head, { childList: true });
+                }""")
+                self.hello(page)
+                self.assertTrue(self.detect(page)['complete'])
+                self.assertEqual(frame.evaluate('() => window.banSeen'), 0)
+                self.assertEqual(self.apply(page, [role(fontSize=30)])['type'], 'design:roles-applied')
+                self.assertTrue(self.detect(page)['complete'])
+                self.assertEqual((frame.evaluate('() => window.banSeen'), self.ban_nodes(frame)), (1, 0))
+
+    def ban_nodes(self, frame):
+        return frame.evaluate("() => Array.from(document.querySelectorAll('style')).filter(s => s.textContent.includes('transition: none')).length")

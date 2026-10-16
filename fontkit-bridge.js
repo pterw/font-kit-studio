@@ -252,6 +252,15 @@
     return { roles: out };
   }
 
+  // The contract's loss order: property, then reason, then winning selector (null first, then code-unit order).
+  const ROLE_LOSS_REASONS = ['author-rule', 'inline', 'inherited', 'unreadable-sheet', 'complex-cascade', 'stylesheet-blocked', 'budget-exceeded'];
+  function compareRoleLosses(a, b) {
+    return ROLE_PROPERTY_KEYS.indexOf(a.property) - ROLE_PROPERTY_KEYS.indexOf(b.property)
+      || ROLE_LOSS_REASONS.indexOf(a.reason) - ROLE_LOSS_REASONS.indexOf(b.reason)
+      || (a.winningSelector === b.winningSelector ? 0 : a.winningSelector === null ? -1 : b.winningSelector === null ? 1
+        : a.winningSelector < b.winningSelector ? -1 : 1);
+  }
+
   function roleDeclaration(key, value) {
     const text = { fontSize: `${value}px`, letterSpacing: `${value}em` }[key];
     return `${ROLE_CSS_NAMES[key]}: ${text === undefined ? value : text}`;
@@ -738,6 +747,7 @@
       if (this.mutationObserver) this.mutationObserver.disconnect();
       if (this.roleObserver) this.roleObserver.disconnect();
       this.removeRoleSheet();
+      if (this.roleQuiet) this.roleQuiet.remove();
       if (this.resizeObserver) this.resizeObserver.disconnect();
       clearTimeout(this.discoveryTimer);
       clearInterval(this.openerTimer);
@@ -1163,6 +1173,7 @@
     }
 
     cancelRoleJobs() {
+      this.releaseRoleQuiet();
       this.roleGeneration += 1;
       clearTimeout(this.roleTimer);
       this.roleTimer = null;
@@ -1188,11 +1199,18 @@
           if (this.active && this.studioSource) this.roleNative += 1;
         }, { capture: true, passive: true });
       }
+      // Font loading can change rendering during any yield: it moves the internal epoch like hover or focus,
+      // never the wire page version (D066).
+      if (document.fonts && document.fonts.addEventListener) {
+        for (const type of ['loading', 'loadingdone', 'loadingerror']) {
+          this.listen(document.fonts, type, () => { if (this.active && this.studioSource) this.roleNative += 1; });
+        }
+      }
       this.roleStyle = this.roleStyleStamp();
     }
 
     roleStyleStamp() {
-      return JSON.stringify([window.innerWidth, window.innerHeight, document.fonts && document.fonts.status,
+      return JSON.stringify([window.innerWidth, window.innerHeight,
         Array.from(document.styleSheets).filter(sheet => !this.roleOwned.has(sheet.ownerNode) && !this.bridgeFontLinks.has(sheet.ownerNode)).map(sheet => {
           try { return [sheet.disabled, sheet.media.mediaText, Array.from(sheet.cssRules, rule => rule.cssText)]; }
           catch (e) { return [sheet.href, sheet.disabled, sheet.media.mediaText]; }
@@ -1261,8 +1279,25 @@
     suspendRoleSheet() {
       const sheet = this.roleSheet && this.roleSheet.sheet;
       if (!sheet || sheet.disabled) return () => {};
+      // Disabling the sheet is a style change: without a transition ban a page transition would start from
+      // the preview value and the read would return it. The ban stays for the whole scan (a per-slice
+      // flush is too costly) and is released once by releaseRoleQuiet. Animations are left alone
+      // (removing one restarts it).
+      if (!this.roleQuiet) {
+        this.roleQuiet = document.createElement('style');
+        this.roleQuiet.textContent = '*, *::before, *::after { transition: none !important; }';
+        this.roleOwned.add(this.roleQuiet);
+      }
+      if (!this.roleQuiet.isConnected) (document.head || document.documentElement).appendChild(this.roleQuiet);
       sheet.disabled = true;
       return () => { sheet.disabled = false; };
+    }
+
+    // The preview is flushed back in under the ban, so it returns at once instead of replaying a transition.
+    releaseRoleQuiet() {
+      if (!this.roleQuiet || !this.roleQuiet.isConnected) return;
+      document.documentElement.getBoundingClientRect();
+      this.roleQuiet.remove();
     }
 
     removeRoleSheet() {
@@ -1358,8 +1393,8 @@
         && job.native === this.roleNative;
     }
 
-    postRoleReceipt(job, complete, reason, outcomes) {
-      this.refreshRolePage();
+    postRoleReceipt(job, complete, reason, outcomes, refreshed = false) {
+      if (!refreshed) this.refreshRolePage();
       const message = { type: 'design:roles-applied', requestId: job.requestId, operation: job.operation, revision: job.revision,
         documentId: job.documentId, pageVersion: job.pageVersion, currentPageVersion: this.pageVersion,
         currentPageURL: this.rolePageURL(), roles: job.roles, canonicalCss: job.css, hashAlgorithm: 'fnv1a32',
@@ -1389,11 +1424,7 @@
         const rest = kept.filter(group => !(merged.has(group.property) && group.reason === 'complex-cascade' && group.winningSelector === null));
         for (const group of kept) if (!rest.includes(group)) merged.get(group.property).count += group.count;
         outcome.losses = rest.concat(Array.from(merged.values()));
-        const reasons = ['author-rule', 'inline', 'inherited', 'unreadable-sheet', 'complex-cascade', 'stylesheet-blocked', 'budget-exceeded'];
-        outcome.losses.sort((a, b) => ROLE_PROPERTY_KEYS.indexOf(a.property) - ROLE_PROPERTY_KEYS.indexOf(b.property)
-          || reasons.indexOf(a.reason) - reasons.indexOf(b.reason)
-          || (a.winningSelector === b.winningSelector ? 0 : a.winningSelector === null ? -1 : b.winningSelector === null ? 1
-            : a.winningSelector < b.winningSelector ? -1 : 1));
+        outcome.losses.sort(compareRoleLosses);
       };
       for (const keep of [group => group.winningSelector === null, () => false]) {
         for (let i = message.outcomes.length - 1; i >= 0 && total > limit; i -= 1) {
@@ -1409,7 +1440,7 @@
     measureRoleReceipt(job) {
       const go = () => {
         if (!this.roleJobAlive(job)) return;
-        if (!this.roleJobFresh(job)) { this.postRoleReceipt(job, false, 'page-changed', []); return; }
+        if (!this.roleJobFresh(job)) { this.postRoleReceipt(job, false, 'page-changed', [], true); return; }
         job.started = performance.now();
         const iterator = this.measureRoleOutcomes(job);
         const run = () => {
@@ -1418,8 +1449,8 @@
           let step;
           do { step = iterator.next(); } while (!step.done && performance.now() - slice < 8);
           if (!step.done) { setTimeout(run, 0); return; }
-          if (!this.roleJobFresh(job)) { this.postRoleReceipt(job, false, 'page-changed', []); return; }
-          this.postRoleReceipt(job, !step.value.budget, step.value.budget ? 'budget-exceeded' : null, step.value.outcomes);
+          if (!this.roleJobFresh(job)) { this.postRoleReceipt(job, false, 'page-changed', [], true); return; }
+          this.postRoleReceipt(job, !step.value.budget, step.value.budget ? 'budget-exceeded' : null, step.value.outcomes, true);
         };
         run();
       };
@@ -1601,7 +1632,7 @@
         || matching.some(item => item.value === null)) return fallback();
       if (!matching.length) return fallback();
       const texts = new Set(matching.map(item => item.entry.text));
-      const named = text => (text.length <= 2000 ? text : null);
+      const named = text => (text.length <= 2000 && !/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(text) ? text : null);
       if (matching.every(item => /^(?:inherit|unset)$/i.test(item.value))) {
         const parent = el.parentElement;
         const selector = texts.size === 1 ? named(matching[0].entry.text) : null;
@@ -1658,11 +1689,7 @@
           }
         }
       }
-      const reasons = ['author-rule', 'inline', 'inherited', 'unreadable-sheet', 'complex-cascade', 'stylesheet-blocked', 'budget-exceeded'];
-      const order = (a, b) => ROLE_PROPERTY_KEYS.indexOf(a.property) - ROLE_PROPERTY_KEYS.indexOf(b.property)
-        || reasons.indexOf(a.reason) - reasons.indexOf(b.reason)
-        || (a.winningSelector === b.winningSelector ? 0 : a.winningSelector === null ? -1 : b.winningSelector === null ? 1
-          : a.winningSelector < b.winningSelector ? -1 : 1);
+      const order = compareRoleLosses;
       // At most 16 groups per role and property: the largest keep their names, the rest merge into one unnamed group.
       const capped = groups => ROLE_PROPERTY_KEYS.flatMap(property => {
         const mine = groups.filter(group => group.property === property);
@@ -1770,6 +1797,7 @@
           && job.native === this.roleNative;
       };
       const finish = reason => {
+        this.releaseRoleQuiet();
         if (!current()) return;
         if (!fresh()) reason = 'page-changed';
         const reply = { type: 'design:detected', requestId: job.requestId, revision: job.revision,
@@ -1800,7 +1828,7 @@
         if (!current()) return;
         if (!fresh()) { finish('page-changed'); return; }
         const slice = performance.now();
-        let step, expired = false;
+        let step, expired = false, thrown = false;
         // Baseline: only the owned sheet is off, only inside this synchronous batch.
         const restore = this.suspendRoleSheet();
         try {
@@ -1808,7 +1836,9 @@
             if (performance.now() - started > 2000) { expired = true; break; }
             step = iterator.next();
           } while (!step.done && performance.now() - slice < 8);
-        } finally { restore(); }
+        } catch (err) { thrown = true; console.warn('[FontKitBridge] The page threw during text-style detection:', err); } finally { restore(); }
+        // A page that throws inside the scan ends the job as an incomplete page-changed reply, never a hang.
+        if (thrown) { finish('page-changed'); return; }
         if (expired) { finish('time-budget'); return; }
         if (step.done) finish(step.value);
         else this.roleTimer = setTimeout(run, 0);
@@ -3886,9 +3916,12 @@
       });
 
       // Dispatch layout change event
+      this.settleOwnWrites();
       try {
         window.dispatchEvent(new CustomEvent('design:order-changed', { detail: { order: orderList } }));
       } catch (e) {}
+      // Whatever the page's listeners wrote counts as author change now, before a later settle can drop it.
+      if (this.roleObserver) this.noteRoleMutations(this.roleObserver.takeRecords());
     }
 
     /**

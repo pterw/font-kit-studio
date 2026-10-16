@@ -1042,6 +1042,95 @@ class SplitPageVersionTests(RoleSheetCase):
                 self.assertEqual((reply['complete'], reply['reason']), (False, 'page-changed'), (reply, attempts))
                 self.assertEqual(reply['currentPageVersion'], reply['pageVersion'])
 
+    def test_writes_made_by_an_order_changed_listener_advance_the_page_version(self):
+        """Given a legacy layout update, when the bridge reorders without a listener, then the
+        version stays; and when a design:order-changed listener appends a node, then an apply with
+        the version detected before it is rejected as page-changed, because the listener's write
+        is an author change while the bridge's own reordering is not."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                patch = {'slots': [{'id': 'a', 'targetId': 'role.body', 'type': 'text', 'size': 16, 'textTouched': False},
+                                   {'id': 'b', 'targetId': 'ordinary.body', 'type': 'text', 'size': 16, 'textTouched': False}],
+                         'layout': {'order': [{'id': 'a', 'role': 'metadata', 'index': 1}, {'id': 'b', 'role': 'h1', 'index': 0}]}}
+                before = self.detect(page)['currentPageVersion']
+                self.assertEqual(self.request(page, {'type': 'design:update', 'patch': patch})['type'], 'design:applied')
+                # Without a listener the bridge's own reordering is not an author change.
+                self.assertEqual(self.detect(page)['currentPageVersion'], before)
+                frame.evaluate("""() => addEventListener('design:order-changed', () => {
+                    const note = document.createElement('p'); note.textContent = 'Listener node';
+                    document.querySelector('main').appendChild(note);
+                })""")
+                detected = self.detect(page)
+                reply = self.request(page, {'type': 'design:update', 'patch': patch})
+                self.assertEqual(reply['type'], 'design:applied', reply)
+                self.assertEqual(frame.locator('main > p').last.inner_text(), 'Listener node')
+                rejected = self.apply(page, [role(fontSize=24)], pageVersion=detected['pageVersion'], documentId=detected['documentId'])
+                self.assertEqual((rejected['type'], rejected.get('reason')), ('design:rejected', 'page-changed'), rejected)
+                self.assertEqual(self.size(frame), '16px')
+
+    def test_an_author_font_loading_after_a_commit_does_not_advance_the_wire_page_version(self):
+        """Given a role naming an author @font-face whose file is held back, when the apply commits
+        and the font then finishes loading, then a second apply and a clear carrying the receipt's
+        version are both accepted, not rejected as page-changed."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                held = []
+                page.context.route('**/held-font.woff2', lambda route: held.append(route))
+                self.addCleanup(lambda: [route.abort() for route in held[1:]])
+                frame.evaluate("""() => { const style = document.createElement('style');
+                    style.textContent = "@font-face { font-family: Probe; src: url(/held-font.woff2) format('woff2'); }";
+                    document.head.appendChild(style); }""")
+                self.hello(page)
+                first = self.apply(page, [role(fontFamily='Probe, serif')])
+                self.assertEqual(first['type'], 'design:roles-applied', first)
+                self.assertEqual(first['currentPageVersion'], first['pageVersion'])
+                frame.wait_for_function("() => document.fonts.status === 'loading'")
+                self.assertEqual(len(held), 1)
+                held[0].fulfill(status=200, body=b'not a font', headers={'content-type': 'font/woff2'})
+                frame.wait_for_function("() => document.fonts.status === 'loaded'")
+                version = {'pageVersion': first['pageVersion'], 'documentId': first['documentId']}
+                second = self.apply(page, [role(fontFamily='Probe, serif', fontSize=24)], **version)
+                self.assertEqual((second['type'], second['revision']), ('design:roles-applied', 2), second)
+                cleared = self.clear(page, **version)
+                self.assertEqual((cleared['type'], cleared['revision']), ('design:roles-applied', 3), cleared)
+
+    def test_a_font_load_during_a_pending_scan_makes_it_page_changed_with_equal_versions(self):
+        """Given a pending scan of the 5,000-parent page, when a font starts loading part-way
+        through it, then the scan is incomplete as page-changed and its two versions are equal."""
+        attempts = []
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                for fraction in (0.3, 0.2, 0.1):
+                    page, frame = self.open(engine, target=TARGET + '/fixtures/large-page/index.html')
+                    self.hello(page)
+                    frame.evaluate("""() => {
+                        window.probe = {};
+                        addEventListener('message', event => { if (event.data.type === 'design:detect') probe.scan = performance.now(); }, true);
+                        document.fonts.addEventListener('loading', () => { probe.font = probe.font || performance.now(); });
+                    }""")
+                    calibration = self.detect(page)
+                    self.assertTrue(calibration['complete'], calibration)
+                    frame.evaluate('() => { probe.scan = undefined; probe.font = undefined; }')
+                    page.evaluate('() => { window.pendingDetect = request({type:"design:detect"}, 15000); }')
+                    frame.evaluate("""wait => new Promise(resolve => {
+                        const tick = () => (probe.scan !== undefined && performance.now() - probe.scan >= wait ? resolve() : requestAnimationFrame(tick));
+                        requestAnimationFrame(tick);
+                    })""", calibration['elapsedMs'] * fraction)
+                    frame.evaluate("""() => { const face = new FontFace('Late', 'url(data:font/woff2;base64,AAAA)');
+                        document.fonts.add(face); face.load().catch(() => {}); }""")
+                    reply = page.evaluate('() => window.pendingDetect')
+                    delay = frame.evaluate('probe.font === undefined ? null : probe.font - probe.scan')
+                    attempts.append({'fraction': fraction, 'fontDelayMs': delay, 'replyMs': round(reply['elapsedMs'], 1)})
+                    if delay is not None and delay <= calibration['elapsedMs'] / 2 and delay < reply['elapsedMs']:
+                        break
+                else:
+                    self.fail('the font load never landed while the scan was pending: ' + json.dumps(attempts))
+                self.assertEqual((reply['complete'], reply['reason']), (False, 'page-changed'), (reply, attempts))
+                self.assertEqual(reply['currentPageVersion'], reply['pageVersion'])
+
     def test_native_event_during_the_frame_wait_makes_the_receipt_stale_with_equal_versions(self):
         """Given a committed apply, when a pointer event (dispatched by the page, so it is not
         a trusted user event) reaches the page before the frame, then the receipt keeps the

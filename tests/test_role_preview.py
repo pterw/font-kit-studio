@@ -53,6 +53,9 @@ CASCADE = {
         '<div class="{c}"><p class="{c}-t" style="font: var(--f)">Text</p></div>'),
     'a rule with all hides the longhand': case(
         'p.{c}-t { font-size: 16px; } .{c} p { all: unset; }', [loss('fontSize', 1, None, 'complex-cascade')], 16),
+    'a winning selector with a C1 control character is never named': case(
+        'p.a\\85 { font-size: 18px; }', [loss('fontSize', 1, None, 'complex-cascade')], 18,
+        '<div class="{c}"><p class="{c}-t a\u0085">Text</p></div>'),
     'unset inherits like inherit': case(
         '.{c} { font-size: 18px; } .{c} p { font-size: unset; }', [loss('fontSize', 1, '.{c} p', 'inherited')], 18),
     'two inheriting selectors are not a proof': case(
