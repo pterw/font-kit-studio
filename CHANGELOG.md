@@ -29,6 +29,12 @@ Two things have their own version numbers:
   explain each lost property: the winning author rule's selector when it can be
   proven, or an inline style, inheritance, an unreadable or blocked stylesheet,
   an unprovable cascade or a time limit. Receipts always stay within 1 MiB.
+- Live App previews role fonts on the running page: draft a family, size,
+  weight, line height, tracking and case for each detected role, then Apply or
+  Clear. Studio shows only what the page acknowledged, with matched and checked
+  counts and a plain reason for each lost property (a winning author selector is
+  shown as text). The preview never reaches saved overrides, exports or sync.
+  Reset all page edits removes every live edit on the page, after confirmation.
 
 ## [0.3.1] - 2026-10-07
 
