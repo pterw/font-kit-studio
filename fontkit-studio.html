@@ -3839,12 +3839,12 @@ if (remembered) kitId.value = remembered;
   // Accepted state is only what the page acknowledged (a receipt, a ready snapshot or a reset-all reply). Drafts are the
   // user's typed input, kept apart from it and from the baseline observations; they live exactly as long as roleView.ids.
   const rolePreview = { roles:[], css:"", hash:"811c9dc5", revision:-1, documentId:null, outcomes:null,
-    unconfirmed:false, message:"No role preview applied.", shown:"No role preview applied.", removed:"" };
+    unconfirmed:false, message:"No role preview applied.", shown:"No role preview applied.", removed:"", origin:null };
   const roleDrafts = new Map();
   const ROLE_PROPS = ["fontFamily", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "textTransform"];
   const ROLE_FIELD_LABELS = { fontFamily:"font family", fontSize:"size", fontWeight:"weight", lineHeight:"line height",
     letterSpacing:"tracking", textTransform:"case" };
-  const ROLE_FIELD_HELP = { fontFamily:"1 to 300 characters, a valid font stack without ; { } < > backslashes, comments, url( or !important",
+  const ROLE_FIELD_HELP = { fontFamily:"1 to 300 characters, a valid font stack without ; { } < > backslashes, control characters, comments, !important, or url( expression( var( env( attr(",
     fontSize:"4 to 400", fontWeight:"a whole number from 1 to 1000", lineHeight:"0.5 to 5", letterSpacing:"-0.5 to 2 em", textTransform:"none, uppercase, lowercase or capitalize" };
   const ROLE_NUMBERS = { fontSize:{ min:4, max:400, places:2 }, fontWeight:{ min:1, max:1000, places:0, integer:true },
     lineHeight:{ min:.5, max:5, places:3 }, letterSpacing:{ min:-.5, max:2, places:4 } };
@@ -3873,10 +3873,12 @@ if (remembered) kitId.value = remembered;
     return hash.toString(16).padStart(8, "0");
   }
   // Family stacks for roles are checked more strictly than canonicalLiveValue does: CSS.supports and balanced quotes.
+  // The same refusals as the bridge's ROLE_FAMILY_UNSAFE, so Apply is never offered for a value the bridge will reject.
+  const ROLE_FAMILY_UNSAFE = /[;{}<>\\\u0000-\u001f\u007f\u2028\u2029]|\/\*|\*\/|!\s*important|\b(?:url|expression|var|env|attr)\s*\(/i;
   function roleFamily(value) {
     if (typeof value !== "string") return null;
     const text = value.trim();
-    if (!text || text.length > 300 || /[;{}<>\\\r\n\f\u2028\u2029]/.test(text) || /\/\*|\*\/|url\(|expression\(|!important/i.test(text)) return null;
+    if (!text || text.length > 300 || ROLE_FAMILY_UNSAFE.test(text)) return null;
     let quote = "";
     for (const ch of text) {
       if (quote) { if (ch === quote) quote = ""; } else if (ch === '"' || ch === "'") quote = ch;
@@ -3931,7 +3933,7 @@ if (remembered) kitId.value = remembered;
     const gone = rolePreview.roles.filter(role => !kept.has(role.id)).map(role => role.name);
     // A ready (a reload, another editor) replaces the state without any Studio action, so it names nothing as removed.
     rolePreview.removed = announce && gone.length ? `Removed from the preview: ${gone.join(", ")}.` : "";
-    Object.assign(rolePreview, { roles, css, hash, revision, documentId, outcomes, unconfirmed:false, message, shown:message });
+    Object.assign(rolePreview, { roles, css, hash, revision, documentId, outcomes, unconfirmed:false, message, shown:message, origin:live.expectedOrigin });
     seedRoleDrafts();
   }
   function markRolePreviewUnconfirmed(message) {
@@ -3940,7 +3942,7 @@ if (remembered) kitId.value = remembered;
     if (message) rolePreview.message = message;
   }
   function resetRoleSession() {
-    if (isRoleOp(live.inFlight)) rolePreview.message = ROLE_DROPPED;
+    if (isRoleOp(live.inFlight) || live.queue.some(isRoleOp)) rolePreview.message = ROLE_DROPPED;
     markRolePreviewUnconfirmed();
     roleView.identity = null; roleView.pending = null; roleView.rows = []; roleView.stylesheet = false;
     roleView.status = "Connect a Live App to detect text styles.";
@@ -3957,7 +3959,13 @@ if (remembered) kitId.value = remembered;
     // A snapshot older than the accepted state of the same document never replaces it.
     if (valid && rolePreview.documentId === state.documentId && data.revision < rolePreview.revision) return;
     roleView.pending = null; roleView.rows = []; roleView.identity = null; roleView.status = ROLE_UNSUPPORTED; roleView.stylesheet = false;
-    if (!valid) { markRolePreviewUnconfirmed(); return; }
+    if (!valid) {
+      // Another app's preview is not this app's: only the same origin keeps the old CSS, marked unconfirmed.
+      if (rolePreview.origin !== null && rolePreview.origin !== live.expectedOrigin) {
+        installAcceptedRoles([], "", ROLE_EMPTY_HASH, -1, null, null, "This bridge does not report a role preview, so none is shown.", false);
+      } else markRolePreviewUnconfirmed();
+      return;
+    }
     if (roleView.origin !== live.expectedOrigin) {
       roleView.origin = live.expectedOrigin; roleView.ids.clear(); roleView.nextId = 0;
       roleDrafts.clear(); roleView.limitReached = false;
@@ -4064,10 +4072,10 @@ if (remembered) kitId.value = remembered;
     const draft = roleDrafts.get(id) || newRoleDraft();
     roleDrafts.set(id, draft);
     if (key === "enabled") draft.enabled = input.checked; else draft[key] = input.value;
+    roleDraftVersion += 1;
     renderRoleControls();
   }
-  q("roleRows").addEventListener("input", onRoleDraftEdit);
-  q("roleRows").addEventListener("change", onRoleDraftEdit);
+  q("roleRows").addEventListener("input", onRoleDraftEdit);   // checkboxes and selects fire input too
   // The valid properties of one draft and the typed fields that are not valid; nothing typed is dropped silently.
   function roleDraftProps(draft) {
     const properties = {}, bad = [];
@@ -4098,7 +4106,17 @@ if (remembered) kitId.value = remembered;
     if (!roleView.identity) return ROLE_UNSUPPORTED;
     return roleView.stylesheet ? null : ROLE_PREVIEW_UNSUPPORTED;
   }
+  // The request-size probe serializes every selected role, so it is recomputed only when something it reads changed.
+  let roleApplyCache = null;
   function roleApplyState() {
+    const inputs = [roleDraftVersion, renderedRoleRows, roleView.identity, roleView.stylesheet, roleView.limitReached, live.ready, live.revision, live.sessionId];
+    if (roleApplyCache && roleApplyCache.inputs.every((value, index) => value === inputs[index])) return roleApplyCache.state;
+    const state = computeRoleApplyState();
+    roleApplyCache = { inputs, state };
+    return state;
+  }
+  let roleDraftVersion = 0;
+  function computeRoleApplyState() {
     const roles = [];
     const reason = roleCapabilityReason();
     if (reason) return { reason, roles };
@@ -4134,12 +4152,16 @@ if (remembered) kitId.value = remembered;
     setDisabledReason(q("roleResetAll"), live.ready ? null : ROLE_CONNECT_FIRST);
     renderRolePreview();
   }
+  let renderedOutcomes = { outcomes:undefined, roles:undefined };
   function renderRolePreview() {
     q("rolePreviewCss").textContent = rolePreview.css;
     q("rolePreviewStatus").textContent = (rolePreview.unconfirmed ? `${ROLE_UNCONFIRMED} ` : "") + rolePreview.message;
     const removed = q("rolePreviewRemoved");
     removed.textContent = rolePreview.removed; removed.hidden = !rolePreview.removed;
     const list = q("rolePreviewOutcomes");
+    // The outcome nodes change only with the accepted state, not with a keystroke in a draft.
+    if (renderedOutcomes.outcomes === rolePreview.outcomes && renderedOutcomes.roles === rolePreview.roles) return;
+    renderedOutcomes = { outcomes:rolePreview.outcomes, roles:rolePreview.roles };
     list.replaceChildren();
     const outcomes = rolePreview.outcomes;
     if (!outcomes) return;
@@ -4235,14 +4257,26 @@ if (remembered) kitId.value = remembered;
     }
     renderDetectedRoles();
   }
+  // One shape for every rejection of a role request. The detail is text, or, for revision-conflict, the bridge's
+  // {baseRevision, revision}; either way it is only ever shown as text.
+  function validRoleRejection(data) {
+    if (!safeRoleWire(data, 1024 * 1024) || !roleCount(data.revision) || !ROLE_REJECTIONS.includes(data.reason)
+      || !exactRoleFields(data, Object.hasOwn(data, "detail")
+        ? ["type", "protocolVersion", "sessionId", "requestId", "revision", "reason", "detail"]
+        : ["type", "protocolVersion", "sessionId", "requestId", "revision", "reason"])) return false;
+    if (!Object.hasOwn(data, "detail") || typeof data.detail === "string") return true;
+    return data.reason === "revision-conflict" && exactRoleFields(data.detail, ["baseRevision", "revision"])
+      && roleCount(data.detail.baseRevision) && roleCount(data.detail.revision);
+  }
+  function rejectionDetailText(data) {
+    if (!Object.hasOwn(data, "detail")) return "";
+    if (typeof data.detail !== "string") return ` Detail: base revision ${data.detail.baseRevision}, bridge revision ${data.detail.revision}`;
+    return data.detail ? ` Detail: ${data.detail.slice(0, 200)}` : "";
+  }
   function rejectRoleDetect(data) {
     if (typeof data.requestId !== "string" || !data.requestId.startsWith("fks-detect-")) return false;
     if (data.requestId !== roleView.pending?.requestId) return true;
-    if (!safeRoleWire(data, 1024 * 1024) || !roleCount(data.revision)
-      || !["invalid-message", "unsupported-value", "revision-conflict", "page-changed", "stylesheet-blocked", "size-limit"].includes(data.reason)
-      || !exactRoleFields(data, Object.hasOwn(data, "detail")
-        ? ["type", "protocolVersion", "sessionId", "requestId", "revision", "reason", "detail"]
-        : ["type", "protocolVersion", "sessionId", "requestId", "revision", "reason"])) return true;
+    if (!validRoleRejection(data)) return true;
     roleView.pending = null; roleView.status = `Role detection rejected (${data.reason}); this page has not been checked.`;
     renderDetectedRoles(); return true;
   }
@@ -4301,9 +4335,9 @@ if (remembered) kitId.value = remembered;
   const roleLossSelector = value => typeof value === "string" && value.length >= 1 && value.length <= 2000 && !/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(value);
   function validRoleOutcome(outcome, ids) {
     if (!exactRoleFields(outcome, ["id", "matched", "checked", "mismatched", "complete", "losses"]) || !ids.has(outcome.id)
-      || !roleCount(outcome.matched, 10000) || !roleCount(outcome.checked, 10000) || !roleCount(outcome.mismatched, 10000)
+      || !roleCount(outcome.matched) || !roleCount(outcome.checked, 10000) || !roleCount(outcome.mismatched, 10000)
       || outcome.mismatched > outcome.checked || outcome.checked > outcome.matched || typeof outcome.complete !== "boolean"
-      || !Array.isArray(outcome.losses) || outcome.losses.length > 64) return false;
+      || !Array.isArray(outcome.losses) || outcome.losses.length > 96) return false;   // matched is uncapped; 16 groups x 6 properties
     return outcome.losses.every(loss => exactRoleFields(loss, ["property", "count", "winningSelector", "reason"])
       && ROLE_PROPS.includes(loss.property) && roleCount(loss.count, 10000) && loss.count >= 1
       && ROLE_LOSS_REASONS.includes(loss.reason) && (loss.winningSelector === null || roleLossSelector(loss.winningSelector)));
@@ -4359,14 +4393,9 @@ if (remembered) kitId.value = remembered;
   function rejectRoleOp(data) {
     const found = roleOpFor(data.requestId);
     if (!found) return false;
-    if (!safeRoleWire(data, 1024 * 1024) || !roleCount(data.revision) || !ROLE_REJECTIONS.includes(data.reason)
-      || !exactRoleFields(data, Object.hasOwn(data, "detail")
-        ? ["type", "protocolVersion", "sessionId", "requestId", "revision", "reason", "detail"]
-        : ["type", "protocolVersion", "sessionId", "requestId", "revision", "reason"])
-      || Object.hasOwn(data, "detail") && typeof data.detail !== "string") return true;
+    if (!validRoleRejection(data)) return true;
     settleRoleOp(found, data.revision);
-    const detail = Object.hasOwn(data, "detail") && data.detail ? ` Detail: ${data.detail.slice(0, 200)}` : "";
-    rolePreview.message = `Role preview ${found.op.operation} rejected (${data.reason}); the previous preview is kept.${NEXT_STEPS[data.reason] || ""}${detail}`;
+    rolePreview.message = `Role preview ${found.op.operation} rejected (${data.reason}); the previous preview is kept.${NEXT_STEPS[data.reason] || ""}${rejectionDetailText(data)}`;
     renderDetectedRoles();
     pumpLiveQueue();
     roleQueueIdle();
@@ -4670,8 +4699,12 @@ if (remembered) kitId.value = remembered;
         if (queued.kind === "restore" || isRoleOp(queued) || (queued.kind === "reset" && (!queued.targetId || queued.targetId === op.targetId))) break;
       }
     } else if (op.kind === "composition") {
-      const queued = live.queue.find(item => item.kind === "composition");
-      if (queued) { queued.patch = op.patch; return true; }
+      // Never merge into a composition queued before an untargeted reset, a restore or a role op: it would be sent ahead of it.
+      for (let index = live.queue.length - 1; index >= 0; index -= 1) {
+        const queued = live.queue[index];
+        if (queued.kind === "composition") { queued.patch = op.patch; return true; }
+        if (queued.kind === "restore" || isRoleOp(queued) || (queued.kind === "reset" && !queued.targetId)) break;
+      }
     }
     live.queue.push(op);
     pumpLiveQueue();

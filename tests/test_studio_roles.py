@@ -92,6 +92,7 @@ addEventListener('message',e=>{if(e.source!==parent||e.origin!=='http://studio.t
 </script>'''
 PEER = PEER_TEMPLATE.replace('__CAPS__', '{roleDetection:true,roleStylesheet:true}')
 PEER_DETECT_ONLY = PEER_TEMPLATE.replace('__CAPS__', '{roleDetection:true}')
+PEER_LEGACY = PEER_TEMPLATE.replace('__CAPS__', '{}')
 
 # The legacy fake target, with the role capabilities and a ready roleState added at serve time. The two replacements
 # fail loudly if the fixture changes; the fake keeps answering legacy ops (and holds replies on request).
@@ -326,6 +327,18 @@ class StudioRoleCase(unittest.TestCase):
         with page.expect_response(lambda response: response.request.method == 'PUT'):
             page.locator('#liveCodeSync').click()
         return self.puts[-1]
+
+    def switch_to(self, page, url, html, ready_status='Ready to detect text styles.'):
+        """Connects Studio to another origin served by `html`; returns that origin's frame once Studio shows `ready_status`."""
+        page.context.route(url, lambda route: route.fulfill(body=html, content_type='text/html'))
+        field = page.get_by_role('textbox', name='Live App URL', exact=True)
+        field.focus()
+        field.press('ControlOrMeta+A')
+        field.press_sequentially(url)
+        page.get_by_role('button', name='Connect Live App', exact=True).click()
+        page.wait_for_function('(text) => document.querySelector("#roleStatus").textContent === text', arg=ready_status)
+        self.page_url = url
+        return next(f for f in page.frames if f.url == url)
 
     def unchanged_page(self, frame):
         self.assertEqual(frame.locator('p').inner_text(), 'Peer body')
@@ -1232,6 +1245,42 @@ class StudioRoleApplyTests(StudioRoleCase):
         self.assertEqual(errors, [])
 
     @per_engine
+    def test_a_revision_conflict_with_the_bridges_object_detail_settles_the_op_and_adopts_the_revision(self, engine):
+        """Given an Apply that the bridge rejects as a revision conflict with its real detail object, when the
+        rejection arrives, then the op settles at once, the status gives the next step and both revisions as text, and
+        the next Apply is based on the bridge's revision."""
+        page, frame, errors = self.open(engine, PEER_URL, PEER)
+        self.detected(page, frame)
+        request = self.apply_role(page, frame, '24')
+        self.send(frame, {'type': 'design:rejected', 'requestId': request['requestId'], 'revision': 7, 'reason': 'revision-conflict',
+                          'detail': {'baseRevision': 0, 'revision': 7}})
+        self.wait_status(page, 'rejected (revision-conflict)')
+        status = self.preview(page)['status']
+        self.assertIn('press the button again', status)
+        self.assertIn('Detail: base revision 0, bridge revision 7', status)
+        self.assertEqual(self.press_apply(page, frame)['baseRevision'], 7)
+        self.assertEqual(errors, [])
+
+    @per_engine
+    def test_outcome_limits_follow_what_the_bridge_can_send(self, engine):
+        """Given a receipt that matches 250,000 elements and lists 96 loss entries (16 groups for each of six
+        properties), when it arrives, then Studio accepts and shows it; a 97th entry or more than 10,000 checked
+        elements is refused."""
+        page, frame, errors = self.open(engine, PEER_URL, PEER)
+        self.detected(page, frame)
+        request = self.apply_role(page, frame, '24')
+        props = ('fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'textTransform', 'fontFamily')
+        losses = [loss(prop, 1, f'main p.c{i}', 'author-rule') for prop in props for i in range(16)]
+        self.send(frame, self.receipt(request, [outcome(matched=250000, checked=96, mismatched=96, losses=losses + [loss()])]))
+        self.send(frame, self.receipt(request, [outcome(matched=250000, checked=10001, mismatched=1)]))
+        self.send(frame, self.receipt(request, [outcome(matched=250000, checked=96, mismatched=96, losses=losses)]))
+        self.wait_status(page, 'Preview applied to 1 role; 96 checked elements did not show it.')
+        text = self.preview(page)['outcomes']
+        self.assertIn('matched 250000, checked 96 eligible text elements, mismatched 96', text)
+        self.assertEqual(text.count(' × '), 96)
+        self.assertEqual(errors, [])
+
+    @per_engine
     def test_receipts_from_the_wrong_session_protocol_or_source_change_nothing(self, engine):
         """Given an Apply in flight, when a valid-looking receipt arrives with another session, protocol, from the
         Studio window itself or from a nested frame, then none settles it; only the real peer's receipt does."""
@@ -1412,8 +1461,14 @@ class StudioRoleQueueTests(StudioLegacyCase):
         self.detected(page, frame)
         request = self.apply_role(page, frame, '24')
         good = {'type': 'design:rejected', 'requestId': request['requestId'], 'revision': 0, 'reason': 'size-limit'}
+        conflict = {'baseRevision': 0, 'revision': 3}
         for name, change in {'extra key': {'extra': 1}, 'unknown reason': {'reason': 'invented'}, 'detail not text': {'detail': 5},
-                             'negative revision': {'revision': -1}, 'text revision': {'revision': 'x'}}.items():
+                             'negative revision': {'revision': -1}, 'text revision': {'revision': 'x'},
+                             'object detail on another reason': {'detail': conflict},
+                             'conflict detail with an extra key': {'reason': 'revision-conflict', 'detail': {**conflict, 'extra': 1}},
+                             'conflict detail missing a key': {'reason': 'revision-conflict', 'detail': {'revision': 3}},
+                             'conflict detail negative': {'reason': 'revision-conflict', 'detail': {'baseRevision': -1, 'revision': 3}},
+                             'conflict detail text': {'reason': 'revision-conflict', 'detail': {'baseRevision': '0', 'revision': 3}}}.items():
             with self.subTest(shape=name):
                 self.send(frame, {**good, **change})
         receipt = self.receipt(request)
@@ -1638,6 +1693,56 @@ class StudioResetAllTests(StudioLegacyCase):
                 request = self.press_apply(page, frame)
                 self.send(frame, self.receipt(request))
                 page.wait_for_function('!document.querySelector("#rolePreviewStatus").textContent.startsWith("Unconfirmed")')
+        self.assertEqual(errors, [])
+
+
+class StudioPrbFixTests(StudioLegacyCase):
+    @per_engine
+    def test_another_apps_preview_is_cleared_when_a_bridge_that_cannot_report_one_connects(self, engine):
+        """Given an applied preview on one origin, when Studio connects to another origin whose bridge reports no role
+        support, then the first app's CSS and counts are gone and the status says no preview is shown."""
+        page, frame, errors = self.open(engine, PEER_URL, PEER)
+        self.detected(page, frame)
+        self.send(frame, self.receipt(self.apply_role(page, frame, '24')))
+        self.wait_status(page, 'Preview applied to 1 role')
+        self.switch_to(page, 'http://evil.test/peer', PEER_LEGACY, UNSUPPORTED)
+        shown = self.preview(page)
+        self.assertEqual((shown['css'], shown['outcomes']), ('', ''))
+        self.assertEqual(shown['status'], 'This bridge does not report a role preview, so none is shown.')
+        self.assertEqual(errors, [])
+
+    @per_engine
+    def test_a_role_op_that_never_left_the_queue_is_reported_dropped_when_the_session_ends(self, engine):
+        """Given Apply queued behind an unanswered legacy op, when Studio connects to another origin, then the status
+        says the request was dropped instead of still reading 'Applying role preview'."""
+        page, frame, errors = self.open(engine, PEER_URL, PEER)
+        self.detected(page, frame)
+        self.control(page, 'Preview this role').check()
+        self.type_value(self.control(page, 'Size (px)'), '24')
+        self.legacy_in_flight(page, frame)
+        self.button(page, APPLY).click()
+        self.assertEqual(self.preview(page)['status'], 'Applying role preview…')
+        self.switch_to(page, 'http://evil.test/peer', PEER)
+        status = self.preview(page)['status']
+        self.assertIn('dropped', status)
+        self.assertNotIn('Applying', status)
+        self.assertEqual(errors, [])
+
+    @per_engine
+    def test_typing_does_not_rebuild_the_outcome_list(self, engine):
+        """Given a shown preview with outcomes, when a key is typed in a draft field, then the outcome nodes are the
+        same nodes afterwards, and the draft and Apply state still follow the key."""
+        page, frame, errors = self.open(engine, PEER_URL, PEER)
+        self.detected(page, frame)
+        self.send(frame, self.receipt(self.apply_role(page, frame, '24')))
+        self.wait_status(page, 'Preview applied to 1 role')
+        page.evaluate('document.querySelector("#rolePreviewOutcomes li").dataset.kept = "1"')
+        self.type_value(self.control(page, 'Weight'), '7')
+        self.assertEqual(page.locator('#rolePreviewOutcomes li').first.get_attribute('data-kept'), '1')
+        self.assertEqual(self.control(page, 'Weight').input_value(), '7')
+        self.assertTrue(self.gate(page)[0])
+        self.type_value(self.control(page, 'Weight'), '0')
+        self.assertFalse(self.gate(page)[0])
         self.assertEqual(errors, [])
 
 
@@ -2048,6 +2153,42 @@ class StudioRoleLegacyInterplayTests(StudioLegacyCase):
         self.assertEqual(shown['css'], receipt['canonicalCss'])
         self.assertTrue(shown['status'].startswith('Unconfirmed'))
         self.assertEqual(errors, [])
+
+    def flow(self, frame):
+        out = []
+        for message in frame.evaluate('received'):
+            if message['type'] == 'design:update':
+                out.append('update' if 'targetId' in message else 'composition')
+            elif message['type'] == 'design:reset':
+                out.append('reset')
+        return out
+
+    @per_engine
+    def test_a_composition_edit_is_not_merged_into_one_queued_before_a_reset_all(self, engine):
+        """Given a linked composition, an inspector edit in flight, a composition edit queued and Reset all page edits
+        queued behind it, when the composition changes again, then the new composition is queued after the reset and
+        is sent after it, so the page ends with the composition rather than empty."""
+        page, frame, errors = self.hybrid_ready(engine)
+        page.on('dialog', lambda dialog: dialog.accept())
+        page.locator('#btnSyncToApp').click()
+        self.wait_flow(frame, ['composition'])
+        self.select(page, frame)
+        frame.evaluate('fake.hold = true')
+        self.edit(page, 'liveFontSize', '9')
+        self.wait_flow(frame, ['composition', 'update'])
+        page.locator('#compositionPreset').select_option('asteria')
+        page.locator('#applyPreset').click()
+        self.button(page, RESET_ALL).click()
+        page.locator('#compositionPreset').select_option('blank')
+        page.locator('#applyPreset').click()
+        frame.evaluate('fake.hold = false; fake.release()')
+        self.wait_flow(frame, ['composition', 'update', 'composition', 'reset', 'composition'])
+        self.assertTrue(frame.evaluate('Object.keys(fake.ledger().tokens).length > 0'))
+        self.assertEqual(errors, [])
+
+    def wait_flow(self, frame, expected):
+        frame.wait_for_function('(expected) => JSON.stringify(received.filter(m => m.type === "design:update" || m.type === "design:reset").map(m => m.type === "design:reset" ? "reset" : ("targetId" in m ? "update" : "composition"))) === JSON.stringify(expected)',
+                                arg=expected, polling=50)
 
     def export_state(self, page):
         page.locator('#exportJson').click()

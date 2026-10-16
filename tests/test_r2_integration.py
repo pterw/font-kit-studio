@@ -191,6 +191,44 @@ CARD_PAGE = """<!doctype html><html lang="en"><meta charset="utf-8"><title>Card<
 <main><div class="card"><p class="role" data-design-role="Body">Card text</p></div></main>
 <script src="/fontkit-bridge.js"></script></html>"""
 LONG_URL = '/?' + 'x' * 1999
+# The real bridge binds a role only to what it measured, so no Detect it makes can reach more than 10,000 elements. This
+# page answers the first Detect itself (the real bridge's own reply then arrives for a request already settled) with a
+# class binding that 10,001 elements carry, and leaves Apply and its receipt to the real bridge.
+MANY_MATCHES = ("""<!doctype html><html lang="en"><meta charset="utf-8"><title>Many</title><main id="m"><p class="b">x</p></main>
+<script>for (let i = 0; i < 10000; i++) { const d = document.createElement('div'); d.className = 'b'; d.hidden = true; d.textContent = 'h'; m.append(d); }
+let session = null;
+addEventListener('message', e => {
+  if (e.source !== parent || !e.data) return;
+  if (e.data.type === 'design:hello') session = e.data.sessionId;
+  if (e.data.type !== 'design:detect') return;
+  const b = window.__fontkitBridge, url = location.href;
+  parent.postMessage({ type: 'design:detected', protocolVersion: 1, sessionId: session, requestId: e.data.requestId, revision: b.revision,
+    documentId: b.documentId, pageVersion: b.pageVersion, pageURL: url, currentPageVersion: b.pageVersion, currentPageURL: url,
+    complete: true, reason: null, elapsedMs: 1, scannedElements: 1, selectorChecks: [], groups: [{ id: 'g1',
+      identity: { kind: 'author-role', name: 'Body' }, suggestedName: 'Body', authorRole: 'Body', elementCount: 1, sampleText: 'x',
+      signatures: [{ style: { fontFamily: 'serif', fontSize: 16, fontWeight: 400, textTransform: 'none', letterSpacing: 0 }, count: 1 }],
+      sharedClasses: ['b'], selectors: [{ value: '.b', stable: true, reason: 'class' }], bindingComplete: true, nearDuplicateIds: [] }] },
+    'http://studio.test');
+}, true);</script>
+<script src="/fontkit-bridge.js"></script></html>""")
+MANY_LOSSES = ("""<!doctype html><html lang="en"><meta charset="utf-8"><title>Losses</title><main id="m"></main>
+<script>
+const rules = [];
+for (let i = 0; i < 30; i++) {
+  const k = i % 4;
+  rules.push(`main p.c${i} { font-size: ${10 + k}px; font-weight: ${100 * (k + 1)}; line-height: ${1 + k / 10};`
+    + ` letter-spacing: ${k}px; text-transform: ${['lowercase', 'uppercase', 'capitalize', 'none'][k]};`
+    + ` font-family: ${['Arial', 'Georgia', 'Courier', 'Verdana'][k]}; }`);
+  const p = document.createElement('p'); p.className = 'c' + i; p.dataset.designRole = 'Body'; p.textContent = 'Paragraph ' + i; m.append(p);
+}
+const style = document.createElement('style'); style.textContent = rules.join(' '); document.head.append(style);
+</script><script src="/fontkit-bridge.js"></script></html>""")
+FAMILIES = [('Georgia, serif', True), ('"Times New Roman", serif', True), ('Source Serif 4', False), ('variable-font', True),
+            ('var(--f)', False), ('var (--f)', False), ('env(x)', False), ('attr(x)', False), ('url(x)', False), ('url (x)', False),
+            ('expression(1)', False), ('expression (1)', False), ('Georgia !important', False), ('Georgia ! important', False),
+            ('a;b', False), ('a{b', False), ('a<b', False), ('a' + chr(92) + 'b', False), ('a/* c */b', False), ("'Unbalanced", False),
+            ('A' * 301, False), ('Georgia' + chr(9) + 'serif', False), ('Georgia' + chr(127), False), ('Georgia' + chr(1), False),
+            ('"quoted' + chr(9) + 'name"', False)]
 
 
 class StudioRoleBridgeTests(StudioLegacyCase):
@@ -338,6 +376,85 @@ class StudioRoleBridgeTests(StudioLegacyCase):
             self.assertNotIn('font-size: 24px', text)
             self.assertNotIn(receipt['cssHash'], text)
             self.assertNotIn('data-design-role', text)
+        self.assertEqual(errors, [])
+
+    @per_engine
+    def test_a_revision_conflict_from_the_real_bridge_settles_at_once_and_the_next_apply_succeeds(self, engine):
+        """Given another client that moved the bridge's revision, when Studio applies on its stale revision, then the
+        real bridge's revision-conflict (with its object detail) settles the op without waiting for a timeout, the status
+        names both revisions and the next step, and pressing Apply again renders the preview."""
+        page, frame, errors = self.start(engine)
+        state = page.evaluate('__s2b.inbound.find(m => m.type === "design:ready").roleState')
+        moved = self.raw(page, {'type': 'design:roles-clear', 'requestId': 'raw-move', 'baseRevision': 0,
+                                'documentId': state['documentId'], 'pageVersion': state['pageVersion']})
+        self.assertEqual(moved['revision'], 1)
+        self.apply_role(page, frame, '24')
+        self.wait_status(page, 'rejected (revision-conflict)')
+        status = self.preview(page)['status']
+        self.assertIn('Detail: base revision 0, bridge revision 1', status)
+        self.assertIn('press the button again', status)
+        self.assertEqual(self.size(frame, '[data-design-role="Body"]'), '16px')
+        request = self.press_apply(page, frame)
+        self.assertEqual(request['baseRevision'], 1)
+        self.wait_for_receipt(page, request)
+        self.assertEqual(self.size(frame, '[data-design-role="Body"]'), '24px')
+        self.assertEqual(errors, [])
+
+    @per_engine
+    def test_a_role_matching_more_than_ten_thousand_elements_is_shown_with_its_full_matched_count(self, engine):
+        """Given a class binding that 10,001 elements carry, one of them rendering text, when the role is applied to the
+        real bridge, then its receipt (matched 10,001, checked 1) is accepted and Studio shows both counts."""
+        page, frame, errors = self.open(engine, TARGET + '/many', MANY_MATCHES, init=CAPTURE)
+        self.record(frame)
+        self.assertIn('Detected', self.detect(page))
+        request = self.apply_role(page, frame, '24')
+        self.wait_for_receipt(page, request)
+        outcome = self.receipts(page)[-1]['outcomes'][0]
+        self.assertEqual((outcome['matched'], outcome['checked']), (10001, 1))
+        self.assertIn('matched 10001, checked 1 eligible text elements', self.preview(page)['outcomes'])
+        self.assertEqual(errors, [])
+
+    @per_engine
+    def test_an_outcome_with_more_than_sixty_four_loss_groups_is_accepted(self, engine):
+        """Given thirty paragraphs that each override all six properties through their own rule, when the role is
+        applied, then the bridge reports more than 64 loss entries for the one role and Studio accepts the receipt and
+        lists every entry."""
+        page, frame, errors = self.open(engine, TARGET + '/losses', MANY_LOSSES, init=CAPTURE)
+        self.record(frame)
+        self.assertIn('Detected', self.detect(page))
+        self.control(page, 'Preview this role', 'role-1', 'Body').check()
+        for label, value in (('Font family', 'Palatino'), ('Size (px)', '40'), ('Weight', '900'), ('Line height', '3'), ('Tracking (em)', '0.5')):
+            self.type_value(self.control(page, label, 'role-1', 'Body'), value)
+        self.control(page, 'Case', 'role-1', 'Body').select_option('none')
+        request = self.press_apply(page, frame)
+        self.wait_for_receipt(page, request)
+        count = len(self.receipts(page)[-1]['outcomes'][0]['losses'])
+        self.assertGreater(count, 64)
+        self.assertEqual(self.preview(page)['outcomes'].count(' × '), count)
+        self.assertEqual(errors, [])
+
+    @per_engine
+    def test_studios_family_field_agrees_with_the_bridge_on_every_row(self, engine):
+        """Given a table of family values, when each is entered in Studio and sent raw to the real bridge, then Apply
+        is enabled exactly when the bridge accepts the value, so no value is offered that the bridge rejects."""
+        page, frame, errors = self.start(engine)
+        state = page.evaluate('__s2b.inbound.find(m => m.type === "design:ready").roleState')
+        self.control(page, 'Preview this role', 'role-1', 'Body').check()
+        field = self.control(page, 'Font family', 'role-1', 'Body')
+        revision = 0
+        for index, (value, accepted) in enumerate(FAMILIES):
+            with self.subTest(family=repr(value)):
+                if value.isprintable():
+                    self.type_value(field, value)
+                else:
+                    field.evaluate('(el, v) => { el.value = v; el.dispatchEvent(new Event("input", { bubbles: true })); }', value)
+                reply = self.raw(page, {'type': 'design:roles-apply', 'requestId': f'raw-family-{index}', 'baseRevision': revision,
+                    'documentId': state['documentId'], 'pageVersion': state['pageVersion'],
+                    'roles': [{'id': 'role-1', 'name': 'Body', 'selectors': ['[data-design-role="Body"]'], 'adapter': 'plain',
+                               'properties': {'fontFamily': value}}]})
+                revision = reply['revision']
+                self.assertEqual(reply['type'] == 'design:roles-applied', accepted, reply)
+                self.assertEqual(self.gate(page)[0], accepted, self.gate(page)[1])
         self.assertEqual(errors, [])
 
     @per_engine
