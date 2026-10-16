@@ -235,3 +235,26 @@ never retried through a different tool. Done means rendered apply and clear,
 atomic rejection, exact undo and baseline detection pass, prior
 characterizations stay green, outcomes are honest and `roleStylesheet` is
 advertised truthfully.
+
+## Additions after dispatch (2026-10-16)
+
+1. **Merged-test gaps in owned files** ([Addendum 10](../../plans/2026-10-03-r2-engine.md#addendum-10-harden-the-merged-detection-tests-2026-10-16)).
+   Add selector and field negatives for roles-apply (other pseudo-classes,
+   raw `{` `;` `}`, line breaks, at-rules, `url(`, `expression(`, comments,
+   2,001 characters and `:nth-of-type(10000)`, with the 2,000 and 9,999
+   positives, a 201-character requestId). Make the existing hostile-detect
+   test observable by reading the evil child's and the target frame's own
+   message logs. Replace two checks that cannot fail (the bridge-ready filter
+   and the host's own roleState). Attempt a real credentialed or foreign URL
+   case; report it as infeasible if the read-only harness cannot serve one.
+   Existing tests in `test_role_protocol.py` may gain Given/When/Then
+   docstrings.
+2. **Page version** ([Addendum 11](../../plans/2026-10-03-r2-engine.md#addendum-11-page-version-counts-page-changes-only-2026-10-16), D063).
+   Bridge-originated writes and native hover/focus/press no longer advance
+   the wire pageVersion; native events move an internal epoch that still
+   stales in-flight detection and receipts. Tests: Apply after a native hover
+   is accepted; a Clear queued behind an inspector edit is accepted; an author
+   DOM or URL change between Detect and Apply is rejected `page-changed`; a
+   hover during a scan still makes it `page-changed` with equal versions.
+   `tests/test_role_detection.py` stays read-only; R2.T1 relaxes its version
+   comparisons.
