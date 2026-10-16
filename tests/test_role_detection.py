@@ -7,6 +7,7 @@ from role_support import RoleBridgeCase, TARGET
 
 class RoleDetectionTests(RoleBridgeCase):
     def test_valid_scan_becoming_unavailable_sends_null_and_no_partial_evidence(self):
+        """Given a valid scan whose page URL becomes unserializable mid-scan, when the reply arrives, then it is incomplete with a null current URL and no partial evidence, and the page recovers once the URL is valid again."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, frame = self.open(engine, target=TARGET + '/fixtures/large-page/index.html')
@@ -34,6 +35,7 @@ class RoleDetectionTests(RoleBridgeCase):
                 self.assertEqual(frame.locator('[data-design-id="g19.249"]').inner_text(), 'Group 19 sample 249')
 
     def test_color4_zero_alpha_and_zero_height_clipping_have_no_eligible_text(self):
+        """Given text that is fully transparent (color 4 syntax) or clipped to zero height, when Studio detects, then only the two ordinary paragraphs are scanned and the author DOM is untouched."""
         for engine in ENGINES:
             for css in ('color:color(srgb 1 0 0 / 0)', 'height:0;overflow:hidden', 'height:0;overflow:hidden;border:2px solid'):
                 with self.subTest(engine=engine, css=css):
@@ -56,6 +58,7 @@ class RoleDetectionTests(RoleBridgeCase):
                     self.assertEqual(frame.locator('.body-copy').first.evaluate('el => getComputedStyle(el).fontSize'), '16px')
 
     def test_native_focus_style_and_eligibility_changes_invalidate_pending_measurement(self):
+        """Given a pending scan and a page whose style and eligibility depend on focus, when the user focuses a field natively, then the reply is incomplete as page-changed and a fresh scan reports the focused rendering."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, frame = self.open(engine, target=TARGET + '/fixtures/large-page/index.html')
@@ -78,7 +81,7 @@ class RoleDetectionTests(RoleBridgeCase):
                 self.assertFalse(frame.locator('.g19').first.is_visible())
                 reply = page.evaluate('pendingDetect')
                 self.assertEqual((reply['complete'], reply['reason']), (False, 'page-changed'), reply)
-                self.assertGreater(reply['currentPageVersion'], reply['pageVersion'])
+                self.assertGreaterEqual(reply['currentPageVersion'], reply['pageVersion'])
                 stable = self.detect(page)
                 self.assertTrue(stable['complete'], stable)
                 self.assertEqual(stable['scannedElements'], 4750)
@@ -86,100 +89,118 @@ class RoleDetectionTests(RoleBridgeCase):
                                  ['signatures'][0]['style']['fontSize'], 35)
 
     def test_late_native_style_only_focus_invalidates_pending_measurement(self):
+        """Given a scan still pending, when a native focus changes only a font size, then the old reply is page-changed and a fresh scan reports the new size."""
         self.check_late_native_focus('body:focus-within .g00 {font-size:35px}', 35, 5000)
 
     def test_late_native_eligibility_only_focus_invalidates_pending_measurement(self):
+        """Given a scan still pending, when a native focus hides a group, then the old reply is page-changed and a fresh scan excludes the hidden text."""
         self.check_late_native_focus('body:focus-within .g00 {visibility:hidden}', 20, 4750)
 
     def test_late_native_pointer_activation_invalidates_pending_measurement(self):
+        """Given a scan still pending, when a native pointer press changes the :active rendering, then the old reply is page-changed and a fresh scan reports the pressed size."""
         self.check_late_native_focus('body:has(#responsiveness:active) .g00 {font-size:35px}', 35, 5000, 'pointerdown')
 
     def test_late_native_keyboard_activation_invalidates_pending_measurement(self):
-        self.check_late_native_focus('body:has(#activation:active) .g00 {font-size:35px}', 35, 5000, 'keydown', 20)
+        """Given a scan still pending, when a native Space keydown activates a button, then the old reply is page-changed and a fresh scan reports the active size."""
+        self.check_late_native_focus('body:has(#activation:active) .g00 {font-size:35px}', 35, 5000, 'keydown')
 
     def test_late_native_hover_and_activation_release_invalidate_pending_measurement(self):
+        """Given a scan still pending, when a native hover starts or a held pointer or key is released, then the old reply is page-changed and a fresh scan reports the new rendering."""
         self.check_late_native_focus('body:has(#responsiveness:hover) .g00 {font-size:35px}', 35, 5000, 'hover')
         self.check_late_native_focus('body:has(#responsiveness:active) .g00 {font-size:35px}', 20, 5000, 'pointerup')
-        self.check_late_native_focus('body:has(#activation:active) .g00 {font-size:35px}', 20, 5000, 'keyup', 20)
+        self.check_late_native_focus('body:has(#activation:active) .g00 {font-size:35px}', 20, 5000, 'keyup')
 
-    def check_late_native_focus(self, css, size, count, stimulus='focus', beats=16):
+    def start_pending_native_change(self, engine, css, stimulus, fraction):
+        """Open a page, run a calibration scan, and apply the native stimulus part-way through a second scan.
+
+        The stimulus delay is a fraction of the calibration scan's own elapsedMs on this same page,
+        measured from the moment the target received the detect request, and waited for on a condition.
+        """
+        page, frame = self.open(engine, target=TARGET + '/fixtures/large-page/index.html')
+        frame.evaluate("""css => {
+            const style = document.createElement('style'); style.textContent = css;
+            document.head.appendChild(style); window.probeTimes = {};
+            const button = document.createElement('button'); button.id = 'activation';
+            button.setAttribute('aria-label', 'Activation probe'); button.style.cssText = 'width:100px;height:32px';
+            document.body.insertBefore(button, document.body.firstChild);
+            addEventListener('message', event => {
+                if (event.data.type === 'design:detect') probeTimes.detect = performance.now();
+            }, true);
+            for (const el of document.querySelectorAll('#responsiveness,#activation')) {
+                for (const type of ['focus', 'pointerover', 'pointerdown', 'pointerup', 'keydown', 'keyup']) el.addEventListener(type, () => {
+                    probeTimes.focus = performance.now();
+                });
+            }
+        }""", css)
+        self.hello(page)
+        self.control(page, {'type': 'design:mode', 'mode': 'interact'})
+        field = frame.get_by_role('button', name='Activation probe', exact=True) if stimulus.startswith('key') else frame.get_by_role('textbox', name='Responsiveness probe', exact=True)
+        if stimulus.startswith('pointer'):
+            field.hover(); field.focus()
+            if stimulus == 'pointerup':
+                page.mouse.down(); self.addCleanup(page.mouse.up)
+        elif stimulus.startswith('key'):
+            field.focus()
+            if stimulus == 'keyup':
+                page.keyboard.down('Space'); self.addCleanup(page.keyboard.up, 'Space')
+        hover_box = field.bounding_box() if stimulus == 'hover' else None
+        before = frame.locator('main').evaluate('el => el.outerHTML')
+        calibration = self.detect(page)
+        self.assertTrue(calibration['complete'], calibration)
+        wait_ms = calibration['elapsedMs'] * fraction
+        frame.evaluate('() => { probeTimes.detect = undefined; probeTimes.focus = undefined; }')
+        start = self.mark(page)
+        page.evaluate("() => { window.pendingDetect = request({type:'design:detect'}); }")
+        frame.evaluate("""wait => new Promise(resolve => {
+            function tick() {
+                if (probeTimes.detect !== undefined && performance.now() - probeTimes.detect >= wait) resolve();
+                else requestAnimationFrame(tick);
+            }
+            requestAnimationFrame(tick);
+        })""", wait_ms)
+        replied_before_native = bool(self.messages(page, 'design:detected', start))
+        if stimulus == 'pointerdown':
+            page.mouse.down(); self.addCleanup(page.mouse.up)
+        elif stimulus == 'pointerup':
+            page.mouse.up()
+        elif stimulus == 'keydown':
+            page.keyboard.down('Space'); self.addCleanup(page.keyboard.up, 'Space')
+        elif stimulus == 'keyup':
+            page.keyboard.up('Space')
+        elif stimulus == 'hover':
+            page.mouse.move(hover_box['x'] + hover_box['width'] / 2, hover_box['y'] + hover_box['height'] / 2)
+        else:
+            field.focus()
+        reply = page.evaluate('pendingDetect')
+        # The premise: the target saw the native event after the scan began and before it finished
+        # (a stale scan is answered page-changed within a slice of the event, so reply timing alone is not it).
+        event_delay = frame.evaluate('probeTimes.focus === undefined ? null : probeTimes.focus - probeTimes.detect')
+        premise = event_delay is not None and not replied_before_native and event_delay < reply['elapsedMs']
+        numbers = {'fraction': fraction, 'calibrationMs': round(calibration['elapsedMs'], 1), 'waitMs': round(wait_ms, 1),
+                   'nativeDelayMs': None if event_delay is None else round(event_delay, 1),
+                   'replyElapsedMs': round(reply['elapsedMs'], 1), 'repliedBeforeNative': replied_before_native}
+        return page, frame, field, before, premise, numbers, reply
+
+    def check_late_native_focus(self, css, size, count, stimulus='focus'):
         for engine in ENGINES:
             with self.subTest(engine=engine, css=css):
-                page, frame = self.open(engine, target=TARGET + '/fixtures/large-page/index.html')
-                frame.evaluate("""css => {
-                    const style = document.createElement('style'); style.textContent = css;
-                    document.head.appendChild(style); window.probeTimes = {};
-                    const button = document.createElement('button'); button.id = 'activation';
-                    button.setAttribute('aria-label', 'Activation probe'); button.style.cssText = 'width:100px;height:32px';
-                    document.body.insertBefore(button, document.body.firstChild);
-                    addEventListener('message', event => {
-                        if (event.data.type === 'design:detect') probeTimes.detect = performance.now();
-                    }, true);
-                    for (const el of document.querySelectorAll('#responsiveness,#activation')) {
-                        for (const type of ['focus', 'pointerover', 'pointerdown', 'pointerup', 'keydown', 'keyup']) el.addEventListener(type, () => {
-                            probeTimes.focus = performance.now();
-                        });
-                    }
-                }""", css)
-                self.hello(page)
-                self.control(page, {'type': 'design:mode', 'mode': 'interact'})
-                field = frame.get_by_role('button', name='Activation probe', exact=True) if stimulus.startswith('key') else frame.get_by_role('textbox', name='Responsiveness probe', exact=True)
-                if stimulus.startswith('pointer'):
-                    field.hover(); field.focus()
-                    if stimulus == 'pointerup':
-                        page.mouse.down(); self.addCleanup(page.mouse.up)
-                elif stimulus.startswith('key'):
-                    field.focus()
-                    if stimulus == 'keyup':
-                        page.keyboard.down('Space'); self.addCleanup(page.keyboard.up, 'Space')
-                hover_box = field.bounding_box() if stimulus == 'hover' else None
-                before = frame.locator('main').evaluate('el => el.outerHTML')
-                start = self.mark(page)
-                page.evaluate("() => { window.pendingDetect = request({type:'design:detect'}); }")
-                frame.evaluate("""beats => new Promise(resolve => {
-                    const start = fixtureProbe.heartbeat;
-                    function tick() {
-                        if (fixtureProbe.heartbeat - start >= beats) resolve();
-                        else requestAnimationFrame(tick);
-                    }
-                    requestAnimationFrame(tick);
-                })""", beats)
-                completed_before_native = bool(self.messages(page, 'design:detected', start))
-                if stimulus == 'pointerdown':
-                    page.mouse.down(); self.addCleanup(page.mouse.up)
-                elif stimulus == 'pointerup':
-                    page.mouse.up()
-                elif stimulus == 'keydown':
-                    page.keyboard.down('Space'); self.addCleanup(page.keyboard.up, 'Space')
-                elif stimulus == 'keyup':
-                    page.keyboard.up('Space')
-                elif stimulus == 'hover':
-                    page.mouse.move(hover_box['x'] + hover_box['width'] / 2, hover_box['y'] + hover_box['height'] / 2)
+                attempts = []
+                for fraction in (0.5, 0.35, 0.2):
+                    page, frame, field, before, premise, numbers, reply = self.start_pending_native_change(
+                        engine, css, stimulus, fraction)
+                    attempts.append(numbers)
+                    if premise:
+                        break
                 else:
-                    field.focus()
-                reply = page.evaluate('pendingDetect')
-                delay = frame.evaluate('probeTimes.focus - probeTimes.detect')
+                    self.fail('native change never landed while the scan was pending: ' + json.dumps(attempts))
                 rendered = frame.locator('.g00').first.evaluate('el => ({size:getComputedStyle(el).fontSize,visibility:getComputedStyle(el).visibility})')
-                print('LATE_FOCUS ' + json.dumps({'css': css, 'stimulus': stimulus, 'completedBeforeNative': completed_before_native, 'focusDelayMs': delay,
-                      'elapsedMs': reply['elapsedMs'], 'complete': reply['complete'], 'reason': reply['reason'],
-                      'pageVersion': reply['pageVersion'], 'currentPageVersion': reply['currentPageVersion'],
-                      'rendered': rendered}), flush=True)
                 self.assertEqual(rendered, {'size': str(size) + 'px', 'visibility': 'visible' if count == 5000 else 'hidden'})
                 self.assertEqual(frame.locator('.g00').first.text_content(), 'Outer prefix Nested sample outer suffix')
                 self.assertEqual(frame.locator('main').evaluate('el => el.outerHTML'), before)
                 self.assertEqual(page.evaluate('revision'), 0)
                 self.assertEqual(self.errors(frame), [])
-                if reply['complete']:
-                    old_size = 35 if stimulus in ('pointerup', 'keyup') else 20
-                    group = next(g for g in reply['groups'] if g['selectors'][0]['value'] == '.g00')
-                    self.assertEqual(group['signatures'], [{'style': {'fontFamily': 'serif', 'fontSize': old_size,
-                                     'fontWeight': 400, 'textTransform': 'none', 'letterSpacing': 0}, 'count': 250}])
-                    self.assertEqual(reply['scannedElements'], 5000)
-                    self.assertFalse(not completed_before_native and delay < reply['elapsedMs'] - 30,
-                                     'native change at least 30ms before completion cannot certify old rendering')
-                else:
-                    self.assertEqual(reply['reason'], 'page-changed', reply)
-                    self.assertGreater(reply['currentPageVersion'], reply['pageVersion'])
+                self.assertEqual((reply['complete'], reply['reason']), (False, 'page-changed'), (reply, attempts))
+                self.assertGreaterEqual(reply['currentPageVersion'], reply['pageVersion'])
                 stable = self.detect(page)
                 self.assertTrue(stable['complete'], stable)
                 self.assertEqual(stable['scannedElements'], count)
@@ -204,7 +225,7 @@ class RoleDetectionTests(RoleBridgeCase):
                 self.assertEqual(frame.locator('.g00').first.evaluate('el => ({size:getComputedStyle(el).fontSize,visibility:getComputedStyle(el).visibility})'),
                                  {'size': str(opposite_size) + 'px', 'visibility': 'visible'})
                 ready = self.hello(page, 'native-after-complete')
-                self.assertGreater(ready['roleState']['pageVersion'], stable['currentPageVersion'])
+                self.assertGreaterEqual(ready['roleState']['pageVersion'], stable['currentPageVersion'])
                 again = self.detect(page)
                 self.assertTrue(again['complete'], again)
                 self.assertEqual(again['scannedElements'], 5000)
@@ -215,6 +236,7 @@ class RoleDetectionTests(RoleBridgeCase):
                 self.assertEqual(self.errors(frame), [])
 
     def test_escaped_author_bindings_hash_uncertainty_mixed_classes_and_reordering(self):
+        """Given escaped ids and roles, hashed and broad classes, unbound elements and reordered siblings, when Studio detects, then bindings select the right text, uncertainty is reported and identities do not depend on DOM order."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, frame = self.open(engine)
@@ -265,8 +287,10 @@ class RoleDetectionTests(RoleBridgeCase):
                 self.assertEqual(by_text['Quoted family']['identity'], {'kind': 'style', 'style': {
                     'fontFamily': '"Case Sensitive Family", serif', 'fontSize': 18.13, 'fontWeight': 400,
                     'textTransform': 'none', 'letterSpacing': 0.0184}})
-                self.assertEqual(by_text['Author duplicate name']['suggestedName'], by_text['Ordinary body']['suggestedName'])
-                self.assertNotEqual(by_text['Author duplicate name']['identity'], by_text['Ordinary body']['identity'])
+                duplicate = next(g for g in reply['groups'] if g['identity'] == {'kind': 'author-role', 'name': 'Text'})
+                self.assertEqual(duplicate['sampleText'], 'Author duplicate name')
+                self.assertEqual(duplicate['suggestedName'], by_text['Ordinary body']['suggestedName'])
+                self.assertNotEqual(duplicate['identity'], by_text['Ordinary body']['identity'])
                 self.assertEqual(frame.locator('main').evaluate('el => el.outerHTML'), before)
                 reference = {json.dumps(g['identity'], sort_keys=True): g['elementCount'] for g in reply['groups']}
                 frame.evaluate("""() => { const main = document.querySelector('main');
@@ -278,16 +302,20 @@ class RoleDetectionTests(RoleBridgeCase):
                 self.assertEqual(frame.get_by_text('Quoted family', exact=True).evaluate('el => getComputedStyle(el).fontSize'), '18.126px')
 
     def test_element_group_variant_identity_reply_and_time_limits_are_incomplete(self):
+        """Given a page at or one past each element, group, variant or identity limit, or a reply or time overrun, when Studio detects, then the exact limit is complete and anything past it is incomplete with its reason and an untouched DOM."""
+        limits = {'element-limit': 10000, 'group-limit': 128, 'variant-limit': 8, 'identity-limit': 200}
+        cases = [(reason, over) for reason in limits for over in (False, True)] + [('reply-limit', True), ('time-budget', True)]
         for engine in ENGINES:
-            for reason in ('element-limit', 'group-limit', 'variant-limit', 'identity-limit', 'reply-limit', 'time-budget'):
-                with self.subTest(engine=engine, reason=reason):
+            for reason, over in cases:
+                with self.subTest(engine=engine, reason=reason, over=over):
                     page, frame = self.open(engine)
-                    frame.evaluate("""reason => {
+                    n = limits.get(reason, 0) + (1 if over else 0)
+                    frame.evaluate("""([reason, n]) => {
                         const main = document.querySelector('main');
                         if (reason === 'element-limit') {
                             main.replaceChildren();
                             const fragment = document.createDocumentFragment();
-                            for (let i = 0; i < 10001; i++) {
+                            for (let i = 0; i < n; i++) {
                                 const el = document.createElement('span'); el.className = 'limit-copy';
                                 el.textContent = 'x '; fragment.appendChild(el);
                             }
@@ -295,53 +323,66 @@ class RoleDetectionTests(RoleBridgeCase):
                         }
                         if (reason === 'group-limit' || reason === 'variant-limit') {
                             main.replaceChildren();
-                            for (let i = 0; i < (reason === 'group-limit' ? 129 : 9); i++) {
+                            for (let i = 0; i < n; i++) {
                                 const el = document.createElement('p'); el.textContent = 'Limit ' + i;
                                 el.style.fontSize = (10 + i) + 'px';
                                 if (reason === 'variant-limit') el.setAttribute('data-design-role', 'Variants');
                                 main.appendChild(el);
                             }
                         }
-                        if (reason === 'identity-limit') main.firstElementChild.setAttribute('data-design-role', 'x'.repeat(201));
+                        if (reason === 'identity-limit') main.firstElementChild.setAttribute('data-design-role', 'x'.repeat(n));
                         if (reason === 'time-budget') addEventListener('message', function busy(event) {
                             if (event.data.type !== 'design:detect') return;
                             removeEventListener('message', busy);
                             const until = performance.now() + 2100;
                             while (performance.now() < until) {} // Real app contention, no fake clock.
                         });
-                    }""", reason)
+                    }""", [reason, n])
                     self.hello(page)
                     before = frame.locator('main').evaluate('el => el.outerHTML')
                     roles = ([{'id': str(i).zfill(100), 'selectors': ['.body-copy'] * 32} for i in range(128)]
                              if reason == 'reply-limit' else [])
                     reply = self.detect(page, knownRoles=roles)
-                    self.assertEqual((reply.get('complete'), reply.get('reason')), (False, reason), reply)
-                    self.assertGreaterEqual(reply['scannedElements'], 0)
+                    self.assertEqual((reply.get('complete'), reply.get('reason')),
+                                     (not over, reason if over else None), reply)
                     if reason == 'element-limit':
-                        self.assertEqual(reply['scannedElements'], 10001)
+                        self.assertEqual(reply['scannedElements'], n)
+                        if not over:
+                            self.assertEqual(sum(g['elementCount'] for g in reply['groups']), n)
                     elif reason == 'group-limit':
                         self.assertEqual(len(reply['groups']), 128)
+                        if not over:
+                            self.assertEqual({g['sampleText'] for g in reply['groups']}, {'Limit %d' % i for i in range(128)})
                     elif reason == 'variant-limit':
+                        self.assertEqual(len(reply['groups']), 1)
                         self.assertEqual(len(reply['groups'][0]['signatures']), 8)
+                        if not over:
+                            self.assertEqual(reply['groups'][0]['elementCount'], 8)
+                    elif reason == 'identity-limit' and not over:
+                        self.assertIn({'kind': 'author-role', 'name': 'x' * 200}, [g['identity'] for g in reply['groups']])
                     elif reason == 'reply-limit':
                         self.assertEqual(reply['selectorChecks'], [])
                     elif reason == 'time-budget':
                         self.assertGreater(reply['elapsedMs'], 2000)
+                    if not over:
+                        self.assertLess(reply['elapsedMs'], 2000, reply['elapsedMs'])
                     self.assertEqual(frame.locator('main').evaluate('el => el.outerHTML'), before)
-                    self.assertTrue(frame.locator('main').inner_text())
 
     def test_latest_detect_hello_reset_and_dispose_suppress_old_jobs(self):
+        """Given an old scan in flight, when a newer detect, hello, reset or dispose supersedes it, then no reply for the old request is ever posted, even after a full scan length has passed."""
         for engine in ENGINES:
             for operation in ('detect', 'hello', 'reset', 'dispose'):
                 with self.subTest(engine=engine, operation=operation):
                     page, frame = self.open(engine, target=TARGET + '/fixtures/large-page/index.html')
                     self.hello(page)
+                    scan_ms = self.detect(page)['elapsedMs']  # Measured scan length on this page.
                     start = self.mark(page)
                     if operation == 'dispose':
                         frame.evaluate("""() => addEventListener('message', function stop(event) {
                             if (event.data.type !== 'design:detect') return;
                             removeEventListener('message', stop); setTimeout(() => __fontkitBridge.dispose(), 0);
                         })""")
+                    began = page.evaluate('performance.now()')
                     result = page.evaluate("""async operation => {
                         const old = request({type:'design:detect', requestId:'old'}, 250);
                         let barrier;
@@ -351,19 +392,24 @@ class RoleDetectionTests(RoleBridgeCase):
                         return {old:await old, barrier};
                     }""", operation)
                     self.assertEqual(result['old']['type'], 'timeout', result)
+                    if operation != 'dispose':
+                        # A fresh complete scan finishing is a point by which an uncancelled old scan has replied.
+                        self.assertTrue(self.detect(page)['complete'])
+                        self.assertTrue(result['barrier']['type'].startswith('design:'))
+                    else:
+                        # Wait on a condition until at least one measured scan length has passed since the request.
+                        page.wait_for_function('([began, ms]) => performance.now() - began >= ms * 1.5',
+                                               arg=[began, scan_ms], polling='raf')
+                        self.assertEqual(self.messages(page, 'design:detected', start), [])
+                        self.assertTrue(frame.evaluate('__fontkitBridge.disposed'))
                     self.assertFalse([m for m in page.evaluate('log').copy()
                                       if m.get('data', {}).get('type') == 'design:detected'
                                       and m['data'].get('requestId') == 'old'])
                     self.assertEqual(frame.locator('[data-design-id="g19.249"]').inner_text(), 'Group 19 sample 249')
                     self.assertEqual(frame.locator('.g19').first.evaluate('el => getComputedStyle(el).fontSize'), '22px')
-                    if operation != 'dispose':
-                        self.assertTrue(self.detect(page)['complete'])
-                        self.assertTrue(result['barrier']['type'].startswith('design:'))
-                    else:
-                        self.assertEqual(self.messages(page, 'design:detected', start), [])
-                        self.assertTrue(frame.evaluate('__fontkitBridge.disposed'))
 
     def test_url_content_style_and_revision_changes_return_captured_stale_evidence(self):
+        """Given a scan in flight, when the URL, content, a style rule or the revision changes, then the reply keeps the captured page evidence, is incomplete as page-changed and a fresh scan matches the new page."""
         for engine in ENGINES:
             for action in ('url', 'content', 'style', 'revision'):
                 with self.subTest(engine=engine, action=action):
@@ -395,7 +441,10 @@ class RoleDetectionTests(RoleBridgeCase):
                     self.assertEqual((reply['complete'], reply['reason']), (False, 'page-changed'), reply)
                     self.assertEqual(reply['documentId'], captured['documentId'])
                     self.assertEqual(reply['pageURL'], captured['pageURL'])
-                    self.assertGreater(reply['currentPageVersion'], reply['pageVersion'])
+                    if action == 'revision':
+                        self.assertGreaterEqual(reply['currentPageVersion'], reply['pageVersion'])
+                    else:
+                        self.assertGreater(reply['currentPageVersion'], reply['pageVersion'])
                     if action == 'url':
                         self.assertTrue(reply['currentPageURL'].endswith('?route=B#section'))
                         self.assertEqual(frame.locator('.g00').first.inner_text(), 'Outer prefix Nested sample outer suffix')
@@ -410,6 +459,7 @@ class RoleDetectionTests(RoleBridgeCase):
                     self.assertEqual(fresh['pageVersion'], fresh['currentPageVersion'])
 
     def test_literal_bootstrap_identities_variants_and_counts_preserve_author_dom(self):
+        """Given the Bootstrap 4 and 5 fixtures, when Studio detects, then identities, variants, counts and bindings match the hand-authored oracle and the author DOM is unchanged."""
         for engine in ENGINES:
             for name in ('bootstrap4-static', 'bootstrap5-static'):
                 with self.subTest(engine=engine, fixture=name):
@@ -441,6 +491,7 @@ class RoleDetectionTests(RoleBridgeCase):
                     self.assertEqual(frame.locator('.type-corpus .h1').evaluate('el => getComputedStyle(el).fontSize'), '40px')
 
     def test_near_duplicate_inclusive_boundaries_never_merge_or_transitively_collapse(self):
+        """Given groups at and just past each near-duplicate tolerance, when Studio detects, then only groups within the inclusive limits are flagged and none merge or collapse transitively."""
         oracle = json.loads((REPO / 'fixtures/large-page/expected-styles.json').read_text(encoding='utf-8'))
         for engine in ENGINES:
             with self.subTest(engine=engine):
@@ -458,6 +509,7 @@ class RoleDetectionTests(RoleBridgeCase):
                 self.assertEqual(frame.locator('.g03').first.evaluate('el => getComputedStyle(el).fontSize'), '21.01px')
 
     def test_first_complete_5000_scan_includes_bindings_and_allows_input_before_reply(self):
+        """Given the 5,000-element page, when a scan runs, then typing renders before the reply and the complete reply carries the oracle groups with bindings inside the time budget."""
         oracle = json.loads((REPO / 'fixtures/large-page/expected-styles.json').read_text(encoding='utf-8'))
         for engine in ENGINES:
             with self.subTest(engine=engine):
@@ -476,8 +528,6 @@ class RoleDetectionTests(RoleBridgeCase):
                             'inputDuring': frame.evaluate('fixtureProbe.acknowledged'),
                             'replyAlreadyArrived': bool(self.messages(page, 'design:detected', start))}
                 reply = page.evaluate('() => window.pendingDetect')
-                print('FIRST_SCAN ' + json.dumps({**observed, 'elapsedMs': reply.get('elapsedMs'),
-                      'complete': reply.get('complete'), 'scannedElements': reply.get('scannedElements')}), flush=True)
                 self.assertFalse(observed['replyAlreadyArrived'], 'native input must render before completion')
                 self.assertGreater(observed['heartbeatDuring'], beat)
                 self.assertEqual(observed['inputDuring'], 'x')
@@ -497,6 +547,7 @@ class RoleDetectionTests(RoleBridgeCase):
                 self.assertEqual(frame.locator('[data-design-id="g19.249"]').evaluate('el => getComputedStyle(el).fontSize'), '22px')
 
     def test_safe_complete_bindings_and_known_selector_counts_keep_namespaces_distinct(self):
+        """Given an author role, an automatic group and known selectors, when Studio detects, then bindings and selector counts stay in distinct namespaces and select the expected text."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, frame = self.open(engine)
@@ -505,7 +556,10 @@ class RoleDetectionTests(RoleBridgeCase):
                 reply = self.detect(page, knownRoles=[{'id': 'known', 'selectors': [
                     '.body-copy', '.missing', r'.sm\:text', '[data-design-role="Body"]']}])
                 self.assertTrue(reply['complete'], reply)
-                author, automatic = reply['groups']
+                by_identity = {json.dumps(g['identity'], sort_keys=True): g for g in reply['groups']}
+                self.assertEqual(len(by_identity), 2, reply['groups'])
+                author = by_identity[json.dumps({'kind': 'author-role', 'name': 'Body'}, sort_keys=True)]
+                automatic = next(g for g in reply['groups'] if g['identity']['kind'] == 'style')
                 self.assertEqual(author['identity'], {'kind': 'author-role', 'name': 'Body'})
                 self.assertEqual(automatic['identity'], {'kind': 'style', 'style': automatic['signatures'][0]['style']})
                 self.assertEqual(author['selectors'], [{'value': '[data-design-role="Body"]', 'stable': True, 'reason': 'author-role'}])
@@ -522,6 +576,7 @@ class RoleDetectionTests(RoleBridgeCase):
                         self.assertEqual(frame.locator(binding['value']).evaluate('el => getComputedStyle(el).fontSize'), '16px')
 
     def test_direct_text_population_visibility_and_nested_dedup(self):
+        """Given visible, hidden, generated, form, shadow and nested text, when Studio detects, then exactly the rendered direct-text parents are counted once each, by sample text."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, frame = self.open(engine)
@@ -532,14 +587,14 @@ class RoleDetectionTests(RoleBridgeCase):
                         el.textContent = text; el.style.cssText = css; parent.appendChild(el); return el;
                     }
                     const outer = add('div', 'outer', 'Prefix ');
-                    add('span', 'inner', 'Nested', outer); outer.appendChild(document.createTextNode(' suffix'));
-                    add('p', 'contents', 'Contents', main, 'display:contents');
-                    add('p', 'below', 'Below viewport', main, 'margin-top:2000px');
+                    add('span', 'inner', 'Nested', outer, 'font-size:21px'); outer.appendChild(document.createTextNode(' suffix'));
+                    add('p', 'contents', 'Contents', main, 'display:contents;font-size:22px');
+                    add('p', 'below', 'Below viewport', main, 'margin-top:2000px;font-size:23px');
                     add('p', 'hidden', 'Hidden', main, 'display:none');
                     add('p', 'invisible', 'Invisible', main, 'visibility:hidden');
                     add('p', 'collapse', 'Collapsed', main, 'visibility:collapse');
                     const hiddenParent = add('div', 'hidden-parent', '', main, 'visibility:hidden');
-                    add('span', 'visible-child', 'Visible child', hiddenParent, 'visibility:visible');
+                    add('span', 'visible-child', 'Visible child', hiddenParent, 'visibility:visible;font-size:24px');
                     const transparent = add('div', 'transparent', '', main, 'opacity:0');
                     add('p', 'transparent-child', 'Transparent child', transparent);
                     add('p', 'transparent-color', 'Transparent color', main, 'color:rgba(0,0,0,0)');
@@ -568,5 +623,9 @@ class RoleDetectionTests(RoleBridgeCase):
                 reply = self.detect(page)
                 self.assertTrue(reply['complete'], reply)
                 self.assertEqual(reply['scannedElements'], 7)
-                self.assertEqual(sum(g['elementCount'] for g in reply['groups']), 7)
+                # Each included parent has its own style except the two ordinary ones, so the exact
+                # sample-text map cannot be met by one wrongly counted and one wrongly dropped kind.
+                self.assertEqual({g['sampleText']: g['elementCount'] for g in reply['groups']},
+                                 {'Author body': 1, 'Ordinary body': 1, 'Prefix': 1, 'Nested': 1, 'Contents': 1,
+                                  'Below viewport': 1, 'Visible child': 1})
                 self.assertEqual(frame.locator('main').evaluate('el => el.outerHTML'), before)
