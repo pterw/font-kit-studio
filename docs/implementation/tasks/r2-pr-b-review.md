@@ -156,3 +156,79 @@ A second independent review of `origin/main..HEAD` at `2ba1e77`, with dispositio
 | CR8 | Each keystroke re-renders the outcome list and re-encodes the request twice. | Fixed, Studio item 7. |
 | CR9 | `postRoleReceipt` serializes every stylesheet again right after the freshness check. | Fixed, bridge item 4. |
 | CR10 | The loss-reason order, comparator and rejection checks are duplicated. | Fixed, bridge item 5 and Studio item 8. |
+
+## Follow-up review (2026-10-16, HEAD 5aa39c6)
+
+Read-only through git objects (`git diff 2ba1e77..5aa39c6`: 5b1fe46 bridge, 5aa39c6 Studio). Probes are in the
+session scratchpad (`prbrev/prbrr_slow.py`, `prbrev/prbrr_font.py`, plus my earlier probes re-run unchanged).
+Chromium, targeted tests only; one Firefox run of the F3 probe.
+
+### 1. Findings re-checked at HEAD
+
+| ID | Result | Evidence |
+|---|---|---|
+| F1 / CR1 | Resolved | `validRoleRejection` accepts a string detail, or for `revision-conflict` exactly `{baseRevision, revision}` (non-negative safe integers); `rejectRoleOp` settles and adopts the revision. My `prbrev_conflict.py` probe against the real bridge: after 1.0 s the status reads "rejected (revision-conflict) ... Detail: base revision 0, bridge revision 1" (was an 8 s "No response"), and the retry Apply succeeds. The test that pinned the object detail as ignored now keeps only `detail: 5` (neither text nor the conflict object) as ignored. |
+| F2 / CR3 | Resolved | `validRoleOutcome` allows 96 losses. Re-ran `prbrev_losses.py` (96 loss entries, 30 matched): "Preview applied to 1 role; 30 checked elements did not show it", CSS shown, and Clear then settles ("Preview cleared.", no rejections). Bridge bound re-derived: `capped()` keeps at most 16 per property and the named-selector cap only swaps entries, so the total never exceeds 6 x 16. |
+| F3 | Resolved | `prbrev_transition.py` (Chromium and Firefox): the second Detect reports 16px and a single role, and the page renders 30px again afterwards. A 4 s transition probe (`prbrr_slow.py`), Detect 0.3 s after Apply while the page is mid-transition at 17.2px, also reports the 16px baseline and no new role. The 4 new `TransitionBaselineTests` pass. |
+| F4 / CR2 | Resolved | `matched` is any safe integer; the bridge `named()` returns null for exactly the class Studio `roleLossSelector` rejects (C0, DEL, C1, U+2028/2029) and for length over 2,000; Studio requires length of at least 1 (selectorText is never empty). Tests `ten_thousand`, `sixty_four`, `outcome_limits_follow` pass. |
+| F5 / CR6 | Resolved | Studio `ROLE_FAMILY_UNSAFE` is character-for-character the bridge regex. `prbrev_family.py`: `var(`, `env(`, `attr(` and a TAB family now disable Apply with the field hint. Test `family_field_agrees` passes. |
+| F6 | Resolved by decision | `rolePreview.origin` is recorded at install; an invalid ready from a different origin clears the preview ("This bridge does not report a role preview, so none is shown."). A same-origin invalid ready keeps the CSS marked unconfirmed, the controller's stated rule, which I accept. Test `another_apps_preview` passes. |
+| F7 | Resolved | `resetRoleSession` also checks `live.queue.some(isRoleOp)` before the queue is emptied. Test `never_left_the_queue` passes. |
+| CR4 | Resolved | `document.fonts` is out of the stamp; `loading`, `loadingdone` and `loadingerror` listeners (registered once under the `roleObserver` guard, removed with the other `this.listen` entries) move only `roleNative`. Tests `font_loading_after` and `font_load_during` pass. A probe with an unloadable `@font-face` family applied twice gave equal page versions (0, 0) and complete outcomes. |
+| CR5 | Resolved | The composition branch scans from the queue tail and stops at a restore, a role op or an untargeted reset. Test `not_merged_into_one_queued` passes. |
+| CR7 | Resolved | `settleOwnWrites()` before the `design:order-changed` dispatch and `noteRoleMutations(takeRecords())` after it. Test `order_changed_listener` passes. It is the only `dispatchEvent` in the bridge, and `onApplied` was already settled first. |
+| CR8 | Resolved | `renderRolePreview` rebuilds the outcome list only when `outcomes` or `roles` change; only `input` is listened to; `roleApplyState` is cached on draft version, rows, identity, capability flags, readiness, revision and session. Test `typing_does_not_rebuild` passes. |
+| CR9 | Resolved | `postRoleReceipt(..., refreshed = true)` is passed only right after `roleJobFresh` (which refreshes), with no yield between. |
+| CR10 | Resolved | One `ROLE_LOSS_REASONS` and `compareRoleLosses` in the bridge, used by `fitRoleReceipt` and `measureRoleOutcomes`; Studio `rejectRoleDetect` and `rejectRoleOp` share `validRoleRejection` and `ROLE_REJECTIONS`. |
+
+Tests run at HEAD (Chromium, `PYTHONPATH=tests`, targeted): `test_role_detection.TransitionBaselineTests` (4),
+`test_role_stylesheet -k order_changed_listener -k font_loading_after -k font_load_during` (3),
+`test_r2_integration -k revision_conflict_from_the_real -k ten_thousand -k sixty_four -k family_field_agrees` (4),
+`test_studio_roles` new cases (6): all OK. `node --check` on HEAD bridge passes.
+
+### 2. New drift between Studio and the bridge
+None found. Re-checked both sides: request keys and limits (256 KiB, 128 roles, 32 selectors, 100/200 ids and
+names), value ranges and rounding, family grammar (identical regex), receipt envelope and revision rule,
+`matched` (uncapped on both), `checked` and `mismatched` at most 10,000, losses at most 96, loss count at most
+10,000 (each element counts once per property), loss reasons, the winning-selector bound (same class and length
+rule), rejection reasons and detail shapes (the only object detail on the wire is the `revision-conflict` pair
+that `checkRevision` builds; every other role rejection detail is a string or absent), `outcomeReason` rules and
+the global-reset `roleState`.
+
+### 3. Trust boundaries and preview isolation
+No regression. `acceptBridgeMessage` is unchanged; the new object detail is validated with `safeRoleWire` and
+`exactRoleFields` and rendered as a template string of two integers through `textContent`. Role ops still touch no
+ledger, override, export or sync path; the composition barrier only narrows merging. The new bridge-owned
+transition-ban `<style>` is in `roleOwned` (excluded from the stamp, the mutation count and the author-rule scan),
+exists only during a scan with a live preview (test `installed_only_while_a_preview_is_live`), and is removed at
+finish, cancel, reset and dispose (tests `throws_inside_the_scan`, `reset_during_a_scan`).
+
+### 4. New observations (all Minor, none blocks the merge)
+- N1 CHANGELOG says Detect "pauses the page's CSS transitions while it scans". The bridge does not pause them: it
+  stops new transitions from starting, and only while a preview is live. Suggested wording: "stops new CSS
+  transitions from starting while it scans".
+- N2 The ban is `*, *::before, *::after { transition: none !important }`, which has specificity 0, so an author
+  rule such as `p { transition: font-size 1s !important }` still wins and the F3 read would again return the
+  preview value on that page. Read from source, not run. D067 states only that other engines are unverified;
+  add this limit there.
+- N3 The new `catch` around the scan batch turns any exception, including one from bridge code, into
+  `page-changed` with only a `console.warn`. Intended for page-thrown errors; a bridge bug would now look like
+  a changing page.
+- N4 AGENTS anti-pattern 15: both fix commit bodies narrate the review ("Review of the whole role preview branch
+  found ..."). Product-story wording would meet the rule. The owner decides whether to reword before the merge,
+  since history is not rewritten without instruction.
+- N5 `ROLE_DROPPED` still says "the page reloaded" when the op was dropped by a same-page re-hello or a
+  disconnect. Wording only.
+
+### Counts
+Critical 0, Important 0, Minor 5 (N1-N5, all new and non-blocking). F1-F7 and CR1-CR10: 17 of 17 resolved
+(F6 by the controller's same-origin rule).
+
+### Verdict
+Approved. The stuck-session and baseline defects are gone against the real bridge, the two sides agree on every
+limit, enum and shape I could find, and trust and isolation are unchanged. N1 is a one-line CHANGELOG fix worth
+making with the merge; N2-N5 can wait.
+
+STATUS: COMPLETE (follow-up)
+
+Dispositions: N1 CHANGELOG wording corrected; N2 recorded as a limit in D067; N3 accepted (the scan's catch logs a warning); N4 left for the owner; N5 wording corrected.

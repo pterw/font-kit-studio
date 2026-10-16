@@ -24,7 +24,7 @@ Two things have their own version numbers:
   (`design:roles-apply`, `design:roles-clear`). It validates the whole request
   before writing, reports measured matches and property losses, and clears
   the preview exactly. Detection keeps measuring the app's own styles; with a
-  preview applied, it pauses the page's CSS transitions while it scans. Only
+  preview applied, CSS transitions do not start while it scans. Only
   the plain adapter is accepted so far.
 - Role preview receipts count matched and measured elements separately and
   explain each lost property: the winning author rule's selector when it can be

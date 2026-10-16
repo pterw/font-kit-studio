@@ -1536,7 +1536,7 @@ class StudioRoleQueueTests(StudioLegacyCase):
         self.detected(page, frame)
         request = self.apply_role(page, frame, '24')
         self.reload_peer(page, frame)
-        self.assertIn('dropped: the page reloaded before it was acknowledged', self.preview(page)['status'])
+        self.assertIn('dropped: the page reloaded or reconnected before it was acknowledged', self.preview(page)['status'])
         self.assertEqual(self.sent(frame), ['design:hello'])
         self.send(frame, self.receipt(request))
         self.quiet(page)

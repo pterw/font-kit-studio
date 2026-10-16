@@ -3863,7 +3863,7 @@ if (remembered) kitId.value = remembered;
   const ROLE_PREVIEW_UNSUPPORTED = "This bridge does not support role preview.";
   const ROLE_UNCONFIRMED = "Unconfirmed: the page has not re-confirmed this preview.";
   const ROLE_STALE = "Preview applied; page changed before checks finished";
-  const ROLE_DROPPED = "Role preview request dropped: the page reloaded before it was acknowledged. Press Detect text styles, then Apply or Clear again.";
+  const ROLE_DROPPED = "Role preview request dropped: the page reloaded or reconnected before it was acknowledged. Press Detect text styles, then Apply or Clear again.";
   const ROLE_EMPTY_HASH = "811c9dc5";
   const isRoleOp = op => op?.kind === "roles-apply" || op?.kind === "roles-clear";
   const roleBytes = text => new TextEncoder().encode(text).length;
