@@ -21,6 +21,7 @@ import threading
 import time
 import unittest
 from unittest.mock import patch
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from fixture_support import FIXTURES, require_fixture, vite_bin
 from support import ENGINES, new_context
@@ -263,10 +264,22 @@ class ReactCorpusTest(unittest.TestCase):
                         'textTransform': 'uppercase', 'letterSpacing': 0.02})
                 finally:
                     try:
-                        css.write_bytes(original)
-                        self.assertEqual(css.read_bytes(), original, 'scratch CSS bytes must be restored')
-                        page.wait_for_function(
-                            'getComputedStyle(document.querySelector("h1")).fontSize === "40px"', timeout=10000)
+                        # Vite coalesces changes to one file inside a short window: an immediate second write can
+                        # produce no hot update (seen on Windows with Vite 8.3.2). So write again until it arrives.
+                        # Short waits for the early writes; the last one keeps the old 10 s budget for slow hosts.
+                        waits = (1000, 1000, 1000, 1000, 10000)
+                        for wait in waits:
+                            css.write_bytes(original)
+                            self.assertEqual(css.read_bytes(), original, 'scratch CSS bytes must be restored')
+                            try:
+                                page.wait_for_function(
+                                    'getComputedStyle(document.querySelector("h1")).fontSize === "40px"', timeout=wait)
+                                break
+                            except PlaywrightTimeoutError:
+                                continue
+                        else:
+                            self.fail(f'the restored CSS never hot-updated after {len(waits)} writes; last computed size '
+                                      + page.evaluate('getComputedStyle(document.querySelector("h1")).fontSize'))
                     finally:
                         old_title.dispose()
                 self.assert_styles(page)
