@@ -19,7 +19,7 @@ The task runs in two code phases by one Studio writer:
   contains R2.3; if R2.5 has landed by then it contains R2.5 too, and the
   dispatch says which. Most real-bridge cases will be characterization GREEN
   once phase 1 exists; say so rather than manufacturing RED. Landing needs
-  R2.5 and R2.7F2b committed, per the plan.
+  R2.5 committed (plan Addendum 13); Bootstrap adapters arrive in PR B2.
 
 ## Exact ownership
 
@@ -270,3 +270,22 @@ A denied tool call is reported, never retried through a different tool. Done
 means every new request and reply has real Studio/bridge rendered coverage as
 well as hostile fake-peer cases, exports and legacy behavior are unchanged,
 and no R3 pairing UI or new persistence is added.
+
+## Additions after dispatch (2026-10-16)
+
+1. **Owner decisions on phase 1's interpretations.**
+   - The Json code tab and its Download show the acknowledged live revision,
+     which a role Apply or Clear raises by one. Every other export and the
+     Sync body stay byte-identical.
+   - Accepted roles that Apply drops are named after Apply in their own status
+     element. There is no warning before Apply.
+   - An invalid typed value blocks Apply only in a selected row. An unselected
+     row shows its reason but does not block.
+2. **R2.5 outcomes** (Addendum 13). `winningSelector` is null or bounded text
+   (1-2,000 characters, no control characters), rendered only as text. It is
+   never checked against the role selector grammar. Show `matched` and
+   `checked` separately; `complete` is false only when the bridge's budget
+   stopped. Show every RoleOutcome reason in plain words, and include one
+   real-bridge case where an author `.card p` rule wins.
+3. **Landing.** Phase 2 runs from the commit that lands R2.5. It converts or
+   drops the R2.2 gating test, because R2.3 advertises `roleStylesheet`.
