@@ -937,6 +937,49 @@ class BaselineDetectTests(RoleSheetCase):
                 self.assertEqual(self.size(frame, '.g00'), '40px')
                 self.assertFalse(frame.evaluate("document.querySelector('style[data-fontkit-role-styles]').sheet.disabled"))
 
+    def test_detect_under_a_body_variable_preview_finishes_and_never_drops_the_preview(self):
+        """Given a body preview with a family on the 5,000-parent page that defines both body variables, when detect scans across
+        many frames, then the reply is complete with 5,000 elements within 2,000 ms, spans several frames while the heartbeat
+        advances, every sampled frame shows the preview family on .g00 and on an element that takes its family only from the
+        variable, and the .g00 group reports the page's own serif."""
+        css = (':root { --bs-body-font-family: Arial, sans-serif; --bs-font-sans-serif: Arial, sans-serif; }'
+               ' body { font-family: var(--bs-body-font-family); }')
+        add_style = "(css) => { const s = document.createElement('style'); s.textContent = css; document.head.appendChild(s); }"
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, target=TARGET + '/fixtures/large-page/index.html')
+                frame.evaluate(add_style, css)
+                self.hello(page)
+                preview = {**role('g00', ['.g00'], fontFamily='Georgia, serif'), 'adapter': 'bootstrap5-body'}
+                receipt = self.apply(page, [preview], timeout=15000)
+                self.assertEqual(receipt['type'], 'design:roles-applied', receipt)
+                frame.evaluate("""() => {
+                    window.samples = []; window.sampling = true;
+                    const el = document.querySelector('.g00'), inherited = document.querySelector('#corpus');
+                    const tick = () => {
+                        samples.push([getComputedStyle(el).fontFamily, getComputedStyle(inherited).fontFamily]);
+                        if (sampling) requestAnimationFrame(tick);
+                    };
+                    requestAnimationFrame(tick);
+                }""")
+                beat = frame.evaluate('fixtureProbe.heartbeat')
+                reply = page.evaluate('() => request({type:"design:detect"}, 15000)')
+                frame.evaluate('window.sampling = false')
+                samples = frame.evaluate('samples')
+                heartbeat = frame.evaluate('fixtureProbe.heartbeat')
+                print('BODY_PREVIEW_DETECT ' + json.dumps({'elapsedMs': reply.get('elapsedMs'), 'complete': reply.get('complete'),
+                      'reason': reply.get('reason'), 'scanned': reply.get('scannedElements'), 'frames': len(samples),
+                      'heartbeat': [beat, heartbeat]}), flush=True)
+                self.assertTrue(reply['complete'], reply.get('reason'))
+                self.assertEqual(reply['scannedElements'], 5000)
+                self.assertLessEqual(reply['elapsedMs'], 2000)
+                self.assertGreater(len(samples), 2, 'the scan must span several animation frames')
+                self.assertGreater(heartbeat, beat)
+                self.assertEqual({tuple(pair) for pair in samples}, {('Georgia, serif', 'Georgia, serif')})
+                g00 = next(g for g in reply['groups'] if g['selectors'] and g['selectors'][0]['value'] == '.g00')
+                self.assertEqual([s['style']['fontFamily'] for s in g00['signatures']], ['serif'])
+                self.assertFalse(frame.evaluate("document.querySelector('style[data-fontkit-role-styles]').sheet.disabled"))
+
 
 class SplitPageVersionTests(RoleSheetCase):
     def test_native_hover_focus_and_press_between_detect_and_apply_do_not_reject_the_apply(self):

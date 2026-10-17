@@ -17,10 +17,14 @@ ROOT_VARIABLES = """(names) => { const style = getComputedStyle(document.documen
 FONT = 'el => { const s = getComputedStyle(el); return [s.fontFamily, s.fontSize]; }'
 STRIP_IDS = "() => document.querySelectorAll('[data-design-id]').forEach(el => el.removeAttribute('data-design-id'))"
 ADD_STYLE = "(css) => { const s = document.createElement('style'); s.textContent = css; document.head.appendChild(s); }"
+LINK_BOOTSTRAP5 = """(href) => new Promise((resolve, reject) => {
+  const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = href;
+  link.onload = resolve; link.onerror = reject; document.head.appendChild(link); })"""
+BOOTSTRAP5_CSS = TARGET + '/fixtures/bootstrap5-static/vendor/bootstrap.min.css'
 ADD_HTML = "(html) => document.querySelector('main, .type-corpus').insertAdjacentHTML('beforeend', html)"
 SET_ROOT_STYLE = "(text) => document.documentElement.setAttribute('style', text)"
 BOTH_VARIABLES = ':root { --bs-body-font-family: serif; --bs-font-sans-serif: sans-serif; }'
-# (fontSize, fontWeight) -> (suggested name, adapter) for the 16 style groups of fixtures/bootstrap5-static/expected-styles.json.
+# (fontSize, fontWeight) -> suggested name for the 16 style groups of fixtures/bootstrap5-static/expected-styles.json.
 FIXTURE_GROUPS = {
     (40, 500): 'Heading 1', (32, 500): 'Heading 2', (28, 500): 'Heading 3', (24, 500): 'Heading 4', (20, 500): 'Heading 5',
     (16, 500): 'Heading 6', (80, 300): 'Display 1', (72, 300): 'Display 2', (64, 300): 'Display 3', (56, 300): 'Display 4',
@@ -131,8 +135,9 @@ class SuggestionTests(AdapterCase):
 
     def test_a_heading_tag_that_matches_a_non_member_binds_by_class_and_stays_plain(self):
         """Given the id-less page plus an h2 with class fs-6, when Studio detects, then the Heading 2 group binds only .h2 (a
-        stable class binding) as a plain group named Heading 2, the mixed-level h6 and h2.fs-6 group binds by dom path as a
-        plain group, and applying .h2 leaves the fs-6 heading at 16px."""
+        stable class binding) as a plain group named Heading 2, the mixed-level h6 and h2.fs-6 group is named Text and binds by
+        dom path as a plain group, and applying the detected Heading 2 group as received renders 36px on .h2 and leaves the fs-6
+        heading at 16px (the binding assertion, not that render check, proves the exclusion: .fs-6 is !important)."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, frame = self.start(engine, prepare=[(STRIP_IDS, None), (ADD_HTML, '<h2 class="fs-6">Small h2</h2>')])
@@ -141,9 +146,9 @@ class SuggestionTests(AdapterCase):
                 self.assertEqual(([(b['value'], b['reason'], b['stable']) for b in two['selectors']], two['adapter']),
                                  ([('.h2', 'class', True)], 'plain'))
                 mixed = next(g for g in groups if g['sampleText'] == 'Heading 6')
-                self.assertEqual((mixed['elementCount'], mixed['adapter'], {b['reason'] for b in mixed['selectors']}),
-                                 (2, 'plain', {'dom-path'}))
-                reply = self.apply(page, [role('two', ['.h2'], fontSize=36)])
+                self.assertEqual((mixed['elementCount'], mixed['suggestedName'], mixed['adapter'], {b['reason'] for b in mixed['selectors']}),
+                                 (2, 'Text', 'plain', {'dom-path'}))
+                reply = self.apply(page, [self.received(two, fontSize=36)])
                 self.assertEqual(reply['type'], 'design:roles-applied', reply)
                 self.assertEqual(frame.locator('.h2').evaluate(FONT)[1], '36px')
                 self.assertEqual(frame.locator('h2.fs-6').evaluate(FONT)[1], '16px')
@@ -165,12 +170,15 @@ class SuggestionTests(AdapterCase):
 
     def test_two_code_elements_form_one_monospace_group_and_the_mono_template_renders(self):
         """Given two code elements, when Studio detects, then one group of 2 named Monospace is bootstrap5-mono by family name,
-        and applying the mono template sets --bs-font-monospace to "JetBrains Mono" with the quotes and both elements render it."""
+        it is the only mono group and the (16, 400) Get started group the only body group, every other group stays plain, and
+        applying the mono template sets --bs-font-monospace to "JetBrains Mono" with the quotes and both elements render it."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, frame = self.start(engine, prepare=[(ADD_HTML, '<p><code>one</code> <code>two</code></p>')])
                 group = next(g for g in self.groups(page) if g['suggestedName'] == 'Monospace')
                 self.assertEqual((group['elementCount'], group['adapter']), (2, 'bootstrap5-mono'))
+                self.assertEqual({g['sampleText']: g['adapter'] for g in self.groups(page) if g['adapter'] != 'plain'},
+                                 {'one': 'bootstrap5-mono', 'Get started': 'bootstrap5-body'})
                 reply = self.apply(page, case_roles('mono'))
                 self.assertEqual(reply['type'], 'design:roles-applied', reply)
                 self.assertEqual(self.variables(frame)['--bs-font-monospace'], '"JetBrains Mono"')
@@ -255,6 +263,64 @@ class SuggestionTests(AdapterCase):
                     self.assertEqual({text: self.sample(groups, text)['adapter'] for text in expected}, expected)
                     self.assertNotIn('bootstrap5-body', {g['adapter'] for g in groups})
 
+    def test_without_heading_evidence_each_heading_group_binds_what_its_markup_allows(self):
+        """Given the Bootstrap 4 fixture without author ids, when Studio detects, then the Heading 1 to 4 and 6 groups bind their
+        one shared class .hN and the Display 1 to 4 groups bind .display-N, all as stable plain class bindings, while the Heading 5
+        group (h5.h5 and h5.card-title share no class) binds two unstable dom paths, and none binds an hN tag."""
+        expected = {f'Heading {n}': [(f'.h{n}', 'class', True)] for n in (1, 2, 3, 4, 6)}
+        expected.update({f'Display {n}': [(f'.display-{n}', 'class', True)] for n in range(1, 5)})
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.start(engine, BS4, prepare=[(STRIP_IDS, None)])
+                groups = self.groups(page)
+                for text, selectors in expected.items():
+                    group = self.sample(groups, text)
+                    self.assertEqual(([(b['value'], b['reason'], b['stable']) for b in group['selectors']], group['adapter']),
+                                     (selectors, 'plain'), text)
+                five = self.sample(groups, 'Heading 5')
+                self.assertEqual((len(five['selectors']), {(b['reason'], b['stable']) for b in five['selectors']}, five['adapter']),
+                                 (2, {('dom-path', False)}, 'plain'))
+
+    def test_variables_defined_on_body_only_are_no_evidence(self):
+        """Given the protocol page whose two body variables are defined on body and not on :root, a paragraph that inherits the
+        body style and a btn button, when Studio detects, then both groups are plain and named Text, and a bootstrap5-body role
+        is rejected as an unsupported adapter with no owned node."""
+        css = 'body { --bs-body-font-family: serif; --bs-font-sans-serif: sans-serif; }'
+        html = '<p>Inherits</p><button class="btn" style="font-size: 41px">Pressed</button>'
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.start(engine, ROLE_PAGE, [(ADD_STYLE, css), (ADD_HTML, html)])
+                groups = self.groups(page)
+                self.assertEqual({text: (self.sample(groups, text)['suggestedName'], self.sample(groups, text)['adapter'])
+                                  for text in ('Inherits', 'Pressed')}, {'Inherits': ('Text', 'plain'), 'Pressed': ('Text', 'plain')})
+                self.rejected_adapter(self.apply(page, [adapted('body', 'bootstrap5-body', ['p'], fontFamily='Inter')]))
+                self.assertEqual(self.owned(frame), [])
+
+    def test_adapter_precedence_and_name_priority_are_pinned_as_the_bridge_decides_them(self):
+        """Given the protocol page with both variables, when Studio detects five arrangements, then an h2 of the monospace family
+        is bootstrap5-heading and not mono; an author-role group of two variants whose first equals the body style stays plain and
+        keeps its role name; an h2 bound by author id that equals the body style is bootstrap5-body named Heading 2 (the heading
+        title beats the adapter name); a btn paragraph equal to the body style is named Body (the adapter name beats the class
+        name); and a paragraph of classes btn and lead is named Lead (the first of the bridge's name list wins). These orders are
+        pinned decisions of the bridge written as literals: the plan fixes no adapter precedence or name priority."""
+        mono = ':root { --bs-font-monospace: monospace; }'
+        scenarios = (
+            ('a heading of the monospace family', mono, '<h2 style="font-family: monospace; font-size: 33px">Mono head</h2>',
+             'Mono head', ('Heading 2', 'bootstrap5-heading')),
+            ('an author-role group of two variants', '',
+             '<p data-design-role="Intro">Alpha</p><p data-design-role="Intro" style="font-size: 43px">Beta</p>',
+             'Alpha', ('Intro', 'plain')),
+            ('a heading bound by author id', '', '<h2 data-design-id="x.head" style="font-size: 1em; font-weight: 400">Head</h2>',
+             'Head', ('Heading 2', 'bootstrap5-body')),
+            ('a btn paragraph equal to the body style', '', '<p class="btn">Bodied</p>', 'Bodied', ('Body', 'bootstrap5-body')),
+            ('a paragraph of classes btn and lead', '', '<p class="btn lead" style="font-size: 41px">Led</p>', 'Led', ('Lead', 'plain')))
+        for engine in ENGINES:
+            for label, css, html, text, expected in scenarios:
+                with self.subTest(engine=engine, scenario=label):
+                    page, frame = self.start(engine, ROLE_PAGE, [(ADD_STYLE, BOTH_VARIABLES + css), (ADD_HTML, html)])
+                    group = self.sample(self.groups(page), text)
+                    self.assertEqual((group['suggestedName'], group['adapter']), expected)
+
 
 HEADING_PAGE = [(ADD_STYLE, BOTH_VARIABLES)]
 
@@ -291,15 +357,26 @@ class HeadingClaimTests(AdapterCase):
                 self.assertEqual(self.one(engine, '<p class="display-1 display-2" style="font-size: 41px">Twin</p>', 'Twin'),
                                  ('Text', 'plain', [('.display-1', 'class', True)]))
 
-    def test_the_heading_level_wins_over_a_display_class_when_the_tag_fits(self):
+    def test_the_display_class_wins_over_the_heading_level_when_the_class_fits(self):
         """Given two h1 elements that both carry display-1, when Studio detects, then their group is named Heading 1 and is
-        bootstrap5-heading bound to h1 alone as a stable class binding."""
+        bootstrap5-heading bound to .display-1 alone as a stable class binding, not to h1."""
         html = ''.join(f'<h1 class="display-1" style="font-size: 41px">{n}</h1>' for n in ('First', 'Second'))
         for engine in ENGINES:
             with self.subTest(engine=engine):
-                self.assertEqual(self.one(engine, html, 'First'), ('Heading 1', 'bootstrap5-heading', [('h1', 'class', True)]))
+                self.assertEqual(self.one(engine, html, 'First'),
+                                 ('Heading 1', 'bootstrap5-heading', [('.display-1', 'class', True)]))
 
-    def test_the_display_class_is_tried_when_the_heading_tag_matches_a_non_member(self):
+    def test_the_heading_level_is_tried_when_the_display_class_matches_a_non_member(self):
+        """Given an h1 with class display-1 beside a paragraph with class display-1 of another size, when Studio detects,
+        then the h1 group is named Heading 1 and is bootstrap5-heading bound to h1 alone as a stable class binding, because
+        .display-1 does not fit."""
+        html = ('<h1 class="display-1" style="font-size: 41px">Shown</h1>'
+                '<p class="display-1" style="font-size: 43px">Other</p>')
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                self.assertEqual(self.one(engine, html, 'Shown'), ('Heading 1', 'bootstrap5-heading', [('h1', 'class', True)]))
+
+    def test_the_display_class_is_tried_first_when_the_heading_tag_matches_a_non_member(self):
         """Given an h1 with class display-1 beside a plain h1 of another size, when Studio detects, then the display group is
         named Heading 1 and is bootstrap5-heading bound to .display-1, and the plain h1 group is named Heading 1, plain and
         bound by dom path."""
@@ -310,6 +387,14 @@ class HeadingClaimTests(AdapterCase):
                                  ('Heading 1', 'bootstrap5-heading', [('.display-1', 'class', True)]))
                 self.assertEqual(self.one(engine, html, 'Plain')[:2], ('Heading 1', 'plain'))
                 self.assertEqual({reason for _, reason, _ in self.one(engine, html, 'Plain')[2]}, {'dom-path'})
+
+    def test_a_group_that_mixes_a_display_class_with_none_is_named_text(self):
+        """Given a paragraph with class display-1 followed by a paragraph of the same style without it on a page with both
+        variables, when Studio detects, then their one group is named Text."""
+        html = '<p class="display-1" style="font-size: 41px">Shown</p><p style="font-size: 41px">Unshown</p>'
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                self.assertEqual(self.one(engine, html, 'Shown')[0], 'Text')
 
     def test_a_group_equal_to_the_body_style_that_shares_it_with_a_heading_group_gets_no_body_suggestion(self):
         """Given a heading and an author-role paragraph that both equal the body style on a page with both variables, when Studio
@@ -322,6 +407,33 @@ class HeadingClaimTests(AdapterCase):
                 self.assertEqual({text: self.sample(groups, text)['adapter'] for text in ('Head', 'Role')},
                                  {'Head': 'bootstrap5-heading', 'Role': 'plain'})
                 self.assertNotIn('bootstrap5-body', {g['adapter'] for g in groups})
+
+    def test_a_shared_class_past_the_sixteenth_still_names_the_group(self):
+        """Given a button with sixteen utility classes and then btn on a page with both variables, when Studio detects, then
+        its group is named Button, plain, although the reply carries only sixteen of its shared classes."""
+        html = f'<button class="{" ".join(f"u{n}" for n in range(table.SHARED_CLASSES))} btn" style="font-size: 41px">Pressed</button>'
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                self.assertEqual(self.one(engine, html, 'Pressed')[:2], ('Button', 'plain'))
+
+
+class DisplayHeadingApplyTests(AdapterCase):
+    def test_applying_a_detected_display_group_renders_its_size_and_weight_over_bootstraps_display_rule(self):
+        """Given the protocol page with the vendored Bootstrap 5 stylesheet and two h1 elements of class display-1, when the
+        detected group is applied as received with 41px, weight 700 and a family, then both headings compute 41px, 700 and that
+        family, and the receipt reports no mismatch and no loss."""
+        html = ''.join(f'<h1 class="display-1">Display {n}</h1>' for n in (1, 2))
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.start(engine, ROLE_PAGE, [(LINK_BOOTSTRAP5, BOOTSTRAP5_CSS), (ADD_HTML, html)])
+                group = self.sample(self.groups(page), 'Display 1')
+                self.assertEqual(group['adapter'], 'bootstrap5-heading')
+                reply = self.apply(page, [self.received(group, fontFamily='Georgia, serif', fontSize=41, fontWeight=700)])
+                self.assertEqual(reply['type'], 'design:roles-applied', reply)
+                self.assertEqual([(o['matched'], o['mismatched'], o['losses']) for o in reply['outcomes']], [(2, 0, [])])
+                self.assertEqual(frame.locator('h1.display-1').evaluate_all(
+                    'els => els.map(el => { const s = getComputedStyle(el); return [s.fontFamily, s.fontSize, s.fontWeight]; })'),
+                    [['Georgia, serif', '41px', '700']] * 2)
 
 
 class ApplyTests(AdapterCase):
@@ -362,6 +474,23 @@ class ApplyTests(AdapterCase):
                 self.assertEqual(reply['roles'], request)
                 self.assertEqual([(o['matched'], o['checked'], o['mismatched']) for o in reply['outcomes']], [(4, 4, 0)])
                 self.assertEqual(reply['canonicalCss'], DETECTED_CSS)
+
+    def test_a_detected_body_role_changes_the_family_of_an_element_that_takes_it_only_from_the_variable(self):
+        """Given the Bootstrap 5 page plus a transparent tooltip whose family comes only from --bs-font-sans-serif, when the
+        detected Body group is applied with Inter and then cleared, then no group has the tooltip's text, the tooltip computes
+        Inter while applied and its own family again after clear."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.start(engine, prepare=[(ADD_HTML, '<div class="tooltip" role="tooltip">Tip text</div>')])
+                groups = self.groups(page)
+                self.assertNotIn('Tip text', [g['sampleText'] for g in groups])
+                own = frame.locator('.tooltip').evaluate(FONT)[0]
+                self.assertNotEqual(own, 'Inter')
+                group = next(g for g in groups if g['adapter'] == 'bootstrap5-body')
+                self.assertEqual(self.apply(page, [self.received(group, fontFamily='Inter')])['type'], 'design:roles-applied')
+                self.assertEqual(frame.locator('.tooltip').evaluate(FONT)[0], 'Inter')
+                self.assertEqual(self.clear(page)['type'], 'design:roles-applied')
+                self.assertEqual(frame.locator('.tooltip').evaluate(FONT)[0], own)
 
     def test_clear_restores_the_variables_the_styles_and_the_dom(self):
         """Given the body, mono and mixed template cases applied in turn, when clear is sent after each, then the variables, every
@@ -461,6 +590,42 @@ class EvidenceTests(AdapterCase):
                 self.assertEqual({g['adapter'] for g in later['groups']}, {'plain'})
                 self.rejected_adapter(self.apply(page, request, pageVersion=later['currentPageVersion']))
                 self.assertEqual((self.owned(frame), page.evaluate('revision')), ([], 0))
+
+    def test_apply_evidence_needs_both_variables(self):
+        """Given the protocol page that defines only one of the two body variables, each in turn, when a bootstrap5-body role is
+        applied, then it is rejected as an unsupported adapter and no owned node is installed."""
+        for engine in ENGINES:
+            for css in (':root { --bs-body-font-family: serif; }', ':root { --bs-font-sans-serif: sans-serif; }'):
+                with self.subTest(engine=engine, css=css):
+                    page, frame = self.start(engine, ROLE_PAGE, [(ADD_STYLE, css), (ADD_HTML, '<p>Inherits</p>')])
+                    self.rejected_adapter(self.apply(page, [adapted('body', 'bootstrap5-body', ['p'], fontFamily='Inter')]))
+                    self.assertEqual(self.owned(frame), [])
+
+    def test_a_heading_role_with_one_display_class_or_one_level_class_is_accepted_and_renders(self):
+        """Given the Bootstrap 5 page, when a bootstrap5-heading role names only .display-1 or only .h3 at 30px, then each is
+        applied and every matching element computes 30px."""
+        for engine in ENGINES:
+            for selector in ('.display-1', '.h3'):
+                with self.subTest(engine=engine, selector=selector):
+                    page, frame = self.start(engine)
+                    reply = self.apply(page, [adapted('one', 'bootstrap5-heading', [selector], fontSize=30)])
+                    self.assertEqual(reply['type'], 'design:roles-applied', reply)
+                    self.assertEqual(frame.locator(selector).evaluate_all('els => els.map(el => getComputedStyle(el).fontSize)'), ['30px'])
+
+    def test_a_heading_role_with_the_bare_tag_is_accepted_and_loses_to_bootstraps_class_rule(self):
+        """Given the Bootstrap 5 page plus a bare h3, when a bootstrap5-heading role names only h3 at 30px, then it is applied, the
+        owned node holds an h3 rule, the bare h3 computes 30px, h3.h3 keeps 28px because Bootstrap's .h3,h3 rule matched through
+        .h3 outranks the bare tag, and the receipt holds one fontSize loss with one mismatch."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.start(engine, prepare=[(ADD_HTML, '<h3>Bare</h3>')])
+                reply = self.apply(page, [adapted('one', 'bootstrap5-heading', ['h3'], fontSize=30)])
+                self.assertEqual(reply['type'], 'design:roles-applied', reply)
+                self.assertTrue(self.owned(frame)[0].startswith('h3 {'), self.owned(frame))
+                self.assertEqual(frame.locator('h3:not(.h3)').evaluate(FONT)[1], '30px')
+                self.assertEqual(frame.locator('h3.h3').evaluate(FONT)[1], '28px')
+                self.assertEqual([(o['matched'], o['mismatched'], [loss['property'] for loss in o['losses']]) for o in reply['outcomes']],
+                                 [(2, 1, ['fontSize'])])
 
     def test_a_heading_role_must_name_one_level_or_one_display_class(self):
         """Given the Bootstrap 5 page, when heading roles name two levels, a level and a display class, two display classes, a

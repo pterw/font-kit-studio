@@ -25,8 +25,10 @@ Two things have their own version numbers:
   before writing, reports measured matches and property losses, and clears
   the preview exactly. Detection keeps measuring the app's own styles; with a
   preview applied, CSS transitions do not start while it scans. On Bootstrap 5
-  pages it suggests body, monospace and heading roles from Bootstrap's own
-  `:root` variables, previews body and monospace roles through those variables
+  pages it reads Bootstrap's own `:root` font variables as evidence and suggests
+  body, monospace and heading roles; a display heading binds its display class, so
+  its size and weight preview too. A re-detect under a body or monospace
+  preview finishes on large pages. It previews body and monospace roles through those variables
   as well as their own selectors, and checks the suggestion again before it
   applies.
 - Role preview receipts count matched and measured elements separately and

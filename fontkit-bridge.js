@@ -299,6 +299,11 @@
     return blocks;
   }
 
+  // Whether the accepted roles write a :root block: a body or mono role with a family. Detect reads longer batches then.
+  function rolesHaveRootBlock(roles) {
+    return roles.some(role => ROLE_VARIABLES[role.adapter] && 'fontFamily' in role.properties);
+  }
+
   // What one element states about a Bootstrap heading: its level by tag and class (null when they disagree or it
   // states none) and its one .display-N class (null with none, several, or an .hN class).
   function headingClaim(el) {
@@ -1797,7 +1802,7 @@
         group.bindingComplete = true; return true;
       };
       let shared = Array.from(elements[0].classList).filter(name => name.length <= 200);
-      const roles = [], ids = [], claims = [], result = { title: null, heading: false };
+      const roles = [], ids = [], claims = [], result = { title: null, heading: false, classes: [] };
       for (const el of elements) {
         yield;
         shared = shared.filter(name => el.classList.contains(name));
@@ -1805,6 +1810,7 @@
         if (evidence) claims.push(headingClaim(el));
       }
       group.sharedClasses = shared.slice(0, 16);
+      result.classes = shared;
       // The group's Bootstrap heading, if all its elements state the same one; it names the group whichever step binds it.
       const level = claims.length && claims.every(claim => claim.level === claims[0].level) ? claims[0].level : null;
       const display = claims.length && claims.every(claim => claim.display === claims[0].display) ? claims[0].display : null;
@@ -1813,10 +1819,11 @@
         designIdSelector(value).replace('data-design-id=', 'data-design-role=')), 'author-role', true))) return result;
       if (ids.every(value => value) && ids.length <= 32 && (yield* choose(ids.map(designIdSelector), 'author-id', true))) return result;
       if (evidence) {
-        // Heading step: a group of one Bootstrap heading level binds its tag and class; when those do not fit,
-        // its one display class is tried next.
+        // Heading step: a group with one display class binds it first, because the level's tag would lose font-size
+        // and weight to Bootstrap's own .display-N rule; when the class does not fit, or the group has none, its one
+        // level binds hN and .hN.
         const levels = level ? [`h${level}`, `.h${level}`].filter(value => query(value).some(el => members.has(el))) : [];
-        if (levels.length && (yield* choose(levels, 'class', true)) || display && (yield* choose([`.${display}`], 'class', true))) {
+        if (display && (yield* choose([`.${display}`], 'class', true)) || levels.length && (yield* choose(levels, 'class', true))) {
           result.heading = true; return result;
         }
       }
@@ -1843,7 +1850,7 @@
         else if (monos.length === 1 && monos[0] === group) group.adapter = 'bootstrap5-mono';
         else if (bodies.length === 1 && bodies[0] === group) group.adapter = 'bootstrap5-body';
         if (group.authorRole) continue;
-        const named = BOOTSTRAP_NAMES.find(([name]) => group.sharedClasses.includes(name));
+        const named = BOOTSTRAP_NAMES.find(([name]) => facts.get(group).classes.includes(name));
         group.suggestedName = facts.get(group).title || names[group.adapter] || (named ? named[1] : 'Text');
       }
     }
@@ -1913,18 +1920,25 @@
         this.roleTimer = null;
         this.post(reply);
       };
+      const rooted = rolesHaveRootBlock(this.roleAccepted.roles);
       const run = () => {
         if (!current()) return;
         if (!fresh()) { finish('page-changed'); return; }
-        const slice = performance.now();
-        let step, expired = false, thrown = false;
+        let slice = performance.now(), reading = 8, step, expired = false, thrown = false;
         // Baseline: only the owned sheet is off, only inside this synchronous batch.
         const restore = this.suspendRoleSheet();
         try {
+          if (rooted) {
+            // A :root variable block restyles the whole document on every toggle: measure it with one forced read,
+            // restart the batch clock after it, and read for twice that (D073).
+            document.documentElement.getBoundingClientRect();
+            reading = Math.max(8, 2 * (performance.now() - slice));
+            slice = performance.now();
+          }
           do {
             if (performance.now() - started > 2000) { expired = true; break; }
             step = iterator.next();
-          } while (!step.done && performance.now() - slice < 8);
+          } while (!step.done && performance.now() - slice < reading);
         } catch (err) { thrown = true; console.warn('[FontKitBridge] The page threw during text-style detection:', err); } finally { restore(); }
         // A page that throws inside the scan ends the job as an incomplete page-changed reply, never a hang.
         if (thrown) { finish('page-changed'); return; }
@@ -1940,7 +1954,7 @@
       // Bootstrap 5 evidence comes from the first batch, where the owned sheet is already off: never from the preview.
       const vars = this.bootstrapVariables(), bodyStyle = this.styleSignature(document.body);
       const evidence = Boolean(vars.body && vars.sans);
-      // Native syntax/root validation also runs cooperatively, before any evidence.
+      // Native syntax/root validation also runs cooperatively, after the evidence read.
       for (const role of data.knownRoles) for (const selector of role.selectors) {
         yield;
         if (!roleSelector(selector)) {
