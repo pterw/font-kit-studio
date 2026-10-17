@@ -44,9 +44,9 @@ def canonical_css(roles):
     """The canonical sheet for the roles in the binding format; Studio re-serializes the roles and requires these bytes."""
     blocks = []
     for role in roles:
-        variables = ADAPTER_VARIABLES.get(role['adapter'], ()) if 'fontFamily' in role['properties'] else ()
-        if variables:
-            blocks.append(':root {\n' + ''.join(f'  {name}: {role["properties"]["fontFamily"]};\n' for name in variables) + '}\n')
+        names = ADAPTER_VARIABLES.get(role['adapter'])
+        if names and 'fontFamily' in role['properties']:
+            blocks.append(':root {\n' + ''.join(f'  {name}: {role["properties"]["fontFamily"]};\n' for name in names) + '}\n')
         lines = [f'{", ".join(role["selectors"])} {{']
         for key in PROPERTY_ORDER:
             if key in role['properties']:
@@ -728,8 +728,9 @@ class StudioRoleDraftTests(StudioRoleCase):
 
     @per_engine
     def test_keystrokes_validate_every_intermediate_value_and_the_documented_bounds(self, engine):
-        """Given a selected role, when a size is typed one key at a time and each bound is typed in full, then Apply
-        follows validity after every keystroke and names the row and field when it is disabled."""
+        """Given a selected role, when a size is typed one key at a time and each bound is typed in full (every refused and
+        accepted font family of the contract table included), then Apply follows validity after every keystroke, names the
+        row and field when it is disabled, and a refused table family gets help naming the keyword and parenthesis rules."""
         page, frame, errors = self.open(engine, PEER_URL, PEER)
         self.detected(page, frame)
         self.control(page, 'Preview this role').check()
@@ -756,6 +757,8 @@ class StudioRoleDraftTests(StudioRoleCase):
                   ('Font family', 'a}', False), ('Font family', 'a<b', False), ('Font family', 'a>b', False),
                   ('Font family', 'a\\b', False), ('Font family', 'url(x)', False), ('Font family', 'expression(1)', False),
                   ('Font family', 'a /* c */', False), ('Font family', 'Georgia !important', False), ('Font family', '$$$', False)]
+        bounds += [('Font family', family, False) for family in table.FAMILIES_REFUSED]
+        bounds += [('Font family', family, True) for family in table.FAMILIES_ACCEPTED]
         self.type_value(size, '')
         for label, value, valid in bounds:
             with self.subTest(field=label, value=value):
@@ -767,6 +770,9 @@ class StudioRoleDraftTests(StudioRoleCase):
                     name = 'font family' if label == 'Font family' else label.split(' (')[0].lower()
                     self.assertIn(f'Body (role-1): {name} not valid', reason)
                     self.assertEqual(field.get_attribute('aria-invalid'), 'true')
+                    if label == 'Font family' and value in table.FAMILIES_REFUSED:
+                        self.assertIn('not a CSS-wide keyword', reason)
+                        self.assertIn('parentheses only inside quotes', reason)
                 self.type_value(field, '')
         self.control(page, 'Case').select_option('uppercase')
         self.assertTrue(self.gate(page)[0])
@@ -1025,6 +1031,9 @@ class StudioRoleApplyTests(StudioRoleCase):
             return {'roles': [{**role, **changes}]}
         def with_outcome(**changes):
             return {'outcomes': [{**first, **changes}]}
+        def refused_family(family):   # roles, css and digest agree; only the family is one the contract refuses
+            changed = with_role(properties={'fontFamily': family})
+            return {**self.with_css(ok, canonical_css([{**role, 'properties': {'fontFamily': family}}])), **changed}
         shapes = {
             'wrong request id': {'requestId': 'fks-req-9999'}, 'wrong operation': {'operation': 'clear'},
             'revision unchanged': {'revision': base}, 'revision skips ahead': {'revision': base + 2},
@@ -1055,6 +1064,8 @@ class StudioRoleApplyTests(StudioRoleCase):
             'body selector': with_role(selectors=['body']), 'unknown adapter': with_role(adapter='nope'),
             'empty properties': with_role(properties={}), 'colour property': with_role(properties={'color': 'red'}),
             'family with semicolon': with_role(properties={'fontFamily': 'a;b'}),
+            'family that is a CSS-wide keyword': refused_family(table.FAMILIES_REFUSED[0]),
+            'family that is a dashed function': refused_family(table.FAMILIES_REFUSED[8]),
             'size out of range': with_role(properties={'fontSize': 3}), 'extra role key': with_role(extra=1),
             'proto key in role': with_role(**{'__proto__': {}}),
             'duplicate outcome': {'outcomes': [first, first]}, 'outcome for an unknown role': with_outcome(id='role-9'),

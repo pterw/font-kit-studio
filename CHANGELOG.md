@@ -42,7 +42,8 @@ Two things have their own version numbers:
   weight, line height, tracking and case for each detected role, then Apply or
   Clear. Studio shows only what the page acknowledged, with matched and checked
   counts and a plain reason for each lost property (a winning author selector is
-  shown as text). The preview never reaches saved overrides, exports or sync.
+  shown as text). Studio refuses the same role families as the bridge before
+  Apply. The preview never reaches saved overrides, exports or sync.
   A role detected on a Bootstrap 5 page names its adapter on its row, for
   example `Adapter: Bootstrap 5 body variables`.
   Reset all page edits removes every live edit on the page, after confirmation.

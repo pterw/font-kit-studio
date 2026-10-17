@@ -3844,7 +3844,7 @@ if (remembered) kitId.value = remembered;
   const ROLE_PROPS = ["fontFamily", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "textTransform"];
   const ROLE_FIELD_LABELS = { fontFamily:"font family", fontSize:"size", fontWeight:"weight", lineHeight:"line height",
     letterSpacing:"tracking", textTransform:"case" };
-  const ROLE_FIELD_HELP = { fontFamily:"1 to 300 characters, a valid font stack without ; { } < > backslashes, control characters, comments, !important, or url( expression( var( env( attr(",
+  const ROLE_FIELD_HELP = { fontFamily:"1 to 300 characters, a valid font stack without ; { } < > backslashes, control characters, comments, !important, or url( expression( var( env( attr(, not a CSS-wide keyword (inherit, initial, unset, revert, revert-layer), and parentheses only inside quotes",
     fontSize:"4 to 400", fontWeight:"a whole number from 1 to 1000", lineHeight:"0.5 to 5", letterSpacing:"-0.5 to 2 em", textTransform:"none, uppercase, lowercase or capitalize" };
   const ROLE_NUMBERS = { fontSize:{ min:4, max:400, places:2 }, fontWeight:{ min:1, max:1000, places:0, integer:true },
     lineHeight:{ min:.5, max:5, places:3 }, letterSpacing:{ min:-.5, max:2, places:4 } };
@@ -3877,16 +3877,19 @@ if (remembered) kitId.value = remembered;
     for (const byte of new TextEncoder().encode(text)) hash = Math.imul(hash ^ byte, 16777619) >>> 0;
     return hash.toString(16).padStart(8, "0");
   }
-  // Family stacks for roles are checked more strictly than canonicalLiveValue does: CSS.supports and balanced quotes.
-  // The same refusals as the bridge's ROLE_FAMILY_UNSAFE, so Apply is never offered for a value the bridge will reject.
+  // Family stacks for roles are checked more strictly than canonicalLiveValue does: CSS.supports, balanced quotes, no CSS-wide
+  // keyword, and no ( or ) outside quotes. The same refusals as the bridge's ROLE_FAMILY_UNSAFE and family checks, so Apply is
+  // never offered for a value the bridge will reject.
   const ROLE_FAMILY_UNSAFE = /[;{}<>\\\u0000-\u001f\u007f\u2028\u2029]|\/\*|\*\/|!\s*important|\b(?:url|expression|var|env|attr)\s*\(/i;
+  const ROLE_FAMILY_KEYWORDS = ["inherit", "initial", "unset", "revert", "revert-layer"];
   function roleFamily(value) {
     if (typeof value !== "string") return null;
     const text = value.trim();
-    if (!text || text.length > 300 || ROLE_FAMILY_UNSAFE.test(text)) return null;
+    if (!text || text.length > 300 || ROLE_FAMILY_UNSAFE.test(text) || ROLE_FAMILY_KEYWORDS.includes(text.toLowerCase())) return null;
     let quote = "";
     for (const ch of text) {
       if (quote) { if (ch === quote) quote = ""; } else if (ch === '"' || ch === "'") quote = ch;
+      else if (ch === "(" || ch === ")") return null;
     }
     return !quote && CSS.supports("font-family", text) ? text : null;
   }
