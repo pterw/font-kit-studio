@@ -165,12 +165,18 @@
   }
 
   // Role stylesheet input (binding contract). Intentionally separate from legacy PATCH_RULES: exact shapes,
-  // role-specific ranges and a stricter family grammar. Plain adapter only until R2.4.
+  // role-specific ranges and a stricter family grammar. Bootstrap 5 adapters need page evidence (D068/D069).
   const ROLE_PROPERTY_KEYS = ['fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'textTransform'];
   const ROLE_CSS_NAMES = { fontFamily: 'font-family', fontSize: 'font-size', fontWeight: 'font-weight',
     lineHeight: 'line-height', letterSpacing: 'letter-spacing', textTransform: 'text-transform' };
   const ROLE_ADAPTERS = ['plain', 'bootstrap5-body', 'bootstrap5-mono', 'bootstrap5-heading'];
   const ROLE_CASES = ['none', 'uppercase', 'lowercase', 'capitalize'];
+  // Variables a Bootstrap 5 body or mono role sets on :root before its plain block (Addendum 17 item 1).
+  const ROLE_VARIABLES = { 'bootstrap5-body': ['--bs-body-font-family', '--bs-font-sans-serif'],
+    'bootstrap5-mono': ['--bs-font-monospace'] };
+  // Suggested names from a group's shared classes, first match in this order.
+  const BOOTSTRAP_NAMES = [['lead', 'Lead'], ['small', 'Small'], ['btn', 'Button'], ['nav-link', 'Navigation link'],
+    ['navbar-brand', 'Brand'], ['card-title', 'Card title'], ['form-label', 'Form label']];
   const MAX_ROLE_CSS_BYTES = 128 * 1024;
   const ROLE_FAMILY_UNSAFE = /[;{}<>\\\u0000-\u001f\u007f\u2028\u2029]|\/\*|\*\/|!\s*important|\b(?:url|expression|var|env|attr)\s*\(/i;
 
@@ -230,12 +236,23 @@
     textTransform: value => value
   };
 
+  // What the heading step of detection can emit: hN and .hN of one level, or one .display-N.
+  function bootstrapHeadingSelectors(selectors) {
+    if (selectors.length === 1 && /^\.display-[1-6]$/.test(selectors[0])) return true;
+    const levels = new Set(selectors.map(value => (/^\.?h([1-6])$/.exec(value) || [])[1]));
+    return levels.size === 1 && !levels.has(undefined);
+  }
+
   // Value pass over a shaped request. Returns {roles} (canonical, request order) or {reason, detail}.
-  function canonicalizeRoles(roles) {
+  // `evidence` is true when the page's own CSS defines both Bootstrap 5 body variables.
+  function canonicalizeRoles(roles, evidence) {
     const checked = new Map(), out = [];
     for (const role of roles) {
-      if (role.adapter !== 'plain') return { reason: 'unsupported-value', detail: 'Unsupported adapter' };
       const selectors = Array.from(new Set(role.selectors));
+      if (role.adapter !== 'plain' && !evidence
+        || role.adapter === 'bootstrap5-heading' && !bootstrapHeadingSelectors(selectors)) {
+        return { reason: 'unsupported-value', detail: 'Unsupported adapter' };
+      }
       for (const selector of selectors) {
         if (!checked.has(selector)) checked.set(selector, roleSelector(selector, true));
         if (!checked.get(selector)) return { reason: 'unsupported-value', detail: 'Unsupported selector' };
@@ -247,7 +264,7 @@
         if (value === undefined) return { reason: 'unsupported-value', detail: 'Unsupported property value' };
         properties[key] = value;
       }
-      out.push({ id: role.id, name: role.name, selectors, adapter: 'plain', properties });
+      out.push({ id: role.id, name: role.name, selectors, adapter: role.adapter, properties });
     }
     return { roles: out };
   }
@@ -266,10 +283,31 @@
     return `${ROLE_CSS_NAMES[key]}: ${text === undefined ? value : text}`;
   }
 
-  // The exact string assigned with textContent: request role order, fixed property order, LF, two-space indent.
-  function serializeRoleCss(roles) {
-    return roles.map(role => `${role.selectors.join(', ')} {\n${ROLE_PROPERTY_KEYS
-      .filter(key => key in role.properties).map(key => `  ${roleDeclaration(key, role.properties[key])};\n`).join('')}}\n`).join('');
+  // The CSS blocks of a request, one rule each, in request role order: a body or mono role with a family writes
+  // its :root block, then its plain block (fixed property order, LF, two-space indent). Blocks are never merged.
+  // Joined, they are the exact string assigned with textContent.
+  function roleCssBlocks(roles) {
+    const blocks = [];
+    for (const role of roles) {
+      const names = ROLE_VARIABLES[role.adapter];
+      if (names && 'fontFamily' in role.properties) {
+        blocks.push(`:root {\n${names.map(name => `  ${name}: ${role.properties.fontFamily};\n`).join('')}}\n`);
+      }
+      blocks.push(`${role.selectors.join(', ')} {\n${ROLE_PROPERTY_KEYS
+        .filter(key => key in role.properties).map(key => `  ${roleDeclaration(key, role.properties[key])};\n`).join('')}}\n`);
+    }
+    return blocks;
+  }
+
+  // What one element states about a Bootstrap heading: its level by tag and class (null when they disagree or it
+  // states none) and its one .display-N class (null with none, several, or an .hN class).
+  function headingClaim(el) {
+    const classes = Array.from(el.classList);
+    const tag = /^h([1-6])$/.exec(el.localName);
+    const marks = classes.map(name => /^h([1-6])$/.exec(name)).filter(Boolean).map(match => match[1]);
+    const levels = new Set(tag ? [tag[1], ...marks] : marks);
+    const shown = classes.filter(name => /^display-[1-6]$/.test(name));
+    return { level: levels.size === 1 ? Array.from(levels)[0] : null, display: !marks.length && shown.length === 1 ? shown[0] : null };
   }
 
   // FNV-1a over UTF-8 bytes; a non-security comparison value, needing no WebCrypto.
@@ -1233,6 +1271,13 @@
         letterSpacing: style.letterSpacing === 'normal' ? 0 : round(parseFloat(style.letterSpacing) / size, 4) };
     }
 
+    // The Bootstrap 5 variables as the page's CSS computes them on :root (trimmed; empty when undefined).
+    bootstrapVariables() {
+      const style = getComputedStyle(document.documentElement);
+      const read = name => style.getPropertyValue(name).trim();
+      return { body: read('--bs-body-font-family'), sans: read('--bs-font-sans-serif'), mono: read('--bs-font-monospace') };
+    }
+
     renderedRoleText(text, visibility = new WeakMap()) {
       const el = text.parentElement;
       if (!text.data.trim() || !el || el.closest(`${EXCLUDED_SELECTOR},textarea,select,option,svg`)) return false;
@@ -1357,15 +1402,24 @@
       if (!this.checkRevision(data)) return;
       this.refreshRolePage();
       if (data.documentId !== this.documentId || data.pageVersion !== this.pageVersion) { this.reject(data.requestId, 'page-changed'); return; }
-      let roles = [], css = '', node = null;
+      let roles = [], css = '', node = null, blocks = [];
       if (operation === 'apply') {
         if (this.rolePageURL() === null) { this.reject(data.requestId, 'unsupported-value', 'Unsupported page URL'); return; }
-        const built = canonicalizeRoles(data.roles);
+        // Evidence is the app's own CSS: read it with the preview off, and drop the transition ban the read set.
+        let evidence = false;
+        if (data.roles.some(role => role.adapter !== 'plain')) {
+          const restore = this.suspendRoleSheet();
+          try { const found = this.bootstrapVariables(); evidence = Boolean(found.body && found.sans); }
+          finally { restore(); this.releaseRoleQuiet(); }
+        }
+        const built = canonicalizeRoles(data.roles, evidence);
         if (built.reason) { this.reject(data.requestId, built.reason, built.detail); return; }
-        roles = built.roles; css = serializeRoleCss(roles);
+        roles = built.roles;
+        blocks = roleCssBlocks(roles);
+        css = blocks.join('');
         if (new TextEncoder().encode(css).length > MAX_ROLE_CSS_BYTES) { this.reject(data.requestId, 'size-limit'); return; }
         if (roles.length) {
-          node = this.installRoleSheet(css, roles.length);
+          node = this.installRoleSheet(css, blocks.length);
           if (!node) { this.reject(data.requestId, 'stylesheet-blocked'); return; }
         }
       }
@@ -1377,7 +1431,7 @@
       const job = { epoch: this.roleEpoch, source: this.studioSource, origin: this.studioOrigin, session: this.sessionId,
         requestId: data.requestId, operation, revision: this.revision, documentId: this.documentId,
         pageVersion: data.pageVersion, pageURL: location.href, native: this.roleNative, roles: JSON.parse(JSON.stringify(roles)),
-        css, hash: this.roleAccepted.hash };
+        css, blocks: blocks.length, hash: this.roleAccepted.hash };
       if (roles.length === 0) this.postRoleReceipt(job, true, null, []);
       else this.measureRoleReceipt(job);
     }
@@ -1585,7 +1639,7 @@
       const { el, style } = element;
       if (ctx.active === null) {
         const node = this.roleSheet;
-        ctx.active = Boolean(node) && this.verifyRoleSheet(node, job.css, job.roles.length)
+        ctx.active = Boolean(node) && this.verifyRoleSheet(node, job.css, job.blocks)
           && !node.hasAttribute('media') && node.getRootNode() === document && Array.from(document.styleSheets).includes(node.sheet);
       }
       if (!ctx.active) return none('stylesheet-blocked');
@@ -1723,7 +1777,9 @@
       return { budget, outcomes };
     }
 
-    *roleBindings(group, elements, query) {
+    // Binds a group to selectors. Returns the Bootstrap facts the adapter pass needs: the title the page's
+    // heading classes give it (evidence pages) and whether the heading step chose its bindings.
+    *roleBindings(group, elements, query, evidence) {
       const members = new Set(elements);
       const choose = function* (values, reason, stable) {
         const unique = Array.from(new Set(values));
@@ -1741,22 +1797,55 @@
         group.bindingComplete = true; return true;
       };
       let shared = Array.from(elements[0].classList).filter(name => name.length <= 200);
-      const roles = [], ids = [];
+      const roles = [], ids = [], claims = [], result = { title: null, heading: false };
       for (const el of elements) {
         yield;
         shared = shared.filter(name => el.classList.contains(name));
         roles.push(this.authorAttr(el, 'data-design-role')); ids.push(this.authorAttr(el, 'data-design-id'));
+        if (evidence) claims.push(headingClaim(el));
       }
       group.sharedClasses = shared.slice(0, 16);
+      // The group's Bootstrap heading, if all its elements state the same one; it names the group whichever step binds it.
+      const level = claims.length && claims.every(claim => claim.level === claims[0].level) ? claims[0].level : null;
+      const display = claims.length && claims.every(claim => claim.display === claims[0].display) ? claims[0].display : null;
+      result.title = level ? `Heading ${level}` : display ? `Display ${display.slice(-1)}` : null;
       if (roles.every(value => value !== null) && (yield* choose(roles.map(value =>
-        designIdSelector(value).replace('data-design-id=', 'data-design-role=')), 'author-role', true))) return;
-      if (ids.every(value => value) && ids.length <= 32 && (yield* choose(ids.map(designIdSelector), 'author-id', true))) return;
+        designIdSelector(value).replace('data-design-id=', 'data-design-role=')), 'author-role', true))) return result;
+      if (ids.every(value => value) && ids.length <= 32 && (yield* choose(ids.map(designIdSelector), 'author-id', true))) return result;
+      if (evidence) {
+        // Heading step: a group of one Bootstrap heading level binds its tag and class; when those do not fit,
+        // its one display class is tried next.
+        const levels = level ? [`h${level}`, `.h${level}`].filter(value => query(value).some(el => members.has(el))) : [];
+        if (levels.length && (yield* choose(levels, 'class', true)) || display && (yield* choose([`.${display}`], 'class', true))) {
+          result.heading = true; return result;
+        }
+      }
       for (const name of shared) {
         const uncertain = /(?:_[A-Za-z0-9]{5,}_\d+$|__[\w-]+___[\w-]{5}$)/.test(name);
-        if (yield* choose([`.${cssEscape(name)}`], uncertain ? 'css-module' : 'class', !uncertain)) return;
+        if (yield* choose([`.${cssEscape(name)}`], uncertain ? 'css-module' : 'class', !uncertain)) return result;
       }
       // A long or mixed binding cannot silently broaden the group's match set.
       if (elements.length <= 32) yield* choose(elements.map(el => this.computeSelector(el)), 'dom-path', false);
+      return result;
+    }
+
+    // Evidence pages only: suggest Bootstrap adapters and names. A body or mono suggestion needs exactly one
+    // qualifying group; a group that qualifies twice takes heading, then mono, then body.
+    suggestBootstrapAdapters(groups, facts, vars, bodyStyle) {
+      const list = Array.from(groups.values());
+      const one = group => (group.signatures.length === 1 ? group.signatures[0].style : null);
+      const mono = vars.mono ? familyNames(vars.mono) : null, body = JSON.stringify(bodyStyle);
+      const monos = list.filter(group => mono && one(group) && familyNames(one(group).fontFamily) === mono);
+      const bodies = list.filter(group => one(group) && JSON.stringify(one(group)) === body);
+      const names = { 'bootstrap5-mono': 'Monospace', 'bootstrap5-body': 'Body' };
+      for (const group of list) {
+        if (facts.get(group).heading) group.adapter = 'bootstrap5-heading';
+        else if (monos.length === 1 && monos[0] === group) group.adapter = 'bootstrap5-mono';
+        else if (bodies.length === 1 && bodies[0] === group) group.adapter = 'bootstrap5-body';
+        if (group.authorRole) continue;
+        const named = BOOTSTRAP_NAMES.find(([name]) => group.sharedClasses.includes(name));
+        group.suggestedName = facts.get(group).title || names[group.adapter] || (named ? named[1] : 'Text');
+      }
     }
 
     detectTextStyles(data) {
@@ -1848,6 +1937,9 @@
 
     *collectRoleStyles(job, data) {
       const { groups, seen } = job;
+      // Bootstrap 5 evidence comes from the first batch, where the owned sheet is already off: never from the preview.
+      const vars = this.bootstrapVariables(), bodyStyle = this.styleSignature(document.body);
+      const evidence = Boolean(vars.body && vars.sans);
       // Native syntax/root validation also runs cooperatively, before any evidence.
       for (const role of data.knownRoles) for (const selector of role.selectors) {
         yield;
@@ -1878,7 +1970,7 @@
         let group = groups.get(key);
         if (!group) {
           if (groups.size >= 128) return 'group-limit';
-          group = { id: `group-${groups.size + 1}`, identity, suggestedName: role || 'Text', authorRole: role,
+          group = { id: `group-${groups.size + 1}`, identity, suggestedName: role || 'Text', authorRole: role, adapter: 'plain',
             signatures: [], elementCount: 0, sampleText: collapse(text.data).slice(0, 200), sharedClasses: [],
             selectors: [], bindingComplete: false, nearDuplicateIds: [] };
           groups.set(key, group); members.set(group, []);
@@ -1890,7 +1982,9 @@
         }
         members.get(group).push(el); variant.count += 1; group.elementCount += 1;
       }
-      for (const group of groups.values()) { yield; yield* this.roleBindings(group, members.get(group), query); }
+      const facts = new Map();
+      for (const group of groups.values()) { yield; facts.set(group, yield* this.roleBindings(group, members.get(group), query, evidence)); }
+      if (evidence) this.suggestBootstrapAdapters(groups, facts, vars, bodyStyle);
       const list = Array.from(groups.values());
       for (let i = 0; i < list.length; i += 1) for (let j = i + 1; j < list.length; j += 1) {
         let near = false;

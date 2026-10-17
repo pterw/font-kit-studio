@@ -171,9 +171,9 @@ class ApplyAndClearTests(RoleSheetCase):
                 self.assertEqual((reply['outcomesComplete'], reply['outcomeReason']), (True, None))
                 self.assertEqual((self.size(frame), self.owned(frame)), ('16px', []))
 
-    def test_only_the_plain_adapter_is_accepted_until_framework_adapters_land(self):
-        """Given each bootstrap5 adapter, when applied, then it is rejected as unsupported
-        with nothing emitted, while the plain adapter renders."""
+    def test_a_bootstrap5_adapter_is_rejected_where_the_page_has_no_bootstrap5_evidence(self):
+        """Given a page without Bootstrap 5 variables, when each bootstrap5 adapter is applied,
+        then it is rejected as unsupported with nothing emitted, while the plain adapter renders."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, frame = self.open(engine)
@@ -303,7 +303,7 @@ class AtomicRejectionTests(RoleSheetCase):
             ('selectors-object', {}, with_role(selectors={}), 'invalid-message'),
             ('roles-129', {}, [role(f'r{i}', [f'.s{i}'], fontSize=30) for i in range(129)], 'invalid-message'),
             ('adapter-unknown', {}, with_role(adapter='bootstrap9'), 'invalid-message'),
-            ('adapter-bootstrap', {}, with_role(adapter='bootstrap5-body'), 'unsupported-value'),
+            ('adapter-bootstrap-without-evidence', {}, with_role(adapter='bootstrap5-body'), 'unsupported-value'),
             ('case-unknown', {}, with_properties(textTransform='small-caps'), 'invalid-message'),
             ('size-nan', {}, with_properties(fontSize=float('nan')), 'unsupported-value'),
             ('size-infinity', {}, with_properties(fontSize=float('inf')), 'unsupported-value'),

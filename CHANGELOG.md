@@ -24,8 +24,11 @@ Two things have their own version numbers:
   (`design:roles-apply`, `design:roles-clear`). It validates the whole request
   before writing, reports measured matches and property losses, and clears
   the preview exactly. Detection keeps measuring the app's own styles; with a
-  preview applied, CSS transitions do not start while it scans. Only
-  the plain adapter is accepted so far.
+  preview applied, CSS transitions do not start while it scans. On Bootstrap 5
+  pages it suggests body, monospace and heading roles from Bootstrap's own
+  `:root` variables, previews body and monospace roles through those variables
+  as well as their own selectors, and checks the suggestion again before it
+  applies.
 - Role preview receipts count matched and measured elements separately and
   explain each lost property: the winning author rule's selector when it can be
   proven, or an inline style, inheritance, an unreadable or blocked stylesheet,
@@ -35,6 +38,8 @@ Two things have their own version numbers:
   Clear. Studio shows only what the page acknowledged, with matched and checked
   counts and a plain reason for each lost property (a winning author selector is
   shown as text). The preview never reaches saved overrides, exports or sync.
+  A role detected on a Bootstrap 5 page names its adapter on its row, for
+  example `Adapter: Bootstrap 5 body variables`.
   Reset all page edits removes every live edit on the page, after confirmation.
 
 ## [0.3.1] - 2026-10-07

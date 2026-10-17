@@ -3810,8 +3810,8 @@ if (remembered) kitId.value = remembered;
   }
   function validDetectedGroup(group) {
     if (!exactRoleFields(group, ["id", "identity", "suggestedName", "authorRole", "signatures", "elementCount",
-      "sampleText", "sharedClasses", "selectors", "bindingComplete", "nearDuplicateIds"])
-      || !roleText(group.id, 100) || !roleText(group.suggestedName, 200)
+      "sampleText", "sharedClasses", "selectors", "bindingComplete", "nearDuplicateIds", "adapter"])
+      || !ROLE_ADAPTERS.includes(group.adapter) || !roleText(group.id, 100) || !roleText(group.suggestedName, 200)
       || typeof group.sampleText !== "string" || group.sampleText.length > 200
       || !roleCount(group.elementCount, 10000) || group.elementCount === 0
       || !validRoleVariants(group.signatures, group.elementCount)
@@ -3849,6 +3849,11 @@ if (remembered) kitId.value = remembered;
   const ROLE_NUMBERS = { fontSize:{ min:4, max:400, places:2 }, fontWeight:{ min:1, max:1000, places:0, integer:true },
     lineHeight:{ min:.5, max:5, places:3 }, letterSpacing:{ min:-.5, max:2, places:4 } };
   const ROLE_ADAPTERS = ["plain", "bootstrap5-body", "bootstrap5-mono", "bootstrap5-heading"];
+  // Studio's own words for the adapters a bridge may suggest; a row shows one for every adapter but plain.
+  const ROLE_ADAPTER_LABELS = { "bootstrap5-body":"Bootstrap 5 body variables", "bootstrap5-mono":"Bootstrap 5 monospace variable",
+    "bootstrap5-heading":"Bootstrap 5 heading rule" };
+  // The variables a Bootstrap 5 body or mono role sets beside its own rule (Addendum 17), in the order the bytes carry them.
+  const ROLE_ADAPTER_VARIABLES = { "bootstrap5-body":["--bs-body-font-family", "--bs-font-sans-serif"], "bootstrap5-mono":["--bs-font-monospace"] };
   const ROLE_LOSS_REASONS = ["author-rule", "inline", "inherited", "unreadable-sheet", "complex-cascade", "stylesheet-blocked", "budget-exceeded"];
   const ROLE_LOSS_TEXT = {
     "author-rule": selector => selector === null ? "overridden by an author rule" : `overridden by ${selector}`,
@@ -3912,15 +3917,18 @@ if (remembered) kitId.value = remembered;
   }
   const ROLE_CSS_NAMES = { fontFamily:"font-family", fontSize:"font-size", fontWeight:"font-weight", lineHeight:"line-height",
     letterSpacing:"letter-spacing", textTransform:"text-transform" };
-  // The binding canonical sheet for plain roles, duplicated from the bridge's serializeRoleCss (global rule 10): request
-  // role order, fixed property order, LF, two-space indent. R2.S3 must extend this for the Bootstrap variable templates.
+  // The binding canonical sheet, duplicated from the bridge's serializeRoleCss (global rule 10): request role order, fixed
+  // property order, LF, two-space indent. A Bootstrap 5 body or mono role that sets a font family first emits a :root block
+  // of its adapter's variables; blocks are never merged. Heading and plain roles emit only their own rule.
   function serializeRoleSheet(roles) {
     return roles.map(role => {
+      const variables = Object.hasOwn(role.properties, "fontFamily") ? ROLE_ADAPTER_VARIABLES[role.adapter] || [] : [];
+      const root = variables.length ? `:root {\n${variables.map(name => `  ${name}: ${role.properties.fontFamily};\n`).join("")}}\n` : "";
       const lines = ROLE_PROPS.filter(key => Object.hasOwn(role.properties, key)).map(key => {
         const value = role.properties[key];
         return `  ${ROLE_CSS_NAMES[key]}: ${key === "fontSize" ? `${value}px` : key === "letterSpacing" ? `${value}em` : value};\n`;
       });
-      return `${role.selectors.join(", ")} {\n${lines.join("")}}\n`;
+      return `${root}${role.selectors.join(", ")} {\n${lines.join("")}}\n`;
     }).join("");
   }
   // Roles, CSS and digest must agree: the CSS is exactly the roles' serialization (the sender controls both CSS and digest,
@@ -4026,6 +4034,7 @@ if (remembered) kitId.value = remembered;
           node.textContent = `${binding.value} — ${binding.stable ? "stable" : "uncertain"} (${binding.reason})`;
           const line = document.createElement("p"); line.append(node); row.append(line);
         }
+        if (group.adapter !== "plain") paragraph(`Adapter: ${ROLE_ADAPTER_LABELS[group.adapter]}`);
         if (!group.bindingComplete) paragraph("Safe complete bindings unavailable.");
         if (group.sharedClasses.length) paragraph(`Shared classes: ${group.sharedClasses.join(" ")}`);
         if (group.nearDuplicateIds.length) paragraph(`Near duplicates (kept separate): ${group.nearDuplicateIds.map(id => rowIds.get(id) || id).join(", ")}`);
@@ -4112,7 +4121,7 @@ if (remembered) kitId.value = remembered;
       const { properties, bad } = roleDraftProps(draft);
       if (bad.length) { problems.push(`${who}: ${bad.map(key => ROLE_FIELD_LABELS[key]).join(", ")} not valid (${ROLE_FIELD_HELP[bad[0]]}).`); continue; }
       if (!Object.keys(properties).length) { problems.push(`${who} needs at least one value.`); continue; }
-      roles.push({ id, name:group.suggestedName, selectors:group.selectors.map(binding => binding.value), adapter:"plain", properties });
+      roles.push({ id, name:group.suggestedName, selectors:group.selectors.map(binding => binding.value), adapter:group.adapter, properties });
     }
     return { roles, problems };
   }
@@ -4244,7 +4253,7 @@ if (remembered) kitId.value = remembered;
     for (const check of data.selectorChecks) {
       if (!exactRoleFields(check, ["roleId", "selector", "matchCount", "signatures"]) || !roleText(check.roleId, 100)
         || !validRoleSelector(check.selector) || !roleCount(check.matchCount, 10000)
-        || !validRoleVariants(check.signatures, check.matchCount, 128)) return false;
+        || !validRoleVariants(check.signatures, check.matchCount, 1024)) return false;
       const key = JSON.stringify([check.roleId, check.selector]);
       if (!remaining.get(key)) return false;
       remaining.set(key, remaining.get(key) - 1);
@@ -4355,7 +4364,8 @@ if (remembered) kitId.value = remembered;
       || !Array.isArray(outcome.losses) || outcome.losses.length > 96) return false;   // matched is uncapped; 16 groups x 6 properties
     return outcome.losses.every(loss => exactRoleFields(loss, ["property", "count", "winningSelector", "reason"])
       && ROLE_PROPS.includes(loss.property) && roleCount(loss.count, 10000) && loss.count >= 1
-      && ROLE_LOSS_REASONS.includes(loss.reason) && (loss.winningSelector === null || roleLossSelector(loss.winningSelector)));
+      && ROLE_LOSS_REASONS.includes(loss.reason) && (loss.winningSelector === null || roleLossSelector(loss.winningSelector)))
+      && ROLE_PROPS.every(prop => outcome.losses.filter(loss => loss.property === prop).length <= 16);
   }
   const ROLE_RECEIPT_KEYS = ["type", "protocolVersion", "sessionId", "requestId", "operation", "revision", "documentId", "pageVersion",
     "currentPageVersion", "currentPageURL", "roles", "canonicalCss", "hashAlgorithm", "cssHash", "outcomesComplete", "outcomeReason", "outcomes"];

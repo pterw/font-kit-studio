@@ -4,7 +4,7 @@ import subprocess
 
 import role_contract as table
 from support import ENGINES
-from role_support import EVIL, REPO, STUDIO, ROLE_PAGE, RoleBridgeCase
+from role_support import EVIL, REPO, STUDIO, ROLE_PAGE, TARGET, RoleBridgeCase
 from test_role_stylesheet import RoleSheetCase, role
 
 
@@ -342,6 +342,35 @@ class RoleContractTableTests(RoleSheetCase):
                 reply = self.detect(page)
                 self.assertEqual((reply['complete'], reply['reason'], len(reply['groups'])), (False, 'group-limit', table.ROLES))
                 self.assertEqual(max(len(g['sampleText']) for g in reply['groups']), table.SAMPLE_CHARS)
+                self.assertEqual(table.violations('detected', reply), [])
+                self.assertEqual({g.get('adapter') for g in reply['groups']} - set(table.ADAPTERS), set())
+
+    def test_one_variant_past_the_limit_stops_the_scan_and_every_group_still_carries_an_adapter(self):
+        """Given one author role of 9 sizes, when Studio detects, then the reply is incomplete with variant-limit and every
+        group it carries has an adapter the table lists."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                frame.evaluate(AUTHOR_ROLES, [1, table.VARIANTS + 1])
+                self.hello(page)
+                reply = self.detect(page)
+                self.assertEqual((reply['complete'], reply['reason']), (False, 'variant-limit'))
+                self.assertTrue(reply['groups'])
+                self.assertEqual({g.get('adapter') for g in reply['groups']} - set(table.ADAPTERS), set())
+                self.assertEqual(table.violations('detected', reply), [])
+
+    def test_a_bootstrap5_detect_posts_adapters_the_table_lists_and_at_least_one_is_not_plain(self):
+        """Given the Bootstrap 5 fixture, when Studio detects, then the reply is complete, every group's adapter is one the table
+        lists, at least one is not plain and the table finds no violation."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, target=TARGET + '/fixtures/bootstrap5-static/index.html')
+                self.hello(page)
+                reply = self.detect(page)
+                self.assertTrue(reply['complete'], reply['reason'])
+                adapters = {g.get('adapter') for g in reply['groups']}
+                self.assertEqual(adapters - set(table.ADAPTERS), set())
+                self.assertTrue(adapters - {'plain'}, adapters)
                 self.assertEqual(table.violations('detected', reply), [])
 
     def test_a_known_selector_over_136_styles_posts_a_check_of_136_signatures_the_table_allows(self):

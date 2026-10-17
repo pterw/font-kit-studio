@@ -214,7 +214,7 @@ addEventListener('message', e => {
     complete: true, reason: null, elapsedMs: 1, scannedElements: 1, selectorChecks: [], groups: [{ id: 'g1',
       identity: { kind: 'author-role', name: 'Body' }, suggestedName: 'Body', authorRole: 'Body', elementCount: 1, sampleText: 'x',
       signatures: [{ style: { fontFamily: 'serif', fontSize: 16, fontWeight: 400, textTransform: 'none', letterSpacing: 0 }, count: 1 }],
-      sharedClasses: ['b'], selectors: [{ value: '.b', stable: true, reason: 'class' }], bindingComplete: true, nearDuplicateIds: [] }] },
+      sharedClasses: ['b'], selectors: [{ value: '.b', stable: true, reason: 'class' }], bindingComplete: true, nearDuplicateIds: [], adapter: 'plain' }] },
     'http://studio.test');
 }, true);</script>
 <script src="/fontkit-bridge.js"></script></html>""")
@@ -723,3 +723,68 @@ class StudioRoleBridgeTests(StudioLegacyCase):
             page.wait_for_function('!document.querySelector(".composer-shell").classList.contains("is-theater-fullscreen")')
             self.assertEqual(observations(), observed)
         self.assertEqual(errors, [])
+
+    def fixture_page(self, name):
+        """A fixture's own HTML with the bridge added, served at the fixture's URL so its vendor files and CSS resolve."""
+        html = (REPO / 'fixtures' / name / 'index.html').read_text(encoding='utf-8').replace('</body>', '<script src="/fontkit-bridge.js"></script></body>')
+        return TARGET + f'/fixtures/{name}/index.html', html
+
+    def computed(self, frame, ids, prop):
+        """The computed value of one CSS property for each element carrying one of the data-design-ids."""
+        return frame.evaluate('([ids, prop]) => ids.map(id => getComputedStyle(document.querySelector(\'[data-design-id="\' + id + \'"]\')).getPropertyValue(prop))',
+                              [ids, prop])
+
+    def root_variables(self, frame):
+        return frame.evaluate('() => ["--bs-body-font-family", "--bs-font-sans-serif"].map(name => getComputedStyle(document.documentElement).getPropertyValue(name).trim())')
+
+    @per_engine
+    def test_a_bootstrap_5_body_row_applies_with_its_variables_and_clear_restores_the_page(self, engine):
+        """Given the Bootstrap 5 fixture under the real bridge, when the one row with an Adapter line is given a family and a
+        size and applied, then its request role carries bootstrap5-body, the four body-tuple elements render the family and
+        size, the root's two variables compute to the family and the preview CSS starts with the :root block; when Clear is
+        pressed, then the variables, the four elements' family and size and main's markup equal their values from before
+        and Studio shows no preview."""
+        family, size = 'Georgia, serif', 22
+        body_tuple = ['bs5.button', 'bs5.navigation', 'bs5.label', 'bs.hero.cta']
+        url, html = self.fixture_page('bootstrap5-static')
+        page, frame, errors = self.start(engine, target=url, peer=html)
+        adapter_lines = page.locator('#roleRows > li p', has_text=re.compile(r'^Adapter: '))
+        self.assertEqual(adapter_lines.count(), 1)
+        row = page.locator('#roleRows > li').filter(has=page.locator('p', has_text=re.compile(r'^Adapter: ')))
+        role, name = row.get_attribute('data-role-id'), row.locator('strong').inner_text().rsplit(' (', 1)[0]
+        before = (self.computed(frame, body_tuple, 'font-family'), self.computed(frame, body_tuple, 'font-size'),
+                  self.root_variables(frame), frame.locator('main').evaluate('el => el.outerHTML'))
+        self.control(page, 'Preview this role', role, name).check()
+        self.type_value(self.control(page, 'Font family', role, name), family)
+        self.type_value(self.control(page, 'Size (px)', role, name), str(size))
+        request = self.press_apply(page, frame)
+        self.assertEqual([item['adapter'] for item in request['roles']], ['bootstrap5-body'])
+        self.wait_for_receipt(page, request)
+        self.assertEqual(self.computed(frame, body_tuple, 'font-family'), [family] * 4)
+        self.assertEqual(self.computed(frame, body_tuple, 'font-size'), [f'{size}px'] * 4)
+        self.assertEqual(self.root_variables(frame), [family] * 2)
+        self.assertTrue(self.preview(page)['css'].startswith(f':root {{\n  --bs-body-font-family: {family};\n  --bs-font-sans-serif: {family};\n}}\n'))
+        self.clear_preview(page, frame)
+        page.wait_for_function('document.querySelector("#rolePreviewCss").textContent === ""')
+        self.assertEqual((self.computed(frame, body_tuple, 'font-family'), self.computed(frame, body_tuple, 'font-size'),
+                          self.root_variables(frame), frame.locator('main').evaluate('el => el.outerHTML')), before)
+        self.assertEqual(self.preview(page)['css'], '')
+        self.assertEqual(errors, [])
+
+    @per_engine
+    def test_every_request_from_the_bootstrap_4_fixture_and_the_plain_role_target_carries_the_plain_adapter(self, engine):
+        """Given the Bootstrap 4 fixture and the plain role target under the real bridge, when every detected row is selected
+        with a size and Apply is pressed, then each role in the request carries plain, and no row shows an Adapter line."""
+        url4, html4 = self.fixture_page('bootstrap4-static')
+        for label, options in (('bootstrap4', {'target': url4, 'peer': html4}), ('role target', {})):
+            with self.subTest(target=label):
+                page, frame, errors = self.start(engine, **options)
+                self.assertEqual(page.locator('#roleRows > li p', has_text=re.compile(r'^Adapter: ')).count(), 0)
+                for index, name in enumerate(self.names(page), start=1):
+                    name = name.rsplit(' (', 1)[0]
+                    self.control(page, 'Preview this role', f'role-{index}', name).check()
+                    self.type_value(self.control(page, 'Size (px)', f'role-{index}', name), '24')
+                request = self.press_apply(page, frame)
+                self.assertGreaterEqual(len(request['roles']), 2)
+                self.assertEqual({item['adapter'] for item in request['roles']}, {'plain'})
+                self.assertEqual(errors, [])
