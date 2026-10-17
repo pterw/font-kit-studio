@@ -1,13 +1,14 @@
 """Role stylesheet apply/clear through the real bridge: rendered styles, exact undo, honest receipts."""
 import json
 
+import role_contract as table
+from role_contract import EMPTY_HASH, fnv1a32
 from support import ENGINES
-from role_support import EVIL, ROLE_PAGE, STUDIO, TARGET, RoleBridgeCase
+from role_support import EVIL, REPO, ROLE_PAGE, STUDIO, TARGET, RoleBridgeCase
 
 OWNED = "Array.from(document.querySelectorAll('style[data-fontkit-role-styles]')).map(s => s.textContent)"
 SIZE = 'el => getComputedStyle(el).fontSize'
 BODY = '.body-copy'
-EMPTY_HASH = '811c9dc5'
 GOLDEN_CSS = (r'''.md\:text-xl, [data-design-id="a\"b"], [data-design-role="H\e9 ro"] {
   font-family: "Zoë Sans", "日本語", serif;
   font-size: 32.46px;
@@ -33,13 +34,6 @@ SNAPSHOT = """() => ({
 
 def role(rid='body', selectors=(BODY,), **properties):
     return {'id': rid, 'name': rid.title(), 'selectors': list(selectors), 'adapter': 'plain', 'properties': properties}
-
-
-def fnv1a32(text):
-    value = 0x811c9dc5
-    for byte in text.encode('utf-8'):
-        value = ((value ^ byte) * 16777619) & 0xffffffff
-    return '%08x' % value
 
 
 class RoleSheetCase(RoleBridgeCase):
@@ -171,9 +165,9 @@ class ApplyAndClearTests(RoleSheetCase):
                 self.assertEqual((reply['outcomesComplete'], reply['outcomeReason']), (True, None))
                 self.assertEqual((self.size(frame), self.owned(frame)), ('16px', []))
 
-    def test_only_the_plain_adapter_is_accepted_until_framework_adapters_land(self):
-        """Given each bootstrap5 adapter, when applied, then it is rejected as unsupported
-        with nothing emitted, while the plain adapter renders."""
+    def test_a_bootstrap5_adapter_is_rejected_where_the_page_has_no_bootstrap5_evidence(self):
+        """Given a page without Bootstrap 5 variables, when each bootstrap5 adapter is applied,
+        then it is rejected as unsupported with nothing emitted, while the plain adapter renders."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, frame = self.open(engine)
@@ -181,6 +175,8 @@ class ApplyAndClearTests(RoleSheetCase):
                 for adapter in ('bootstrap5-body', 'bootstrap5-mono', 'bootstrap5-heading'):
                     bad = role(fontFamily='Georgia', fontSize=24)
                     bad['adapter'] = adapter
+                    if adapter == 'bootstrap5-body':
+                        bad['selectors'] = ['body']  # the placement rule would refuse any other selector, hiding the evidence check
                     reply = self.apply(page, [bad])
                     self.assertEqual((reply['type'], reply['reason'], reply['detail']),
                                      ('design:rejected', 'unsupported-value', 'Unsupported adapter'), reply)
@@ -303,7 +299,7 @@ class AtomicRejectionTests(RoleSheetCase):
             ('selectors-object', {}, with_role(selectors={}), 'invalid-message'),
             ('roles-129', {}, [role(f'r{i}', [f'.s{i}'], fontSize=30) for i in range(129)], 'invalid-message'),
             ('adapter-unknown', {}, with_role(adapter='bootstrap9'), 'invalid-message'),
-            ('adapter-bootstrap', {}, with_role(adapter='bootstrap5-body'), 'unsupported-value'),
+            ('adapter-bootstrap-without-evidence', {}, with_role(adapter='bootstrap5-body', selectors=['body']), 'unsupported-value'),
             ('case-unknown', {}, with_properties(textTransform='small-caps'), 'invalid-message'),
             ('size-nan', {}, with_properties(fontSize=float('nan')), 'unsupported-value'),
             ('size-infinity', {}, with_properties(fontSize=float('inf')), 'unsupported-value'),
@@ -937,6 +933,49 @@ class BaselineDetectTests(RoleSheetCase):
                 self.assertEqual(self.size(frame, '.g00'), '40px')
                 self.assertFalse(frame.evaluate("document.querySelector('style[data-fontkit-role-styles]').sheet.disabled"))
 
+    def test_detect_under_a_body_variable_preview_finishes_and_never_drops_the_preview(self):
+        """Given a body preview with a family on the 5,000-parent page that defines both body variables, when detect scans across
+        many frames, then the reply is complete with 5,000 elements within 2,000 ms, spans several frames while the heartbeat
+        advances, every sampled frame shows the preview family on body and on #corpus (which inherits it), and the .g00 group, which
+        keeps its own family, reports the page's own serif."""
+        css = (':root { --bs-body-font-family: Arial, sans-serif; --bs-font-sans-serif: Arial, sans-serif; }'
+               ' body { font-family: var(--bs-body-font-family); }')
+        add_style = "(css) => { const s = document.createElement('style'); s.textContent = css; document.head.appendChild(s); }"
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, target=TARGET + '/fixtures/large-page/index.html')
+                frame.evaluate(add_style, css)
+                self.hello(page)
+                preview = {**role('g00', ['body'], fontFamily='Georgia, serif'), 'adapter': 'bootstrap5-body'}
+                receipt = self.apply(page, [preview], timeout=15000)
+                self.assertEqual(receipt['type'], 'design:roles-applied', receipt)
+                frame.evaluate("""() => {
+                    window.samples = []; window.sampling = true;
+                    const el = document.body, inherited = document.querySelector('#corpus');
+                    const tick = () => {
+                        samples.push([getComputedStyle(el).fontFamily, getComputedStyle(inherited).fontFamily]);
+                        if (sampling) requestAnimationFrame(tick);
+                    };
+                    requestAnimationFrame(tick);
+                }""")
+                beat = frame.evaluate('fixtureProbe.heartbeat')
+                reply = page.evaluate('() => request({type:"design:detect"}, 15000)')
+                frame.evaluate('window.sampling = false')
+                samples = frame.evaluate('samples')
+                heartbeat = frame.evaluate('fixtureProbe.heartbeat')
+                print('BODY_PREVIEW_DETECT ' + json.dumps({'elapsedMs': reply.get('elapsedMs'), 'complete': reply.get('complete'),
+                      'reason': reply.get('reason'), 'scanned': reply.get('scannedElements'), 'frames': len(samples),
+                      'heartbeat': [beat, heartbeat]}), flush=True)
+                self.assertTrue(reply['complete'], reply.get('reason'))
+                self.assertEqual(reply['scannedElements'], 5000)
+                self.assertLessEqual(reply['elapsedMs'], 2000)
+                self.assertGreater(len(samples), 2, 'the scan must span several animation frames')
+                self.assertGreater(heartbeat, beat)
+                self.assertEqual({tuple(pair) for pair in samples}, {('Georgia, serif', 'Georgia, serif')})
+                g00 = next(g for g in reply['groups'] if g['selectors'] and g['selectors'][0]['value'] == '.g00')
+                self.assertEqual([s['style']['fontFamily'] for s in g00['signatures']], ['serif'])
+                self.assertFalse(frame.evaluate("document.querySelector('style[data-fontkit-role-styles]').sheet.disabled"))
+
 
 class SplitPageVersionTests(RoleSheetCase):
     def test_native_hover_focus_and_press_between_detect_and_apply_do_not_reject_the_apply(self):
@@ -1195,3 +1234,185 @@ class BridgeFontLinkTests(RoleSheetCase):
                 self.assertEqual(reset['roleState']['pageVersion'], version)
                 self.assertEqual(frame.locator('link[data-fontkit-font]').count(), 0)
                 self.assertEqual(self.apply(page, [role(fontSize=24)], pageVersion=version)['type'], 'design:roles-applied')
+
+
+BRIDGE = REPO / 'fontkit-bridge.js'
+BODY_VARIABLES = ':root { --bs-body-font-family: Georgia; --bs-font-sans-serif: Georgia; }'
+ADD_STYLE = "(css) => { const s = document.createElement('style'); s.textContent = css; document.head.appendChild(s); }"
+FAMILY = 'el => getComputedStyle(el).fontFamily'
+# What the engine computes for each accepted near miss (it re-serializes the quotes).
+NEAR_MISS_COMPUTED = {
+    '"inherit"': '"inherit"', "'Inter (Display)'": '"Inter (Display)"', '"Inter (Display)"': '"Inter (Display)"',
+    'Initialism, serif': 'Initialism, serif', 'Inherit Sans': '"Inherit Sans"', 'inherited': 'inherited',
+    'revert-layers': 'revert-layers', '"A)"': '"A)"', '"Inter\'s (x)"': '"Inter\'s (x)"',
+    '\'say "hi" (x)\'': '"say \\"hi\\" (x)"'}
+# Collects what a request does to the document: the type and target of every record, and the text of every added node.
+WATCH = """() => {
+    window.written = [];
+    window.watcher = new MutationObserver(records => window.written.push(...records));
+    window.watcher.observe(document.documentElement, { subtree: true, childList: true, attributes: true, characterData: true });
+}"""
+WRITES = """() => {
+    window.written.push(...window.watcher.takeRecords());
+    const out = window.written.map(r => [r.type, r.target.nodeName, Array.from(r.addedNodes, n => n.textContent)]);
+    window.written = []; return out;
+}"""
+
+
+def adapted(rid, adapter, selectors, **properties):
+    return {**role(rid, selectors, **properties), 'adapter': adapter}
+
+
+def wide_roles(adapter):
+    """Three plain roles of 32 distinct 1,400-character selectors each: about 134 KB of canonical CSS (over 128 KiB) in a request
+    under 256 KiB; a non-plain adapter adds its one role on `body` first (the only place a body role may sit)."""
+    roles = [adapted(f'big{i}', 'plain', [f'.c{i}-{j:02d}' + 'x' * 1400 for j in range(32)], fontSize=24) for i in range(3)]
+    return roles if adapter == 'plain' else [adapted('page', adapter, ['body'], fontFamily='Inter')] + roles
+
+
+class UnsafeFamilyTests(RoleSheetCase):
+    def test_a_css_wide_keyword_or_a_parenthesis_outside_quotes_is_refused_and_keeps_the_preview(self):
+        """Given a page that defines both body variables and an accepted Inter preview, when each refused family of the table is
+        applied as a plain role and as a bootstrap5-body role, then every request is rejected as an unsupported value and the
+        owned sheet text, the computed family and the revision are exactly as before."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                frame.evaluate(ADD_STYLE, BODY_VARIABLES)
+                self.hello(page)
+                self.assertEqual(self.apply(page, [role(fontFamily='Inter')])['revision'], 1)
+                before = (self.owned(frame), frame.locator(BODY).first.evaluate(FAMILY))
+                self.assertEqual(before, (['.body-copy {\n  font-family: Inter;\n}\n'], 'Inter'))
+                for family in table.FAMILIES_REFUSED + table.FAMILY_KEYWORDS:
+                    for adapter in ('plain', 'bootstrap5-body'):
+                        with self.subTest(family=family, adapter=adapter):
+                            where = ['body'] if adapter == 'bootstrap5-body' else [BODY]
+                            reply = self.apply(page, [adapted('f', adapter, where, fontFamily=family)])
+                            self.assertEqual((reply['type'], reply.get('reason'), reply.get('detail')),
+                                             ('design:rejected', 'unsupported-value', 'Unsupported property value'), reply)
+                            self.assertEqual((self.owned(frame), frame.locator(BODY).first.evaluate(FAMILY)), before)
+                            self.assertEqual(page.evaluate('revision'), 1)
+
+    def test_near_misses_of_the_family_rule_are_accepted_and_render(self):
+        """Given the protocol page, when each near miss of the table is applied (quoted keywords and parentheses, longer words,
+        quotes inside quotes), then every request is accepted and .body-copy computes the engine's serialization of that
+        family, written out per case."""
+        self.assertEqual(set(NEAR_MISS_COMPUTED), set(table.FAMILIES_ACCEPTED))
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                for family, computed in NEAR_MISS_COMPUTED.items():
+                    with self.subTest(family=family):
+                        reply = self.apply(page, [role(fontFamily=family)])
+                        self.assertEqual(reply['type'], 'design:roles-applied', reply)
+                        self.assertEqual(frame.locator(BODY).first.evaluate(FAMILY), computed)
+
+
+class InstallCountTests(RoleSheetCase):
+    @staticmethod
+    def without_the_parenthesis_check():
+        """The final bridge with its family parenthesis check removed by one replacement, so a family `--x(` reaches the sheet."""
+        source = BRIDGE.read_text(encoding='utf-8')
+        check = ' || unquotedParenthesis(trimmed)'
+        assert source.count(check) == 1
+        return source.replace(check, '')
+
+    def cut_sheet_is_blocked(self, engine, source):
+        page, frame = self.open(engine, bridge_source=source)
+        self.hello(page)
+        self.assertEqual(self.apply(page, [role(fontSize=24)])['revision'], 1)
+        cut = [role('a', [BODY], fontFamily='--x(', fontSize=30), role('b', ['main'], fontSize=11)]
+        reply = self.apply(page, cut)
+        self.assertEqual((reply['type'], reply.get('reason')), ('design:rejected', 'stylesheet-blocked'), reply)
+        self.assertEqual((self.owned(frame), self.size(frame), page.evaluate('revision')), ([PLAIN_24], '24px', 1))
+
+    def test_a_sheet_the_parser_cuts_short_is_blocked_and_keeps_the_previous_preview(self):
+        """Given a bridge without its parenthesis check and a 24px preview, when a request holds a family `--x(` that makes the
+        parser drop the rules after it, then it is rejected as stylesheet-blocked and the owned sheet, the size and the
+        revision are the preview's."""
+        for engine in ENGINES:
+            if engine != 'chromium':
+                self.skipTest("Firefox's CSS.supports already refuses `--x(`, so no sheet reaches the parser there")
+            with self.subTest(engine=engine):
+                self.cut_sheet_is_blocked(engine, self.without_the_parenthesis_check())
+
+    def test_the_install_check_does_not_depend_on_constructing_a_stylesheet(self):
+        """Given a page whose CSSStyleSheet constructor throws, when a valid apply arrives, then it is accepted, the sheet is
+        owned and .body-copy renders 24px."""
+        source = "window.CSSStyleSheet = function () { throw new Error('no constructor'); };\n" + BRIDGE.read_text(encoding='utf-8')
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, bridge_source=source)
+                self.hello(page)
+                reply = self.apply(page, [role(fontSize=24)])
+                self.assertEqual(reply['type'], 'design:roles-applied', reply)
+                self.assertEqual((self.owned(frame), self.size(frame)), ([PLAIN_24], '24px'))
+
+
+class ValidateBeforeReadingTests(RoleSheetCase):
+    def start(self, engine, preview):
+        page, frame = self.open(engine)
+        frame.evaluate(ADD_STYLE, BODY_VARIABLES)
+        self.hello(page)
+        self.assertEqual(self.apply(page, [preview])['type'], 'design:roles-applied')
+        frame.evaluate(WATCH)
+        return page, frame
+
+    def test_an_invalid_or_oversized_request_is_refused_without_writing_to_the_document(self):
+        """Given a live bootstrap5-body preview with a family on a page with both body variables, when a request holding a
+        bootstrap5-body role and an invalid selector, and one whose canonical CSS is over 128 KiB, are applied, then they are
+        rejected as an unsupported selector and as size-limit, and the document has no mutation record; the same two requests
+        with plain roles are rejected the same way."""
+        preview = adapted('p', 'bootstrap5-body', ['body'], fontFamily='Inter')
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.start(engine, preview)
+                for adapter in ('bootstrap5-body', 'plain'):
+                    with self.subTest(adapter=adapter):
+                        where = ['body'] if adapter == 'bootstrap5-body' else [BODY]
+                        bad = self.apply(page, [adapted('a', adapter, where, fontFamily='Inter'), role('b', ['p:hover'], fontSize=30)])
+                        self.assertEqual((bad['type'], bad.get('reason'), bad.get('detail')),
+                                         ('design:rejected', 'unsupported-value', 'Unsupported selector'), bad)
+                        big = self.apply(page, wide_roles(adapter), timeout=8000)
+                        self.assertEqual((big['type'], big.get('reason')), ('design:rejected', 'size-limit'), big)
+                        self.assertEqual(frame.evaluate(WRITES), [])
+
+    def test_the_evidence_read_writes_only_when_the_preview_holds_a_root_block(self):
+        """Given a page with both body variables, when a valid bootstrap5-body apply replaces a plain preview, a bootstrap5-body
+        preview without a family and a bootstrap5-body preview with a family, then the first two add no style element holding
+        transition: none, and the third adds one (it reads with the preview off)."""
+        previews = (('plain', role('p', [BODY], fontSize=20), 0), ('no family', adapted('p', 'bootstrap5-body', ['body'], fontSize=20), 0),
+                    ('family', adapted('p', 'bootstrap5-body', ['body'], fontFamily='Inter'), 1))
+        for engine in ENGINES:
+            for label, preview, bans in previews:
+                with self.subTest(engine=engine, preview=label):
+                    page, frame = self.start(engine, preview)
+                    reply = self.apply(page, [adapted('b', 'bootstrap5-body', ['body'], fontFamily='Inter', fontSize=18)])
+                    self.assertEqual(reply['type'], 'design:roles-applied', reply)
+                    added = [text for _, _, texts in frame.evaluate(WRITES) for text in texts if 'transition: none' in text]
+                    self.assertEqual(len(added), bans)
+
+
+class ReadyTokensTests(RoleSheetCase):
+    def test_a_rehello_reports_the_pages_own_tokens_while_a_root_preview_stays_installed(self):
+        """Given a page with both body variables set to Georgia and no monospace variable, and a bootstrap5-body and a
+        bootstrap5-mono preview with families, when a new hello arrives, then ready.tokens.css holds the body variables the
+        first ready held (Georgia) and no --bs-font-monospace, and afterwards the owned sheet is unchanged, body still
+        computes Inter, and no style holding transition: none remains."""
+        body = adapted('body', 'bootstrap5-body', ['body'], fontFamily='Inter')
+        mono = adapted('mono', 'bootstrap5-mono', ['[data-design-id="ordinary.body"]'], fontFamily='"JetBrains Mono"')
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                frame.evaluate(ADD_STYLE, BODY_VARIABLES)
+                first = self.hello(page)['tokens']['css']
+                self.assertEqual((first['--bs-body-font-family'], first['--bs-font-sans-serif']), ('Georgia', 'Georgia'))
+                receipt = self.apply(page, [body, mono])
+                self.assertEqual(receipt['type'], 'design:roles-applied', receipt)
+                second = self.hello(page, 's2')['tokens']['css']
+                self.assertEqual((second['--bs-body-font-family'], second['--bs-font-sans-serif']), ('Georgia', 'Georgia'))
+                self.assertNotIn('--bs-font-monospace', second)
+                self.assertEqual(self.owned(frame), [receipt['canonicalCss']])
+                self.assertEqual(frame.locator('body').evaluate(FAMILY), 'Inter')
+                self.assertEqual(frame.evaluate("Array.from(document.querySelectorAll('style')).filter(s => s.textContent.includes('transition: none')).length"), 0)

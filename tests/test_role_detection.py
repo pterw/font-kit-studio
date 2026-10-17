@@ -479,6 +479,10 @@ class RoleDetectionTests(RoleBridgeCase):
                         self.assertEqual(group['signatures'], [{'style': v['signature'], 'count': v['elementCount']}
                                                               for v in expected['variants']])
                         self.assertTrue(group['bindingComplete'], group)
+                        if group['adapter'] == 'bootstrap5-body':
+                            # The Body group binds the page by `body`, which carries no data-design-id (Addendum 23 item 1).
+                            self.assertEqual(group['selectors'], [{'value': 'body', 'stable': True, 'reason': 'page'}])
+                            continue
                         matched = set()
                         for binding in group['selectors']:
                             matched.update(frame.locator(binding['value']).evaluate_all(

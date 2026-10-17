@@ -44,8 +44,9 @@ jobs:
           cache: 'pip'
           cache-dependency-path: requirements-dev.txt
 
-      # Only for `node --check fontkit-bridge.js`. Studio and the bridge have
-      # no runtime dependencies and no build step, so nothing else uses Node.
+      # For `node --check fontkit-bridge.js` and the React fixtures' npm installs
+      # below. Studio and the bridge have no runtime dependencies and no build
+      # step.
       - name: Set up Node
         uses: actions/setup-node@v7
         with:
@@ -154,6 +155,23 @@ jobs:
           FKS_ENGINES: chromium
           FKS_REQUIRE_PRECOMMIT: '1'
         run: python -m unittest discover -s tests -v
+
+      # The React CSS-module corpus runs the fixture's own Vite dev server, so the
+      # suite above skips it: that fixture is not installed yet at that point.
+      # Here it is installed and its module runs with installs required, so its
+      # cases block instead of skipping. After the suite, so its cases run
+      # only once.
+      - name: Install the React CSS-module fixture
+        if: ${{ !cancelled() }}
+        run: npm ci --prefix fixtures/vite-react-css-modules
+
+      - name: React CSS-module fixture tests (blocking, never skipped here)
+        if: ${{ !cancelled() }}
+        env:
+          FKS_ENGINES: chromium
+          FKS_REQUIRE_FIXTURES: '1'
+          PYTHONPATH: tests
+        run: python -m unittest test_r2_react -v
 
       # The cookie canary runs the real Vite command. Install its fixture and
       # bundle the package so missing dependencies cannot silently skip it.

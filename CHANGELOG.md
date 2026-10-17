@@ -23,18 +23,31 @@ Two things have their own version numbers:
 - The bridge previews text-style roles from one stylesheet it owns
   (`design:roles-apply`, `design:roles-clear`). It validates the whole request
   before writing, reports measured matches and property losses, and clears
-  the preview exactly. Detection keeps measuring the app's own styles; with a
-  preview applied, CSS transitions do not start while it scans. Only
-  the plain adapter is accepted so far.
+  the preview exactly. It refuses a role family that is a CSS-wide keyword or
+  holds a parenthesis outside quotes, and a role sheet the browser parses
+  short, and `design:ready` reports the page's own tokens while a preview is
+  applied. Detection keeps measuring the app's own styles; with a
+  preview applied, CSS transitions do not start while it scans. On Bootstrap 5
+  pages it reads Bootstrap's own `:root` font variables as evidence and suggests
+  body, monospace and heading roles; a display heading binds its display class, so
+  its size and weight preview too. A re-detect under a body or monospace
+  preview finishes on large pages. It previews body and monospace roles through those variables
+  as well as their own selectors. The body role binds the page itself, so it
+  applies on real pages; at Apply the bridge checks the evidence again and refuses
+  a body or monospace role placed anywhere else or given twice.
 - Role preview receipts count matched and measured elements separately and
   explain each lost property: the winning author rule's selector when it can be
   proven, or an inline style, inheritance, an unreadable or blocked stylesheet,
-  an unprovable cascade or a time limit. Receipts always stay within 1 MiB.
+  an unprovable cascade or a time limit. A Bootstrap 5 body role's receipt says
+  that it applies page-wide and that inherited text is not measured. Receipts always stay within 1 MiB.
 - Live App previews role fonts on the running page: draft a family, size,
   weight, line height, tracking and case for each detected role, then Apply or
   Clear. Studio shows only what the page acknowledged, with matched and checked
   counts and a plain reason for each lost property (a winning author selector is
-  shown as text). The preview never reaches saved overrides, exports or sync.
+  shown as text). Studio refuses the same role families as the bridge before
+  Apply. The preview never reaches saved overrides, exports or sync.
+  A role detected on a Bootstrap 5 page names its adapter on its row, for
+  example `Adapter: Bootstrap 5 body variables`.
   Reset all page edits removes every live edit on the page, after confirmation.
 
 ## [0.3.1] - 2026-10-07

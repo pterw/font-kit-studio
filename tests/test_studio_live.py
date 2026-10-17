@@ -10,9 +10,11 @@ import json
 import re
 import time
 import unittest
+from itertools import product
 from pathlib import Path
 from urllib.parse import quote
 
+from playwright.sync_api import TimeoutError as PlaywrightTimeout
 from support import (ENGINES, HTML, REPO, canvas_snapshot, close_contexts, launch, new_context,
                      route_virtual_origins, shared_runtime)
 
@@ -26,6 +28,17 @@ FAKE = f'{TARGET}/fake-target.html'
 # The dev-server status request has been answered once Sync to file stops saying "Checking": it then says what it writes
 # or why it is off. It is disabled while the ledger is empty either way, so the title is the signal, not `disabled`.
 DEV_SERVER_ANSWERED = '() => !/^Checking/.test(document.querySelector("#liveCodeSync").title)'
+# The browser does not order a cross-origin target's bridge-ready message against its iframe's load event, and Studio greets
+# differently in each order (a new session at bridge-ready, the session in use at load). The handshake tests force both and
+# record the order they got in Studio's page before connecting: window.__order holds the events as they arrive and
+# window.__ready the session of every design:ready reply (the fake stamps the session it pinned, the bridge's own record).
+ANNOUNCE_ORDERS = (['bridge-ready', 'load'], ['load', 'bridge-ready'])
+ORDER_RECORDER = '''() => { window.__order = []; window.__ready = [];
+    document.querySelector('#targetAppFrame').addEventListener('load', () => window.__order.push('load'));
+    addEventListener('message', e => {
+        if (e.data?.type === 'design:bridge-ready') window.__order.push('bridge-ready');
+        if (e.data?.type === 'design:ready') window.__ready.push(e.data.sessionId);
+    }); }'''
 
 
 class LiveCase(unittest.TestCase):
@@ -156,6 +169,51 @@ class LiveCase(unittest.TestCase):
         hellos = self.received(frame, 'design:hello')
         return hellos[-1]['data']['sessionId']
 
+    def hold_load(self, context):
+        """Serves fake-target.html with one image whose request stays unanswered: the page announces the bridge while its
+        iframe cannot fire load. Returns the held image requests; wait_greeted answers them."""
+        body = (FIXTURES / 'fake-target.html').read_text(encoding='utf-8')
+        self.assertEqual(body.count('</body>'), 1, 'fake-target.html changed shape')
+        body = body.replace('</body>', '<img src="/fks-hold-load.gif"></body>')
+        held = []
+        # Registered after the module's routes, so these run first; FAKE is matched exactly, so ?late=1 stays unheld.
+        context.route(FAKE, lambda route: route.fulfill(body=body, content_type='text/html'))
+        context.route(f'{TARGET}/fks-hold-load.gif', lambda route: held.append(route))
+        return held
+
+    def wait_greeted(self, page, order, held, trigger):
+        """Runs trigger (a connect or a reload) and waits until the new target document has been greeted twice, Studio shows
+        Connected and Studio's page saw the announce events in this order. A held load is answered first, once the page has
+        requested its image and Studio's first hello has reached the still-loading document. Clears the order recorder."""
+        page.evaluate('() => { window.__order = []; window.__ready = []; }')
+        if held is None:
+            trigger()
+        else:
+            try:
+                with page.expect_request(f'{TARGET}/fks-hold-load.gif', timeout=20_000):
+                    trigger()
+            except PlaywrightTimeout:
+                self.fail('the page never requested its held image')
+            page.evaluate('0')   # the event says the page asked, not that the route handler ran: one round trip lets it run
+            self.assertEqual(len(held), 1, 'the page requested its held image')
+            self.frame(page).wait_for_function(
+                'document.readyState !== "complete" && window.__received.some(i => i.data && i.data.type === "design:hello")')
+            held.pop().fulfill(status=204)
+        frame = self.frame(page)
+        frame.wait_for_function('window.__received.filter(i => i.data && i.data.type === "design:hello").length >= 2')
+        self.wait_badge(page, r'^Connected \(5 targets\)$')
+        self.assertEqual(page.evaluate('window.__order'), order)
+        return frame
+
+    def force_order(self, page, order):
+        """Connects with the bridge announcing in this order (ANNOUNCE_ORDERS): bridge-ready first holds the target's load
+        open, load first uses the fake's late announce. Returns the greeted frame and the held image requests (None if unheld)."""
+        page.evaluate(ORDER_RECORDER)
+        late = order[0] == 'load'
+        held = None if late else self.hold_load(page.context)
+        url = f'{FAKE}?late=1' if late else FAKE
+        return self.wait_greeted(page, order, held, lambda: self.connect(page, url)), held
+
     def code(self, page, tab='Css'):
         page.locator(f'#codeTab{tab}').click()
         return page.locator('#liveCodeOutput').inner_text()
@@ -277,33 +335,39 @@ class StudioDefectTests(LiveCase):
 
 class StudioProtocolTests(LiveCase):
     def test_handshake_status_badges_and_target_query(self):
-        for engine in ENGINES:
-            with self.subTest(engine=engine):
-                context = self.context(engine)
-                page = context.new_page()
-                page.goto(APP)
+        """Given Studio connecting to a target page, when the bridge announces before the iframe's load event (the load
+        held open) or after it (the fake's late announce), then Studio's page sees the two events in that order, its badge
+        passes through Connecting… and Bridge detected to Connected, and the target receives exactly two hellos, each from
+        Studio's origin with protocol 1 and a session id: both on one session when the announce came first, on two
+        sessions when load came first, the last being the session the bridge answered with; and given a ?target= link,
+        when Studio opens, then it prefills the field, shows the Live App view and connects, with no page error."""
+        for engine, order in product(ENGINES, ANNOUNCE_ORDERS):
+            with self.subTest(engine=engine, order=order):
+                late = order[0] == 'load'
+                page, _ = self.open(engine, target=None)
                 self.assertEqual(page.locator('#bridgeStatusBadge').inner_text(), 'Idle')
                 page.evaluate('''() => { window.__badges = [];
                     new MutationObserver(() => window.__badges.push(document.querySelector('#bridgeStatusBadge').textContent))
                       .observe(document.querySelector('#bridgeStatusBadge'), {childList:true, characterData:true, subtree:true}); }''')
-                self.connect(page)
-                self.wait_connected(page)
+                frame, _ = self.force_order(page, order)
                 badges = page.evaluate('window.__badges')
                 self.assertIn('Connecting…', badges)
                 self.assertIn('Bridge detected', badges)
-                frame = self.frame(page)
                 hellos = self.received(frame, 'design:hello')
-                self.assertGreaterEqual(len(hellos), 1)
+                self.assertEqual(len(hellos), 2)
                 for hello in hellos:
                     self.assertEqual(hello['origin'], STUDIO)
                     self.assertEqual(hello['data']['protocolVersion'], 1)
                     self.assertRegex(hello['data']['sessionId'], r'^fks-[0-9a-z]+$')
-                # bridge-ready starts the session; the iframe load re-greets with that same session.
-                self.assertEqual(len({h['data']['sessionId'] for h in hellos}), 1)
-                self.assertEqual(hellos[-1]['data']['sessionId'], self.session_id(frame))
+                # bridge-ready first starts the session and the load re-greets with it; load first greets with a first
+                # session and bridge-ready then starts a fresh one.
+                self.assertEqual(len({h['data']['sessionId'] for h in hellos}), 2 if late else 1)
+                self.assertEqual(hellos[-1]['data']['sessionId'], page.evaluate('window.__ready')[-1])
 
-                # ?target= prefills, opens Composer -> Live App view and connects.
-                page2 = context.new_page()
+        for engine in ENGINES:
+            with self.subTest(engine=engine, query='target'):
+                # ?target= prefills, opens Composer -> Live App view and connects. Its own context: a hold is per context.
+                page2 = self.context(engine).new_page()
                 errors = []
                 page2.on('pageerror', lambda error: errors.append(str(error)))
                 page2.goto(f'{APP}?target={FAKE}')
@@ -1046,12 +1110,18 @@ class StudioFixRound1Tests(LiveCase):
                 self.assertEqual(errors, [])
 
     def test_every_control_message_carries_protocol_version_and_session(self):
-        for engine in ENGINES:
-            with self.subTest(engine=engine):
-                page, errors = self.open(engine)
-                self.wait_connected(page)
-                frame = self.frame(page)
-                sid = self.session_id(frame)
+        """Given a connected target page, greeted with the bridge announcing before the iframe's load event (the load held
+        open) or after it (the fake's late announce), when Studio syncs, selects, edits, switches mode, restores text,
+        resets and goes back, then Studio's page saw the two events in that order, and every message Studio sent comes
+        from its origin with protocol 1 and the session the fake answered with: one session when the announce came first;
+        when load came first, the first hello carries a superseded session and every message after the second hello
+        carries the one the bridge started; it sent the update, select, mode, reset and restore-text kinds, never
+        design:highlight, one composition update, and a restore-text with the base revision 2 and a request id."""
+        for engine, order in product(ENGINES, ANNOUNCE_ORDERS):
+            with self.subTest(engine=engine, order=order):
+                late = order[0] == 'load'
+                page, errors = self.open(engine, target=None)
+                frame, _ = self.force_order(page, order)
                 page.locator('#btnSyncToApp').click()
                 page.wait_for_function('() => /rev 1$/.test(document.querySelector("#bridgeStatusBadge").textContent)')
                 page.locator('[data-live-target="hero.lead"]').click()
@@ -1068,18 +1138,31 @@ class StudioFixRound1Tests(LiveCase):
                 page.locator('#liveResetTarget').click()
                 page.wait_for_function('() => /rev 5$/.test(document.querySelector("#bridgeStatusBadge").textContent)')
                 page.wait_for_selector('[data-live-back]')
+                selects = len(self.received(frame, 'design:select'))
                 page.locator('[data-live-back]').click()
-                page.wait_for_timeout(300)
+                frame.wait_for_function(
+                    '(n) => window.__received.filter(i => i.data && i.data.type === "design:select").length > n', arg=selects)
                 messages = [item for item in self.received(frame) if item['fromParent']]
                 kinds = {m['data']['type'] for m in messages}
                 for kind in ('design:hello', 'design:update', 'design:select', 'design:mode', 'design:reset', 'design:restore-text'):
                     self.assertIn(kind, kinds)
                 self.assertNotIn('design:highlight', kinds)
-                for item in messages:
+                # The oracle is the fake's own stamp: the session on its design:ready replies, not a hello Studio sent.
+                final = page.evaluate('window.__ready')[-1]
+                hello_at = [i for i, m in enumerate(messages) if m['data']['type'] == 'design:hello']
+                self.assertEqual(len(hello_at), 2)
+                first, second = (messages[i]['data']['sessionId'] for i in hello_at)
+                self.assertEqual(second, final)
+                if late:
+                    self.assertNotEqual(first, second)
+                else:
+                    self.assertEqual(first, second)
+                for index, item in enumerate(messages):
                     data = item['data']
                     self.assertEqual(item['origin'], STUDIO)
                     self.assertEqual(data.get('protocolVersion'), 1, data)
-                    self.assertEqual(data.get('sessionId'), sid, data)
+                    if not late or index > hello_at[1]:
+                        self.assertEqual(data.get('sessionId'), final, data)
                 restore = [m['data'] for m in messages if m['data']['type'] == 'design:restore-text'][-1]
                 self.assertEqual(restore['baseRevision'], 2)
                 self.assertTrue(restore['requestId'])
@@ -1088,32 +1171,39 @@ class StudioFixRound1Tests(LiveCase):
                 self.assertEqual(errors, [])
 
     def test_i3_every_iframe_load_regreets_both_announce_orders(self):
-        for engine in ENGINES:
-            with self.subTest(engine=engine):
-                for variant in (FAKE, f'{FAKE}?late=1'):
-                    page, errors = self.open(engine, target=variant)
-                    self.wait_connected(page)
-                    for _ in range(2):
-                        frame = self.frame(page)
-                        sid = self.session_id(frame)
+        """Given a connected target page, when its frame reloads twice with the bridge announcing before the iframe's load
+        event (the load held open) or after it (the fake's late announce), then Studio's page sees the two events in that
+        order and the new document gets exactly two hellos: both on one session that is new when the announce came first,
+        the session in use and then a different one when load came first; and when the frame then moves to a page without
+        a bridge, then Studio says no bridge answered, shows the hint, drops the live controls and has seen no page error."""
+        for engine, order in product(ENGINES, ANNOUNCE_ORDERS):
+            with self.subTest(engine=engine, order=order):
+                late = order[0] == 'load'
+                page, errors = self.open(engine, target=None)
+                frame, held = self.force_order(page, order)
+                for _ in range(2):
+                    sid = self.session_id(frame)
+
+                    def reload(frame=frame):
+                        started = frame.evaluate('performance.timeOrigin')
                         frame.evaluate('location.reload()')
-                        page.wait_for_timeout(100)
-                        self.wait_connected(page)
-                        frame = self.frame(page)
-                        hellos = [h['data']['sessionId'] for h in self.received(frame, 'design:hello')]
-                        if 'late' in variant:
-                            # load comes first: the new document is greeted with the session already in use.
-                            self.assertEqual(hellos[0], sid)
-                        else:
-                            # bridge-ready comes first and starts a fresh session; load re-greets with it.
-                            self.assertEqual(len(hellos), 2)
-                            self.assertEqual(len(set(hellos)), 1)
-                            self.assertNotEqual(hellos[0], sid)
-                    frame.evaluate('(url) => { location.href = url; }', f'{TARGET}/no-bridge.html')
-                    self.wait_badge(page, r'^No bridge answered at http://target\.test within 4 s\.$', timeout=7000)
-                    self.assertTrue(page.locator('#bridgeHint').is_visible())
-                    self.assertEqual(page.locator('#liveFontSize').count(), 0)
-                    self.assertEqual(errors, [])
+                        frame.wait_for_function('(origin) => performance.timeOrigin !== origin', arg=started)
+                    frame = self.wait_greeted(page, order, held, reload)
+                    hellos = [h['data']['sessionId'] for h in self.received(frame, 'design:hello')]
+                    self.assertEqual(len(hellos), 2)
+                    if late:
+                        # load comes first: the new document is greeted with the session already in use.
+                        self.assertEqual(hellos[0], sid)
+                        self.assertNotEqual(hellos[1], sid)
+                    else:
+                        # bridge-ready comes first and starts a fresh session; load re-greets with it.
+                        self.assertEqual(len(set(hellos)), 1)
+                        self.assertNotEqual(hellos[0], sid)
+                frame.evaluate('(url) => { location.href = url; }', f'{TARGET}/no-bridge.html')
+                self.wait_badge(page, r'^No bridge answered at http://target\.test within 4 s\.$', timeout=7000)
+                self.assertTrue(page.locator('#bridgeHint').is_visible())
+                self.assertEqual(page.locator('#liveFontSize').count(), 0)
+                self.assertEqual(errors, [])
 
     def test_a_text_overrides_compare_like_the_trimmed_bridge_ledger(self):
         for engine in ENGINES:
