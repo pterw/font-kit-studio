@@ -201,7 +201,7 @@
       else current += ch;
     }
     names.push(current.replace(/\s+/g, ' ').trim());
-    return names.join(',');
+    return JSON.stringify(names);
   }
 
   // Shape pass (reason invalid-message): exact keys, counts, lengths, enums. True when malformed.

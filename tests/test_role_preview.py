@@ -169,6 +169,27 @@ class CascadeTests(PreviewCase):
                 self.assertEqual((outcome['matched'], outcome['checked'], outcome['mismatched']), (2, 2, 1))
                 self.assertEqual(outcome['losses'], [loss('fontSize', 1, None, 'inline')])
 
+    def test_a_quoted_family_containing_a_comma_is_not_the_two_families_an_author_lists(self):
+        """Given a role asking for the single family "A,B" and an author rule that wins with the
+        two families A, B, when applied, then the receipt reports one fontFamily author-rule loss
+        and the rendered family list is the author's."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                frame, outcome, _ = self.one(engine, '.card p { font-family: A, B, serif; }', CARD, fontFamily='"A,B", serif')
+                self.assertEqual(frame.locator('.card-copy').evaluate('el => getComputedStyle(el).fontFamily'), 'A, B, serif')
+                self.assertEqual((outcome['matched'], outcome['checked'], outcome['mismatched']), (1, 1, 1))
+                self.assertEqual(outcome['losses'], [loss('fontFamily', 1, '.card p', 'author-rule')])
+
+    def test_the_same_family_list_written_with_other_quotes_and_spacing_is_no_loss(self):
+        """Given a role asking for "Georgia", serif and an author rule that wins with the
+        unquoted, differently spaced list Georgia,   serif, when applied, then the same families
+        are no loss: nothing is mismatched and no loss is reported."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                frame, outcome, _ = self.one(engine, '.card p { font-family: Georgia,   serif; }', CARD, fontFamily='"Georgia", serif')
+                self.assertEqual(frame.locator('.card-copy').evaluate('el => getComputedStyle(el).fontFamily'), 'Georgia, serif')
+                self.assertEqual((outcome['matched'], outcome['checked'], outcome['mismatched'], outcome['losses']), (1, 1, 0, []))
+
     def test_the_selector_cap_names_2000_characters_and_nothing_longer(self):
         """Given winning rules whose selectors are exactly 2,000 and 2,002 characters, when
         applied, then the first is named verbatim and the longer one is unnamed complex-cascade."""
