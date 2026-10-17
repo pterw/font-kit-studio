@@ -1374,9 +1374,12 @@ class StudioRoleApplyTests(StudioRoleCase):
                 def measure(*shape):
                     envelope = {'protocolVersion': 1, 'sessionId': request['sessionId'], **build(*shape)}
                     return len(json.dumps(envelope, ensure_ascii=False, separators=(',', ':')).encode('utf-8'))
-                full = 0
-                while measure(full + 1, 1, 1) <= size:
-                    full += 1
+                full, over = 0, 1
+                while measure(over, 1, 1) <= size:
+                    full, over = over, over * 2
+                while over - full > 1:
+                    middle = (full + over) // 2
+                    full, over = (middle, over) if measure(middle, 1, 1) <= size else (full, middle)
                 rest = size - measure(full, 1, 1)
                 first = 1 + min(rest, table.WINNING_SELECTOR_CHARS - 2)
                 second = 1 + rest - (first - 1)

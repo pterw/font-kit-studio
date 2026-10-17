@@ -148,9 +148,9 @@ class ReactCorpusTest(unittest.TestCase):
             self.assertFalse(reader.is_alive(), 'owned output reader did not stop')
             if port is not None:
                 with socket.socket() as sock:
-                    sock.settimeout(2)
+                    sock.settimeout(0.25)
                     self.assertNotEqual(sock.connect_ex(('127.0.0.1', port)), 0,
-                                        'owned Vite listener still accepts connections')
+                                        'owned Vite listener answered; nothing should answer within 0.25 s')
         finally:
             proc.stdout.close()
 
@@ -192,7 +192,7 @@ class ReactCorpusTest(unittest.TestCase):
     def start_host(self):
         handler = partial(QuietHandler, directory=str(REPO / 'tests' / 'fixtures' / 'bridge'))
         server = ThreadingHTTPServer(('127.0.0.1', 0), handler)
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread = threading.Thread(target=partial(server.serve_forever, poll_interval=0.01), daemon=True)
         thread.start()
         return server, thread
 
@@ -205,9 +205,9 @@ class ReactCorpusTest(unittest.TestCase):
         finally:
             server.server_close()
         with socket.socket() as sock:
-            sock.settimeout(2)
+            sock.settimeout(0.25)
             self.assertNotEqual(sock.connect_ex(('127.0.0.1', port)), 0,
-                                'owned host listener still accepts connections')
+                                'owned host listener answered; nothing should answer within 0.25 s')
 
     def bridge_source(self):
         """The bridge bytes served to the app; a mutant runner overrides this and nothing else."""
