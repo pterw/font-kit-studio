@@ -2,6 +2,7 @@
 import json
 import re
 
+import role_contract as table
 from support import ENGINES, REPO
 from test_studio_roles import (APPLY, CLEAR, RESET_ALL, ROLE_PAGE, STALE, TARGET, UNAVAILABLE, StudioLegacyCase,
                                StudioRoleCase, per_engine)
@@ -235,7 +236,7 @@ FAMILIES = [('Georgia, serif', True), ('"Times New Roman", serif', True), ('Sour
             ('expression(1)', False), ('expression (1)', False), ('Georgia !important', False), ('Georgia ! important', False),
             ('a;b', False), ('a{b', False), ('a<b', False), ('a' + chr(92) + 'b', False), ('a/* c */b', False), ("'Unbalanced", False),
             ('A' * 301, False), ('Georgia' + chr(9) + 'serif', False), ('Georgia' + chr(127), False), ('Georgia' + chr(1), False),
-            ('"quoted' + chr(9) + 'name"', False)]
+            ('"quoted' + chr(9) + 'name"', False)] + [(v, False) for v in table.FAMILIES_REFUSED] + [(v, True) for v in table.FAMILIES_ACCEPTED]
 
 
 class StudioRoleBridgeTests(StudioLegacyCase):
