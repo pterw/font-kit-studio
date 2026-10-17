@@ -175,6 +175,8 @@ class ApplyAndClearTests(RoleSheetCase):
                 for adapter in ('bootstrap5-body', 'bootstrap5-mono', 'bootstrap5-heading'):
                     bad = role(fontFamily='Georgia', fontSize=24)
                     bad['adapter'] = adapter
+                    if adapter == 'bootstrap5-body':
+                        bad['selectors'] = ['body']  # the placement rule would refuse any other selector, hiding the evidence check
                     reply = self.apply(page, [bad])
                     self.assertEqual((reply['type'], reply['reason'], reply['detail']),
                                      ('design:rejected', 'unsupported-value', 'Unsupported adapter'), reply)
@@ -297,7 +299,7 @@ class AtomicRejectionTests(RoleSheetCase):
             ('selectors-object', {}, with_role(selectors={}), 'invalid-message'),
             ('roles-129', {}, [role(f'r{i}', [f'.s{i}'], fontSize=30) for i in range(129)], 'invalid-message'),
             ('adapter-unknown', {}, with_role(adapter='bootstrap9'), 'invalid-message'),
-            ('adapter-bootstrap-without-evidence', {}, with_role(adapter='bootstrap5-body'), 'unsupported-value'),
+            ('adapter-bootstrap-without-evidence', {}, with_role(adapter='bootstrap5-body', selectors=['body']), 'unsupported-value'),
             ('case-unknown', {}, with_properties(textTransform='small-caps'), 'invalid-message'),
             ('size-nan', {}, with_properties(fontSize=float('nan')), 'unsupported-value'),
             ('size-infinity', {}, with_properties(fontSize=float('inf')), 'unsupported-value'),
@@ -934,8 +936,8 @@ class BaselineDetectTests(RoleSheetCase):
     def test_detect_under_a_body_variable_preview_finishes_and_never_drops_the_preview(self):
         """Given a body preview with a family on the 5,000-parent page that defines both body variables, when detect scans across
         many frames, then the reply is complete with 5,000 elements within 2,000 ms, spans several frames while the heartbeat
-        advances, every sampled frame shows the preview family on .g00 and on an element that takes its family only from the
-        variable, and the .g00 group reports the page's own serif."""
+        advances, every sampled frame shows the preview family on body and on #corpus (which inherits it), and the .g00 group, which
+        keeps its own family, reports the page's own serif."""
         css = (':root { --bs-body-font-family: Arial, sans-serif; --bs-font-sans-serif: Arial, sans-serif; }'
                ' body { font-family: var(--bs-body-font-family); }')
         add_style = "(css) => { const s = document.createElement('style'); s.textContent = css; document.head.appendChild(s); }"
@@ -944,12 +946,12 @@ class BaselineDetectTests(RoleSheetCase):
                 page, frame = self.open(engine, target=TARGET + '/fixtures/large-page/index.html')
                 frame.evaluate(add_style, css)
                 self.hello(page)
-                preview = {**role('g00', ['.g00'], fontFamily='Georgia, serif'), 'adapter': 'bootstrap5-body'}
+                preview = {**role('g00', ['body'], fontFamily='Georgia, serif'), 'adapter': 'bootstrap5-body'}
                 receipt = self.apply(page, [preview], timeout=15000)
                 self.assertEqual(receipt['type'], 'design:roles-applied', receipt)
                 frame.evaluate("""() => {
                     window.samples = []; window.sampling = true;
-                    const el = document.querySelector('.g00'), inherited = document.querySelector('#corpus');
+                    const el = document.body, inherited = document.querySelector('#corpus');
                     const tick = () => {
                         samples.push([getComputedStyle(el).fontFamily, getComputedStyle(inherited).fontFamily]);
                         if (sampling) requestAnimationFrame(tick);
@@ -1262,9 +1264,10 @@ def adapted(rid, adapter, selectors, **properties):
 
 
 def wide_roles(adapter):
-    """Three roles of 32 distinct 1,400-character selectors each: about 134 KB of canonical CSS (over 128 KiB) in a request under 256 KiB."""
-    return [adapted(f'big{i}', adapter if i == 0 else 'plain', [f'.c{i}-{j:02d}' + 'x' * 1400 for j in range(32)], fontSize=24)
-            for i in range(3)]
+    """Three plain roles of 32 distinct 1,400-character selectors each: about 134 KB of canonical CSS (over 128 KiB) in a request
+    under 256 KiB; a non-plain adapter adds its one role on `body` first (the only place a body role may sit)."""
+    roles = [adapted(f'big{i}', 'plain', [f'.c{i}-{j:02d}' + 'x' * 1400 for j in range(32)], fontSize=24) for i in range(3)]
+    return roles if adapter == 'plain' else [adapted('page', adapter, ['body'], fontFamily='Inter')] + roles
 
 
 class UnsafeFamilyTests(RoleSheetCase):
@@ -1283,7 +1286,8 @@ class UnsafeFamilyTests(RoleSheetCase):
                 for family in table.FAMILIES_REFUSED + table.FAMILY_KEYWORDS:
                     for adapter in ('plain', 'bootstrap5-body'):
                         with self.subTest(family=family, adapter=adapter):
-                            reply = self.apply(page, [adapted('f', adapter, [BODY], fontFamily=family)])
+                            where = ['body'] if adapter == 'bootstrap5-body' else [BODY]
+                            reply = self.apply(page, [adapted('f', adapter, where, fontFamily=family)])
                             self.assertEqual((reply['type'], reply.get('reason'), reply.get('detail')),
                                              ('design:rejected', 'unsupported-value', 'Unsupported property value'), reply)
                             self.assertEqual((self.owned(frame), frame.locator(BODY).first.evaluate(FAMILY)), before)
@@ -1329,7 +1333,7 @@ class InstallCountTests(RoleSheetCase):
         revision are the preview's."""
         for engine in ENGINES:
             if engine != 'chromium':
-                continue  # Firefox's CSS.supports already refuses `--x(`, so no sheet reaches the parser there.
+                self.skipTest("Firefox's CSS.supports already refuses `--x(`, so no sheet reaches the parser there")
             with self.subTest(engine=engine):
                 self.cut_sheet_is_blocked(engine, self.without_the_parenthesis_check())
 
@@ -1360,13 +1364,14 @@ class ValidateBeforeReadingTests(RoleSheetCase):
         bootstrap5-body role and an invalid selector, and one whose canonical CSS is over 128 KiB, are applied, then they are
         rejected as an unsupported selector and as size-limit, and the document has no mutation record; the same two requests
         with plain roles are rejected the same way."""
-        preview = adapted('p', 'bootstrap5-body', [BODY], fontFamily='Inter')
+        preview = adapted('p', 'bootstrap5-body', ['body'], fontFamily='Inter')
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, frame = self.start(engine, preview)
                 for adapter in ('bootstrap5-body', 'plain'):
                     with self.subTest(adapter=adapter):
-                        bad = self.apply(page, [adapted('a', adapter, [BODY], fontFamily='Inter'), role('b', ['p:hover'], fontSize=30)])
+                        where = ['body'] if adapter == 'bootstrap5-body' else [BODY]
+                        bad = self.apply(page, [adapted('a', adapter, where, fontFamily='Inter'), role('b', ['p:hover'], fontSize=30)])
                         self.assertEqual((bad['type'], bad.get('reason'), bad.get('detail')),
                                          ('design:rejected', 'unsupported-value', 'Unsupported selector'), bad)
                         big = self.apply(page, wide_roles(adapter), timeout=8000)
@@ -1377,13 +1382,13 @@ class ValidateBeforeReadingTests(RoleSheetCase):
         """Given a page with both body variables, when a valid bootstrap5-body apply replaces a plain preview, a bootstrap5-body
         preview without a family and a bootstrap5-body preview with a family, then the first two add no style element holding
         transition: none, and the third adds one (it reads with the preview off)."""
-        previews = (('plain', role('p', [BODY], fontSize=20), 0), ('no family', adapted('p', 'bootstrap5-body', [BODY], fontSize=20), 0),
-                    ('family', adapted('p', 'bootstrap5-body', [BODY], fontFamily='Inter'), 1))
+        previews = (('plain', role('p', [BODY], fontSize=20), 0), ('no family', adapted('p', 'bootstrap5-body', ['body'], fontSize=20), 0),
+                    ('family', adapted('p', 'bootstrap5-body', ['body'], fontFamily='Inter'), 1))
         for engine in ENGINES:
             for label, preview, bans in previews:
                 with self.subTest(engine=engine, preview=label):
                     page, frame = self.start(engine, preview)
-                    reply = self.apply(page, [adapted('b', 'bootstrap5-body', [BODY], fontFamily='Inter', fontSize=18)])
+                    reply = self.apply(page, [adapted('b', 'bootstrap5-body', ['body'], fontFamily='Inter', fontSize=18)])
                     self.assertEqual(reply['type'], 'design:roles-applied', reply)
                     added = [text for _, _, texts in frame.evaluate(WRITES) for text in texts if 'transition: none' in text]
                     self.assertEqual(len(added), bans)
@@ -1393,9 +1398,9 @@ class ReadyTokensTests(RoleSheetCase):
     def test_a_rehello_reports_the_pages_own_tokens_while_a_root_preview_stays_installed(self):
         """Given a page with both body variables set to Georgia and no monospace variable, and a bootstrap5-body and a
         bootstrap5-mono preview with families, when a new hello arrives, then ready.tokens.css holds the body variables the
-        first ready held (Georgia) and no --bs-font-monospace, and afterwards the owned sheet is unchanged, the body role still
+        first ready held (Georgia) and no --bs-font-monospace, and afterwards the owned sheet is unchanged, body still
         computes Inter, and no style holding transition: none remains."""
-        body = adapted('body', 'bootstrap5-body', ['[data-design-id="role.body"]'], fontFamily='Inter')
+        body = adapted('body', 'bootstrap5-body', ['body'], fontFamily='Inter')
         mono = adapted('mono', 'bootstrap5-mono', ['[data-design-id="ordinary.body"]'], fontFamily='"JetBrains Mono"')
         for engine in ENGINES:
             with self.subTest(engine=engine):
@@ -1409,5 +1414,5 @@ class ReadyTokensTests(RoleSheetCase):
                 self.assertEqual((second['--bs-body-font-family'], second['--bs-font-sans-serif']), ('Georgia', 'Georgia'))
                 self.assertNotIn('--bs-font-monospace', second)
                 self.assertEqual(self.owned(frame), [receipt['canonicalCss']])
-                self.assertEqual(frame.locator('[data-design-id="role.body"]').evaluate(FAMILY), 'Inter')
+                self.assertEqual(frame.locator('body').evaluate(FAMILY), 'Inter')
                 self.assertEqual(frame.evaluate("Array.from(document.querySelectorAll('style')).filter(s => s.textContent.includes('transition: none')).length"), 0)

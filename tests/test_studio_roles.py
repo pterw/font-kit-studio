@@ -1034,7 +1034,14 @@ class StudioRoleApplyTests(StudioRoleCase):
         def refused_family(family):   # roles, css and digest agree; only the family is one the contract refuses
             changed = with_role(properties={'fontFamily': family})
             return {**self.with_css(ok, canonical_css([{**role, 'properties': {'fontFamily': family}}])), **changed}
+        def with_roles(*roles):   # roles, css, digest and outcomes agree; only the placement of the adapter is wrong
+            return {**self.with_css(ok, canonical_css(list(roles))), 'roles': list(roles), 'outcomes': [{**first, 'id': each['id']} for each in roles]}
+        body = {**role, 'adapter': 'bootstrap5-body', 'selectors': ['body']}
+        mono = {**role, 'adapter': 'bootstrap5-mono', 'selectors': ['code']}
         shapes = {
+            'two body roles': with_roles(body, {**body, 'id': 'role-2'}), 'two mono roles': with_roles(mono, {**mono, 'id': 'role-2'}),
+            'body role on a class': with_roles({**body, 'selectors': ['.btn']}), 'body role on BODY': with_roles({**body, 'selectors': ['BODY']}),
+            'body role on body twice': with_roles({**body, 'selectors': ['body', 'body']}),
             'wrong request id': {'requestId': 'fks-req-9999'}, 'wrong operation': {'operation': 'clear'},
             'revision unchanged': {'revision': base}, 'revision skips ahead': {'revision': base + 2},
             'negative revision': {'revision': -1}, 'wrong document': {'documentId': 'other-document'},
@@ -1781,7 +1788,7 @@ class StudioRoleStateTests(StudioRoleCase):
         preview shows the page's CSS as reported, that row's draft is already selected with the accepted values, the
         snapshot was never sent back, and Apply replaces the set and names the role it removes."""
         page, frame, errors = self.open(engine, PEER_URL, PEER)
-        gone = {**self.role_input('role-9', 'Gone'), 'adapter': 'bootstrap5-body', 'properties': {'fontFamily': 'Georgia, serif'}}
+        gone = {**self.role_input('role-9', 'Gone'), 'selectors': ['body'], 'adapter': 'bootstrap5-body', 'properties': {'fontFamily': 'Georgia, serif'}}
         state = self.snapshot_state([self.role_input('role-1', 'Body', fontSize=24, fontWeight=700), gone])
         self.ready_with(page, frame, state, revision=3)
         shown = self.preview(page)
@@ -2291,8 +2298,8 @@ class StudioAdapterTests(StudioLegacyCase):
     """Studio accepts the adapter a bridge suggests, sends it back unchanged, shows it and accepts the template bytes."""
 
     def body_row(self, page, frame, adapter='bootstrap5-body'):
-        """Detects one Body group on .btn and .nav-link, selects it and types Inter at 18 px by keystrokes."""
-        self.detected(page, frame, [group(selectors=bound('.btn', '.nav-link'), adapter=adapter)])
+        """Detects one Body group on the page binding, selects it and types Inter at 18 px by keystrokes."""
+        self.detected(page, frame, [group(selectors=table.PAGE_BODY, adapter=adapter)])
         self.control(page, 'Preview this role').check()
         self.type_value(self.control(page, 'Font family'), 'Inter')
         self.type_value(self.control(page, 'Size (px)'), '18')
@@ -2300,15 +2307,18 @@ class StudioAdapterTests(StudioLegacyCase):
     @per_engine
     def test_each_adapter_renders_with_its_own_line_after_the_bindings_and_a_plain_row_has_none(self, engine):
         """Given a detected reply with one group for each of the four adapters, when the rows render, then each row's own
-        paragraphs are exactly its counts, signature and binding lines, then for a Bootstrap adapter its one Adapter line
-        (before Safe complete bindings unavailable. on the incomplete body row), then its shared classes; the plain row has
-        no Adapter line."""
-        groups = [group(f'g-{adapter}', adapter, adapter, binding_complete=adapter != 'bootstrap5-body', adapter=adapter) for adapter in table.ADAPTERS]
+        paragraphs are exactly its counts, signature and binding lines, then for a Bootstrap adapter its one Adapter line, then
+        its shared classes; the body row's binding line is body on the page, the heading row (bindings not complete) has its
+        Adapter line and then Safe complete bindings unavailable. before its shared classes, and the plain row has no Adapter line."""
+        groups = [group(f'g-{adapter}', adapter, adapter, selectors=table.PAGE_BODY if adapter == 'bootstrap5-body' else None,
+                        binding_complete=adapter != 'bootstrap5-heading', adapter=adapter)
+                  for adapter in table.ADAPTERS]
         page, frame, errors = self.open(engine, PEER_URL, PEER)
         self.detected(page, frame, groups)
         head = ['1 eligible text parent: Peer body', '1 × sans-serif: 16px / 400 / none / 0em', '.body-copy — stable (class)']
         shared = 'Shared classes: body-copy'
-        expected = [head + ([ADAPTER_LINES[adapter]] if adapter != 'plain' else []) + (['Safe complete bindings unavailable.'] if adapter == 'bootstrap5-body' else []) + [shared]
+        expected = [(head[:2] + ['body — stable (page)'] if adapter == 'bootstrap5-body' else head) + ([ADAPTER_LINES[adapter]] if adapter != 'plain' else [])
+                    + (['Safe complete bindings unavailable.'] if adapter == 'bootstrap5-heading' else []) + [shared]
                     for adapter in table.ADAPTERS]
         rows = page.locator('#roleRows > li')
         self.assertEqual(rows.count(), len(table.ADAPTERS))
@@ -2341,7 +2351,7 @@ class StudioAdapterTests(StudioLegacyCase):
         plain block and the body case's bytes, then the preview shows that CSS and the two-role status."""
         page, frame, errors = self.open(engine, PEER_URL, PEER)
         self.detected(page, frame, [group('g-lead', 'Lead', 'Lead', selectors=bound('.lead'), adapter='plain'),
-                                    group('g-body', 'Body', 'Body', selectors=bound('.btn', '.nav-link'), adapter='bootstrap5-body')])
+                                    group('g-body', 'Body', 'Body', selectors=table.PAGE_BODY, adapter='bootstrap5-body')])
         self.control(page, 'Preview this role', 'role-1', 'Lead').check()
         self.type_value(self.control(page, 'Size (px)', 'role-1', 'Lead'), '20')
         self.control(page, 'Preview this role', 'role-2', 'Body').check()
@@ -2350,7 +2360,7 @@ class StudioAdapterTests(StudioLegacyCase):
         request = self.press_apply(page, frame)
         self.assertEqual(request['roles'], [
             {'id': 'role-1', 'name': 'Lead', 'selectors': ['.lead'], 'adapter': 'plain', 'properties': {'fontSize': 20}},
-            {'id': 'role-2', 'name': 'Body', 'selectors': ['.btn', '.nav-link'], 'adapter': 'bootstrap5-body',
+            {'id': 'role-2', 'name': 'Body', 'selectors': ['body'], 'adapter': 'bootstrap5-body',
              'properties': {'fontFamily': 'Inter', 'fontSize': 18}}])
         css = LEAD_BLOCK + CASES['body']['css']
         self.send(frame, self.with_css(self.receipt(request), css))
@@ -2364,7 +2374,7 @@ class StudioAdapterTests(StudioLegacyCase):
         """Given a body group applied and acknowledged, when the next Detect reports the same group as a heading and
         Apply is pressed again, then the first request carried bootstrap5-body and the second bootstrap5-heading."""
         page, frame, errors = self.open(engine, PEER_URL, PEER)
-        self.detected(page, frame, [group(adapter='bootstrap5-body')])
+        self.detected(page, frame, [group(selectors=table.PAGE_BODY, adapter='bootstrap5-body')])
         first = self.apply_role(page, frame, '24')
         self.send(frame, self.receipt(first))
         self.wait_status(page, 'Preview applied to 1 role')
@@ -2459,6 +2469,142 @@ class StudioAdapterTests(StudioLegacyCase):
         self.assertEqual(len(self.ops(frame, 'design:roles-apply')), sends)
         self.assertEqual(errors, [])
 
+    def page_groups(self):
+        return [group('g-body', 'Body', 'Body', selectors=table.PAGE_BODY, adapter='bootstrap5-body'),
+                group('g-mono', 'Code', 'Code', selectors=table.PAGE_MONO, adapter='bootstrap5-mono')]
+
+    @per_engine
+    def test_a_page_bound_body_group_with_the_mono_fallback_renders_and_apply_sends_body(self, engine):
+        """Given a Detect reply with the body group on body (page) and the mono group on code, kbd, pre and samp, when it
+        arrives, then the status starts with Detected, two rows render, the body row's paragraphs are exactly its counts,
+        signature, page binding line, Adapter line and shared classes, and when the body row is selected with Inter at 18 px
+        and applied, then Apply is enabled and the request's roles are exactly the body case's roles, selecting ["body"]."""
+        page, frame, errors = self.open(engine, PEER_URL, PEER)
+        self.detected(page, frame, self.page_groups())
+        rows = page.locator('#roleRows > li')
+        self.assertEqual(rows.count(), 2)
+        self.assertEqual(rows.nth(0).locator(':scope > p').all_inner_texts(), [
+            '1 eligible text parent: Peer body', '1 × sans-serif: 16px / 400 / none / 0em', 'body — stable (page)',
+            ADAPTER_LINES['bootstrap5-body'], 'Shared classes: body-copy'])
+        self.control(page, 'Preview this role').check()
+        self.type_value(self.control(page, 'Font family'), 'Inter')
+        self.type_value(self.control(page, 'Size (px)'), '18')
+        self.assertTrue(self.gate(page)[0])
+        self.assertEqual(self.press_apply(page, frame)['roles'], CASES['body']['roles'])
+        self.assertEqual(errors, [])
+
+    @per_engine
+    def test_a_hostile_page_binding_refuses_the_whole_reply_and_the_fence_is_the_only_row(self, engine):
+        """Given a pending Detect, when a reply carries page bindings on a plain or a heading group, a body group on a class,
+        on body plus another binding, on BODY, on a page binding that is not body, on the mono bindings, not complete or not stable, body in a plain or a mono group's
+        bindings, mono page bindings in another order, three of the four or with a class binding, two body groups or two mono
+        groups, then none of it renders: the fence reply that follows is the only row and no row says Hostile."""
+        def hostile(adapter, selectors, complete=True, group_id='scan-h', author='Hostile'):
+            return group(group_id, 'Hostile', author, selectors=selectors, binding_complete=complete, adapter=adapter)
+        body, mono = 'bootstrap5-body', 'bootstrap5-mono'
+        page_body = {**table.PAGE_BODY[0]}
+        dom_body = [{'value': 'body', 'stable': False, 'reason': 'dom-path'}]
+        shapes = {
+            'page on a plain group': [hostile('plain', table.PAGE_BODY)],
+            'page on a heading group': [hostile('bootstrap5-heading', table.PAGE_MONO[:1])],
+            'body group on .btn': [hostile(body, bound('.btn'))],
+            'body group on a page binding that is not body': [hostile(body, [{**page_body, 'value': 'code'}])],
+            'mono group on the four page bindings, not complete': [hostile(mono, table.PAGE_MONO, complete=False)],
+            'body page binding that is not stable': [hostile(body, [{**page_body, 'stable': False}])],
+            'body group with body and a class': [hostile(body, table.PAGE_BODY + bound('.btn'))],
+            'BODY': [hostile(body, [{**page_body, 'value': 'BODY'}])],
+            'body group on the mono bindings': [hostile(body, table.PAGE_MONO)],
+            'body in a plain group': [hostile('plain', dom_body)],
+            'body in a mono group': [hostile(mono, dom_body)],
+            'incomplete page binding': [hostile(body, table.PAGE_BODY, complete=False)],
+            'mono page bindings in another order': [hostile(mono, table.PAGE_MONO[::-1])],
+            'mono group with three of the four': [hostile(mono, table.PAGE_MONO[:3])],
+            'mono group with the four and a class': [hostile(mono, table.PAGE_MONO + bound('.mono'))],
+            'two body groups': [hostile(body, table.PAGE_BODY), hostile(body, table.PAGE_BODY, group_id='scan-h2', author='Hostile 2')],
+            'two mono groups': [hostile(mono, table.PAGE_MONO), hostile(mono, table.PAGE_MONO, group_id='scan-h2', author='Hostile 2')],
+        }
+        page, frame, errors = self.open(engine, PEER_URL, PEER)
+        for name, groups in shapes.items():
+            with self.subTest(shape=name):
+                request = self.pending(page, frame)
+                self.send(frame, self.reply(request, groups))
+                self.send(frame, self.reply(request, [group(name='Fence')]))
+                page.wait_for_function('document.querySelector("#roleRows").textContent.includes("Fence")', timeout=8000)
+                self.assertEqual(page.locator('#roleRows > li').count(), 1)
+                self.assertNotIn('Hostile', page.locator('#roleRows').inner_text())
+        self.assertEqual(errors, [])
+
+    @per_engine
+    def test_a_selector_check_on_body_for_a_known_role_is_accepted(self, engine):
+        """Given a detected page-bound body group, so that the next Detect names role-1 on ["body"], when the reply carries one
+        selector check for role-1 on body, then the request's knownRoles are exactly role-1 on ["body"], the reply's one check
+        is on body, and the status starts with Detected with the body row still shown."""
+        page, frame, errors = self.open(engine, PEER_URL, PEER)
+        groups = [self.page_groups()[0]]
+        self.detected(page, frame, groups)
+        request = self.pending(page, frame)
+        self.assertEqual(request['knownRoles'], [{'id': 'role-1', 'selectors': ['body']}])
+        reply = self.reply(request, groups)
+        self.assertEqual([(check['roleId'], check['selector']) for check in reply['selectorChecks']], [('role-1', 'body')])
+        self.send(frame, reply)
+        page.wait_for_function('document.querySelector("#roleStatus").textContent.startsWith("Detected")', timeout=8000)
+        self.assertEqual(page.locator('#roleRows > li').count(), 1)
+        self.assertEqual(errors, [])
+
+    @per_engine
+    def test_the_receipt_line_of_a_body_role_says_it_is_page_wide_and_another_roles_line_is_unchanged(self, engine):
+        """Given a plain Lead role and a page-bound Body role applied twice, when the receipt reports no checked elements and
+        then three, then the outcome paragraphs are exactly the Lead line (no eligible text found while it checked none, the
+        plain counts after) and the Body line, which ends with the page-wide text both times and never with no eligible text."""
+        page_wide = "; applies page-wide through Bootstrap's body variables, and inherited text is not measured"
+        page, frame, errors = self.open(engine, PEER_URL, PEER)
+        self.detected(page, frame, [group('g-lead', 'Lead', 'Lead', selectors=bound('.lead')),
+                                    group('g-body', 'Body', 'Body', selectors=table.PAGE_BODY, adapter='bootstrap5-body')])
+        self.control(page, 'Preview this role', 'role-1', 'Lead').check()
+        self.type_value(self.control(page, 'Size (px)', 'role-1', 'Lead'), '20')
+        self.control(page, 'Preview this role', 'role-2', 'Body').check()
+        self.type_value(self.control(page, 'Size (px)', 'role-2', 'Body'), '18')
+        for size, checked, lead in (('18', 0, '; no eligible text found for this role on this page'), ('19', 3, '')):
+            with self.subTest(checked=checked):
+                self.type_value(self.control(page, 'Size (px)', 'role-2', 'Body'), size)
+                request = self.press_apply(page, frame)
+                self.send(frame, self.receipt(request, [outcome(id='role-1', matched=1, checked=min(checked, 1)),
+                                                         outcome(id='role-2', matched=3, checked=checked)]))
+                page.wait_for_function('(text) => document.querySelector("#rolePreviewOutcomes").textContent.includes(text)',
+                                       arg=f'Body (role-2): matched 3, checked {checked}', timeout=8000)
+                self.assertEqual(page.locator('#rolePreviewOutcomes li p').all_inner_texts(), [
+                    f'Lead (role-1): matched 1, checked {min(checked, 1)} eligible text elements, mismatched 0{lead}',
+                    f'Body (role-2): matched 3, checked {checked} eligible text elements, mismatched 0{page_wide}'])
+        self.assertEqual(errors, [])
+
+    @per_engine
+    def test_a_ready_snapshot_places_a_body_role_on_body_and_refuses_two_roles_of_an_adapter_or_a_misplaced_one(self, engine):
+        """Given a connected peer, when a ready snapshot carries one body role on ["body"] and one mono role, then its CSS is
+        shown with Detect enabled; when a snapshot carries two body roles, two mono roles, a body role on [".btn"], on ["BODY"] or a body role
+        on ["body", "body"], each with its own matching CSS and digest, then the status is the unsupported text, Detect is
+        disabled and the preview still shows the accepted CSS."""
+        body = {**self.role_input('role-1', 'Body', fontFamily='Inter', fontSize=18), 'selectors': ['body'], 'adapter': 'bootstrap5-body'}
+        mono = {**self.role_input('role-2', 'Code', fontSize=14), 'selectors': ['code'], 'adapter': 'bootstrap5-mono'}
+        refused = {'two body roles': [body, {**body, 'id': 'role-3'}], 'two mono roles': [mono, {**mono, 'id': 'role-3'}],
+                   'body role on a class': [{**body, 'selectors': ['.btn']}], 'body role on BODY': [{**body, 'selectors': ['BODY']}],
+                   'body role on body twice': [{**body, 'selectors': ['body', 'body']}]}
+        accepted = self.snapshot_state([body, mono])
+        page, frame, errors = self.open(engine, PEER_URL, PEER)
+        revision = 0
+        self.ready_with(page, frame, accepted, revision=revision)
+        page.wait_for_function('document.querySelector("#roleStatus").textContent === "Ready to detect text styles."', timeout=8000)
+        self.assertEqual(self.preview(page)['css'], accepted['canonicalCss'])
+        self.assertTrue(self.button(page, 'Detect text styles').is_enabled())
+        for name, roles in refused.items():
+            with self.subTest(case=name):
+                revision += 2
+                self.ready_with(page, frame, accepted, revision=revision)
+                self.ready_with(page, frame, self.snapshot_state(roles), revision=revision + 1)
+                page.wait_for_function('(text) => document.querySelector("#roleStatus").textContent === text', arg=UNSUPPORTED, timeout=8000)
+                self.assertTrue(self.button(page, 'Detect text styles').is_disabled())
+                self.assertEqual(self.preview(page)['css'], accepted['canonicalCss'])
+        self.assertEqual(errors, [])
+
 
 class StudioContractTableTests(StudioRoleCase):
     """Studio against tests/role_contract.py: the limits no other test pins at the limit and one past it, and the table itself."""
@@ -2505,7 +2651,8 @@ class StudioContractTableTests(StudioRoleCase):
 
     def test_the_checker_passes_a_valid_message_of_each_kind_and_flags_each_single_defect_once(self):
         """Given one valid message of each kind, when the checker reads it, then it has no violation; given a copy with one
-        defect, then it has exactly one, for each of 53 defects (a row for each rule the checker applies); every refused family
+        defect, then it has exactly one, for each of 74 defects (a row for each rule the checker applies, including a page binding, a body or
+        mono placement and a body selector); every refused family
         has exactly one and every near-miss family none; 100 astral characters in a name and 50 in an id (200 and 100 UTF-16
         units) have none; an unknown kind raises."""
         request = {'requestId': 'fks-detect-1', 'documentId': 'peer-document', 'knownRoles': []}
@@ -2520,6 +2667,42 @@ class StudioContractTableTests(StudioRoleCase):
         many = [{'style': style, 'count': 1} for style in table.styles(table.CHECK_SIGNATURES + 1)]
         bound = {'value': '.body-copy', 'stable': True, 'reason': 'class'}
         role = self.role_input()
+        page_body = group('scan-body', 'Page text', None, adapter='bootstrap5-body', selectors=table.PAGE_BODY)
+        page_mono = group('scan-mono', 'Code', None, adapter='bootstrap5-mono', selectors=table.PAGE_MONO)
+        class_mono = group('scan-code', 'Code', None, adapter='bootstrap5-mono', selectors=[bound])
+        body_role = {**self.role_input('role-2', 'Page text', fontSize=24), 'selectors': ['body'], 'adapter': 'bootstrap5-body'}
+        mono_role = {**self.role_input('role-3', 'Code', fontSize=14), 'selectors': ['code'], 'adapter': 'bootstrap5-mono'}
+        page_apply = {**apply, 'roles': [body_role, mono_role]}
+        body_check = {'roleId': 'role-1', 'selector': 'body', 'matchCount': 0, 'signatures': []}
+        valid_page = [('detected', 'body and mono groups on the page bindings', self.reply(request, [page_body, page_mono])),
+                      ('detected', 'mono group on its own class binding', self.reply(request, [class_mono])),
+                      ('detected', 'a selector check on body', self.reply(request, [page_body], selectorChecks=[body_check])),
+                      ('roles-applied', 'one body role on body and one mono role', self.receipt(page_apply)),
+                      ('role-state', 'one body role on body and one mono role', self.snapshot_state(page_apply['roles']))]
+        dom_body = {'value': 'body', 'stable': False, 'reason': 'dom-path'}
+        page_defects = [
+            ('detected', 'page binding on a plain group', {'groups': [group(selectors=table.PAGE_BODY)]}),
+            ('detected', 'page binding on a heading group', {'groups': [group(adapter='bootstrap5-heading', selectors=table.PAGE_MONO[:1])]}),
+            ('detected', 'body group on a class binding', {'groups': [{**page_body, 'selectors': [bound]}]}),
+            ('detected', 'body group on the mono bindings', {'groups': [{**page_body, 'selectors': table.PAGE_MONO}]}),
+            ('detected', 'body group with body and a class binding', {'groups': [{**page_body, 'selectors': table.PAGE_BODY + [bound]}]}),
+            ('detected', 'mono page group with three bindings', {'groups': [{**page_mono, 'selectors': table.PAGE_MONO[:3]}]}),
+            ('detected', 'mono page group out of order', {'groups': [{**page_mono, 'selectors': table.PAGE_MONO[::-1]}]}),
+            ('detected', 'mono page group with a class binding', {'groups': [{**page_mono, 'selectors': table.PAGE_MONO[:2] + [bound]}]}),
+            ('detected', 'page binding that is not complete', {'groups': [{**page_body, 'bindingComplete': False}]}),
+            ('detected', 'body as a plain binding', {'groups': [group(selectors=[dom_body])]}),
+            ('detected', 'body as a mono class binding', {'groups': [{**class_mono, 'selectors': [dom_body]}]}),
+            ('detected', 'two body groups', {'groups': [page_body, {**page_body, 'id': 'scan-body-2'}]}),
+            ('detected', 'two mono groups', {'groups': [page_mono, {**page_mono, 'id': 'scan-mono-2'}]}),
+            ('roles-applied', 'two body roles', {'roles': [body_role, {**body_role, 'id': 'role-9'}]}),
+            ('roles-applied', 'body role on other selectors', {'roles': [{**body_role, 'selectors': ['.btn']}]}),
+            ('roles-applied', 'body role on BODY', {'roles': [{**body_role, 'selectors': ['BODY']}]}),
+            ('role-state', 'two mono roles', {'roles': [mono_role, {**mono_role, 'id': 'role-9'}]}),
+            ('role-state', 'body role with a second selector', {'roles': [{**body_role, 'selectors': ['body', '.btn']}]}),
+            ('role-state', 'body role with body twice', {'roles': [{**body_role, 'selectors': ['body', 'body']}]}),
+            ('role-state', 'plain role on body', {'roles': [{**role, 'selectors': ['body']}]}),
+            ('role-state', 'mono role on body', {'roles': [{**mono_role, 'selectors': ['body']}]}),
+        ]
         astral = chr(0x1F600)
         controls = {'C0': 1, 'DEL': 0x7f, 'C1': 0x85, 'U+2028': 0x2028, 'U+2029': 0x2029}
         defects = [
@@ -2572,9 +2755,12 @@ class StudioContractTableTests(StudioRoleCase):
             ('role-state', 'boolean weight', {'roles': [{**role, 'properties': {'fontWeight': True}}]}),
             ('role-state', 'family that is not text', {'roles': [{**role, 'properties': {'fontFamily': 5}}]}),
         ] + [('roles-applied', f'winning selector {name}', {'outcomes': [outcome(losses=[loss(selector='.a' + chr(code))])]})
-             for name, code in controls.items()]
+             for name, code in controls.items()] + page_defects
         for kind, message in valid.items():
             with self.subTest(valid=kind):
+                self.assertEqual(table.violations(kind, message), [])
+        for kind, name, message in valid_page:
+            with self.subTest(valid=name, kind=kind):
                 self.assertEqual(table.violations(kind, message), [])
         for kind, name, change in defects:
             with self.subTest(defect=name):
@@ -2638,8 +2824,8 @@ class StudioContractTableTests(StudioRoleCase):
 
     @per_engine
     def test_detected_reply_limits_render_at_the_limit_and_are_refused_one_past(self, engine):
-        """Given a pending Detect, when a reply carries one field at its table limit, then the table finds no violation in it and its
-        rows render; when it carries one past the limit, then the table finds one violation and the reply is refused: the fence
+        """Given a pending Detect, when a reply carries one field at its table limit (every binding reason, the page one on a body
+        group), then the table finds no violation in it and its rows render; when it carries one past the limit, then the table finds one violation and the reply is refused: the fence
         reply that follows is the only row on the page."""
         def one(**fields):
             return [{**group(), **fields}], {}
@@ -2649,8 +2835,9 @@ class StudioContractTableTests(StudioRoleCase):
             return one(selectors=[{'value': '.body-copy', 'stable': flag, 'reason': reason}])
         def signature(name):
             return {'style': {**STYLE, 'textTransform': name}, 'count': 1}
-        every_reason = one(selectors=[{'value': f'.r{i}', 'stable': reason in table.STABLE_REASONS, 'reason': reason}
-                                      for i, reason in enumerate(table.BINDING_REASONS)])
+        every_plain = group(selectors=[{'value': f'.r{i}', 'stable': reason in table.STABLE_REASONS, 'reason': reason}
+                                       for i, reason in enumerate(r for r in table.BINDING_REASONS if r != 'page')])
+        every_reason = ([every_plain, group('scan-body', 'Page text', None, adapter='bootstrap5-body', selectors=table.PAGE_BODY)], {})
         every_case = one(signatures=[signature(name) for name in table.CASES], elementCount=len(table.CASES))
         incomplete = {'complete': False, 'reason': 'element-limit'}
         rows = {

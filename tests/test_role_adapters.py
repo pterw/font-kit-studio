@@ -12,6 +12,8 @@ BODY_VARIABLES = ('--bs-body-font-family', '--bs-font-sans-serif')
 VARIABLES = BODY_VARIABLES + ('--bs-font-monospace',)
 BODY_IDS = ('bs.hero.cta', 'bs5.button', 'bs5.navigation', 'bs5.label')
 BODY_SELECTORS = [f'[data-design-id="{name}"]' for name in BODY_IDS]
+BUTTON_IDS, TEXT_IDS = BODY_IDS[:2], BODY_IDS[2:]   # the two .btn buttons keep 1rem; the nav link and the label inherit the size
+PAGE_BODY = [('body', 'page', True)]
 ROOT_VARIABLES = """(names) => { const style = getComputedStyle(document.documentElement);
   return Object.fromEntries(names.map(name => [name, style.getPropertyValue(name).trim()])); }"""
 FONT = 'el => { const s = getComputedStyle(el); return [s.fontFamily, s.fontSize]; }'
@@ -35,8 +37,8 @@ CASE_VARIABLES = {
     'mono': {'--bs-font-monospace': '"JetBrains Mono"'},
     'body-without-family': {}, 'heading': {},
     'mixed': {'--bs-body-font-family': 'Inter', '--bs-font-sans-serif': 'Inter', '--bs-font-monospace': '"JetBrains Mono"'}}
-DETECTED_CSS = (':root {\n  --bs-body-font-family: Inter;\n  --bs-font-sans-serif: Inter;\n}\n'
-                + ', '.join(BODY_SELECTORS) + ' {\n  font-family: Inter;\n  font-size: 18px;\n}\n')
+BODY_CSS = ':root {\n  --bs-body-font-family: Inter;\n  --bs-font-sans-serif: Inter;\n}\nbody {\n  font-family: Inter;\n  font-size: 18px;\n}\n'
+PAGE_TEXT = "() => document.body.insertBefore(document.createTextNode('Page text'), document.body.firstChild)"
 
 
 def adapted(rid, adapter, selectors, **properties):
@@ -81,12 +83,17 @@ class AdapterCase(RoleSheetCase):
         self.assertEqual((reply['type'], reply.get('reason'), reply.get('detail')),
                          ('design:rejected', 'unsupported-value', 'Unsupported adapter'), reply)
 
+    @staticmethod
+    def bindings(group):
+        return [(b['value'], b['reason'], b['stable']) for b in group['selectors']]
+
 
 class SuggestionTests(AdapterCase):
     def test_the_bootstrap5_fixture_gets_the_body_suggestion_and_class_names_and_keeps_author_ids_first(self):
         """Given the Bootstrap 5 fixture, whose elements carry author ids, when Studio detects, then the 16 style groups carry the
-        names of the oracle's sizes and weights, only the body-style group is bootstrap5-body (bound to the four body ids, in order)
-        and the two author-role groups keep their role names, while every other group stays plain because author ids bind first."""
+        names of the oracle's sizes and weights, only the body-style group is bootstrap5-body (bound by the one stable page binding
+        `body`, complete) and the two author-role groups keep their role names, while every other group stays plain because
+        author ids bind first."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, frame = self.start(engine)
@@ -96,7 +103,7 @@ class SuggestionTests(AdapterCase):
                 self.assertEqual({key: g['suggestedName'] for key, g in styled.items()}, FIXTURE_GROUPS)
                 self.assertEqual({key: g['adapter'] for key, g in styled.items() if g['adapter'] != 'plain'},
                                  {(16, 400): 'bootstrap5-body'})
-                self.assertEqual([b['value'] for b in styled[(16, 400)]['selectors']], BODY_SELECTORS)
+                self.assertEqual((self.bindings(styled[(16, 400)]), styled[(16, 400)]['bindingComplete']), (PAGE_BODY, True))
                 roles = {g['authorRole']: (g['suggestedName'], g['adapter']) for g in groups if g['authorRole']}
                 self.assertEqual(roles, {'Editorial': ('Editorial', 'plain'), 'editorial': ('editorial', 'plain')})
 
@@ -213,7 +220,7 @@ class SuggestionTests(AdapterCase):
             with self.subTest(engine=engine):
                 page, frame = self.start(engine, BS4)
                 before = self.snapshot(frame)
-                for adapter, selectors in (('bootstrap5-body', ['.btn']), ('bootstrap5-mono', ['code']), ('bootstrap5-heading', ['h2'])):
+                for adapter, selectors in (('bootstrap5-body', ['body']), ('bootstrap5-mono', ['code']), ('bootstrap5-heading', ['h2'])):
                     reply = self.apply(page, [adapted('bad', adapter, selectors, fontFamily='Inter', fontSize=18)])
                     self.rejected_adapter(reply)
                     self.assertEqual((self.owned(frame), page.evaluate('revision')), ([], 0))
@@ -241,14 +248,13 @@ class SuggestionTests(AdapterCase):
                 self.assertEqual((group['adapter'], group['suggestedName']), ('bootstrap5-body', 'Body'))
 
     def test_ties_and_precedence_between_the_body_mono_and_heading_suggestions(self):
-        """Given the protocol page with both variables, when Studio detects four arrangements, then two groups equal to the body
-        style, and two groups of the monospace family, each get no suggestion; a lone h2 equal to the body style is
-        bootstrap5-heading and nothing is body; and a lone group equal to both is bootstrap5-mono and nothing is body."""
+        """Given the protocol page with both variables, when Studio detects three arrangements, then two groups of the monospace
+        family get no suggestion; a lone h2 equal to the body style is bootstrap5-heading and nothing is body; and a lone group
+        equal to both is bootstrap5-mono and nothing is body. (Two style groups equal to the body style cannot exist: the
+        body-style group is unique by construction, and an author-role paragraph no longer counts.)"""
         mono = ':root { --bs-font-monospace: monospace; }'
         small = 'style="font-family: monospace; font-size: %dpx"'
         scenarios = (
-            ('two groups equal to the body style', '', '<p data-design-role="Intro">Role</p><p>Auto</p>',
-             {'Role': 'plain', 'Auto': 'plain'}),
             ('two monospace groups', mono, f'<code {small % 14}>Code</code><samp {small % 16}>Samp</samp>',
              {'Code': 'plain', 'Samp': 'plain'}),
             ('a heading equal to the body style', '', '<h2 style="font-size: 1em; font-weight: 400">Head</h2>',
@@ -293,7 +299,7 @@ class SuggestionTests(AdapterCase):
                 groups = self.groups(page)
                 self.assertEqual({text: (self.sample(groups, text)['suggestedName'], self.sample(groups, text)['adapter'])
                                   for text in ('Inherits', 'Pressed')}, {'Inherits': ('Text', 'plain'), 'Pressed': ('Text', 'plain')})
-                self.rejected_adapter(self.apply(page, [adapted('body', 'bootstrap5-body', ['p'], fontFamily='Inter')]))
+                self.rejected_adapter(self.apply(page, [adapted('body', 'bootstrap5-body', ['body'], fontFamily='Inter')]))
                 self.assertEqual(self.owned(frame), [])
 
     def test_adapter_precedence_and_name_priority_are_pinned_as_the_bridge_decides_them(self):
@@ -440,8 +446,8 @@ class ApplyTests(AdapterCase):
     def test_every_template_case_emits_its_exact_bytes_and_changes_exactly_its_variables(self):
         """Given the Bootstrap 5 fixture, when each template case is applied, then the receipt is complete, echoes the roles with their
         adapters, the canonical CSS and digest equal the case, the owned node holds that CSS and the computed variables change
-        exactly where the case says; the body case also reports matched 3, checked 3, mismatched 0 and no losses, renders Inter
-        at 18px on its three elements and leaves the label at sans-serif and 16px."""
+        exactly where the case says; the body case also reports matched 1, checked 0, mismatched 0 and no losses (the receipt counts
+        `body`), renders Inter at 18px on the nav link and the label, and gives the two .btn buttons Inter at their own 16px."""
         for engine in ENGINES:
             for case in table.TEMPLATE_CASES:
                 with self.subTest(engine=engine, case=case['name']):
@@ -454,26 +460,101 @@ class ApplyTests(AdapterCase):
                     after = self.variables(frame)
                     self.assertEqual({k: v for k, v in after.items() if v != before[k]}, CASE_VARIABLES[case['name']])
                     if case['name'] == 'body':
-                        self.assertEqual(reply['outcomes'], [{'id': 'role-1', 'matched': 3, 'checked': 3, 'mismatched': 0,
+                        self.assertEqual(reply['outcomes'], [{'id': 'role-1', 'matched': 1, 'checked': 0, 'mismatched': 0,
                                                               'complete': True, 'losses': []}])
-                        self.assertEqual([self.font(frame, name) for name in BODY_IDS[:3]], [['Inter', '18px']] * 3)
-                        self.assertEqual(self.font(frame, 'bs5.label'), ['sans-serif', '16px'])
+                        self.assertEqual([self.font(frame, name) for name in TEXT_IDS], [['Inter', '18px']] * 2)
+                        self.assertEqual([self.font(frame, name) for name in BUTTON_IDS], [['Inter', '16px']] * 2)
 
-    def test_a_detected_body_group_applies_as_received_with_the_root_block_first(self):
-        """Given the detected bootstrap5-body group, when it is applied as received with Inter at 18px, then all four elements
-        compute them, the receipt echoes the request with matched 4, checked 4 and mismatched 0, and the canonical CSS is
-        the :root block followed by the plain block."""
+    def test_a_detected_body_group_binds_the_page_and_reaches_every_inheriting_element(self):
+        """Given the Bootstrap 5 fixture with 40 added unclassed paragraphs of the body style, when Studio detects, then one group
+        of 44 is bootstrap5-body bound by the single stable page binding `body`, complete, and when it is applied as received with
+        Inter at 18px the receipt echoes the request with the literal outcome matched 1, checked 0, mismatched 0, complete and no
+        losses, the canonical CSS is the :root block then the body block, the 40 paragraphs, the nav link and the label compute
+        Inter and 18px, the two .btn buttons compute Inter and keep 16px (their size is 1rem), and clear restores the snapshot."""
+        reads = 'els => els.map(el => { const s = getComputedStyle(el); return [s.fontFamily, s.fontSize]; })'
         for engine in ENGINES:
             with self.subTest(engine=engine):
-                page, frame = self.start(engine)
-                group = next(g for g in self.groups(page) if g['adapter'] == 'bootstrap5-body')
+                page, frame = self.start(engine, prepare=[(ADD_HTML, '<p>Added paragraph</p>' * 40)])
+                added = 'main p:not([class])'
+                self.assertEqual(frame.locator(added).evaluate_all(reads), [[frame.locator(added).first.evaluate(FONT)[0], '16px']] * 40)
+                self.assertNotEqual(frame.locator(added).first.evaluate(FONT)[0], 'Inter')
+                before = self.snapshot(frame)
+                bodies = [g for g in self.groups(page) if g['adapter'] == 'bootstrap5-body']
+                self.assertEqual(len(bodies), 1)
+                group = bodies[0]
+                self.assertEqual((group['elementCount'], self.bindings(group), group['bindingComplete']), (44, PAGE_BODY, True))
                 request = [self.received(group, fontFamily='Inter', fontSize=18)]
                 reply = self.apply(page, request)
                 self.assertEqual(reply['type'], 'design:roles-applied', reply)
-                self.assertEqual([self.font(frame, name) for name in BODY_IDS], [['Inter', '18px']] * 4)
                 self.assertEqual(reply['roles'], request)
-                self.assertEqual([(o['matched'], o['checked'], o['mismatched']) for o in reply['outcomes']], [(4, 4, 0)])
-                self.assertEqual(reply['canonicalCss'], DETECTED_CSS)
+                self.assertEqual(reply['outcomes'], [{'id': 'detected', 'matched': 1, 'checked': 0, 'mismatched': 0,
+                                                      'complete': True, 'losses': []}])
+                self.assertEqual(reply['canonicalCss'], BODY_CSS)
+                self.assertEqual(frame.locator(added).evaluate_all(reads), [['Inter', '18px']] * 40)
+                self.assertEqual([self.font(frame, name) for name in TEXT_IDS], [['Inter', '18px']] * 2)
+                self.assertEqual([self.font(frame, name) for name in BUTTON_IDS], [['Inter', '16px']] * 2)
+                self.assertEqual(self.clear(page)['type'], 'design:roles-applied')
+                self.assertEqual(self.snapshot(frame), before)
+
+    def test_a_body_that_holds_its_own_text_is_checked_by_the_receipt(self):
+        """Given the Bootstrap 5 fixture whose body holds a text node of its own, when the detected Body group is applied with
+        Inter at 18px, then the group is bound by `body`, the receipt reports matched 1, checked 1, mismatched 0, complete and no
+        losses, and body computes Inter and 18px."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.start(engine, prepare=[(PAGE_TEXT, None)])
+                group = next(g for g in self.groups(page) if g['adapter'] == 'bootstrap5-body')
+                self.assertEqual(self.bindings(group), PAGE_BODY)
+                reply = self.apply(page, [self.received(group, fontFamily='Inter', fontSize=18)])
+                self.assertEqual(reply['type'], 'design:roles-applied', reply)
+                self.assertEqual(reply['outcomes'], [{'id': 'detected', 'matched': 1, 'checked': 1, 'mismatched': 0,
+                                                      'complete': True, 'losses': []}])
+                self.assertEqual(frame.locator('body').evaluate(FONT), ['Inter', '18px'])
+
+    def test_an_author_role_group_stays_plain_and_does_not_take_the_body_suggestion_from_its_neighbour(self):
+        """Given a data-design-role paragraph equal to the body style on the Bootstrap 5 fixture, and on the protocol page a
+        heading-shaped author-role group whose role selector also matches an empty element, when Studio detects, then the
+        paragraph's group is plain with its role name and its author-role binding and the body-style group beside it is still
+        bootstrap5-body bound by `body`, and the heading-shaped group is plain with its role name."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine, page='bootstrap5'):
+                page, frame = self.start(engine, prepare=[(ADD_HTML, '<p data-design-role="Intro">Role paragraph</p>')])
+                groups = self.groups(page)
+                found = self.sample(groups, 'Role paragraph')
+                self.assertEqual((found['adapter'], found['suggestedName'], found['authorRole'], self.bindings(found)),
+                                 ('plain', 'Intro', 'Intro', [('[data-design-role="Intro"]', 'author-role', True)]))
+                self.assertEqual(self.bindings(self.sample(groups, 'Get started')), PAGE_BODY)
+                self.assertEqual(self.sample(groups, 'Get started')['adapter'], 'bootstrap5-body')
+            with self.subTest(engine=engine, page='heading-shaped'):
+                html = ('<h1 class="display-1" data-design-role="Hero" style="font-size: 41px">Big</h1>'
+                        '<div data-design-role="Hero"></div>')
+                page, frame = self.start(engine, ROLE_PAGE, [(ADD_STYLE, BOTH_VARIABLES), (ADD_HTML, html)])
+                hero = self.sample(self.groups(page), 'Big')
+                self.assertEqual((hero['adapter'], hero['suggestedName'], hero['authorRole']), ('plain', 'Hero', 'Hero'))
+
+    def test_a_mono_group_binds_the_four_page_tags_unless_it_already_has_a_complete_binding(self):
+        """Given 40 unclassed code elements, when Studio detects, then their one group is bootstrap5-mono bound to code, kbd, pre
+        and samp in that order as stable page bindings, complete; given two code elements sharing a class their group keeps its
+        stable class binding; and given a span.font-monospace of the same style beside the 40, the group counts 41 elements and
+        the applied receipt matches only the 40 code elements the four tags select."""
+        page_mono = [('code', 'page', True), ('kbd', 'page', True), ('pre', 'page', True), ('samp', 'page', True)]
+        for engine in ENGINES:
+            with self.subTest(engine=engine, case='40 code'):
+                page, frame = self.start(engine, prepare=[(ADD_HTML, '<code>x</code>' * 40)])
+                group = next(g for g in self.groups(page) if g['adapter'] == 'bootstrap5-mono')
+                self.assertEqual((group['elementCount'], self.bindings(group), group['bindingComplete']), (40, page_mono, True))
+            with self.subTest(engine=engine, case='shared class'):
+                page, frame = self.start(engine, prepare=[(ADD_HTML, '<code class="snippet">a</code><code class="snippet">b</code>')])
+                group = next(g for g in self.groups(page) if g['adapter'] == 'bootstrap5-mono')
+                self.assertEqual((group['elementCount'], self.bindings(group)), (2, [('.snippet', 'class', True)]))
+            with self.subTest(engine=engine, case='span.font-monospace'):
+                html = '<code>x</code>' * 40 + '<span class="font-monospace" style="font-size: 14px">y</span>'
+                page, frame = self.start(engine, prepare=[(ADD_HTML, html)])
+                group = next(g for g in self.groups(page) if g['adapter'] == 'bootstrap5-mono')
+                self.assertEqual((group['elementCount'], self.bindings(group)), (41, page_mono))
+                reply = self.apply(page, [self.received(group, fontFamily='"JetBrains Mono"')])
+                self.assertEqual(reply['type'], 'design:roles-applied', reply)
+                self.assertEqual([(o['matched'], o['checked']) for o in reply['outcomes']], [(40, 40)])
 
     def test_a_detected_body_role_changes_the_family_of_an_element_that_takes_it_only_from_the_variable(self):
         """Given the Bootstrap 5 page plus a transparent tooltip whose family comes only from --bs-font-sans-serif, when the
@@ -508,41 +589,43 @@ class ApplyTests(AdapterCase):
 
     def test_an_inline_root_variable_beats_the_role_and_clear_keeps_the_attribute(self):
         """Given an html element whose inline style sets --bs-body-font-family, when the body template is applied, then the inline
-        value still wins for that variable, the other variable and the elements take the role, and clear leaves the style
-        attribute byte-identical."""
+        value still wins for that variable, the other variable and the nav link take the role, the button gets Inter at its own
+        16px, and clear leaves the style attribute byte-identical."""
         inline = '--bs-body-font-family: Serif-Inline'
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, frame = self.start(engine, prepare=[(SET_ROOT_STYLE, inline)])
                 self.assertEqual(self.apply(page, case_roles('body'))['type'], 'design:roles-applied')
                 self.assertEqual(self.variables(frame, BODY_VARIABLES), {'--bs-body-font-family': 'Serif-Inline', '--bs-font-sans-serif': 'Inter'})
-                self.assertEqual(self.font(frame, 'bs5.button'), ['Inter', '18px'])
+                self.assertEqual(self.font(frame, 'bs5.navigation'), ['Inter', '18px'])
+                self.assertEqual(self.font(frame, 'bs5.button'), ['Inter', '16px'])
                 self.assertEqual(self.clear(page)['type'], 'design:roles-applied')
                 self.assertEqual(frame.evaluate("document.documentElement.getAttribute('style')"), inline)
 
     def test_bootstrap_declared_sizes_make_a_lost_size_one_complex_cascade_entry(self):
-        """Given an author rule with higher specificity and a var() size on the four body elements, when the body adapter is
-        applied to them at 18px, then all four checked elements mismatch and the receipt holds one fontSize complex-cascade entry of count 4 with
-        no winning selector; without the rule the same apply has no mismatch and no loss."""
+        """Given an author rule with higher specificity and a var() size on four elements, when a plain role sets 18px on them
+        (the body adapter now binds `body`, so a plain role carries the loss logic), then all four checked elements mismatch and
+        the receipt holds one fontSize complex-cascade entry of count 4 with no winning selector; without the rule the same
+        apply has no mismatch and no loss."""
         css = 'main.container .btn, main.container .nav-link, main.container .form-label { font-size: var(--lost, 11px); }'
         for engine in ENGINES:
             for author, lost in ((css, True), ('', False)):
                 with self.subTest(engine=engine, rule=bool(author)):
                     page, frame = self.start(engine, prepare=[(ADD_STYLE, author)] if author else [])
-                    outcome = self.apply(page, [adapted('body', 'bootstrap5-body', BODY_SELECTORS, fontFamily='Inter', fontSize=18)])['outcomes'][0]
+                    outcome = self.apply(page, [role('body', BODY_SELECTORS, fontFamily='Inter', fontSize=18)])['outcomes'][0]
                     self.assertEqual((outcome['matched'], outcome['checked'], outcome['mismatched']), (4, 4, 4 if lost else 0))
                     self.assertEqual(outcome['losses'], [{'property': 'fontSize', 'count': 4, 'winningSelector': None,
                                                           'reason': 'complex-cascade'}] if lost else [])
 
     def test_a_body_sheet_with_its_root_block_is_exactly_128_kib_and_one_byte_more_is_refused(self):
-        """Given a body role and two plain roles of 32 long selectors each, when the whole canonical sheet including the :root
-        block is exactly 128 KiB, then it installs, and one byte more is rejected as size-limit leaving the first install."""
+        """Given a body role on body and three plain roles of 32 long selectors each, when the whole canonical sheet including the
+        :root block is exactly 128 KiB, then it installs, and one byte more is rejected as size-limit leaving the first install."""
         root = ':root {\n  --bs-body-font-family: Inter;\n  --bs-font-sans-serif: Inter;\n}\n'
 
         def build(width, extra):
-            roles = [adapted('big0', 'bootstrap5-body', [f'.c0-{j:02d}' + 'x' * (width + (j < extra)) for j in range(32)], fontFamily='Inter')]
-            roles += [role(f'big{i}', [f'.c{i}-{j:02d}' + 'x' * (width + (i * 32 + j < extra)) for j in range(32)], fontSize=24) for i in (1, 2)]
-            css = root + ', '.join(roles[0]['selectors']) + ' {\n  font-family: Inter;\n}\n'
+            roles = [adapted('page', 'bootstrap5-body', ['body'], fontFamily='Inter')]
+            roles += [role(f'big{i}', [f'.c{i}-{j:02d}' + 'x' * (width + (i * 32 + j < extra)) for j in range(32)], fontSize=24) for i in (0, 1, 2)]
+            css = root + 'body {\n  font-family: Inter;\n}\n'
             css += ''.join(', '.join(r['selectors']) + ' {\n  font-size: 24px;\n}\n' for r in roles[1:])
             return roles, css
         for engine in ENGINES:
@@ -560,9 +643,11 @@ class ApplyTests(AdapterCase):
                 self.assertEqual((over['type'], over.get('reason')), ('design:rejected', 'size-limit'), over)
                 self.assertEqual((self.owned(frame), page.evaluate('revision')), ([css], 1))
 
-    def test_without_the_stylesheet_constructor_the_rule_count_is_the_block_count(self):
-        """Given a bridge served without CSSStyleSheet and an author rule that beats the body template's size, when the body
-        template is applied, then it installs, and the lost size is reported with its normal reason, not stylesheet-blocked."""
+    def test_the_installed_rule_count_equals_the_block_count_of_a_body_and_a_plain_role_without_the_stylesheet_constructor(self):
+        """Given a bridge served without CSSStyleSheet and an author rule that beats a plain role's size on the two .btn buttons,
+        when the body template (two blocks) and a plain .btn role (one block) are applied, then the three-block sheet installs,
+        and the lost size is reported with its normal reason on the plain role, not stylesheet-blocked, and the body role
+        reports matched 1, checked 0."""
         shadow = "Object.defineProperty(window,'CSSStyleSheet',{value:undefined,configurable:true,writable:true});\n"
         source = shadow + (REPO / 'fontkit-bridge.js').read_text(encoding='utf-8')
         author = 'main.container .btn { font-size: 12px; }'
@@ -570,10 +655,73 @@ class ApplyTests(AdapterCase):
             with self.subTest(engine=engine):
                 page, frame = self.start(engine, prepare=[(ADD_STYLE, author)], bridge_source=source)
                 self.assertEqual(frame.evaluate('typeof CSSStyleSheet'), 'undefined')
-                reply = self.apply(page, case_roles('body'))
+                reply = self.apply(page, case_roles('body') + [role('button', ['.btn'], fontSize=18)])
                 self.assertEqual(reply['type'], 'design:roles-applied', reply)
-                self.assertEqual(reply['outcomes'][0]['losses'], [{'property': 'fontSize', 'count': 2, 'winningSelector': None,
+                self.assertEqual([(o['matched'], o['checked']) for o in reply['outcomes']], [(1, 0), (2, 2)])
+                self.assertEqual(reply['outcomes'][1]['losses'], [{'property': 'fontSize', 'count': 2, 'winningSelector': None,
                                                                    'reason': 'complex-cascade'}])
+
+
+class PlacementTests(AdapterCase):
+    def test_a_body_or_mono_role_off_its_place_is_refused_with_its_detail_and_the_preview_stays(self):
+        """Given the Bootstrap 5 fixture with a valid Body preview, when each misplaced request is applied (a body role on .btn,
+        on body and .btn, on BODY, on html; a mono role on body; two body roles; two mono roles), then each is refused
+        unsupported-value with the detail Unsupported adapter, except the mono role on body and a plain role on body, which are
+        Unsupported selector, and a body role plus a plain role both on body, Unsupported selector for the plain role; after each
+        the owned sheet text, the revision and the nav link's computed font are the preview's; and a body role on body twice is
+        accepted as one selector."""
+        def body(rid, selectors):
+            return adapted(rid, 'bootstrap5-body', selectors, fontFamily='Inter')
+
+        def mono(rid, selectors):
+            return adapted(rid, 'bootstrap5-mono', selectors, fontFamily='"JetBrains Mono"')
+        adapter, selector = 'Unsupported adapter', 'Unsupported selector'
+        rows = (
+            ('body on .btn', [body('a', ['.btn'])], adapter),
+            ('body on body and .btn', [body('a', ['body', '.btn'])], adapter),
+            ('body on BODY', [body('a', ['BODY'])], adapter),
+            ('body on html', [body('a', ['html'])], adapter),
+            ('mono on body', [mono('a', ['body'])], selector),
+            ('two body roles', [body('a', ['body']), body('b', ['body'])], adapter),
+            ('two mono roles', [mono('a', ['code']), mono('b', ['kbd'])], adapter),
+            ('body in a plain role', [role('a', ['body'], fontSize=20)], selector),
+            ('body role and a plain role both on body', [body('a', ['body']), role('b', ['body'], fontSize=20)], selector))
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.start(engine)
+                css = self.apply(page, case_roles('body'))['canonicalCss']
+                before = (self.owned(frame), page.evaluate('revision'), self.font(frame, 'bs5.navigation'))
+                self.assertEqual(before, ([css], 1, ['Inter', '18px']))
+                for label, roles, detail in rows:
+                    with self.subTest(row=label):
+                        reply = self.apply(page, roles)
+                        self.assertEqual((reply['type'], reply.get('reason'), reply.get('detail')),
+                                         ('design:rejected', 'unsupported-value', detail), reply)
+                        self.assertEqual((self.owned(frame), page.evaluate('revision'), self.font(frame, 'bs5.navigation')), before)
+                twice = self.apply(page, [body('a', ['body', 'body'])])
+                self.assertEqual((twice['type'], twice['roles'][0]['selectors']), ('design:roles-applied', ['body']), twice)
+
+    def test_detect_accepts_a_known_role_on_body_alone_and_still_refuses_body_among_others_and_html(self):
+        """Given the Bootstrap 5 fixture, when Studio detects with a known role whose sole selector is body, then the reply is
+        complete and its selector check is matchCount 0 with no signatures (body holds no text of its own); when body holds a
+        text node of its own the check is matchCount 1 with one signature of count 1, 16px and weight 400; and known roles on
+        body and .btn, and on html, are rejected as unsupported-value."""
+        known = [{'id': 'known', 'selectors': ['body']}]
+        for engine in ENGINES:
+            with self.subTest(engine=engine, own_text=False):
+                page, frame = self.start(engine)
+                reply = self.detect(page, knownRoles=known)
+                self.assertEqual((reply['type'], reply['complete']), ('design:detected', True), reply)
+                self.assertEqual(reply['selectorChecks'], [{'roleId': 'known', 'selector': 'body', 'matchCount': 0, 'signatures': []}])
+                for selectors in (['body', '.btn'], ['html']):
+                    refused = self.detect(page, knownRoles=[{'id': 'known', 'selectors': selectors}])
+                    self.assertEqual((refused['type'], refused.get('reason')), ('design:rejected', 'unsupported-value'), refused)
+            with self.subTest(engine=engine, own_text=True):
+                page, frame = self.start(engine, prepare=[(PAGE_TEXT, None)])
+                check = self.detect(page, knownRoles=known)['selectorChecks'][0]
+                self.assertEqual((check['matchCount'], len(check['signatures']), check['signatures'][0]['count'],
+                                  check['signatures'][0]['style']['fontSize'], check['signatures'][0]['style']['fontWeight']),
+                                 (1, 1, 1, 16, 400))
 
 
 class EvidenceTests(AdapterCase):
@@ -598,7 +746,7 @@ class EvidenceTests(AdapterCase):
             for css in (':root { --bs-body-font-family: serif; }', ':root { --bs-font-sans-serif: sans-serif; }'):
                 with self.subTest(engine=engine, css=css):
                     page, frame = self.start(engine, ROLE_PAGE, [(ADD_STYLE, css), (ADD_HTML, '<p>Inherits</p>')])
-                    self.rejected_adapter(self.apply(page, [adapted('body', 'bootstrap5-body', ['p'], fontFamily='Inter')]))
+                    self.rejected_adapter(self.apply(page, [adapted('body', 'bootstrap5-body', ['body'], fontFamily='Inter')]))
                     self.assertEqual(self.owned(frame), [])
 
     def test_a_heading_role_with_one_display_class_or_one_level_class_is_accepted_and_renders(self):

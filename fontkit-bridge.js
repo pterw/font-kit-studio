@@ -255,17 +255,30 @@
     return Boolean(level) && selectors.every(value => (/^\.?h([1-6])$/.exec(value) || [])[1] === level[1]);
   }
 
+  // A Detect known role whose sole selector is `body` is the Body role's (Addendum 23 item 1): its selector check runs as
+  // for any selector, but the general root ban does not apply to it.
+  function soleBody(role) { return role.selectors.length === 1 && role.selectors[0] === 'body'; }
+
   // Value pass over a shaped request, before anything is read from the page. Returns {roles, blocks, css} (canonical,
   // request order) or {reason, detail}. Whether the page has the Bootstrap 5 evidence a non-plain adapter needs is the
   // caller's check, once this pass has accepted the request.
   function canonicalizeRoles(roles) {
+    // Placement first (Addendum 23 item 3): at most one body and one mono role, and a body role holds exactly `body`.
+    // `body` is valid nowhere else, so the selector loop below skips it only for that role.
+    for (const adapter of ['bootstrap5-body', 'bootstrap5-mono']) {
+      if (roles.filter(role => role.adapter === adapter).length > 1) return { reason: 'unsupported-value', detail: 'Unsupported adapter' };
+    }
+    const page = roles.find(role => role.adapter === 'bootstrap5-body');
+    if (page && JSON.stringify(Array.from(new Set(page.selectors))) !== '["body"]') {
+      return { reason: 'unsupported-value', detail: 'Unsupported adapter' };
+    }
     const checked = new Map(), out = [];
     for (const role of roles) {
       const selectors = Array.from(new Set(role.selectors));
       if (role.adapter === 'bootstrap5-heading' && !bootstrapHeadingSelectors(selectors)) {
         return { reason: 'unsupported-value', detail: 'Unsupported adapter' };
       }
-      for (const selector of selectors) {
+      for (const selector of role === page ? [] : selectors) {
         if (!checked.has(selector)) checked.set(selector, roleSelector(selector, true));
         if (!checked.get(selector)) return { reason: 'unsupported-value', detail: 'Unsupported selector' };
       }
@@ -1824,8 +1837,8 @@
       group.sharedClasses = shared.slice(0, 16);
       result.classes = shared;
       // The group's Bootstrap heading, if all its elements state the same one; it names the group whichever step binds it.
-      const level = claims.length && claims.every(claim => claim.level === claims[0].level) ? claims[0].level : null;
-      const display = claims.length && claims.every(claim => claim.display === claims[0].display) ? claims[0].display : null;
+      const agreed = key => (claims.length && claims.every(claim => claim[key] === claims[0][key]) ? claims[0][key] : null);
+      const level = agreed('level'), display = agreed('display');
       result.title = level ? `Heading ${level}` : display ? `Display ${display.slice(-1)}` : null;
       if (roles.every(value => value !== null) && (yield* choose(roles.map(value =>
         designIdSelector(value).replace('data-design-id=', 'data-design-role=')), 'author-role', true))) return result;
@@ -1835,8 +1848,8 @@
         // and weight to Bootstrap's own .display-N rule; when the class does not fit, or the group has none, its one
         // level binds hN and .hN.
         const levels = level ? [`h${level}`, `.h${level}`].filter(value => query(value).some(el => members.has(el))) : [];
-        if (display && (yield* choose([`.${display}`], 'class', true)) || levels.length && (yield* choose(levels, 'class', true))) {
-          result.heading = true; return result;
+        for (const values of [display ? [`.${display}`] : [], levels]) {
+          if (yield* choose(values, 'class', true)) { result.heading = true; return result; }
         }
       }
       for (const name of shared) {
@@ -1848,22 +1861,32 @@
       return result;
     }
 
-    // Evidence pages only: suggest Bootstrap adapters and names. A body or mono suggestion needs exactly one
-    // qualifying group; a group that qualifies twice takes heading, then mono, then body.
+    // Evidence pages only: suggest Bootstrap adapters and names. A body or mono suggestion needs exactly one qualifying
+    // style group (an author-role group never qualifies); a group that qualifies twice takes heading, then mono, then
+    // body. The body group binds the page by `body`; a mono group without a complete binding binds Bootstrap's four tags.
     suggestBootstrapAdapters(groups, facts, monoFamily, bodyStyle) {
-      const list = Array.from(groups.values());
-      const one = group => (group.signatures.length === 1 ? group.signatures[0].style : null);
+      const list = Array.from(groups.values()).filter(group => !group.authorRole);
+      const style = group => (group.signatures.length === 1 ? group.signatures[0].style : null);
+      const sole = test => {
+        const found = list.filter(group => style(group) && test(style(group)));
+        return found.length === 1 ? found[0] : null;
+      };
       const mono = monoFamily ? familyNames(monoFamily) : null, body = JSON.stringify(bodyStyle);
-      const monos = list.filter(group => mono && one(group) && familyNames(one(group).fontFamily) === mono);
-      const bodies = list.filter(group => one(group) && JSON.stringify(one(group)) === body);
+      const monoGroup = mono && sole(value => familyNames(value.fontFamily) === mono);
+      const bodyGroup = sole(value => JSON.stringify(value) === body);
       const names = { 'bootstrap5-mono': 'Monospace', 'bootstrap5-body': 'Body' };
+      const bind = (group, values) => {
+        group.selectors = values.map(value => ({ value, stable: true, reason: 'page' })); group.bindingComplete = true;
+      };
       for (const group of list) {
-        if (facts.get(group).heading) group.adapter = 'bootstrap5-heading';
-        else if (monos.length === 1 && monos[0] === group) group.adapter = 'bootstrap5-mono';
-        else if (bodies.length === 1 && bodies[0] === group) group.adapter = 'bootstrap5-body';
-        if (group.authorRole) continue;
-        const named = BOOTSTRAP_NAMES.find(([name]) => facts.get(group).classes.includes(name));
-        group.suggestedName = facts.get(group).title || names[group.adapter] || (named ? named[1] : 'Text');
+        const fact = facts.get(group);
+        if (fact.heading) group.adapter = 'bootstrap5-heading';
+        else if (group === monoGroup) {
+          group.adapter = 'bootstrap5-mono';
+          if (!group.bindingComplete) bind(group, ['code', 'kbd', 'pre', 'samp']);
+        } else if (group === bodyGroup) { group.adapter = 'bootstrap5-body'; bind(group, ['body']); }
+        const named = BOOTSTRAP_NAMES.find(([name]) => fact.classes.includes(name));
+        group.suggestedName = fact.title || names[group.adapter] || (named ? named[1] : 'Text');
       }
     }
 
@@ -1885,7 +1908,7 @@
           this.reject(data.requestId, 'invalid-message'); return;
         }
         ids.add(role.id);
-        if (!role.selectors.every(value => roleSelector(value, false))) { this.reject(data.requestId, 'unsupported-value'); return; }
+        if (!soleBody(role) && !role.selectors.every(value => roleSelector(value, false))) { this.reject(data.requestId, 'unsupported-value'); return; }
       }
       if (data.documentId !== this.documentId) { this.reject(data.requestId, 'page-changed'); return; }
       if (this.rolePageURL() === null) { this.reject(data.requestId, 'unsupported-value', 'Unsupported page URL'); return; }
@@ -1966,7 +1989,7 @@
       // Bootstrap 5 evidence comes from the first batch, where the owned sheet is already off: never from the preview.
       const { evidence, mono } = this.bootstrapVariables(), bodyStyle = this.styleSignature(document.body);
       // Native syntax/root validation also runs cooperatively, after the evidence read.
-      for (const role of data.knownRoles) for (const selector of role.selectors) {
+      for (const role of data.knownRoles) for (const selector of soleBody(role) ? [] : role.selectors) {
         yield;
         if (!roleSelector(selector)) {
           this.reject(job.requestId, 'unsupported-value'); this.cancelRoleJobs(); return null;
@@ -2027,7 +2050,7 @@
         yield;
         const signatures = [], variants = new Map();
         const matched = query(selector);
-        if (matched.some(el => el === document.documentElement || el === document.body)) {
+        if (!soleBody(role) && matched.some(el => el === document.documentElement || el === document.body)) {
           this.reject(job.requestId, 'unsupported-value'); this.cancelRoleJobs(); return null;
         }
         for (const el of matched) {

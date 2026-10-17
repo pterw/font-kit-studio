@@ -742,7 +742,8 @@ class StudioRoleBridgeTests(StudioLegacyCase):
     def test_a_bootstrap_5_body_row_applies_with_its_variables_and_clear_restores_the_page(self, engine):
         """Given the Bootstrap 5 fixture under the real bridge, when the one row with an Adapter line is given a family and a
         size and applied, then its request role carries bootstrap5-body, the four body-tuple elements render the family and
-        size, the root's two variables compute to the family and the preview CSS starts with the :root block; when Clear is
+        the sizes 16px, 22px, 22px and 16px, the root's two variables compute to the family and the preview CSS starts with the :root block (the two .btn
+        elements keep 16px, as under a body binding a component with its own size rule does); when Clear is
         pressed, then the variables, the four elements' family and size and main's markup equal their values from before
         and Studio shows no preview."""
         family, size = 'Georgia, serif', 22
@@ -762,7 +763,7 @@ class StudioRoleBridgeTests(StudioLegacyCase):
         self.assertEqual([item['adapter'] for item in request['roles']], ['bootstrap5-body'])
         self.wait_for_receipt(page, request)
         self.assertEqual(self.computed(frame, body_tuple, 'font-family'), [family] * 4)
-        self.assertEqual(self.computed(frame, body_tuple, 'font-size'), [f'{size}px'] * 4)
+        self.assertEqual(self.computed(frame, body_tuple, 'font-size'), ['16px', f'{size}px', f'{size}px', '16px'])
         self.assertEqual(self.root_variables(frame), [family] * 2)
         self.assertTrue(self.preview(page)['css'].startswith(f':root {{\n  --bs-body-font-family: {family};\n  --bs-font-sans-serif: {family};\n}}\n'))
         self.clear_preview(page, frame)
@@ -770,6 +771,58 @@ class StudioRoleBridgeTests(StudioLegacyCase):
         self.assertEqual((self.computed(frame, body_tuple, 'font-family'), self.computed(frame, body_tuple, 'font-size'),
                           self.root_variables(frame), frame.locator('main').evaluate('el => el.outerHTML')), before)
         self.assertEqual(self.preview(page)['css'], '')
+        self.assertEqual(errors, [])
+
+    MEMBERS = """() => { const key = el => { const c = getComputedStyle(el); return [c.fontFamily, c.fontSize, c.fontWeight, c.lineHeight, c.letterSpacing, c.textTransform].join('|'); };
+        const body = key(document.body);
+        return [...document.querySelectorAll('main *')].map((el, index) => [el, index]).filter(([el]) => [...el.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())
+            && key(el) === body).map(([el, index]) => [index, el.matches('.btn')]); }"""
+    STYLES = """(indices) => { const all = document.querySelectorAll('main *'); return indices.map(i => [getComputedStyle(all[i]).fontFamily, getComputedStyle(all[i]).fontSize]); }"""
+
+    @per_engine
+    def test_the_bootstrap_5_body_row_applies_to_body_text_that_has_no_ids_or_shared_class_and_clear_restores_it(self, engine):
+        """Given the Bootstrap 5 fixture with 40 more unclassed paragraphs and list items without ids under the real bridge,
+        when Detect runs, the one Adapter row is given a family and a size and applied, then the row has a role id and an
+        enabled Apply, the request's Body role selects exactly body, the receipt line is the Body line ending page-wide, and
+        every element that computed body's style before (44) computes the family and 22px except the .btn ones, which keep
+        16px; when Clear is pressed, then each of them computes its family and size from before and main's markup is as before."""
+        family, size = 'Georgia, serif', 22
+        url, html = self.fixture_page('bootstrap5-static')
+        html = html.replace('</main>', '<p>One</p>' * 20 + '<ul>' + '<li>Item</li>' * 20 + '</ul></main>')
+        page, frame, errors = self.open(engine, init=CAPTURE, target=url, peer=html)
+        page.get_by_role('button', name='Detect text styles', exact=True).click()
+        def shown(selector, wanted):
+            """The element's text once it holds the wanted text, or what it holds after 15 s."""
+            return page.evaluate("""([selector, wanted]) => new Promise(done => { const start = Date.now(), poll = () => { const text = document.querySelector(selector).textContent;
+                if (text.includes(wanted) || Date.now() - start > 15000) done(text); else setTimeout(poll, 50); }; poll(); })""",
+                                 [selector, wanted])
+        status = shown('#roleStatus', 'Detected')
+        self.assertIn('Detected', status)
+        self.record(frame)
+        members = frame.evaluate(self.MEMBERS)
+        self.assertEqual(len(members), 44)
+        indices = [index for index, _ in members]
+        buttons = [button for _, button in members]
+        self.assertEqual(buttons.count(True), 2)
+        before = (frame.evaluate(self.STYLES, indices), frame.locator('main').evaluate('el => el.outerHTML'))
+        row = page.locator('#roleRows > li').filter(has=page.locator('p', has_text=re.compile(r'^Adapter: ')))
+        self.assertEqual(row.count(), 1)
+        role, name = row.get_attribute('data-role-id'), row.locator('strong').inner_text().rsplit(' (', 1)[0]
+        self.assertIsNotNone(role)
+        self.control(page, 'Preview this role', role, name).check()
+        self.type_value(self.control(page, 'Font family', role, name), family)
+        self.type_value(self.control(page, 'Size (px)', role, name), str(size))
+        self.assertTrue(self.button(page, APPLY).is_enabled())
+        request = self.press_apply(page, frame)
+        self.assertEqual([(item['adapter'], item['selectors']) for item in request['roles']], [('bootstrap5-body', ['body'])])
+        self.wait_for_receipt(page, request)
+        self.assertIn('Preview applied to 1 role; 0 checked elements did not show it.', shown('#rolePreviewStatus', 'Preview applied to 1 role; 0 checked elements did not show it.'))
+        self.assertEqual(page.locator('#rolePreviewOutcomes li p').all_inner_texts(), [
+            f"{name} ({role}): matched 1, checked 0 eligible text elements, mismatched 0; applies page-wide through Bootstrap's body variables, and inherited text is not measured"])
+        self.assertEqual(frame.evaluate(self.STYLES, indices), [[family, '16px' if button else f'{size}px'] for button in buttons])
+        self.clear_preview(page, frame)
+        page.wait_for_function('document.querySelector("#rolePreviewCss").textContent === ""')
+        self.assertEqual((frame.evaluate(self.STYLES, indices), frame.locator('main').evaluate('el => el.outerHTML')), before)
         self.assertEqual(errors, [])
 
     @per_engine

@@ -32,12 +32,14 @@ Two things have their own version numbers:
   body, monospace and heading roles; a display heading binds its display class, so
   its size and weight preview too. A re-detect under a body or monospace
   preview finishes on large pages. It previews body and monospace roles through those variables
-  as well as their own selectors, and checks the suggestion again before it
-  applies.
+  as well as their own selectors. The body role binds the page itself, so it
+  applies on real pages; at Apply the bridge checks the evidence again and refuses
+  a body or monospace role placed anywhere else or given twice.
 - Role preview receipts count matched and measured elements separately and
   explain each lost property: the winning author rule's selector when it can be
   proven, or an inline style, inheritance, an unreadable or blocked stylesheet,
-  an unprovable cascade or a time limit. Receipts always stay within 1 MiB.
+  an unprovable cascade or a time limit. A Bootstrap 5 body role's receipt says
+  that it applies page-wide and that inherited text is not measured. Receipts always stay within 1 MiB.
 - Live App previews role fonts on the running page: draft a family, size,
   weight, line height, tracking and case for each detected role, then Apply or
   Clear. Studio shows only what the page acknowledged, with matched and checked

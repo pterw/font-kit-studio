@@ -1,7 +1,7 @@
 """The R2 role protocol's limits, enums and shapes, written once for the tests of both sides.
 
-Every value comes from the plan's binding contract and Addenda 13-18 (17: template bytes; 18: signatures per check), 20
-and 22 (families) (docs/plans/2026-10-03-r2-engine.md) and, where the
+Every value comes from the plan's binding contract and Addenda 13-18 (17: template bytes; 18: signatures per check), 20,
+22 (families) and 23 (page bindings and placement) (docs/plans/2026-10-03-r2-engine.md) and, where the
 plan is silent, from the R2.5 brief (docs/implementation/tasks/r2-task-5-brief.md: pins and additions), the PR B fix brief
 (r2-task-bfix-brief.md) and the PR B review (r2-pr-b-review.md). None comes from fontkit-bridge.js or fontkit-studio.html:
 a test that reads this table checks a side against the contract, not against itself. A later change to a field, limit or
@@ -36,8 +36,13 @@ EMPTY_HASH = '811c9dc5'              # FNV-1a32 of the empty string
 
 CASES = ('none', 'uppercase', 'lowercase', 'capitalize')                       # type Case
 ADAPTERS = ('plain', 'bootstrap5-body', 'bootstrap5-mono', 'bootstrap5-heading')   # RoleInput.adapter
-BINDING_REASONS = ('author-role', 'author-id', 'class', 'css-module', 'dom-path')  # SelectorBinding.reason
-STABLE_REASONS = ('author-role', 'author-id', 'class')                         # a binding is stable exactly when its reason is one
+BINDING_REASONS = ('author-role', 'author-id', 'class', 'css-module', 'dom-path', 'page')  # SelectorBinding.reason
+STABLE_REASONS = ('author-role', 'author-id', 'class', 'page')                         # a binding is stable exactly when its reason is one
+# Addendum 23 items 1, 3, 4: a body group binds the page by one stable `body`; a mono group that binds the page takes Bootstrap's four
+# elements, in this order; `body` is valid only as the one selector of a body role; one body and one mono role or group each.
+PAGE_BODY = [{'value': 'body', 'stable': True, 'reason': 'page'}]
+PAGE_MONO = [{'value': value, 'stable': True, 'reason': 'page'} for value in ('code', 'kbd', 'pre', 'samp')]
+PAGE_ADAPTERS = ('bootstrap5-body', 'bootstrap5-mono')   # the adapters that own the page: one role or group each
 LOSS_REASONS = ('author-rule', 'inline', 'inherited', 'unreadable-sheet', 'complex-cascade', 'stylesheet-blocked',
                 'budget-exceeded')                                              # RoleOutcome loss reasons, in the contract's order
 OUTCOME_REASONS = (None, 'page-changed', 'budget-exceeded')                    # roles-applied outcomeReason
@@ -147,8 +152,9 @@ def wire(message):
 def violations(kind, message):
     """One string per value of `message` outside the table, for kind 'detected', 'roles-applied', 'rejected' or 'role-state'.
 
-    It checks counts, lengths (UTF-16 units), bytes, enums, number ranges, families, the stable/reason rule and the contract's
-    invariants. It does not compare key sets: both sides already validate exact field lists, so a missing field raises KeyError,
+    It checks counts, lengths (UTF-16 units), bytes, enums, number ranges, families, the stable/reason rule, the page bindings
+    (a body group binds exactly `body`, a mono page group binds code, kbd, pre, samp), one body and one mono role or group, `body` only
+    as a body role's one selector (selector checks are exempt) and the contract's invariants. It does not compare key sets: both sides already validate exact field lists, so a missing field raises KeyError,
     except a group's `adapter` (read with `get`: a missing one is a violation like a wrong one).
     """
     if kind not in ('detected', 'roles-applied', 'rejected', 'role-state'):
@@ -201,6 +207,13 @@ def violations(kind, message):
                          f'{key}: {value!r} outside {low}..{high} with {places} decimals')
         count(len(css.encode('utf-8')), CSS_BYTES, 'canonicalCss bytes')
         need(bool(roles) or (css == '' and message['cssHash'] == EMPTY_HASH), 'no roles must mean no CSS and the empty digest')
+        for adapter in PAGE_ADAPTERS:
+            need(sum(1 for role in roles if role['adapter'] == adapter) <= 1, f'more than one {adapter} role')
+        for role in roles:
+            if role['adapter'] == 'bootstrap5-body':
+                need(role['selectors'] == ['body'], f'role {role["id"]!r}: a bootstrap5-body role selects exactly body')
+            else:
+                need('body' not in role['selectors'], f'role {role["id"]!r}: body only as the one selector of a bootstrap5-body role')
 
     count(wire(message), REPLY_BYTES, 'message bytes')
     for key, high in (('requestId', REQUEST_ID_CHARS), ('documentId', DOCUMENT_ID_CHARS)):
@@ -231,6 +244,17 @@ def violations(kind, message):
             for name in group['sharedClasses']:
                 chars(name, CLASS_CHARS, 'shared class')
             count(len(group['selectors']), SELECTORS, 'group selectors')
+            adapter, bindings = group.get('adapter'), group['selectors']
+            pages = [binding for binding in bindings if binding['reason'] == 'page']
+            if pages and adapter not in PAGE_ADAPTERS:
+                need(False, f'group {group["id"]!r}: page binding on a {adapter!r} group')
+            elif adapter == 'bootstrap5-body':
+                need(bindings == PAGE_BODY, f'group {group["id"]!r}: a body group binds exactly body/page, not {bindings!r}')
+            elif adapter == 'bootstrap5-mono' and pages:
+                need(bindings == PAGE_MONO, f'group {group["id"]!r}: a mono page group binds exactly code, kbd, pre, samp, not {bindings!r}')
+            else:
+                need(not any(binding['value'] == 'body' for binding in bindings), f'group {group["id"]!r}: body binding outside a body group')
+            need(not pages or group['bindingComplete'], f'group {group["id"]!r}: a page binding must be complete')
             for binding in group['selectors']:
                 selector(binding['value'], 'binding')
                 need(binding['reason'] in BINDING_REASONS, f'binding reason: {binding["reason"]!r}')
@@ -240,6 +264,8 @@ def violations(kind, message):
             near = group['nearDuplicateIds']
             need(len(set(near)) == len(near), f'nearDuplicateIds of {group["id"]!r} repeat an id')
             need(all(other != group['id'] and other in ids for other in near), f'nearDuplicateIds of {group["id"]!r} name a group outside the reply')
+        for adapter in PAGE_ADAPTERS:
+            need(sum(1 for group in message['groups'] if group.get('adapter') == adapter) <= 1, f'more than one {adapter} group')
         for check in message['selectorChecks']:
             chars(check['roleId'], ROLE_ID_CHARS, 'check roleId')
             selector(check['selector'], 'check selector')
@@ -279,22 +305,22 @@ def _role(number, name, adapter, targets, **properties):
 # Addendum 17 item 1, written out from its rules and never produced by code: a body or mono role that sets a family emits
 # a :root block of its variables before its plain block; every role emits its own blocks in request order; blocks never merge.
 TEMPLATE_CASES = (
-    {'name': 'body', 'roles': [_role(1, 'Body', 'bootstrap5-body', ['.btn', '.nav-link'], fontFamily='Inter', fontSize=18)],
-     'css': ':root {\n  --bs-body-font-family: Inter;\n  --bs-font-sans-serif: Inter;\n}\n.btn, .nav-link {\n  font-family: Inter;\n  font-size: 18px;\n}\n',
-     'hash': 'bf7cd581'},
+    {'name': 'body', 'roles': [_role(1, 'Body', 'bootstrap5-body', ['body'], fontFamily='Inter', fontSize=18)],
+     'css': ':root {\n  --bs-body-font-family: Inter;\n  --bs-font-sans-serif: Inter;\n}\nbody {\n  font-family: Inter;\n  font-size: 18px;\n}\n',
+     'hash': 'bb5252fb'},
     {'name': 'mono', 'roles': [_role(1, 'Mono', 'bootstrap5-mono', ['code'], fontFamily='"JetBrains Mono"')],
      'css': ':root {\n  --bs-font-monospace: "JetBrains Mono";\n}\ncode {\n  font-family: "JetBrains Mono";\n}\n', 'hash': '3842c27b'},
-    {'name': 'body-without-family', 'roles': [_role(1, 'Body', 'bootstrap5-body', ['.btn', '.nav-link'], fontWeight=500)],
-     'css': '.btn, .nav-link {\n  font-weight: 500;\n}\n', 'hash': 'a06c14e7'},
+    {'name': 'body-without-family', 'roles': [_role(1, 'Body', 'bootstrap5-body', ['body'], fontWeight=500)],
+     'css': 'body {\n  font-weight: 500;\n}\n', 'hash': '0f1b0795'},
     {'name': 'heading', 'roles': [_role(1, 'Heading', 'bootstrap5-heading', ['h2', '.h2'], fontFamily='Fraunces', fontSize=32)],
      'css': 'h2, .h2 {\n  font-family: Fraunces;\n  font-size: 32px;\n}\n', 'hash': 'b623dd3c'},
     {'name': 'mixed', 'roles': [_role(1, 'Lead', 'plain', ['.lead'], fontSize=20),
-                                _role(2, 'Body', 'bootstrap5-body', ['.btn', '.nav-link'], fontFamily='Inter', fontSize=18),
+                                _role(2, 'Body', 'bootstrap5-body', ['body'], fontFamily='Inter', fontSize=18),
                                 _role(3, 'Mono', 'bootstrap5-mono', ['code'], fontFamily='"JetBrains Mono"'),
                                 _role(4, 'Heading', 'bootstrap5-heading', ['h2', '.h2'], fontFamily='Fraunces', fontSize=32)],
      'css': ('.lead {\n  font-size: 20px;\n}\n'
-             ':root {\n  --bs-body-font-family: Inter;\n  --bs-font-sans-serif: Inter;\n}\n.btn, .nav-link {\n  font-family: Inter;\n  font-size: 18px;\n}\n'
+             ':root {\n  --bs-body-font-family: Inter;\n  --bs-font-sans-serif: Inter;\n}\nbody {\n  font-family: Inter;\n  font-size: 18px;\n}\n'
              ':root {\n  --bs-font-monospace: "JetBrains Mono";\n}\ncode {\n  font-family: "JetBrains Mono";\n}\n'
              'h2, .h2 {\n  font-family: Fraunces;\n  font-size: 32px;\n}\n'),
-     'hash': '9672a774'},
+     'hash': '4d6ad066'},
 )

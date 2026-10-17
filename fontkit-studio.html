@@ -3776,7 +3776,10 @@ if (remembered) kitId.value = remembered;
         && (url.pathname + url.search + url.hash).length <= 2000;
     } catch { return false; }
   }
-  function validRoleSelector(value) {
+  // `body` is valid only as the page binding of a Bootstrap 5 body group, a body role's selector and a selector check
+  // (Addendum 23); every other caller keeps the root ban.
+  function validRoleSelector(value, bodyOk = false) {
+    if (bodyOk && value === "body") return true;
     if (!roleText(value, 2000) || UNSAFE_SELECTOR_TEXT.test(value) || !ROLE_SELECTOR_GRAMMAR.test(value)
       || /^(?:html|body|\*)$/i.test(value) || /:nth-of-type\(0+\)/i.test(value)) return false;
     if (/^(?:html|body)(?=[#.\[:]|$)/i.test(value.split(" > ").at(-1))) return false;
@@ -3828,12 +3831,20 @@ if (remembered) kitId.value = remembered;
       || group.authorRole !== null || group.signatures.length !== 1
       || roleIdentityKey(identity) !== roleIdentityKey({ kind:"style", style:group.signatures[0].style })) return false;
     const selectors = new Set();
-    return group.selectors.every(binding => {
-      if (!exactRoleFields(binding, ["value", "stable", "reason"]) || !validRoleSelector(binding.value)
-        || typeof binding.stable !== "boolean" || !["author-role", "author-id", "class", "css-module", "dom-path"].includes(binding.reason)
+    if (!group.selectors.every(binding => {
+      if (!exactRoleFields(binding, ["value", "stable", "reason"]) || !validRoleSelector(binding.value, binding.reason === "page")
+        || typeof binding.stable !== "boolean" || !["author-role", "author-id", "class", "css-module", "dom-path", "page"].includes(binding.reason)
         || binding.stable !== !["css-module", "dom-path"].includes(binding.reason) || selectors.has(binding.value)) return false;
       selectors.add(binding.value); return true;
-    });
+    })) return false;
+    // Addendum 23: a body group binds exactly body/page; a mono group binds the page by exactly code, kbd, pre, samp or not at
+    // all; no other group has a page binding; every page binding is complete.
+    const pages = group.selectors.filter(binding => binding.reason === "page").map(binding => binding.value);
+    if (group.adapter === "bootstrap5-body") return pages.length === 1 && group.selectors.length === 1 && pages[0] === "body" && group.bindingComplete;
+    if (group.adapter === "bootstrap5-mono" && pages.length) {
+      return group.selectors.length === ROLE_PAGE_MONO.length && ROLE_PAGE_MONO.every((value, i) => pages[i] === value) && group.bindingComplete;
+    }
+    return !pages.length;
   }
   // ---- role preview state (R2.S2) ---------------------------------------------
   // Accepted state is only what the page acknowledged (a receipt, a ready snapshot or a reset-all reply). Drafts are the
@@ -3852,6 +3863,7 @@ if (remembered) kitId.value = remembered;
   // Studio's own words for the adapters a bridge may suggest; a row shows one for every adapter but plain.
   const ROLE_ADAPTER_LABELS = { "bootstrap5-body":"Bootstrap 5 body variables", "bootstrap5-mono":"Bootstrap 5 monospace variable",
     "bootstrap5-heading":"Bootstrap 5 heading rule" };
+  const ROLE_PAGE_MONO = ["code", "kbd", "pre", "samp"];
   // The variables a Bootstrap 5 body or mono role sets beside its own rule (Addendum 17), in the order the bytes carry them.
   const ROLE_ADAPTER_VARIABLES = { "bootstrap5-body":["--bs-body-font-family", "--bs-font-sans-serif"], "bootstrap5-mono":["--bs-font-monospace"] };
   const ROLE_LOSS_REASONS = ["author-rule", "inline", "inherited", "unreadable-sheet", "complex-cascade", "stylesheet-blocked", "budget-exceeded"];
@@ -3912,11 +3924,13 @@ if (remembered) kitId.value = remembered;
         && roundTo(value, rule.places) === value;
     });
   }
+  // A body role selects exactly ["body"], and no other role selects body (Addendum 23).
   function validRoleInput(role) {
     return exactRoleFields(role, ["id", "name", "selectors", "adapter", "properties"]) && roleText(role.id, 100)
       && roleText(role.name, 200) && ROLE_ADAPTERS.includes(role.adapter) && Array.isArray(role.selectors)
       && role.selectors.length >= 1 && role.selectors.length <= 32 && new Set(role.selectors).size === role.selectors.length
-      && role.selectors.every(validRoleSelector) && validRoleProperties(role.properties);
+      && (role.adapter === "bootstrap5-body" ? role.selectors.length === 1 && role.selectors[0] === "body"
+        : role.selectors.every(selector => validRoleSelector(selector))) && validRoleProperties(role.properties);
   }
   const ROLE_CSS_NAMES = { fontFamily:"font-family", fontSize:"font-size", fontWeight:"font-weight", lineHeight:"line-height",
     letterSpacing:"letter-spacing", textTransform:"text-transform" };
@@ -3939,6 +3953,7 @@ if (remembered) kitId.value = remembered;
   // so a matching digest alone proves nothing), the digest is of its UTF-8 bytes, it is at most 128 KiB, and no roles means no CSS.
   function validAcceptedRoles(roles, css, algorithm, hash) {
     return Array.isArray(roles) && roles.length <= 128 && roles.every(validRoleInput)
+      && ["bootstrap5-body", "bootstrap5-mono"].every(adapter => roles.filter(role => role.adapter === adapter).length <= 1)
       && new Set(roles.map(role => role.id)).size === roles.length && typeof css === "string" && roleBytes(css) <= 128 * 1024
       && algorithm === "fnv1a32" && hash === fnv1a32(css) && (roles.length === 0) === (css === "")
       && css === serializeRoleSheet(roles);
@@ -4195,6 +4210,7 @@ if (remembered) kitId.value = remembered;
     if (!outcomes) return;
     const line = (parent, text) => { const node = document.createElement("p"); node.textContent = text; parent.append(node); };
     const names = new Map(rolePreview.roles.map(role => [role.id, role.name]));
+    const pageWide = new Set(rolePreview.roles.filter(role => role.selectors.length === 1 && role.selectors[0] === "body").map(role => role.id));
     if (outcomes.reason === "budget-exceeded") {
       const item = document.createElement("li");
       line(item, "Checks incomplete (budget-exceeded): the counts below cover only what was checked before the limit.");
@@ -4206,7 +4222,8 @@ if (remembered) kitId.value = remembered;
       // were measured. Matched elements without rendered text are not failures, and an unfinished check says so.
       const unmeasured = outcome.matched - outcome.checked;
       line(item, `${names.get(outcome.id)} (${outcome.id}): matched ${outcome.matched}, checked ${outcome.checked} eligible text elements, mismatched ${outcome.mismatched}`
-        + `${outcome.complete ? "" : " (incomplete)"}${outcome.checked === 0 ? "; no eligible text found for this role on this page" : ""}`);
+        + `${outcome.complete ? "" : " (incomplete)"}${pageWide.has(outcome.id) ? "; applies page-wide through Bootstrap's body variables, and inherited text is not measured"
+          : outcome.checked === 0 ? "; no eligible text found for this role on this page" : ""}`);
       if (outcome.complete && unmeasured > 0 && outcome.checked > 0) {
         line(item, `${unmeasured} matched element${unmeasured === 1 ? " has" : "s have"} no rendered text and ${unmeasured === 1 ? "was" : "were"} not measured.`);
       }
@@ -4250,13 +4267,14 @@ if (remembered) kitId.value = remembered;
       if (ids.has(group.id) || identities.has(identity)) return false;
       ids.add(group.id); identities.add(identity); count += group.elementCount;
     }
+    if (["bootstrap5-body", "bootstrap5-mono"].some(adapter => data.groups.filter(group => group.adapter === adapter).length > 1)) return false;
     if (count > data.scannedElements || data.complete && count !== data.scannedElements
       || data.groups.some(group => group.nearDuplicateIds.some(id => id === group.id || !ids.has(id)))) return false;
     const checks = pending.knownRoles.flatMap(role => role.selectors.map(selector => JSON.stringify([role.id, selector])));
     const remaining = new Map(); checks.forEach(key => remaining.set(key, (remaining.get(key) || 0) + 1));
     for (const check of data.selectorChecks) {
       if (!exactRoleFields(check, ["roleId", "selector", "matchCount", "signatures"]) || !roleText(check.roleId, 100)
-        || !validRoleSelector(check.selector) || !roleCount(check.matchCount, 10000)
+        || !validRoleSelector(check.selector, true) || !roleCount(check.matchCount, 10000)
         || !validRoleVariants(check.signatures, check.matchCount, 1024)) return false;
       const key = JSON.stringify([check.roleId, check.selector]);
       if (!remaining.get(key)) return false;
