@@ -2,8 +2,10 @@
 import json
 import subprocess
 
+import role_contract as table
 from support import ENGINES
 from role_support import EVIL, REPO, STUDIO, ROLE_PAGE, RoleBridgeCase
+from test_role_stylesheet import RoleSheetCase, role
 
 
 class RoleProtocolTests(RoleBridgeCase):
@@ -260,3 +262,155 @@ class RoleProtocolTests(RoleBridgeCase):
                 self.assertEqual(frame.locator('.body-copy').first.inner_text(), 'Author body')
                 self.assertEqual(frame.locator('main').evaluate('el => el.outerHTML'), before)
                 self.assertEqual(page.evaluate('revision'), 0)
+
+
+# Pages for the contract table's bridge extremes, built with frame.evaluate after open and before hello.
+# STYLE_GRID: `count` distinct styles (columns weights x the rest sizes, so every group is near the others). Style 0 is 32 elements
+# whose data-design-id values make each selector `pad + 19` long; style 1 is one element with the given classes and text.
+STYLE_GRID = """([count, columns, pad, classes, long]) => {
+  const main = document.querySelector('main'); main.replaceChildren();
+  for (let i = 0; i < count; i++) for (let k = 0; k < (i === 0 ? 32 : 1); k++) {
+    const p = document.createElement('p'); p.textContent = i === 1 ? long : 'Style ' + i;
+    p.style.fontSize = (16 + Math.floor(i / columns) / 100) + 'px'; p.style.fontWeight = String(400 + i % columns);
+    if (i === 0) p.setAttribute('data-design-id', ('i' + k + '-').padEnd(pad, 'x'));
+    if (i === 1) p.className = classes.join(' ');
+    main.appendChild(p);
+  }
+}"""
+# AUTHOR_ROLES: `roles` author roles of `variants` sizes each, every element with class k.
+AUTHOR_ROLES = """([roles, variants]) => {
+  const main = document.querySelector('main'); main.replaceChildren();
+  for (let r = 0; r < roles; r++) for (let v = 0; v < variants; v++) {
+    const p = document.createElement('p'); p.textContent = 'R' + r + ' V' + v; p.className = 'k';
+    p.setAttribute('data-design-role', 'Role ' + r); p.style.fontSize = (10 + v * 2 + r / 10) + 'px'; main.appendChild(p);
+  }
+}"""
+# WINNERS: `count` paragraphs of class t, each with its own author rule p.eN that sets all six properties.
+WINNERS = """(count) => {
+  const style = document.createElement('style'); const main = document.querySelector('main');
+  for (let i = 0; i < count; i++) {
+    style.textContent += `p.e${i} { font-size: 18px; font-weight: 300; line-height: 2; letter-spacing: 1px; text-transform: lowercase; font-family: monospace; }`;
+    const p = document.createElement('p'); p.className = 't e' + i; p.textContent = 'Lost ' + i; main.appendChild(p);
+  }
+  document.head.appendChild(style);
+}"""
+
+
+# POSTED_BYTES: records the UTF-8 JSON size of every message the host page posts to the bridge, by wrapping its `send`.
+POSTED_BYTES = """() => {
+  window.postedBytes = []; const post = window.send;
+  window.send = (msg) => { window.postedBytes.push(new TextEncoder().encode(JSON.stringify(msg)).length); return post(msg); };
+}"""
+
+
+class RoleContractTableTests(RoleSheetCase):
+    """The real bridge driven to its reachable extremes against tests/role_contract.py."""
+
+    def test_a_complete_scan_at_every_limit_posts_only_values_the_table_allows(self):
+        """Given 128 distinct styles that are all near each other, a group of 32 elements with 2,000-character selectors, one
+        element with 20 classes (one of 201 characters, one of 200) and a 300-character text, and 128 known roles of 32 selectors,
+        when Studio detects, then the reply is complete with 128 groups and 4,096 checks, reaches each limit and the table finds
+        no violation."""
+        classes = [table.text(table.CLASS_CHARS + 1, 'L')] + table.class_names(1, table.CLASS_CHARS) + table.class_names(table.SHARED_CLASSES + 2, 8)
+        known = [{'id': f'role-{i}', 'selectors': table.selectors(table.SELECTORS)} for i in range(table.ROLES)]
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                frame.evaluate(STYLE_GRID, [table.ROLES, table.ROLES // table.VARIANTS, table.SELECTOR_CHARS - len('[data-design-id=""]'),
+                                            classes, table.text(table.SAMPLE_CHARS + 100, 'S')])
+                self.hello(page)
+                reply = self.detect(page, knownRoles=known)
+                groups = reply['groups']
+                self.assertEqual((reply['complete'], len(groups), len(reply['selectorChecks'])), (True, table.ROLES, table.SELECTOR_CHECKS))
+                self.assertEqual(max(len(g['nearDuplicateIds']) for g in groups), table.NEAR_DUPLICATES)
+                self.assertEqual(max(len(g['selectors']) for g in groups), table.SELECTORS)
+                self.assertEqual(max(len(b['value']) for g in groups for b in g['selectors']), table.SELECTOR_CHARS)
+                self.assertEqual(max(len(g['sharedClasses']) for g in groups), table.SHARED_CLASSES)
+                self.assertEqual(max(len(c) for g in groups for c in g['sharedClasses']), table.CLASS_CHARS)
+                self.assertEqual(max(len(g['sampleText']) for g in groups), table.SAMPLE_CHARS)
+                self.assertEqual(table.violations('detected', reply), [])
+
+    def test_one_style_past_the_group_limit_stops_the_scan_at_128_groups_with_the_sample_cut(self):
+        """Given 129 distinct styles and a 300-character text, when Studio detects, then the reply is incomplete with group-limit,
+        carries 128 groups and a sample cut to 200 characters, and the table finds no violation; the scan stops before bindings,
+        so only the group count and the sample text are reached."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                frame.evaluate(STYLE_GRID, [table.ROLES + 1, table.ROLES // table.VARIANTS, 100, [], table.text(table.SAMPLE_CHARS + 100, 'S')])
+                self.hello(page)
+                reply = self.detect(page)
+                self.assertEqual((reply['complete'], reply['reason'], len(reply['groups'])), (False, 'group-limit', table.ROLES))
+                self.assertEqual(max(len(g['sampleText']) for g in reply['groups']), table.SAMPLE_CHARS)
+                self.assertEqual(table.violations('detected', reply), [])
+
+    def test_a_known_selector_over_136_styles_posts_a_check_of_136_signatures_the_table_allows(self):
+        """Given 17 author roles of 8 sizes that all carry one class and a known role for that class, when Studio detects, then
+        the reply is complete, its one check carries 17 x VARIANTS = 136 signatures and the table finds no violation."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                frame.evaluate(AUTHOR_ROLES, [17, table.VARIANTS])
+                self.hello(page)
+                reply = self.detect(page, knownRoles=[{'id': 'k', 'selectors': ['.k']}])
+                self.assertTrue(reply['complete'], reply['reason'])
+                self.assertEqual([(c['roleId'], len(c['signatures'])) for c in reply['selectorChecks']], [('k', 17 * table.VARIANTS)])
+                self.assertEqual(table.violations('detected', reply), [])
+
+    def test_a_maximal_apply_posts_a_receipt_and_role_state_the_table_allows_and_one_role_more_is_rejected(self):
+        """Given 128 roles with 100-character ids, 200-character names, 32 selectors, 300-character families, the maximum of every
+        number and a 200-character request id, when Studio applies them, then the request as the bridge received it (the bytes its
+        host page posts) is within 256 KiB and the receipt, the role state of a second hello and the invalid-message rejection
+        of 129 roles all fit the table."""
+        maxima = {key: high for key, (_, high, _) in table.NUMBER_RULES.items()}
+        roles = [{'id': table.text(table.ROLE_ID_CHARS, f'role-{i}-'), 'name': table.text(table.NAME_CHARS, f'Name {i} '),
+                  'selectors': ['.body-copy'] + table.selectors(table.SELECTORS - 1), 'adapter': 'plain',
+                  'properties': {'fontFamily': table.text(table.FAMILY_CHARS), **maxima, 'textTransform': 'capitalize'}}
+                 for i in range(table.ROLES)]
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                page.evaluate(POSTED_BYTES)
+                receipt = self.apply(page, roles, timeout=30000, requestId=table.text(table.REQUEST_ID_CHARS))
+                posted = page.evaluate('postedBytes')
+                self.assertEqual(len(posted), 1)
+                self.assertTrue(table.wire(roles) <= posted[0] <= table.REQUEST_BYTES, posted)
+                self.assertEqual(receipt['type'], 'design:roles-applied', receipt.get('reason'))
+                self.assertEqual((len(receipt['roles']), len(receipt['outcomes'])), (table.ROLES, table.ROLES))
+                self.assertEqual(table.violations('roles-applied', receipt), [])
+                state = self.hello(page, 's2')['roleState']
+                self.assertEqual(len(state['roles']), table.ROLES)
+                self.assertEqual(table.violations('role-state', state), [])
+                over = self.apply(page, [role(f'r{i}', [f'.s{i}'], fontSize=20) for i in range(table.ROLES + 1)])
+                self.assertEqual((over['type'], over.get('reason')), ('design:rejected', 'invalid-message'))
+                self.assertEqual(table.violations('rejected', over), [])
+
+    def test_a_stale_base_revision_posts_the_revision_conflict_object_the_table_allows(self):
+        """Given a bridge at revision 0, when Studio applies against base revision 7, then the rejection is a revision-conflict
+        whose detail is exactly the base revision and the bridge revision, and the table finds no violation."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                stale = self.apply(page, [role(fontSize=20)], baseRevision=7)
+                self.assertEqual((stale['type'], stale.get('reason'), stale.get('detail')),
+                                 ('design:rejected', 'revision-conflict', {'baseRevision': 7, 'revision': 0}))
+                self.assertEqual(table.violations('rejected', stale), [])
+
+    def test_17_winning_author_rules_for_each_property_post_exactly_96_loss_entries_16_for_each_property(self):
+        """Given one role over 17 paragraphs whose own author rules win all six properties, when Studio applies it, then the
+        receipt counts 17 losers for each property in exactly 96 entries, 16 for each property, and the table finds no violation."""
+        mine = {'fontFamily': 'Georgia', 'fontSize': 24, 'fontWeight': 700, 'lineHeight': 1.2, 'letterSpacing': 0.05, 'textTransform': 'uppercase'}
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                frame.evaluate(WINNERS, table.LOSSES_PER_PROPERTY + 1)
+                self.hello(page)
+                receipt = self.apply(page, [role('t', ['.t'], **mine)])
+                losses = receipt['outcomes'][0]['losses']
+                self.assertEqual(sum(entry['count'] for entry in losses), len(table.PROPERTY_ORDER) * (table.LOSSES_PER_PROPERTY + 1))
+                self.assertEqual(len(losses), table.LOSSES)
+                self.assertEqual({prop: sum(1 for entry in losses if entry['property'] == prop) for prop in table.PROPERTY_ORDER},
+                                 dict.fromkeys(table.PROPERTY_ORDER, table.LOSSES_PER_PROPERTY))
+                self.assertEqual(table.violations('roles-applied', receipt), [])

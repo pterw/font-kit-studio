@@ -11,6 +11,7 @@ import unittest
 from pathlib import Path
 from urllib.parse import quote
 
+import role_contract as table
 from support import ENGINES, HTML, REPO, new_context, route_virtual_origins
 
 STUDIO = 'http://studio.test'
@@ -533,15 +534,15 @@ class StudioRoleBoundaryTests(StudioRoleCase):
         reply, then the fence is what renders (so the hostile one was not accepted), the failing shape is named by
         its subtest, and no hostile text renders."""
         too_many = [group('many', 'Hostile many', 'Many'), group('last', 'Hostile last', 'Last')]
-        too_many[0]['elementCount'] = 10000
-        too_many[0]['signatures'][0]['count'] = 10000
+        too_many[0]['elementCount'] = table.ELEMENTS
+        too_many[0]['signatures'][0]['count'] = table.ELEMENTS
         def hostile(**changes):
             return [{**group(name='Hostile'), **changes}]
         def selector(value, stable=True, reason='class'):
             return hostile(selectors=[{'value': value, 'stable': stable, 'reason': reason}])
         shapes = {
             'foreign route': {'pageURL': TARGET + '/different', 'currentPageURL': TARGET + '/different'},
-            'more elements than the limit': {'scannedElements': 10001, 'groups': too_many},
+            'more elements than the limit': {'scannedElements': table.ELEMENTS + 1, 'groups': too_many},
             'extra top-level key': {'extra': True}, 'extra group key': {'groups': hostile(extra=True)},
             'identity differs from authorRole': {'groups': hostile(identity={'kind': 'author-role', 'name': 'Other'})},
             'style identity differs from signature': {'groups': hostile(
@@ -550,8 +551,8 @@ class StudioRoleBoundaryTests(StudioRoleCase):
             'count differs from variants': {'groups': hostile(elementCount=2)},
             'duplicate group': {'groups': [group(name='Hostile'), group(name='Hostile')]},
             'near duplicate missing': {'groups': hostile(nearDuplicateIds=['missing'])},
-            'sample text too long': {'groups': hostile(sampleText='x' * 201)},
-            'too many shared classes': {'groups': hostile(sharedClasses=['x'] * 17)},
+            'sample text too long': {'groups': hostile(sampleText='x' * (table.SAMPLE_CHARS + 1))},
+            'too many shared classes': {'groups': hostile(sharedClasses=['x'] * (table.SHARED_CLASSES + 1))},
             'nonfinite size': {'groups': hostile(signatures=[{'style': {**STYLE, 'fontSize': float('inf')}, 'count': 1}])},
             'selector starts with digit': {'groups': selector('.1')},
             'selector list': {'groups': selector('.a,.b')},
@@ -566,19 +567,19 @@ class StudioRoleBoundaryTests(StudioRoleCase):
             'at-rule': {'groups': selector('@media x')},
             'url function': {'groups': selector('.a url(x)')},
             'expression function': {'groups': selector('.a expression(1)')},
-            '2001-character selector': {'groups': selector('.' + 'a' * 2000)},
-            'nth-of-type 10000': {'groups': selector('p:nth-of-type(10000)', False, 'dom-path')},
-            '33 selectors': {'groups': hostile(selectors=[{'value': f'.c{i}', 'stable': True, 'reason': 'class'} for i in range(33)])},
+            '2001-character selector': {'groups': selector(table.class_selector(table.SELECTOR_CHARS + 1))},
+            'nth-of-type 10000': {'groups': selector(f'p:nth-of-type({table.NTH_MAX + 1})', False, 'dom-path')},
+            '33 selectors': {'groups': hostile(selectors=[{'value': f'.c{i}', 'stable': True, 'reason': 'class'} for i in range(table.SELECTORS + 1)])},
             'foreign page url': {'pageURL': 'http://evil.test/path'},
             'credential current url': {'currentPageURL': 'http://user:secret@target.test/path'},
             'null current url': {'currentPageURL': None}, 'invented reason': {'reason': 'invented'},
-            'negative time': {'elapsedMs': -1}, 'slow complete scan': {'elapsedMs': 2001}, 'negative version': {'pageVersion': -1},
-            'scanned over limit': {'scannedElements': 10002}, 'check count mismatch': 'checks',
+            'negative time': {'elapsedMs': -1}, 'slow complete scan': {'elapsedMs': table.TIME_BUDGET_MS + 1}, 'negative version': {'pageVersion': -1},
+            'scanned over limit': {'scannedElements': table.ELEMENTS_INCOMPLETE + 1}, 'check count mismatch': 'checks',
             'groups as object': {'groups': {'0': group(name='Hostile')}},
             'constructor in identity': {'groups': hostile(identity={'kind': 'author-role', 'name': 'Body', 'constructor': {}})},
             'proto in identity': {'groups': hostile(identity={'kind': 'author-role', 'name': 'Body', '__proto__': {}})},
             'prototype in identity': {'groups': hostile(identity={'kind': 'author-role', 'name': 'Body', 'prototype': {}})},
-            'over-long name': {'groups': hostile(suggestedName='x' * 201)},
+            'over-long name': {'groups': hostile(suggestedName='x' * (table.NAME_CHARS + 1))},
         }
         for engine in ENGINES:
             with self.subTest(engine=engine):
@@ -609,14 +610,14 @@ class StudioRoleBoundaryTests(StudioRoleCase):
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, frame, errors = self.open(engine, TARGET + '/peer', PEER)
-                limits = [{'value': '.' + 'a' * 1999, 'stable': True, 'reason': 'class'},
-                          {'value': 'p:nth-of-type(9999)', 'stable': False, 'reason': 'dom-path'}]
-                limits += [{'value': f'.c{i}', 'stable': True, 'reason': 'class'} for i in range(30)]
+                limits = [{'value': table.class_selector(table.SELECTOR_CHARS), 'stable': True, 'reason': 'class'},
+                          {'value': f'p:nth-of-type({table.NTH_MAX})', 'stable': False, 'reason': 'dom-path'}]
+                limits += [{'value': f'.c{i}', 'stable': True, 'reason': 'class'} for i in range(table.SELECTORS - 2)]
                 self.detected(page, frame, [group(selectors=limits)])
                 text = page.locator('#roleRows').inner_text()
-                self.assertIn('p:nth-of-type(9999)', text)
-                self.assertIn('.' + 'a' * 1999, text)
-                self.assertIn('.c29', text)
+                self.assertIn(f'p:nth-of-type({table.NTH_MAX})', text)
+                self.assertIn(table.class_selector(table.SELECTOR_CHARS), text)
+                self.assertIn(f'.c{table.SELECTORS - 3}', text)
                 self.assertEqual(errors, [])
 
     def test_request_limit_counts_utf8_bytes_not_characters(self):
@@ -626,16 +627,16 @@ class StudioRoleBoundaryTests(StudioRoleCase):
             with self.subTest(engine=engine):
                 page, frame, errors = self.open(engine, TARGET + '/peer', PEER)
                 selector = [{'value': '.' + '界' * 700, 'stable': True, 'reason': 'class'}]
-                many = [group(f'g-{i}', f'Role {i}', f'Author {i}', selectors=selector) for i in range(128)]
+                many = [group(f'g-{i}', f'Role {i}', f'Author {i}', selectors=selector) for i in range(table.ROLES)]
                 request = self.pending(page, frame)
                 self.send(frame, self.reply(request, many[:100]))
                 page.wait_for_function('document.querySelector("#roleRows").children.length===100')
                 request = self.pending(page, frame)
                 self.assertEqual(len(request['knownRoles']), 100)
                 self.send(frame, self.reply(request, many))
-                page.wait_for_function('document.querySelector("#roleRows").children.length===128')
+                page.wait_for_function(f'document.querySelector("#roleRows").children.length==={table.ROLES}')
                 characters = len(json.dumps(many, ensure_ascii=False))
-                self.assertLess(characters, 256 * 1024, 'a length-based limit would let this through')
+                self.assertLess(characters, table.REQUEST_BYTES, 'a length-based limit would let this through')
                 page.get_by_role('button', name='Detect text styles').click()
                 page.wait_for_function('document.querySelector("#roleStatus").textContent.includes("request limit")')
                 self.assertEqual(frame.evaluate('requests.length'), 2)
@@ -644,7 +645,7 @@ class StudioRoleBoundaryTests(StudioRoleCase):
     def test_detected_reply_at_one_mib_is_accepted_and_one_byte_more_is_not(self):
         """Given a valid detected reply padded through a legitimate font-family field, when it is exactly 1 MiB or
         1 MiB + 1 bytes, then only the first renders."""
-        limit = 1024 * 1024
+        limit = table.REPLY_BYTES
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, frame, errors = self.open(engine, TARGET + '/peer', PEER)
@@ -1276,14 +1277,14 @@ class StudioRoleApplyTests(StudioRoleCase):
         self.detected(page, frame)
         request = self.apply_role(page, frame, '24')
         props = ('fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'textTransform', 'fontFamily')
-        losses = [loss(prop, 1, f'main p.c{i}', 'author-rule') for prop in props for i in range(16)]
+        losses = [loss(prop, 1, f'main p.c{i}', 'author-rule') for prop in props for i in range(table.LOSSES_PER_PROPERTY)]
         self.send(frame, self.receipt(request, [outcome(matched=250000, checked=96, mismatched=96, losses=losses + [loss()])]))
-        self.send(frame, self.receipt(request, [outcome(matched=250000, checked=10001, mismatched=1)]))
+        self.send(frame, self.receipt(request, [outcome(matched=250000, checked=table.CHECKED + 1, mismatched=1)]))
         self.send(frame, self.receipt(request, [outcome(matched=250000, checked=96, mismatched=96, losses=losses)]))
         self.wait_status(page, 'Preview applied to 1 role; 96 checked elements did not show it.')
         text = self.preview(page)['outcomes']
         self.assertIn('matched 250000, checked 96 eligible text elements, mismatched 96', text)
-        self.assertEqual(text.count(' × '), 96)
+        self.assertEqual(text.count(' × '), table.LOSSES)
         self.assertEqual(errors, [])
 
     @per_engine
@@ -1322,11 +1323,11 @@ class StudioRoleApplyTests(StudioRoleCase):
     def test_a_receipt_css_at_128_kib_is_accepted_and_one_byte_more_is_not(self, engine):
         """Given 128 accepted roles and an Apply in flight, when the receipt's canonical CSS (a real serialization with
         multi-byte family names) is one byte over 128 KiB it is ignored, and at exactly 128 KiB it is what renders."""
-        limit = 128 * 1024
+        limit = table.CSS_BYTES
         page, frame, errors = self.open(engine, PEER_URL, PEER)
-        roles = [self.role_input(f'role-{i}', f'Author {i}', fontSize=20) for i in range(1, 129)]
+        roles = [self.role_input(f'role-{i}', f'Author {i}', fontSize=20) for i in range(1, table.ROLES + 1)]
         self.ready_with(page, frame, self.snapshot_state(roles), revision=0)
-        self.detected(page, frame, [group(f'g-{i}', f'Author {i}', f'Author {i}') for i in range(1, 129)])
+        self.detected(page, frame, [group(f'g-{i}', f'Author {i}', f'Author {i}') for i in range(1, table.ROLES + 1)])
         request = self.press_apply(page, frame)
         over = self.sized_receipt(request, limit + 1)
         fence = self.sized_receipt(request, limit)
@@ -1340,16 +1341,16 @@ class StudioRoleApplyTests(StudioRoleCase):
     def test_a_receipt_at_one_mib_is_accepted_and_one_byte_more_is_not(self, engine):
         """Given 128 accepted roles seeded from ready and a receipt padded through valid loss selectors and CSS, when
         the reply is exactly 1 MiB or 1 MiB + 1 bytes, then only the first settles the Apply."""
-        limit = 1024 * 1024
+        limit = table.REPLY_BYTES
         page, frame, errors = self.open(engine, PEER_URL, PEER)
-        roles = [self.role_input(f'role-{i}', f'Author {i}', fontSize=20) for i in range(1, 129)]
+        roles = [self.role_input(f'role-{i}', f'Author {i}', fontSize=20) for i in range(1, table.ROLES + 1)]
         self.ready_with(page, frame, self.snapshot_state(roles), revision=0)
-        self.detected(page, frame, [group(f'g-{i}', f'Author {i}', f'Author {i}') for i in range(1, 129)])
+        self.detected(page, frame, [group(f'g-{i}', f'Author {i}', f'Author {i}') for i in range(1, table.ROLES + 1)])
         for size, accepted in ((limit + 1, False), (limit, True)):
             with self.subTest(size=size):
                 request = self.press_apply(page, frame)
                 def build(full, first, second):
-                    losses = [loss(selector='.' + 'a' * 1999) for _ in range(full)] + [loss(selector='.' + 'a' * first), loss(selector='.' + 'a' * second)]
+                    losses = [loss(selector=table.class_selector(table.WINNING_SELECTOR_CHARS)) for _ in range(full)] + [loss(selector='.' + 'a' * first), loss(selector='.' + 'a' * second)]
                     chunks = [losses[n:n + 64] for n in range(0, len(losses), 64)]
                     outcomes = [outcome(id=f'role-{i + 1}', mismatched=len(c), matched=len(c), checked=len(c), losses=c)
                                 for i, c in enumerate(chunks)]
@@ -1361,7 +1362,7 @@ class StudioRoleApplyTests(StudioRoleCase):
                 while measure(full + 1, 1, 1) <= size:
                     full += 1
                 rest = size - measure(full, 1, 1)
-                first = 1 + min(rest, 1998)
+                first = 1 + min(rest, table.WINNING_SELECTOR_CHARS - 2)
                 second = 1 + rest - (first - 1)
                 self.assertEqual(measure(full, first, second), size)
                 self.send(frame, build(full, first, second))
@@ -2263,3 +2264,281 @@ class StudioRoleLegacyInterplayTests(StudioLegacyCase):
         document = json.loads(page.locator('#exportDialogText').input_value())
         page.locator('#exportDialog').evaluate('(dialog) => dialog.close()')
         return document.get('live', {})
+
+
+class StudioContractTableTests(StudioRoleCase):
+    """Studio against tests/role_contract.py: the limits no other test pins at the limit and one past it, and the table itself."""
+
+    def test_template_cases_follow_the_addendum_rules_and_carry_their_own_digests(self):
+        """Given the five template cases, when each is read, then its digest is the FNV-1a32 of its CSS, its CSS without the
+        :root blocks is the plain serialization of its roles, and the :root blocks are the adapter variables of each body or
+        mono role that sets a family, in role order."""
+        root = r':root \{\n(?:  [^\n]*\n)+\}\n'
+        variables = {'bootstrap5-body': ('--bs-body-font-family', '--bs-font-sans-serif'), 'bootstrap5-mono': ('--bs-font-monospace',)}
+        for case in table.TEMPLATE_CASES:
+            with self.subTest(case=case['name']):
+                expected = [':root {\n' + ''.join(f'  {name}: {role["properties"]["fontFamily"]};\n' for name in variables[role['adapter']]) + '}\n'
+                            for role in case['roles'] if role['adapter'] in variables and 'fontFamily' in role['properties']]
+                self.assertEqual(fnv1a32(case['css']), case['hash'])
+                self.assertEqual(re.sub(root, '', case['css']), canonical_css(case['roles']))
+                self.assertEqual(re.findall(root, case['css']), expected)
+
+    def test_builders_return_exact_sizes_distinct_values_and_the_contracts_loss_order(self):
+        """Given the table's builders, when each builds a payload, then text has the asked length and honours its prefix, a class
+        selector is a dot and the asked length of letters, selectors are distinct class selectors, class names are distinct and of
+        the asked length, styles are distinct with the five StyleSignature fields, and losses come in the contract's loss order,
+        16 for each property, with distinct winning selectors."""
+        with self.subTest(builder='text'):
+            self.assertEqual([len(table.text(n)) for n in (0, 1, table.SELECTOR_CHARS)], [0, 1, table.SELECTOR_CHARS])
+            self.assertEqual((table.text(5, 'ab'), table.text(1, 'abc')), ('abaaa', 'a'))
+        with self.subTest(builder='class_selector'):
+            self.assertEqual([table.class_selector(n) for n in (2, 4)], ['.a', '.aaa'])
+        with self.subTest(builder='selectors'):
+            chosen = table.selectors(table.SELECTORS + 1)
+            self.assertEqual((len(set(chosen)), all(re.fullmatch(r'\.[a-z][a-z0-9]*', selector) for selector in chosen)), (table.SELECTORS + 1, True))
+        with self.subTest(builder='class_names'):
+            names = table.class_names(table.SHARED_CLASSES + 1, table.CLASS_CHARS)
+            self.assertEqual((len(set(names)), {len(name) for name in names}), (table.SHARED_CLASSES + 1, {table.CLASS_CHARS}))
+        with self.subTest(builder='styles'):
+            made = table.styles(table.VARIANTS + 1)
+            self.assertEqual(len({json.dumps(style, sort_keys=True) for style in made}), table.VARIANTS + 1)
+            self.assertEqual({tuple(sorted(style)) for style in made}, {tuple(sorted(STYLE))})
+        with self.subTest(builder='losses'):
+            made = table.losses(table.LOSSES_PER_PROPERTY)
+            order = [(table.PROPERTY_ORDER.index(entry['property']), table.LOSS_REASONS.index(entry['reason']), entry['winningSelector']) for entry in made]
+            per_property = {prop: sum(1 for entry in made if entry['property'] == prop) for prop in table.PROPERTY_ORDER}
+            self.assertEqual((len(made), order == sorted(order), len(set(order))), (table.LOSSES, True, table.LOSSES))
+            self.assertEqual(per_property, dict.fromkeys(table.PROPERTY_ORDER, table.LOSSES_PER_PROPERTY))
+
+    def test_the_checker_passes_a_valid_message_of_each_kind_and_flags_each_single_defect_once(self):
+        """Given one valid message of each kind, when the checker reads it, then it has no violation; given a copy with one
+        defect, then it has exactly one, for each of 46 defects (a row for each rule the checker applies); an unknown kind raises."""
+        request = {'requestId': 'fks-detect-1', 'documentId': 'peer-document', 'knownRoles': []}
+        apply = {'type': 'design:roles-apply', 'requestId': 'fks-req-1', 'baseRevision': 0, 'documentId': 'peer-document',
+                 'pageVersion': 0, 'roles': [self.role_input()]}
+        conflict = {'type': 'design:rejected', 'requestId': 'fks-req-1', 'revision': 7, 'reason': 'revision-conflict',
+                    'detail': {'baseRevision': 0, 'revision': 7}}
+        valid = {'detected': self.reply(request, [group(), group('scan-b', 'Text', None)]), 'rejected': conflict,
+                 'roles-applied': self.receipt(apply, [outcome(losses=table.losses(table.LOSSES_PER_PROPERTY))]),
+                 'role-state': self.snapshot_state(apply['roles'])}
+        check = {'roleId': 'role-1', 'selector': '.body-copy', 'matchCount': 1, 'signatures': [{'style': STYLE.copy(), 'count': 1}]}
+        many = [{'style': style, 'count': 1} for style in table.styles(table.CHECK_SIGNATURES + 1)]
+        bound = {'value': '.body-copy', 'stable': True, 'reason': 'class'}
+        role = self.role_input()
+        controls = {'C0': 1, 'DEL': 0x7f, 'C1': 0x85, 'U+2028': 0x2028, 'U+2029': 0x2029}
+        defects = [
+            ('detected', 'groups', {'groups': [group(f'g-{i}', f'Role {i}', f'Author {i}') for i in range(table.ROLES + 1)]}),
+            ('detected', 'sample', {'groups': [{**group(), 'sampleText': table.text(table.SAMPLE_CHARS + 1)}]}),
+            ('detected', 'reason', {'complete': False, 'reason': 'invented'}),
+            ('detected', 'complete flag', {'reason': 'group-limit'}),
+            ('detected', 'scanned elements', {'scannedElements': table.ELEMENTS + 1}),
+            ('detected', 'elapsed', {'elapsedMs': table.TIME_BUDGET_MS + 1}),
+            ('detected', 'request id', {'requestId': table.text(table.REQUEST_ID_CHARS + 1)}),
+            ('detected', 'document id', {'documentId': table.text(table.DOCUMENT_ID_CHARS + 1)}),
+            ('detected', 'route', {'pageURL': 'http://target.test/' + 'x' * table.ROUTE_CHARS}),
+            ('detected', 'group ids', {'groups': [group(), group()]}),
+            ('detected', 'near duplicate', {'groups': [{**group(), 'nearDuplicateIds': ['missing']}]}),
+            ('detected', 'near duplicate of itself', {'groups': [{**group(), 'nearDuplicateIds': ['scan-a']}]}),
+            ('detected', 'near duplicates repeat', {'groups': [{**group(), 'nearDuplicateIds': ['scan-b'] * 2}, group('scan-b', 'Text', None)]}),
+            ('detected', 'variant counts', {'groups': [{**group(), 'elementCount': 2}]}),
+            ('detected', 'group selectors', {'groups': [{**group(), 'selectors': [{**bound, 'value': value} for value in table.selectors(table.SELECTORS + 1)]}]}),
+            ('detected', 'stable flag', {'groups': [{**group(), 'selectors': [{**bound, 'stable': False}]}]}),
+            ('detected', 'nth-of-type', {'groups': [{**group(), 'selectors': [{**bound, 'value': f'p:nth-of-type({table.NTH_MAX + 1})'}]}]}),
+            ('detected', 'negative size', {'groups': [{**group(), 'signatures': [{'style': {**STYLE, 'fontSize': -1}, 'count': 1}]}]}),
+            ('detected', 'checks', {'selectorChecks': [check] * (table.SELECTOR_CHECKS + 1)}),
+            ('detected', 'check role id', {'selectorChecks': [{**check, 'roleId': table.text(table.ROLE_ID_CHARS + 1)}]}),
+            ('detected', 'check selector', {'selectorChecks': [{**check, 'selector': table.class_selector(table.SELECTOR_CHARS + 1)}]}),
+            ('detected', 'check signatures', {'selectorChecks': [{**check, 'matchCount': len(many), 'signatures': many}]}),
+            ('detected', 'message bytes', {'groups': [{**group(), 'signatures': [{'style': {**STYLE, 'fontFamily': 'P' * table.REPLY_BYTES}, 'count': 1}]}]}),
+            ('rejected', 'detail', {'detail': {'baseRevision': 0, 'revision': 7, 'extra': 1}}),
+            ('rejected', 'rejection reason', {'reason': 'invented', 'detail': 'text'}),
+            ('rejected', 'detail for another reason', {'reason': 'size-limit'}),
+            ('roles-applied', 'loss', {'outcomes': [outcome(losses=table.losses(table.LOSSES_PER_PROPERTY + 1)[:table.LOSSES_PER_PROPERTY + 1])]}),
+            ('roles-applied', 'outcome counts', {'outcomes': [outcome(matched=1, checked=2)]}),
+            ('roles-applied', 'checked', {'outcomes': [outcome(matched=table.CHECKED + 1, checked=table.CHECKED + 1)]}),
+            ('roles-applied', 'outcomes', {'outcomes': [outcome()] * (table.ROLES + 1)}),
+            ('roles-applied', 'outcome reason', {'outcomeReason': 'invented', 'outcomesComplete': False}),
+            ('roles-applied', 'outcomes complete', {'outcomeReason': 'page-changed'}),
+            ('roles-applied', 'canonical css', {'canonicalCss': 'a' * (table.CSS_BYTES + 1)}),
+            ('roles-applied', 'no roles but css', {'roles': [], 'outcomes': [], 'cssHash': table.EMPTY_HASH}),
+            ('roles-applied', 'no roles but digest', {'roles': [], 'outcomes': [], 'canonicalCss': ''}),
+            ('roles-applied', 'loss reason', {'outcomes': [outcome(losses=[loss(reason='invented')])]}),
+            ('roles-applied', 'winning selector length', {'outcomes': [outcome(losses=[loss(selector=table.class_selector(table.WINNING_SELECTOR_CHARS + 1))])]}),
+            ('role-state', 'role ids', {'roles': [role, role]}),
+            ('role-state', 'adapter', {'roles': [{**role, 'adapter': 'nope'}]}),
+            ('role-state', 'property key', {'roles': [{**role, 'properties': {'color': 'red'}}]}),
+            ('role-state', 'role text transform', {'roles': [{**role, 'properties': {'textTransform': 'nope'}}]}),
+        ] + [('roles-applied', f'winning selector {name}', {'outcomes': [outcome(losses=[loss(selector='.a' + chr(code))])]})
+             for name, code in controls.items()]
+        for kind, message in valid.items():
+            with self.subTest(valid=kind):
+                self.assertEqual(table.violations(kind, message), [])
+        for kind, name, change in defects:
+            with self.subTest(defect=name):
+                self.assertEqual(len(table.violations(kind, {**valid[kind], **change})), 1)
+        with self.assertRaises(ValueError):
+            table.violations('detect', valid['detected'])
+
+    def test_every_limit_the_bridge_class_does_not_reach_is_a_table_name_with_a_reason(self):
+        """Given the table's list of limits the real-bridge class does not build, when its keys are read, then each is one of the
+        table's limit names (an upper-case number or digest constant, or NUMBER_RULES) and carries a reason."""
+        limits = {name for name, value in vars(table).items() if name.isupper() and isinstance(value, (int, str)) and not isinstance(value, bool)}
+        for name, reason in table.STUDIO_SIDE_ONLY.items():
+            with self.subTest(name=name):
+                self.assertIn(name, limits | {'NUMBER_RULES'})
+                self.assertTrue(reason.strip())
+
+    @per_engine
+    def test_role_input_limits_are_refused_one_past_and_accepted_at_the_limit_in_a_ready_snapshot(self, engine):
+        """Given a connected peer, when a ready snapshot carries a role one past a RoleInput limit and then one at it, then the table
+        finds one violation in the first and none in the second, the first shows the unsupported reason with Detect disabled, and
+        the second shows its canonical CSS with Detect enabled."""
+        def one(**changes):
+            return [{**self.role_input(), **changes}]
+        def prop(**properties):
+            return one(properties=properties)
+        def many(count):
+            return [self.role_input(f'role-{i}', f'Role {i}') for i in range(count)]
+        rows = {'role id': (one(id=table.text(table.ROLE_ID_CHARS)), one(id=table.text(table.ROLE_ID_CHARS + 1))),
+                'name': (one(name=table.text(table.NAME_CHARS)), one(name=table.text(table.NAME_CHARS + 1))),
+                'selectors': (one(selectors=table.selectors(table.SELECTORS)), one(selectors=table.selectors(table.SELECTORS + 1))),
+                'selector': (one(selectors=[table.class_selector(table.SELECTOR_CHARS)]), one(selectors=[table.class_selector(table.SELECTOR_CHARS + 1)])),
+                'roles': (many(table.ROLES), many(table.ROLES + 1)),
+                'family': (prop(fontFamily=table.text(table.FAMILY_CHARS)), prop(fontFamily=table.text(table.FAMILY_CHARS + 1)))}
+        for key, (low, high, places) in table.NUMBER_RULES.items():
+            rows[f'{key} minimum'] = (prop(**{key: low}), prop(**{key: round(low - 10 ** -places, places)}))
+            rows[f'{key} maximum'] = (prop(**{key: high}), prop(**{key: round(high + 10 ** -places, places)}))
+        page, frame, errors = self.open(engine, PEER_URL, PEER)
+        for label, (limit, past) in rows.items():
+            with self.subTest(row=label):
+                at, over = self.snapshot_state(limit), self.snapshot_state(past)
+                self.assertEqual((table.violations('role-state', at), len(table.violations('role-state', over))), ([], 1))
+                self.ready_with(page, frame, over)
+                page.wait_for_function('(text) => document.querySelector("#roleStatus").textContent === text', arg=UNSUPPORTED, timeout=8000)
+                self.assertTrue(self.button(page, 'Detect text styles').is_disabled())
+                self.ready_with(page, frame, at)
+                page.wait_for_function('document.querySelector("#roleStatus").textContent === "Ready to detect text styles."', timeout=8000)
+                self.assertEqual(self.preview(page)['css'], at['canonicalCss'])
+                self.assertTrue(self.button(page, 'Detect text styles').is_enabled())
+        self.assertEqual(errors, [])
+
+    @per_engine
+    def test_detected_reply_limits_render_at_the_limit_and_are_refused_one_past(self, engine):
+        """Given a pending Detect, when a reply carries one field at its table limit, then the table finds no violation in it and its
+        rows render; when it carries one past the limit, then the table finds one violation and the reply is refused: the fence
+        reply that follows is the only row on the page."""
+        def one(**fields):
+            return [{**group(), **fields}], {}
+        def variants(count):
+            return one(signatures=[{'style': style, 'count': 1} for style in table.styles(count)], elementCount=count)
+        def binding(reason, flag):
+            return one(selectors=[{'value': '.body-copy', 'stable': flag, 'reason': reason}])
+        def signature(name):
+            return {'style': {**STYLE, 'textTransform': name}, 'count': 1}
+        every_reason = one(selectors=[{'value': f'.r{i}', 'stable': reason in table.STABLE_REASONS, 'reason': reason}
+                                      for i, reason in enumerate(table.BINDING_REASONS)])
+        every_case = one(signatures=[signature(name) for name in table.CASES], elementCount=len(table.CASES))
+        incomplete = {'complete': False, 'reason': 'element-limit'}
+        rows = {
+            'group id': (one(id=table.text(table.ROLE_ID_CHARS)), one(id=table.text(table.ROLE_ID_CHARS + 1))),
+            'suggested name': (one(suggestedName=table.text(table.NAME_CHARS)), one(suggestedName=table.text(table.NAME_CHARS + 1))),
+            'author name': (([group(author=table.text(table.NAME_CHARS))], {}), ([group(author=table.text(table.NAME_CHARS + 1))], {})),
+            'sample': (one(sampleText=table.text(table.SAMPLE_CHARS)), one(sampleText=table.text(table.SAMPLE_CHARS + 1))),
+            'shared classes': (one(sharedClasses=table.class_names(table.SHARED_CLASSES, 8)), one(sharedClasses=table.class_names(table.SHARED_CLASSES + 1, 8))),
+            'shared class': (one(sharedClasses=table.class_names(1, table.CLASS_CHARS)), one(sharedClasses=table.class_names(1, table.CLASS_CHARS + 1))),
+            'variants': (variants(table.VARIANTS), variants(table.VARIANTS + 1)),
+            'complete elements': (one(elementCount=table.ELEMENTS, signatures=[{'style': STYLE.copy(), 'count': table.ELEMENTS}]), None),
+            'incomplete elements': (([group()], {**incomplete, 'scannedElements': table.ELEMENTS_INCOMPLETE}),
+                                    ([group()], {**incomplete, 'scannedElements': table.ELEMENTS_INCOMPLETE + 1})),
+            'binding reason': (every_reason, binding('invented', True)), 'stable flag': (every_reason, binding('class', False)),
+            'text case': (every_case, one(signatures=[signature('invented')])),
+        }
+        page, frame, errors = self.open(engine, TARGET + '/peer', PEER)
+        for label, (limit, past) in rows.items():
+            with self.subTest(row=label):
+                groups, changes = limit
+                request = self.pending(page, frame)
+                reply = self.reply(request, groups, **changes)
+                self.assertEqual(table.violations('detected', reply), [])
+                self.send(frame, reply)
+                page.wait_for_function('(prefix) => document.querySelector("#roleStatus").textContent.startsWith(prefix)',
+                                       arg='Detected' if reply['complete'] else 'Incomplete', timeout=8000)
+                self.assertEqual(page.locator('#roleRows > li').count(), len(groups))
+                if past is None:
+                    continue
+                groups, changes = past
+                request = self.pending(page, frame)
+                refused = self.reply(request, groups, **changes)
+                self.assertEqual(len(table.violations('detected', refused)), 1)
+                self.send(frame, refused)
+                self.send(frame, self.reply(request, [group(name='Fence')]))
+                page.wait_for_function('document.querySelector("#roleRows").textContent.includes("Fence")', timeout=8000)
+                self.assertEqual(page.locator('#roleRows > li').count(), 1)
+        self.assertEqual(errors, [])
+
+    @per_engine
+    def test_128_groups_render_and_a_129th_is_refused(self, engine):
+        """Given a pending Detect, when a reply carries 128 groups, then the table finds no violation and 128 rows render; when the
+        next reply carries 129, then the table finds one violation and the reply is refused: the fence reply that follows is the
+        only row on the page."""
+        page, frame, errors = self.open(engine, TARGET + '/peer', PEER)
+        groups = [group(f'g-{i}', f'Role {i}', f'Author {i}') for i in range(table.ROLES + 1)]
+        request = self.pending(page, frame)
+        reply = self.reply(request, groups[:table.ROLES])
+        self.assertEqual(table.violations('detected', reply), [])
+        self.send(frame, reply)
+        page.wait_for_function('(count) => document.querySelector("#roleRows").children.length === count', arg=table.ROLES, timeout=15000)
+        request = self.pending(page, frame)
+        refused = self.reply(request, groups)
+        self.assertEqual(len(table.violations('detected', refused)), 1)
+        self.send(frame, refused)
+        self.send(frame, self.reply(request, [group('fence', 'Fence', 'Author 0')]))
+        page.wait_for_function('document.querySelector("#roleRows").textContent.includes("Fence")', timeout=15000)
+        self.assertEqual(page.locator('#roleRows > li').count(), 1)
+        self.assertEqual(errors, [])
+
+    @per_engine
+    def test_a_group_lists_127_near_duplicates_across_128_groups(self, engine):
+        """Given a reply of 128 groups in which the first names the other 127 as near duplicates, when it arrives, then the table
+        finds no violation, every row renders and the first row lists all 127."""
+        page, frame, errors = self.open(engine, TARGET + '/peer', PEER)
+        groups = [group(f'g-{i}', f'Role {i}', f'Author {i}') for i in range(table.ROLES)]
+        groups[0] = {**groups[0], 'nearDuplicateIds': [other['id'] for other in groups[1:]]}
+        request = self.pending(page, frame)
+        reply = self.reply(request, groups)
+        self.assertEqual(table.violations('detected', reply), [])
+        self.send(frame, reply)
+        page.wait_for_function('(count) => document.querySelector("#roleRows").children.length === count', arg=table.ROLES, timeout=15000)
+        listed = page.locator('#roleRows > li').first.locator('p', has_text='Near duplicates').inner_text()
+        self.assertEqual(listed.count(', ') + 1, table.NEAR_DUPLICATES)
+        self.assertEqual(errors, [])
+
+    @per_engine
+    def test_outcome_counts_render_at_the_checked_limit_and_a_loss_count_one_past_is_refused(self, engine):
+        """Given an Apply in flight, when the receipt reports 10,000 checked elements, 10,000 mismatched ones or a loss count of
+        10,000, then the table finds no violation and the counts render; when a loss count is 10,001, then the table finds one
+        violation and the receipt is refused: the fence receipt is what renders."""
+        full = {'matched': table.CHECKED, 'checked': table.CHECKED}
+        counts = f'matched {table.CHECKED}, checked {table.CHECKED} eligible text elements, mismatched'
+        rows = {'checked': (outcome(**full), f'{counts} 0', None),
+                'mismatched': (outcome(**full, mismatched=table.CHECKED), f'{counts} {table.CHECKED}', None),
+                'loss count': (outcome(**full, mismatched=table.CHECKED, losses=[loss(count=table.CHECKED)]),
+                               f'{table.CHECKED} × fontSize: overridden by an author rule',
+                               outcome(**full, mismatched=table.CHECKED, losses=[loss(count=table.CHECKED + 1)]))}
+        page, frame, errors = self.open(engine, PEER_URL, PEER)
+        self.detected(page, frame)
+        for label, (limit, shown, past) in rows.items():
+            with self.subTest(row=label):
+                receipt = self.receipt(self.apply_role(page, frame, '24'), [limit])
+                self.assertEqual(table.violations('roles-applied', receipt), [])
+                self.send(frame, receipt)
+                page.wait_for_function('(text) => document.querySelector("#rolePreviewOutcomes").textContent.includes(text)', arg=shown, timeout=8000)
+                if past is None:
+                    continue
+                request = self.apply_role(page, frame, '25')
+                refused = self.receipt(request, [past])
+                self.assertEqual(len(table.violations('roles-applied', refused)), 1)
+                self.send(frame, refused)
+                self.send(frame, self.receipt(request, [outcome(matched=7, checked=7)]))
+                page.wait_for_function('document.querySelector("#rolePreviewOutcomes").textContent.includes("matched 7,")', timeout=8000)
+        self.assertEqual(errors, [])
