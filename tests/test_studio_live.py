@@ -14,6 +14,7 @@ from itertools import product
 from pathlib import Path
 from urllib.parse import quote
 
+from playwright.sync_api import TimeoutError as PlaywrightTimeout
 from support import (ENGINES, HTML, REPO, canvas_snapshot, close_contexts, launch, new_context,
                      route_virtual_origins, shared_runtime)
 
@@ -180,14 +181,20 @@ class LiveCase(unittest.TestCase):
         context.route(f'{TARGET}/fks-hold-load.gif', lambda route: held.append(route))
         return held
 
-    def wait_greeted(self, page, held=None):
-        """Waits until the target document has been greeted twice and Studio shows Connected. A held load is answered
-        first, once the page has requested its image and Studio's first hello has reached the still-loading document."""
-        if held is not None:
-            for _ in range(100):
-                if held:
-                    break
-                page.wait_for_timeout(50)
+    def wait_greeted(self, page, order, held, trigger):
+        """Runs trigger (a connect or a reload) and waits until the new target document has been greeted twice, Studio shows
+        Connected and Studio's page saw the announce events in this order. A held load is answered first, once the page has
+        requested its image and Studio's first hello has reached the still-loading document. Clears the order recorder."""
+        page.evaluate('() => { window.__order = []; window.__ready = []; }')
+        if held is None:
+            trigger()
+        else:
+            try:
+                with page.expect_request(f'{TARGET}/fks-hold-load.gif', timeout=20_000):
+                    trigger()
+            except PlaywrightTimeout:
+                self.fail('the page never requested its held image')
+            page.evaluate('0')   # the event says the page asked, not that the route handler ran: one round trip lets it run
             self.assertEqual(len(held), 1, 'the page requested its held image')
             self.frame(page).wait_for_function(
                 'document.readyState !== "complete" && window.__received.some(i => i.data && i.data.type === "design:hello")')
@@ -195,7 +202,17 @@ class LiveCase(unittest.TestCase):
         frame = self.frame(page)
         frame.wait_for_function('window.__received.filter(i => i.data && i.data.type === "design:hello").length >= 2')
         self.wait_badge(page, r'^Connected \(5 targets\)$')
+        self.assertEqual(page.evaluate('window.__order'), order)
         return frame
+
+    def force_order(self, page, order):
+        """Connects with the bridge announcing in this order (ANNOUNCE_ORDERS): bridge-ready first holds the target's load
+        open, load first uses the fake's late announce. Returns the greeted frame and the held image requests (None if unheld)."""
+        page.evaluate(ORDER_RECORDER)
+        late = order[0] == 'load'
+        held = None if late else self.hold_load(page.context)
+        url = f'{FAKE}?late=1' if late else FAKE
+        return self.wait_greeted(page, order, held, lambda: self.connect(page, url)), held
 
     def code(self, page, tab='Css'):
         page.locator(f'#codeTab{tab}').click()
@@ -332,11 +349,7 @@ class StudioProtocolTests(LiveCase):
                 page.evaluate('''() => { window.__badges = [];
                     new MutationObserver(() => window.__badges.push(document.querySelector('#bridgeStatusBadge').textContent))
                       .observe(document.querySelector('#bridgeStatusBadge'), {childList:true, characterData:true, subtree:true}); }''')
-                page.evaluate(ORDER_RECORDER)
-                held = None if late else self.hold_load(page.context)
-                self.connect(page, f'{FAKE}?late=1' if late else FAKE)
-                frame = self.wait_greeted(page, held)
-                self.assertEqual(page.evaluate('window.__order'), order)
+                frame, _ = self.force_order(page, order)
                 badges = page.evaluate('window.__badges')
                 self.assertIn('Connecting…', badges)
                 self.assertIn('Bridge detected', badges)
@@ -1108,11 +1121,7 @@ class StudioFixRound1Tests(LiveCase):
             with self.subTest(engine=engine, order=order):
                 late = order[0] == 'load'
                 page, errors = self.open(engine, target=None)
-                page.evaluate(ORDER_RECORDER)
-                held = None if late else self.hold_load(page.context)
-                self.connect(page, f'{FAKE}?late=1' if late else FAKE)
-                frame = self.wait_greeted(page, held)
-                self.assertEqual(page.evaluate('window.__order'), order)
+                frame, _ = self.force_order(page, order)
                 page.locator('#btnSyncToApp').click()
                 page.wait_for_function('() => /rev 1$/.test(document.querySelector("#bridgeStatusBadge").textContent)')
                 page.locator('[data-live-target="hero.lead"]').click()
@@ -1171,18 +1180,15 @@ class StudioFixRound1Tests(LiveCase):
             with self.subTest(engine=engine, order=order):
                 late = order[0] == 'load'
                 page, errors = self.open(engine, target=None)
-                page.evaluate(ORDER_RECORDER)
-                held = None if late else self.hold_load(page.context)
-                self.connect(page, f'{FAKE}?late=1' if late else FAKE)
-                frame = self.wait_greeted(page, held)
+                frame, held = self.force_order(page, order)
                 for _ in range(2):
                     sid = self.session_id(frame)
-                    started = frame.evaluate('performance.timeOrigin')
-                    page.evaluate('() => { window.__order = []; window.__ready = []; }')
-                    frame.evaluate('location.reload()')
-                    frame.wait_for_function('(origin) => performance.timeOrigin !== origin', arg=started)
-                    frame = self.wait_greeted(page, held)
-                    self.assertEqual(page.evaluate('window.__order'), order)
+
+                    def reload(frame=frame):
+                        started = frame.evaluate('performance.timeOrigin')
+                        frame.evaluate('location.reload()')
+                        frame.wait_for_function('(origin) => performance.timeOrigin !== origin', arg=started)
+                    frame = self.wait_greeted(page, order, held, reload)
                     hellos = [h['data']['sessionId'] for h in self.received(frame, 'design:hello')]
                     self.assertEqual(len(hellos), 2)
                     if late:
