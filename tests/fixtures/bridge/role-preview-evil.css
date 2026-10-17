@@ -1,0 +1,2 @@
+/* Served from the evil origin without CORS: the target page can render it but never read its rules. */
+.card p { font-size: 18px; }
