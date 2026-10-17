@@ -26,7 +26,6 @@ STALE = 'Preview applied; page changed before checks finished'
 APPLY = 'Apply selected roles'
 CLEAR = 'Clear preview'
 RESET_ALL = 'Reset all page edits'
-EMPTY_HASH = '811c9dc5'
 FIXTURE = REPO / 'tests' / 'fixtures' / 'studio' / 'fake-target.html'
 
 STYLE = {'fontFamily': 'sans-serif', 'fontSize': 16, 'fontWeight': 400,
@@ -38,12 +37,7 @@ CSS_UNITS = {'fontSize': 'px', 'letterSpacing': 'em'}
 ADAPTER_VARIABLES = {'bootstrap5-body': ('--bs-body-font-family', '--bs-font-sans-serif'), 'bootstrap5-mono': ('--bs-font-monospace',)}
 
 
-def fnv1a32(text):
-    """The contract's digest, written out here so tests do not borrow Studio's."""
-    value = 0x811c9dc5
-    for byte in text.encode('utf-8'):
-        value = ((value ^ byte) * 0x01000193) & 0xffffffff
-    return f'{value:08x}'
+EMPTY_HASH, fnv1a32 = table.EMPTY_HASH, table.fnv1a32
 
 
 def canonical_css(roles):
@@ -358,17 +352,17 @@ class StudioRoleBoundaryTests(StudioRoleCase):
             with self.subTest(engine=engine):
                 page, frame, errors = self.open(engine, TARGET + '/peer', PEER)
                 request = self.pending(page, frame)
-                groups = [group(f'g-{i}', f'Role {i}', f'Author {i}') for i in range(128)]
+                groups = [group(f'g-{i}', f'Role {i}', f'Author {i}') for i in range(table.ROLES)]
                 selectors = [{'value': '.' + c * 1050, 'stable': True, 'reason': 'class'} for c in ('a', 'b')]
                 for item in groups:
                     item['selectors'] = selectors
                 self.send(frame, self.reply(request, groups))
-                page.wait_for_function('document.querySelector("#roleRows").children.length===128')
+                page.wait_for_function('document.querySelector("#roleRows").children.length===' + str(table.ROLES))
                 self.assertEqual(page.locator('#roleRows > li').last.get_attribute('data-role-id'), 'role-128')
                 page.get_by_role('button', name='Detect text styles').click()
                 page.wait_for_function('document.querySelector("#roleStatus").textContent.includes("request limit")')
                 self.assertEqual(frame.evaluate('requests.length'), 1)
-                self.assertEqual(page.locator('#roleRows > li').count(), 128)
+                self.assertEqual(page.locator('#roleRows > li').count(), table.ROLES)
                 frame.evaluate('ready()')
                 page.wait_for_function('document.querySelector("#roleRows").children.length===0')
                 request = self.pending(page, frame)
@@ -419,7 +413,7 @@ class StudioRoleBoundaryTests(StudioRoleCase):
                     {'type': 'design:ready', 'protocolVersion': 1, 'sessionId': session, 'revision': 0,
                      'capabilities': {'roleDetection': True}, 'roleState': {
                          'documentId': 'forged-document', 'pageVersion': 0, 'pageURL': TARGET + '/peer',
-                         'roles': [], 'canonicalCss': '', 'hashAlgorithm': 'fnv1a32', 'cssHash': '811c9dc5'}, 'targets': []})
+                         'roles': [], 'canonicalCss': '', 'hashAlgorithm': 'fnv1a32', 'cssHash': EMPTY_HASH}, 'targets': []})
                 page.evaluate('()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))')
                 self.assertTrue(page.get_by_role('button', name='Detect text styles').is_disabled())
                 self.assertNotIn('Ready to detect', page.locator('#roleStatus').inner_text())
@@ -442,10 +436,10 @@ class StudioRoleBoundaryTests(StudioRoleCase):
                            'roles not an array': {**original, 'roles': {}},
                            'css without roles': {**original, 'canonicalCss': 'p{}', 'cssHash': fnv1a32('p{}')},
                            'empty document': {**original, 'documentId': ''},
-                           '201-character document': {**original, 'documentId': 'd' * 201},
+                           '201-character document': {**original, 'documentId': 'd' * (table.DOCUMENT_ID_CHARS + 1)},
                            'foreign url': {**original, 'pageURL': 'http://evil.test/path'},
                            'credential url': {**original, 'pageURL': 'http://user:secret@target.test/path'},
-                           'over-long url': {**original, 'pageURL': TARGET + '/' + 'x' * 2000},
+                           'over-long url': {**original, 'pageURL': TARGET + '/' + 'x' * table.ROUTE_CHARS},
                            'prototype key': {**original, 'constructor': {}}}
                 for name, state in invalid.items():
                     with self.subTest(snapshot=name):
@@ -757,7 +751,7 @@ class StudioRoleDraftTests(StudioRoleCase):
                   ('Tracking (em)', '-0.51', False), ('Tracking (em)', '-0.5', True), ('Tracking (em)', '2', True),
                   ('Tracking (em)', '2.01', False), ('Tracking (em)', '0.12345', True),
                   ('Font family', 'Georgia, serif', True), ('Font family', '"Times New Roman", serif', True),
-                  ('Font family', '  Georgia  ', True), ('Font family', 'A' * 300, True), ('Font family', 'A' * 301, False),
+                  ('Font family', '  Georgia  ', True), ('Font family', 'A' * table.FAMILY_CHARS, True), ('Font family', 'A' * (table.FAMILY_CHARS + 1), False),
                   ('Font family', "'Unbalanced", False), ('Font family', 'a;b', False), ('Font family', 'a{b', False),
                   ('Font family', 'a}', False), ('Font family', 'a<b', False), ('Font family', 'a>b', False),
                   ('Font family', 'a\\b', False), ('Font family', 'url(x)', False), ('Font family', 'expression(1)', False),
@@ -1042,7 +1036,7 @@ class StudioRoleApplyTests(StudioRoleCase):
             'complete with null route': {'currentPageURL': None},
             'foreign route': {'currentPageURL': 'http://evil.test/x'},
             'credential route': {'currentPageURL': 'http://user:pw@target.test/peer'},
-            'over-long route': {'currentPageURL': TARGET + '/' + 'x' * 2000},
+            'over-long route': {'currentPageURL': TARGET + '/' + 'x' * table.ROUTE_CHARS},
             'script route': {'currentPageURL': 'javascript:alert(1)'},
             'budget with null route': {'outcomesComplete': False, 'outcomeReason': 'budget-exceeded', 'currentPageURL': None},
             'budget with moved route': {'outcomesComplete': False, 'outcomeReason': 'budget-exceeded', 'currentPageURL': TARGET + '/other'},
@@ -1052,7 +1046,7 @@ class StudioRoleApplyTests(StudioRoleCase):
             'invented reason': {'outcomesComplete': False, 'outcomeReason': 'invented', 'outcomes': []},
             'wrong digest': {'cssHash': '00000000'}, 'other algorithm': {'hashAlgorithm': 'sha256'},
             'css edited without its digest': {'canonicalCss': 'x'},
-            'css over 128 KiB with its own digest': self.with_css(ok, 'a' * (128 * 1024 + 1)),
+            'css over 128 KiB with its own digest': self.with_css(ok, 'a' * (table.CSS_BYTES + 1)),
             'css unrelated to the roles with its own digest': self.with_css(ok, 'p { color: red; }\n'),
             'css with the roles plus an extra rule and its own digest': self.with_css(ok, ok['canonicalCss'] + 'p { color: red; }\n'),
             'no roles for an apply': {'roles': [], 'canonicalCss': '', 'cssHash': EMPTY_HASH, 'outcomes': []},
@@ -1066,7 +1060,7 @@ class StudioRoleApplyTests(StudioRoleCase):
             'duplicate outcome': {'outcomes': [first, first]}, 'outcome for an unknown role': with_outcome(id='role-9'),
             'checked above matched': with_outcome(matched=1, checked=2),
             'mismatched above checked': with_outcome(matched=2, checked=2, mismatched=3),
-            'negative count': with_outcome(mismatched=-1), 'count above ten thousand': with_outcome(matched=10001, checked=10001),
+            'negative count': with_outcome(mismatched=-1), 'count above ten thousand': with_outcome(matched=table.CHECKED + 1, checked=table.CHECKED + 1),
             'nonfinite count': with_outcome(matched=float('inf')),
             'outcome without complete': {'outcomes': [{k: v for k, v in first.items() if k != 'complete'}]},
             'complete not a boolean': with_outcome(complete='yes'),
@@ -1075,7 +1069,7 @@ class StudioRoleApplyTests(StudioRoleCase):
             'loss property as css name': with_outcome(losses=[loss(prop='font-size')]),
             'loss reason invented': with_outcome(losses=[loss(reason='invented')]),
             'loss selector empty': with_outcome(losses=[loss(selector='')]),
-            'loss selector over 2000 characters': with_outcome(losses=[loss(selector='.' + 'a' * 2000)]),
+            'loss selector over 2000 characters': with_outcome(losses=[loss(selector='.' + 'a' * table.WINNING_SELECTOR_CHARS)]),
             'loss selector with a line break': with_outcome(losses=[loss(selector='.a' + chr(10) + '.b')]),
             'loss selector with a null character': with_outcome(losses=[loss(selector='.a' + chr(0))]),
             'loss selector with a C1 control': with_outcome(losses=[loss(selector='.a' + chr(0x85))]),
@@ -1120,11 +1114,11 @@ class StudioRoleApplyTests(StudioRoleCase):
         when Apply is considered, then it is disabled with the request-limit reason; unselecting enough rows makes
         the same selectors fit and Apply sends them."""
         page, frame, errors = self.open(engine, PEER_URL, PEER)
-        roles = [self.role_input(f'role-{i}', f'Author {i}', fontSize=20) for i in range(1, 129)]
+        roles = [self.role_input(f'role-{i}', f'Author {i}', fontSize=20) for i in range(1, table.ROLES + 1)]
         self.ready_with(page, frame, self.snapshot_state(roles), revision=0)
         selector = [{'value': '.' + '界' * 700, 'stable': True, 'reason': 'class'}]
-        self.detected(page, frame, [group(f'g-{i}', f'Author {i}', f'Author {i}', selectors=selector) for i in range(1, 129)])
-        self.assertLess(len(json.dumps(roles, ensure_ascii=False)) + 128 * 700, 256 * 1024)
+        self.detected(page, frame, [group(f'g-{i}', f'Author {i}', f'Author {i}', selectors=selector) for i in range(1, table.ROLES + 1)])
+        self.assertLess(len(json.dumps(roles, ensure_ascii=False)) + table.ROLES * 700, table.REQUEST_BYTES)
         enabled, reason = self.gate(page)
         self.assertFalse(enabled)
         self.assertIn('256 KiB', reason)
@@ -1237,7 +1231,7 @@ class StudioRoleApplyTests(StudioRoleCase):
         self.detected(page, frame)
         request = self.apply_role(page, frame, '24')
         markup = '<img src=x onerror="document.body.dataset.bad=1">'
-        long = '.' + 'a' * 1999
+        long = '.' + 'a' * (table.WINNING_SELECTOR_CHARS - 1)
         named = [loss('fontSize', 1, selector, 'author-rule') for selector in ('.card p', 'h1, .card p', 'a:hover', 'body p', markup, long)]
         others = [loss('fontSize', 1, 'body', 'inherited'), loss('fontWeight', 1, None, 'inline'),
                   loss('lineHeight', 1, None, 'unreadable-sheet'), loss('letterSpacing', 1, None, 'complex-cascade'),
@@ -1313,7 +1307,7 @@ class StudioRoleApplyTests(StudioRoleCase):
     def sized_receipt(self, request, size):
         """A receipt for the request whose canonical CSS is exactly `size` UTF-8 bytes of real serialization: a multi-byte
         family per role, padded by selector length (the page may report other properties than were sent; ids must match)."""
-        roles = [{**role, 'selectors': ['.body-copy'], 'properties': {'fontFamily': '\u754c' * 300}} for role in request['roles']]
+        roles = [{**role, 'selectors': ['.body-copy'], 'properties': {'fontFamily': '\u754c' * table.FAMILY_CHARS}} for role in request['roles']]
         missing = size - len(canonical_css(roles).encode('utf-8'))
         for role in roles:
             add = min(missing, 1990)
@@ -1933,7 +1927,7 @@ class StudioRoleStateTests(StudioRoleCase):
         """Given 128 issued role ids and a further role refused, when the page is re-detected after a ready, then
         Apply stays disabled with a hint that says the limit is reached."""
         page, frame, errors = self.open(engine, PEER_URL, PEER)
-        self.detected(page, frame, [group(f'g-{i}', f'Role {i}', f'Author {i}') for i in range(128)])
+        self.detected(page, frame, [group(f'g-{i}', f'Role {i}', f'Author {i}') for i in range(table.ROLES)])
         frame.evaluate('ready()')
         page.wait_for_function('document.querySelector("#roleRows").children.length===0')
         request = self.pending(page, frame)
@@ -2500,7 +2494,9 @@ class StudioContractTableTests(StudioRoleCase):
 
     def test_the_checker_passes_a_valid_message_of_each_kind_and_flags_each_single_defect_once(self):
         """Given one valid message of each kind, when the checker reads it, then it has no violation; given a copy with one
-        defect, then it has exactly one, for each of 46 defects (a row for each rule the checker applies); an unknown kind raises."""
+        defect, then it has exactly one, for each of 53 defects (a row for each rule the checker applies); every refused family
+        has exactly one and every near-miss family none; 100 astral characters in a name and 50 in an id (200 and 100 UTF-16
+        units) have none; an unknown kind raises."""
         request = {'requestId': 'fks-detect-1', 'documentId': 'peer-document', 'knownRoles': []}
         apply = {'type': 'design:roles-apply', 'requestId': 'fks-req-1', 'baseRevision': 0, 'documentId': 'peer-document',
                  'pageVersion': 0, 'roles': [self.role_input()]}
@@ -2513,6 +2509,7 @@ class StudioContractTableTests(StudioRoleCase):
         many = [{'style': style, 'count': 1} for style in table.styles(table.CHECK_SIGNATURES + 1)]
         bound = {'value': '.body-copy', 'stable': True, 'reason': 'class'}
         role = self.role_input()
+        astral = chr(0x1F600)
         controls = {'C0': 1, 'DEL': 0x7f, 'C1': 0x85, 'U+2028': 0x2028, 'U+2029': 0x2029}
         defects = [
             ('detected', 'groups', {'groups': [group(f'g-{i}', f'Role {i}', f'Author {i}') for i in range(table.ROLES + 1)]}),
@@ -2525,6 +2522,9 @@ class StudioContractTableTests(StudioRoleCase):
             ('detected', 'document id', {'documentId': table.text(table.DOCUMENT_ID_CHARS + 1)}),
             ('detected', 'route', {'pageURL': 'http://target.test/' + 'x' * table.ROUTE_CHARS}),
             ('detected', 'group ids', {'groups': [group(), group()]}),
+            ('detected', 'adapter', {'groups': [group(adapter='bootstrap9')]}),
+            ('detected', 'adapter null', {'groups': [group(adapter=None)]}),
+            ('detected', 'adapter missing', {'groups': [{key: value for key, value in group().items() if key != 'adapter'}]}),
             ('detected', 'near duplicate', {'groups': [{**group(), 'nearDuplicateIds': ['missing']}]}),
             ('detected', 'near duplicate of itself', {'groups': [{**group(), 'nearDuplicateIds': ['scan-a']}]}),
             ('detected', 'near duplicates repeat', {'groups': [{**group(), 'nearDuplicateIds': ['scan-b'] * 2}, group('scan-b', 'Text', None)]}),
@@ -2556,6 +2556,10 @@ class StudioContractTableTests(StudioRoleCase):
             ('role-state', 'adapter', {'roles': [{**role, 'adapter': 'nope'}]}),
             ('role-state', 'property key', {'roles': [{**role, 'properties': {'color': 'red'}}]}),
             ('role-state', 'role text transform', {'roles': [{**role, 'properties': {'textTransform': 'nope'}}]}),
+            ('role-state', 'name in UTF-16 units', {'roles': [{**role, 'name': astral * (table.NAME_CHARS // 2 + 1)}]}),
+            ('role-state', 'role id in UTF-16 units', {'roles': [{**role, 'id': astral * (table.ROLE_ID_CHARS // 2 + 1)}]}),
+            ('role-state', 'boolean weight', {'roles': [{**role, 'properties': {'fontWeight': True}}]}),
+            ('role-state', 'family that is not text', {'roles': [{**role, 'properties': {'fontFamily': 5}}]}),
         ] + [('roles-applied', f'winning selector {name}', {'outcomes': [outcome(losses=[loss(selector='.a' + chr(code))])]})
              for name, code in controls.items()]
         for kind, message in valid.items():
@@ -2564,6 +2568,15 @@ class StudioContractTableTests(StudioRoleCase):
         for kind, name, change in defects:
             with self.subTest(defect=name):
                 self.assertEqual(len(table.violations(kind, {**valid[kind], **change})), 1)
+        for family in table.FAMILIES_REFUSED:
+            with self.subTest(refused=family):
+                self.assertEqual(len(table.violations('role-state', {**valid['role-state'], 'roles': [{**role, 'properties': {'fontFamily': family}}]})), 1)
+        for family in table.FAMILIES_ACCEPTED:
+            with self.subTest(accepted=family):
+                self.assertEqual(table.violations('role-state', {**valid['role-state'], 'roles': [{**role, 'properties': {'fontFamily': family}}]}), [])
+        with self.subTest(accepted='astral name and id at the limit'):
+            at_limit = {**role, 'name': astral * (table.NAME_CHARS // 2), 'id': astral * (table.ROLE_ID_CHARS // 2)}
+            self.assertEqual(table.violations('role-state', {**valid['role-state'], 'roles': [at_limit]}), [])
         with self.assertRaises(ValueError):
             table.violations('detect', valid['detected'])
 
@@ -2592,7 +2605,9 @@ class StudioContractTableTests(StudioRoleCase):
                 'selectors': (one(selectors=table.selectors(table.SELECTORS)), one(selectors=table.selectors(table.SELECTORS + 1))),
                 'selector': (one(selectors=[table.class_selector(table.SELECTOR_CHARS)]), one(selectors=[table.class_selector(table.SELECTOR_CHARS + 1)])),
                 'roles': (many(table.ROLES), many(table.ROLES + 1)),
-                'family': (prop(fontFamily=table.text(table.FAMILY_CHARS)), prop(fontFamily=table.text(table.FAMILY_CHARS + 1)))}
+                'family': (prop(fontFamily=table.text(table.FAMILY_CHARS)), prop(fontFamily=table.text(table.FAMILY_CHARS + 1))),
+                'name in UTF-16 units': (one(name=chr(0x1F600) * (table.NAME_CHARS // 2)), one(name=chr(0x1F600) * (table.NAME_CHARS // 2 + 1))),
+                'weight as a boolean': (prop(fontWeight=1), prop(fontWeight=True))}
         for key, (low, high, places) in table.NUMBER_RULES.items():
             rows[f'{key} minimum'] = (prop(**{key: low}), prop(**{key: round(low - 10 ** -places, places)}))
             rows[f'{key} maximum'] = (prop(**{key: high}), prop(**{key: round(high + 10 ** -places, places)}))

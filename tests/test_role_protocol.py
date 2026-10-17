@@ -277,12 +277,13 @@ STYLE_GRID = """([count, columns, pad, classes, long]) => {
     main.appendChild(p);
   }
 }"""
-# AUTHOR_ROLES: `roles` author roles of `variants` sizes each, every element with class k.
+# AUTHOR_ROLES: `roles` author roles of `variants` sizes each, every element with class k; the sizes stay distinct up to 100 roles
+# of the same variant (v * 2 + r / 100), so `roles` x `variants` distinct signatures share the class.
 AUTHOR_ROLES = """([roles, variants]) => {
   const main = document.querySelector('main'); main.replaceChildren();
   for (let r = 0; r < roles; r++) for (let v = 0; v < variants; v++) {
     const p = document.createElement('p'); p.textContent = 'R' + r + ' V' + v; p.className = 'k';
-    p.setAttribute('data-design-role', 'Role ' + r); p.style.fontSize = (10 + v * 2 + r / 10) + 'px'; main.appendChild(p);
+    p.setAttribute('data-design-role', 'Role ' + r); p.style.fontSize = (10 + v * 2 + r / 100) + 'px'; main.appendChild(p);
   }
 }"""
 # WINNERS: `count` paragraphs of class t, each with its own author rule p.eN that sets all six properties.
@@ -343,11 +344,10 @@ class RoleContractTableTests(RoleSheetCase):
                 self.assertEqual((reply['complete'], reply['reason'], len(reply['groups'])), (False, 'group-limit', table.ROLES))
                 self.assertEqual(max(len(g['sampleText']) for g in reply['groups']), table.SAMPLE_CHARS)
                 self.assertEqual(table.violations('detected', reply), [])
-                self.assertEqual({g.get('adapter') for g in reply['groups']} - set(table.ADAPTERS), set())
 
-    def test_one_variant_past_the_limit_stops_the_scan_and_every_group_still_carries_an_adapter(self):
-        """Given one author role of 9 sizes, when Studio detects, then the reply is incomplete with variant-limit and every
-        group it carries has an adapter the table lists."""
+    def test_one_variant_past_the_limit_stops_the_scan_and_the_reply_still_fits_the_table(self):
+        """Given one author role of 9 sizes, when Studio detects, then the reply is incomplete with variant-limit, carries at
+        least one group and the table finds no violation."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, frame = self.open(engine)
@@ -356,12 +356,11 @@ class RoleContractTableTests(RoleSheetCase):
                 reply = self.detect(page)
                 self.assertEqual((reply['complete'], reply['reason']), (False, 'variant-limit'))
                 self.assertTrue(reply['groups'])
-                self.assertEqual({g.get('adapter') for g in reply['groups']} - set(table.ADAPTERS), set())
                 self.assertEqual(table.violations('detected', reply), [])
 
-    def test_a_bootstrap5_detect_posts_adapters_the_table_lists_and_at_least_one_is_not_plain(self):
-        """Given the Bootstrap 5 fixture, when Studio detects, then the reply is complete, every group's adapter is one the table
-        lists, at least one is not plain and the table finds no violation."""
+    def test_a_bootstrap5_detect_posts_a_reply_the_table_allows_with_a_group_that_is_not_plain(self):
+        """Given the Bootstrap 5 fixture, when Studio detects, then the reply is complete, at least one group's adapter is not
+        plain and the table finds no violation."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, frame = self.open(engine, target=TARGET + '/fixtures/bootstrap5-static/index.html')
@@ -369,21 +368,22 @@ class RoleContractTableTests(RoleSheetCase):
                 reply = self.detect(page)
                 self.assertTrue(reply['complete'], reply['reason'])
                 adapters = {g.get('adapter') for g in reply['groups']}
-                self.assertEqual(adapters - set(table.ADAPTERS), set())
                 self.assertTrue(adapters - {'plain'}, adapters)
                 self.assertEqual(table.violations('detected', reply), [])
 
-    def test_a_known_selector_over_136_styles_posts_a_check_of_136_signatures_the_table_allows(self):
-        """Given 17 author roles of 8 sizes that all carry one class and a known role for that class, when Studio detects, then
-        the reply is complete, its one check carries 17 x VARIANTS = 136 signatures and the table finds no violation."""
+    def test_a_known_selector_over_the_most_styles_posts_a_check_of_the_signature_limit_the_table_allows(self):
+        """Given 128 author roles of 8 sizes that all carry one class and a known role for that class, when Studio detects, then
+        the reply is complete with 128 groups of 8 signatures, its one check carries 1,024 signatures and the table finds no
+        violation."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, frame = self.open(engine)
-                frame.evaluate(AUTHOR_ROLES, [17, table.VARIANTS])
+                frame.evaluate(AUTHOR_ROLES, [table.ROLES, table.VARIANTS])
                 self.hello(page)
                 reply = self.detect(page, knownRoles=[{'id': 'k', 'selectors': ['.k']}])
                 self.assertTrue(reply['complete'], reply['reason'])
-                self.assertEqual([(c['roleId'], len(c['signatures'])) for c in reply['selectorChecks']], [('k', 17 * table.VARIANTS)])
+                self.assertEqual((len(reply['groups']), max(len(g['signatures']) for g in reply['groups'])), (table.ROLES, table.VARIANTS))
+                self.assertEqual([(c['roleId'], len(c['signatures'])) for c in reply['selectorChecks']], [('k', table.CHECK_SIGNATURES)])
                 self.assertEqual(table.violations('detected', reply), [])
 
     def test_a_maximal_apply_posts_a_receipt_and_role_state_the_table_allows_and_one_role_more_is_rejected(self):

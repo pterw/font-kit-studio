@@ -1,4 +1,4 @@
-"""Rendered inputs for R2 React adapters; role preview belongs to F2b.
+"""Rendered inputs for R2 React adapters, and the role preview and its Clear on a real React app.
 
 The literal oracle describes authored semantic selectors, not a compiler's hash
 algorithm. CSS updates are HMR, not React Fast Refresh. Every browser uses an
@@ -26,6 +26,7 @@ from unittest.mock import patch
 from urllib.parse import quote
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
+import role_contract as table
 from fixture_support import FIXTURES, REPO, require_fixture, vite_bin
 from support import ENGINES, new_context
 
@@ -48,7 +49,7 @@ ELEMENTS = {
     'title': '[data-design-id="modules.title"]', 'first': '[data-design-id="modules.body.first"]',
     'second': '[data-design-id="modules.body.second"]', 'hash': 'aside > p', 'stable': 'p.stable-copy',
     'action': '[data-design-id="modules.replace"]'}
-OWNED = "Array.from(document.querySelectorAll('#fontkit-role-styles'), s => s.textContent)"
+OWNED = "Array.from(document.querySelectorAll('style[data-fontkit-role-styles]'), s => s.textContent)"
 STYLE_ATTRIBUTES = "document.querySelectorAll('[style]').length"
 DISPLAY = {'fontFamily': 'Georgia, serif', 'fontWeight': 700}
 BODY = {'fontFamily': 'Verdana, sans-serif', 'letterSpacing': 0.05}
@@ -57,7 +58,7 @@ DISPLAY_CSS = '[data-design-role="display"] {\n  font-family: Georgia, serif;\n 
 BODY_CSS = ('[data-design-id="modules.body.first"], [data-design-id="modules.body.second"] {\n'
             '  font-family: Verdana, sans-serif;\n  letter-spacing: 0.05em;\n}\n')
 HASH_CSS = '{} {{\n  font-family: "Courier New", monospace;\n  font-size: 15px;\n}}\n'
-EMPTY_HASH = '811c9dc5'
+EMPTY_HASH, fnv1a32 = table.EMPTY_HASH, table.fnv1a32
 BRIDGE_ORIGIN_SCRIPT = """(() => {
     if (location.origin !== %s) return;
     addEventListener('DOMContentLoaded', () => {
@@ -80,13 +81,6 @@ HOLD_FRAMES = """() => {
         setTimeout(() => { stamps.deadline = performance.now(); }, 250);
     });
 }"""
-
-
-def fnv1a32(text):
-    value = 2166136261
-    for byte in text.encode('utf-8'):
-        value = ((value ^ byte) * 16777619) & 0xffffffff
-    return '%08x' % value
 
 
 def role(identifier, name, selectors, **properties):
@@ -554,7 +548,7 @@ class ReactCorpusTest(unittest.TestCase):
             with self.subTest(engine=engine), self.role_app(engine) as (page, frame, _, detected):
                 receipt = self.send(page, 'design:roles-apply', detected, roles=self.preview_roles(detected))
                 self.assertEqual(receipt['type'], 'design:roles-applied', receipt)
-                owned = frame.locator('#fontkit-role-styles').element_handle()
+                owned = frame.locator('style[data-fontkit-role-styles]').element_handle()
                 button = frame.get_by_role('button', name='Replace text', exact=True)
                 title, first, second = (frame.locator(ELEMENTS[name]) for name in ('title', 'first', 'second'))
                 for generation, key in ((1, 'Enter'), (2, 'Space')):

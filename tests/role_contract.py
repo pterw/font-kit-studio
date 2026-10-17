@@ -1,10 +1,12 @@
 """The R2 role protocol's limits, enums and shapes, written once for the tests of both sides.
 
-Every value comes from the plan's binding contract and Addenda 13-18 (docs/plans/2026-10-03-r2-engine.md) and, where the
+Every value comes from the plan's binding contract and Addenda 13-18 (17: template bytes; 18: signatures per check), 20
+and 22 (families) (docs/plans/2026-10-03-r2-engine.md) and, where the
 plan is silent, from the R2.5 brief (docs/implementation/tasks/r2-task-5-brief.md: pins and additions), the PR B fix brief
 (r2-task-bfix-brief.md) and the PR B review (r2-pr-b-review.md). None comes from fontkit-bridge.js or fontkit-studio.html:
 a test that reads this table checks a side against the contract, not against itself. A later change to a field, limit or
-enum updates this table first, in the task the plan names. Tests import it as `import role_contract as table`.
+enum updates this table first, in the task the plan names. Lengths are UTF-16 code units, as the contract's strings are.
+Tests import it as `import role_contract as table`.
 """
 import json
 import re
@@ -26,7 +28,6 @@ TIME_BUDGET_MS = 2000                # elapsedMs of a complete reply (detection 
 CHECKED = 10000                      # checked per outcome (R2.5 pin 1); matched has no cap; a loss count is at most CHECKED
 LOSSES_PER_PROPERTY, LOSSES = 16, 96  # loss groups per role and property; per outcome, 6 x 16 (R2.5 pin 6, PR B review F2)
 WINNING_SELECTOR_CHARS = 2000        # winningSelector, no C0, DEL, C1, U+2028 or U+2029 character (R2.5 additions, F4)
-NAMED_SELECTOR_CHARS = 262144        # named winning-selector characters per receipt (R2.5 addition 11; bridge side only)
 REQUEST_ID_CHARS = DOCUMENT_ID_CHARS = 200   # requestId, documentId (envelope)
 ROUTE_CHARS = 2000                   # route text: path, search and hash (route observation)
 FAMILY_CHARS = 300                   # a trimmed RoleInput family (value validation)
@@ -49,6 +50,23 @@ PROPERTY_ORDER = ('fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterS
 # is unbounded and its measured size only nonnegative.
 NUMBER_RULES = {'fontSize': (4, 400, 2), 'fontWeight': (1, 1000, 0), 'lineHeight': (0.5, 5, 3), 'letterSpacing': (-0.5, 2, 4)}
 
+# Addendum 22 item 1 (D072), written from the contract text: a trimmed family that is exactly a CSS-wide keyword (any case) or
+# holds ( or ) outside quotes is refused. "Outside quotes": one pass, " or ' opens a quote, only the same character closes it,
+# no escapes (a backslash is refused elsewhere); a parenthesis counts only when no quote is open.
+FAMILY_KEYWORDS = ('inherit', 'initial', 'unset', 'revert', 'revert-layer')
+FAMILIES_REFUSED = (
+    # keywords: both CSS engines accept all of these and a sheet would carry them, so only the rule refuses them
+    'inherit', 'initial', 'unset', 'revert', 'revert-layer', 'INHERIT', 'Revert-Layer', '  inherit  ',
+    # dashed functions: Chromium accepts them in CSS.supports (the case for killing a mutant there); Firefox already refuses them
+    '--x(', '--x(a)', '--x()', 'Inter, --x(', 'if(media(all): Inter', '"Inter", --x(a)', '--x("a")',
+    # table-only: CSS.supports already refuses these in both engines, so never use generic(kai) to kill a mutant; a lone ) is table-only
+    'generic(kai)', 'Inter)', 'a), serif', 'Inter (Display)',
+)
+FAMILIES_ACCEPTED = (   # near misses that must still pass: quoted keywords and parentheses, longer words, one-pass quote scans
+    '"inherit"', "'Inter (Display)'", '"Inter (Display)"', 'Initialism, serif', 'Inherit Sans', 'inherited', 'revert-layers',
+    '"A)"', '"Inter\'s (x)"', '\'say "hi" (x)\'',
+)
+
 # Table names whose limit the real-bridge class (RoleContractTableTests) does not build, with where the bridge side is pinned.
 STUDIO_SIDE_ONLY = {
     'ELEMENTS': 'a 10,000-element page: test_role_detection pins the bridge at 10,000 and 10,001',
@@ -56,7 +74,6 @@ STUDIO_SIDE_ONLY = {
     'NTH_MAX': 'a dom path 9,999 siblings deep needs a 10,000-element page; test_role_stylesheet pins apply at 9,999 and 10,000',
     'CHECKED': 'a 10,000-element match: test_role_preview pins the bridge cap',
     'WINNING_SELECTOR_CHARS': 'a 2,000-character author selector: test_role_preview',
-    'NAMED_SELECTOR_CHARS': 'a bridge-only cap of 262,144 characters: test_role_preview builds it',
     'NUMBER_RULES': 'the minima 4, 1, 0.5 and -0.5: the bridge class builds only the maxima; test_role_stylesheet pins the bridge number ranges',
     'EMPTY_HASH': 'an empty role state: the bridge class checks the role state only after an apply; test_role_protocol pins the empty digest',
     'DOCUMENT_ID_CHARS': 'the bridge makes a short documentId; only a Studio-side reply carries 200 characters',
@@ -65,6 +82,29 @@ STUDIO_SIDE_ONLY = {
     'REPLY_BYTES': 'the exact 1 MiB boundary: test_role_protocol.RoleProtocolTests pins the bridge reply near it',
     'CSS_BYTES': 'the exact 128 KiB boundary: test_role_stylesheet pins the bridge at 128 KiB and one byte more',
 }
+
+
+def fnv1a32(text):
+    """The contract's digest: FNV-1a over the UTF-8 bytes (offset 2166136261, multiplier 16777619, modulo 2^32), eight hex digits."""
+    value = 2166136261
+    for byte in text.encode('utf-8'):
+        value = ((value ^ byte) * 16777619) % 2 ** 32
+    return f'{value:08x}'
+
+
+def family_refused(value):
+    """Whether the contract refuses the family: a trimmed CSS-wide keyword (any case) or a parenthesis outside quotes."""
+    if value.strip().lower() in FAMILY_KEYWORDS:
+        return True
+    quote = None
+    for char in value:
+        if quote:
+            quote = None if char == quote else quote
+        elif char in ('"', "'"):
+            quote = char
+        elif char in '()':
+            return True
+    return False
 
 
 def text(length, prefix='t'):
@@ -107,8 +147,9 @@ def wire(message):
 def violations(kind, message):
     """One string per value of `message` outside the table, for kind 'detected', 'roles-applied', 'rejected' or 'role-state'.
 
-    It checks counts, lengths, bytes, enums, number ranges, the stable/reason rule and the contract's invariants. It does not
-    compare key sets: both sides already validate exact field lists.
+    It checks counts, lengths (UTF-16 units), bytes, enums, number ranges, families, the stable/reason rule and the contract's
+    invariants. It does not compare key sets: both sides already validate exact field lists, so a missing field raises KeyError,
+    except a group's `adapter` (read with `get`: a missing one is a violation like a wrong one).
     """
     if kind not in ('detected', 'roles-applied', 'rejected', 'role-state'):
         raise ValueError(f'unknown kind {kind!r}')
@@ -119,7 +160,8 @@ def violations(kind, message):
             found.append(what)
 
     def chars(value, high, what, low=1):
-        need(isinstance(value, str) and low <= len(value) <= high, f'{what}: {len(value) if isinstance(value, str) else value!r} characters')
+        units = sum(2 if ord(char) > 0xFFFF else 1 for char in value) if isinstance(value, str) else None
+        need(units is not None and low <= units <= high, f'{what}: {value!r} has {units} UTF-16 units')
 
     def count(value, high, what, low=0):
         need(isinstance(value, int) and not isinstance(value, bool) and low <= value <= high, f'{what}: {value!r}')
@@ -150,11 +192,12 @@ def violations(kind, message):
                 need(key in PROPERTY_ORDER, f'property {key!r}')
                 if key == 'fontFamily':
                     chars(value, FAMILY_CHARS, 'family')
+                    need(not isinstance(value, str) or not family_refused(value), f'family: {value!r} is a CSS-wide keyword or holds a parenthesis')
                 elif key == 'textTransform':
                     need(value in CASES, f'textTransform: {value!r}')
                 elif key in NUMBER_RULES:
                     low, high, places = NUMBER_RULES[key]
-                    need(isinstance(value, (int, float)) and low <= value <= high and round(value, places) == value,
+                    need(isinstance(value, (int, float)) and not isinstance(value, bool) and low <= value <= high and round(value, places) == value,
                          f'{key}: {value!r} outside {low}..{high} with {places} decimals')
         count(len(css.encode('utf-8')), CSS_BYTES, 'canonicalCss bytes')
         need(bool(roles) or (css == '' and message['cssHash'] == EMPTY_HASH), 'no roles must mean no CSS and the empty digest')
@@ -179,6 +222,7 @@ def violations(kind, message):
         count(len(message['selectorChecks']), SELECTOR_CHECKS, 'selectorChecks')
         for group in message['groups']:
             chars(group['id'], ROLE_ID_CHARS, 'group id')
+            need(group.get('adapter') in ADAPTERS, f'group adapter: {group.get("adapter")!r}')
             chars(group['suggestedName'], NAME_CHARS, 'suggestedName')
             if group['authorRole'] is not None:
                 chars(group['authorRole'], NAME_CHARS, 'authorRole')
