@@ -190,6 +190,13 @@ CARD_PAGE = """<!doctype html><html lang="en"><meta charset="utf-8"><title>Card<
 <style>.card p { font-size: 20px; font-family: serif; } .role { font-size: 16px; }</style>
 <main><div class="card"><p class="role" data-design-role="Body">Card text</p></div></main>
 <script src="/fontkit-bridge.js"></script></html>"""
+ESCAPED_PAGE = """<!doctype html><html lang="en"><meta charset="utf-8"><title>Escaped</title>
+<style>.sm\\:big { font-size: 20px; }</style>
+<main><p class="sm:big">Escaped text</p></main>
+<script src="/fontkit-bridge.js"></script></html>"""
+TWO_SELECTOR_PAGE = """<!doctype html><html lang="en"><meta charset="utf-8"><title>Two</title>
+<main><p class="alpha">One</p><p class="beta">Two</p></main>
+<script src="/fontkit-bridge.js"></script></html>"""
 LONG_URL = '/?' + 'x' * 1999
 # The real bridge binds a role only to what it measured, so no Detect it makes can reach more than 10,000 elements. This
 # page answers the first Detect itself (the real bridge's own reply then arrives for a request already settled) with a
@@ -324,6 +331,61 @@ class StudioRoleBridgeTests(StudioLegacyCase):
         self.wait_status(page, 'Preview cleared.')
         self.assertEqual(self.look(frame), before)
         self.assertEqual(self.preview(page)['css'], '')
+        self.assertEqual(errors, [])
+
+    @per_engine
+    def test_studio_shows_the_real_receipt_so_its_serialization_equals_the_bridges(self, engine):
+        """Given the real bridge and a role given every property by keystrokes (a quoted non-ASCII family, fractional
+        size and tracking), when it is applied, then the preview shows the bridge's canonical CSS byte for byte: Studio
+        accepts a receipt only when its own serialization of the roles equals those bytes."""
+        page, frame, errors = self.start(engine)
+        self.control(page, 'Preview this role', 'role-1', 'Body').check()
+        for label, value in (('Font family', '"界 Sans", Georgia, serif'), ('Size (px)', '24.5'), ('Weight', '700'),
+                             ('Line height', '1.25'), ('Tracking (em)', '0.05')):
+            self.type_value(self.control(page, label, 'role-1', 'Body'), value)
+        self.control(page, 'Case', 'role-1', 'Body').select_option('uppercase')
+        request = self.press_apply(page, frame)
+        self.wait_for_receipt(page, request)
+        css = self.receipts(page)[-1]['canonicalCss']
+        self.assertIn('  font-family: "\u754c Sans", Georgia, serif;\n  font-size: 24.5px;\n  font-weight: 700;\n'
+                      '  line-height: 1.25;\n  letter-spacing: 0.05em;\n  text-transform: uppercase;\n}\n', css)
+        self.wait_status(page, 'Preview applied to 1 role')
+        self.assertEqual(self.preview(page)['css'], css)
+        self.assertEqual(frame.locator('[data-design-role="Body"]').evaluate('el => getComputedStyle(el).fontSize'), '24.5px')
+        self.assertEqual(errors, [])
+
+    @per_engine
+    def test_a_receipt_for_an_escaped_class_selector_equals_studios_serialization(self, engine):
+        """Given a page whose only text has the class sm:big, when the role the real bridge detects for it (selector
+        .sm\\:big) is applied, then the preview shows the bridge's canonical CSS with the escaped selector byte for byte."""
+        page, frame, errors = self.open(engine, TARGET + '/escaped', ESCAPED_PAGE, init=CAPTURE)
+        self.assertIn('Detected', self.detect(page))
+        self.record(frame)
+        request = self.apply_role(page, frame, '24')
+        self.wait_for_receipt(page, request)
+        css = self.receipts(page)[-1]['canonicalCss']
+        self.assertEqual(css, '.sm\\:big {\n  font-size: 24px;\n}\n')
+        self.wait_status(page, 'Preview applied to 1 role')
+        self.assertEqual(self.preview(page)['css'], css)
+        self.assertEqual(frame.locator('p').evaluate('el => getComputedStyle(el).fontSize'), '24px')
+        self.assertEqual(errors, [])
+
+    @per_engine
+    def test_a_receipt_for_a_role_with_two_selectors_equals_studios_serialization(self, engine):
+        """Given a page whose two same-styled paragraphs the real bridge groups under two selectors, when that role is
+        applied, then the preview shows the bridge's canonical CSS, whose rule joins both selectors with a comma and a
+        space, byte for byte."""
+        page, frame, errors = self.open(engine, TARGET + '/two', TWO_SELECTOR_PAGE, init=CAPTURE)
+        self.assertIn('Detected', self.detect(page))
+        self.record(frame)
+        request = self.apply_role(page, frame, '24')
+        self.wait_for_receipt(page, request)
+        self.assertEqual(len(request['roles'][0]['selectors']), 2)
+        css = self.receipts(page)[-1]['canonicalCss']
+        self.assertIn(', ', css.split(' {')[0])
+        self.wait_status(page, 'Preview applied to 1 role')
+        self.assertEqual(self.preview(page)['css'], css)
+        self.assertEqual(frame.locator('p').evaluate_all('els => els.map(el => getComputedStyle(el).fontSize)'), ['24px', '24px'])
         self.assertEqual(errors, [])
 
     @per_engine

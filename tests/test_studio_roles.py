@@ -45,7 +45,7 @@ def fnv1a32(text):
 
 
 def canonical_css(roles):
-    """A plausible canonical sheet for the roles: Studio checks its size and digest, never re-serializes it."""
+    """The canonical sheet for the roles in the binding format; Studio re-serializes the roles and requires these bytes."""
     blocks = []
     for role in roles:
         lines = [f'{", ".join(role["selectors"])} {{']
@@ -1048,6 +1048,8 @@ class StudioRoleApplyTests(StudioRoleCase):
             'wrong digest': {'cssHash': '00000000'}, 'other algorithm': {'hashAlgorithm': 'sha256'},
             'css edited without its digest': {'canonicalCss': 'x'},
             'css over 128 KiB with its own digest': self.with_css(ok, 'a' * (128 * 1024 + 1)),
+            'css unrelated to the roles with its own digest': self.with_css(ok, 'p { color: red; }\n'),
+            'css with the roles plus an extra rule and its own digest': self.with_css(ok, ok['canonicalCss'] + 'p { color: red; }\n'),
             'no roles for an apply': {'roles': [], 'canonicalCss': '', 'cssHash': EMPTY_HASH, 'outcomes': []},
             'role id differs': {**with_role(id='role-9'), **with_outcome(id='role-9')},
             'extra role': {'roles': [role, {**role, 'id': 'role-2'}]},
@@ -1092,15 +1094,19 @@ class StudioRoleApplyTests(StudioRoleCase):
         self.detected(page, frame, pageVersion=2, currentPageVersion=2)
         request = self.apply_role(page, frame, '24')
         names = list(self.hostile_receipts(request)[1])
-        for name in names:
+        for index, name in enumerate(names):
             with self.subTest(shape=name):
+                if index:
+                    request = self.apply_role(page, frame, '24')   # a new request each time, so one failing shape cannot cascade
                 ok, hostile = self.hostile_receipts(request)
-                fence = self.with_css(ok, ok['canonicalCss'] + '/* fence */\n')
+                marker = 100 + index
+                fence = {**ok, 'outcomes': [outcome(matched=marker, checked=marker)]}
                 self.send(frame, hostile[name])
                 self.send(frame, fence)
-                page.wait_for_function('(css) => document.querySelector("#rolePreviewCss").textContent === css', arg=fence['canonicalCss'], timeout=4000)
+                page.wait_for_function('(text) => document.querySelector("#rolePreviewOutcomes").textContent.includes(text)',
+                                       arg=f'matched {marker},', timeout=4000)
+                self.assertEqual(self.preview(page)['css'], ok['canonicalCss'])
                 self.assertEqual(self.preview(page)['status'], 'Preview applied to 1 role; 0 checked elements did not show it.')
-                request = self.apply_role(page, frame, '24')
         self.assertEqual(errors, [])
 
     @per_engine
@@ -1288,33 +1294,46 @@ class StudioRoleApplyTests(StudioRoleCase):
         self.detected(page, frame)
         request = self.apply_role(page, frame, '24')
         receipt = self.receipt(request)
-        marked = self.with_css(receipt, receipt['canonicalCss'] + '/* hostile */\n')
+        marked = {**receipt, 'outcomes': [outcome(matched=9, checked=9)]}
         self.send(frame, marked, sessionId='wrong-session')
         self.send(frame, marked, protocolVersion=2)
         page.evaluate('(data)=>window.postMessage(data,location.origin)', {**marked, 'sessionId': request['sessionId'], 'protocolVersion': 1})
         frame.evaluate('data=>new Promise(resolve=>{let child=document.createElement("iframe");child.onload=resolve;child.srcdoc="<script>parent.parent.postMessage("+JSON.stringify(data)+",\\\"http://studio.test\\\")<"+"/script>";document.body.append(child)})',
                        {**marked, 'sessionId': request['sessionId'], 'protocolVersion': 1})
         self.send(frame, receipt)
-        page.wait_for_function('(css) => document.querySelector("#rolePreviewCss").textContent === css', arg=receipt['canonicalCss'], timeout=4000)
-        self.assertNotIn('hostile', self.preview(page)['css'])
+        page.wait_for_function('document.querySelector("#rolePreviewOutcomes").textContent.includes("matched 1,")', timeout=4000)
+        self.assertNotIn('matched 9', self.preview(page)['outcomes'])
         self.assertEqual(errors, [])
+
+    def sized_receipt(self, request, size):
+        """A receipt for the request whose canonical CSS is exactly `size` UTF-8 bytes of real serialization: a multi-byte
+        family per role, padded by selector length (the page may report other properties than were sent; ids must match)."""
+        roles = [{**role, 'selectors': ['.body-copy'], 'properties': {'fontFamily': '\u754c' * 300}} for role in request['roles']]
+        missing = size - len(canonical_css(roles).encode('utf-8'))
+        for role in roles:
+            add = min(missing, 1990)
+            role['selectors'] = ['.' + 'a' * (len('body-copy') + add)]
+            missing -= add
+        css = canonical_css(roles)
+        self.assertEqual(len(css.encode('utf-8')), size)
+        return {**self.receipt(request), 'roles': roles, 'canonicalCss': css, 'cssHash': fnv1a32(css)}
 
     @per_engine
     def test_a_receipt_css_at_128_kib_is_accepted_and_one_byte_more_is_not(self, engine):
-        """Given a valid receipt whose canonical CSS is exactly 128 KiB of multi-byte text, then it renders; one byte
-        more with its own correct digest does not."""
+        """Given 128 accepted roles and an Apply in flight, when the receipt's canonical CSS (a real serialization with
+        multi-byte family names) is one byte over 128 KiB it is ignored, and at exactly 128 KiB it is what renders."""
         limit = 128 * 1024
         page, frame, errors = self.open(engine, PEER_URL, PEER)
-        self.detected(page, frame)
-        request = self.apply_role(page, frame, '24')
-        receipt = self.receipt(request)
-        over = '界' * (limit // 3) + 'abc'
-        self.assertEqual(len(over.encode('utf-8')), limit + 1)
-        fence = '界' * (limit // 3) + 'ab'
-        self.assertEqual(len(fence.encode('utf-8')), limit)
-        self.send(frame, self.with_css(receipt, over))
-        self.send(frame, self.with_css(receipt, fence))
-        page.wait_for_function('(css) => document.querySelector("#rolePreviewCss").textContent === css', arg=fence, timeout=10000)
+        roles = [self.role_input(f'role-{i}', f'Author {i}', fontSize=20) for i in range(1, 129)]
+        self.ready_with(page, frame, self.snapshot_state(roles), revision=0)
+        self.detected(page, frame, [group(f'g-{i}', f'Author {i}', f'Author {i}') for i in range(1, 129)])
+        request = self.press_apply(page, frame)
+        over = self.sized_receipt(request, limit + 1)
+        fence = self.sized_receipt(request, limit)
+        self.assertGreater(len(over['canonicalCss'].encode('utf-8')), limit)
+        self.send(frame, over)
+        self.send(frame, fence)
+        page.wait_for_function('(css) => document.querySelector("#rolePreviewCss").textContent === css', arg=fence['canonicalCss'], timeout=10000)
         self.assertEqual(errors, [])
 
     @per_engine
@@ -1329,30 +1348,29 @@ class StudioRoleApplyTests(StudioRoleCase):
         for size, accepted in ((limit + 1, False), (limit, True)):
             with self.subTest(size=size):
                 request = self.press_apply(page, frame)
-                def build(full, partial, pad):
-                    losses = [loss(selector='.' + 'a' * 1999) for _ in range(full)] + [loss(selector='.' + 'a' * partial)]
+                def build(full, first, second):
+                    losses = [loss(selector='.' + 'a' * 1999) for _ in range(full)] + [loss(selector='.' + 'a' * first), loss(selector='.' + 'a' * second)]
                     chunks = [losses[n:n + 64] for n in range(0, len(losses), 64)]
                     outcomes = [outcome(id=f'role-{i + 1}', mismatched=len(c), matched=len(c), checked=len(c), losses=c)
                                 for i, c in enumerate(chunks)]
-                    receipt = self.receipt(request, outcomes)
-                    return self.with_css(receipt, receipt['canonicalCss'] + 'x' * pad)
+                    return self.receipt(request, outcomes)
                 def measure(*shape):
                     envelope = {'protocolVersion': 1, 'sessionId': request['sessionId'], **build(*shape)}
                     return len(json.dumps(envelope, ensure_ascii=False, separators=(',', ':')).encode('utf-8'))
                 full = 0
-                while measure(full + 1, 1, 0) <= size:
+                while measure(full + 1, 1, 1) <= size:
                     full += 1
-                rest = size - measure(full, 1, 0)
-                partial = 1 + min(rest, 1998)
-                pad = rest - (partial - 1)
-                self.assertEqual(measure(full, partial, pad), size)
-                self.send(frame, build(full, partial, pad))
+                rest = size - measure(full, 1, 1)
+                first = 1 + min(rest, 1998)
+                second = 1 + rest - (first - 1)
+                self.assertEqual(measure(full, first, second), size)
+                self.send(frame, build(full, first, second))
                 if accepted:
-                    self.wait_status(page, 'Preview applied to 128 roles')
+                    wanted = 'matched 64,'
                 else:
-                    fence = self.with_css(self.receipt(request), canonical_css(request['roles']) + '/* fence */' + chr(10))
-                    self.send(frame, fence)
-                    page.wait_for_function('(css) => document.querySelector("#rolePreviewCss").textContent === css', arg=fence['canonicalCss'], timeout=15000)
+                    self.send(frame, self.receipt(request, [outcome(matched=7, checked=7)]))
+                    wanted = 'matched 7,'
+                page.wait_for_function('(text) => document.querySelector("#rolePreviewOutcomes").textContent.includes(text)', arg=wanted, timeout=15000)
         self.assertEqual(errors, [])
 
 
@@ -1792,6 +1810,55 @@ class StudioRoleStateTests(StudioRoleCase):
         self.assertEqual(errors, [])
 
     @per_engine
+    def test_a_stale_ready_of_the_same_document_never_lowers_the_revision_the_next_apply_carries(self, engine):
+        """Given an accepted preview at revision 5, when a ready of the same document arrives with revision 4, then the
+        preview is unchanged and the next Apply carries baseRevision 5, not 4."""
+        page, frame, errors = self.open(engine, PEER_URL, PEER)
+        newer = self.snapshot_state([self.role_input(fontSize=24)])
+        older = self.snapshot_state([self.role_input(fontSize=30)])
+        self.ready_with(page, frame, newer, revision=5)
+        self.ready_with(page, frame, older, revision=4)
+        self.assertEqual(self.preview(page)['css'], newer['canonicalCss'])
+        self.detected(page, frame)
+        self.assertEqual(self.press_apply(page, frame)['baseRevision'], 5)
+        self.assertEqual(self.preview(page)['css'], newer['canonicalCss'])
+        self.assertEqual(errors, [])
+
+    @per_engine
+    def test_a_ready_for_a_new_document_adopts_its_lower_revision(self, engine):
+        """Given an accepted preview at revision 5, when a ready of a new document arrives with revision 1, then the
+        next Apply carries baseRevision 1: a reload restarts the bridge's counter."""
+        page, frame, errors = self.open(engine, PEER_URL, PEER)
+        self.ready_with(page, frame, self.snapshot_state([self.role_input(fontSize=24)]), revision=5)
+        self.ready_with(page, frame, self.snapshot_state([], documentId='peer-document-2'), revision=1)
+        self.detected(page, frame)
+        self.assertEqual(self.apply_role(page, frame, '24')['baseRevision'], 1)
+        self.assertEqual(errors, [])
+
+    @per_engine
+    def test_a_ready_whose_css_is_not_its_roles_serialization_is_not_shown_even_with_a_matching_digest(self, engine):
+        """Given valid roles reported with unrelated CSS and that CSS's own digest, when the ready arrives first on an
+        empty preview and again over an accepted one, then nothing is shown as acknowledged: the empty preview stays
+        empty, the accepted CSS stays, marked unconfirmed, and Detect and Apply are off."""
+        page, frame, errors = self.open(engine, PEER_URL, PEER)
+        state = self.snapshot_state([self.role_input(fontSize=24)])
+        hostile = self.with_css(state, 'p { color: red; }\n')
+        before = self.preview(page)
+        self.ready_with(page, frame, hostile, revision=1)
+        self.assertEqual(self.preview(page), before)
+        self.assertTrue(self.button(page, 'Detect text styles').is_disabled())
+        self.ready_with(page, frame, state, revision=2)
+        self.assertEqual(self.preview(page)['css'], state['canonicalCss'])
+        self.ready_with(page, frame, hostile, revision=3)
+        shown = self.preview(page)
+        self.assertEqual(shown['css'], state['canonicalCss'])
+        self.assertTrue(shown['status'].startswith('Unconfirmed'))
+        self.assertTrue(self.button(page, 'Detect text styles').is_disabled())
+        self.assertEqual(self.gate(page), (False, UNSUPPORTED))
+        self.assertNotIn('color: red', page.locator('#rolePreviewCss').text_content())
+        self.assertEqual(errors, [])
+
+    @per_engine
     def test_an_invalid_ready_marks_the_shown_preview_unconfirmed_and_a_valid_one_confirms_it(self, engine):
         """Given an accepted snapshot, when a ready arrives with a wrong digest, then the preview stays but is marked
         unconfirmed, Detect and Apply are disabled with the unsupported reason; a valid ready confirms it."""
@@ -1882,18 +1949,19 @@ class StudioRoleStateTests(StudioRoleCase):
         self.type_value(self.control(page, 'Size (px)', 'role-1', 'Existing'), '24')
 
     @per_engine
-    def test_literal_markup_in_names_css_and_details_renders_only_as_text(self, engine):
-        """Given a role named with markup, a canonical CSS that closes the pre, and a rejection detail with a tag, when
-        they render, then they are literal text: no image element, no script side effect."""
+    def test_literal_markup_in_names_and_details_renders_only_as_text(self, engine):
+        """Given a role named with markup and a rejection detail with a tag (the canonical CSS cannot carry markup: the
+        roles' selectors and families refuse it), when they render, then they are literal text: no image element, no
+        script side effect."""
         literal = '<img src="https://isolation.invalid/x" onerror="document.body.dataset.bad=1">'
         page, frame, errors = self.open(engine, PEER_URL, PEER)
         self.detected(page, frame, [group(name=literal)])
         request = self.apply_role(page, frame, '24', name=literal)
-        receipt = self.with_css(self.receipt(request), '</pre>' + literal + '\n')
+        receipt = self.receipt(request)
         self.send(frame, receipt)
         self.wait_status(page, 'Preview applied to 1 role')
         shown = self.preview(page)
-        self.assertEqual(shown['css'], '</pre>' + literal + '\n')
+        self.assertEqual(shown['css'], receipt['canonicalCss'])
         self.assertIn(literal, shown['outcomes'])
         request = self.apply_role(page, frame, '25', name=literal)
         self.send(frame, {'type': 'design:rejected', 'requestId': request['requestId'], 'revision': 1,

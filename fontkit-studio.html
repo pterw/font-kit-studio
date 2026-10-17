@@ -3910,11 +3910,26 @@ if (remembered) kitId.value = remembered;
       && role.selectors.length >= 1 && role.selectors.length <= 32 && new Set(role.selectors).size === role.selectors.length
       && role.selectors.every(validRoleSelector) && validRoleProperties(role.properties);
   }
-  // Roles, CSS and digest must agree: the digest is of the UTF-8 bytes, the CSS is at most 128 KiB, and no roles means no CSS.
+  const ROLE_CSS_NAMES = { fontFamily:"font-family", fontSize:"font-size", fontWeight:"font-weight", lineHeight:"line-height",
+    letterSpacing:"letter-spacing", textTransform:"text-transform" };
+  // The binding canonical sheet for plain roles, duplicated from the bridge's serializeRoleCss (global rule 10): request
+  // role order, fixed property order, LF, two-space indent. R2.S3 must extend this for the Bootstrap variable templates.
+  function serializeRoleSheet(roles) {
+    return roles.map(role => {
+      const lines = ROLE_PROPS.filter(key => Object.hasOwn(role.properties, key)).map(key => {
+        const value = role.properties[key];
+        return `  ${ROLE_CSS_NAMES[key]}: ${key === "fontSize" ? `${value}px` : key === "letterSpacing" ? `${value}em` : value};\n`;
+      });
+      return `${role.selectors.join(", ")} {\n${lines.join("")}}\n`;
+    }).join("");
+  }
+  // Roles, CSS and digest must agree: the CSS is exactly the roles' serialization (the sender controls both CSS and digest,
+  // so a matching digest alone proves nothing), the digest is of its UTF-8 bytes, it is at most 128 KiB, and no roles means no CSS.
   function validAcceptedRoles(roles, css, algorithm, hash) {
     return Array.isArray(roles) && roles.length <= 128 && roles.every(validRoleInput)
       && new Set(roles.map(role => role.id)).size === roles.length && typeof css === "string" && roleBytes(css) <= 128 * 1024
-      && algorithm === "fnv1a32" && hash === fnv1a32(css) && (roles.length === 0) === (css === "");
+      && algorithm === "fnv1a32" && hash === fnv1a32(css) && (roles.length === 0) === (css === "")
+      && css === serializeRoleSheet(roles);
   }
   const newRoleDraft = () => ({ enabled:false, fontFamily:"", fontSize:"", fontWeight:"", lineHeight:"", letterSpacing:"", textTransform:"" });
   // Accepted roles seed drafts for issued ids that have none, so a later Detect shows them selected instead of dropping them.
@@ -5478,11 +5493,15 @@ if (remembered) kitId.value = remembered;
         startHandshake();
         break;
       case "design:ready": {
+        // Within one document of one origin the bridge's revision only grows, so a stale ready never lowers it (a new document may).
+        const sameDocument = rolePreview.documentId !== null && rolePreview.origin === live.expectedOrigin
+          && data.roleState?.documentId === rolePreview.documentId;
         acceptRoleReady(data);
         const targets = Array.isArray(data.targets) ? data.targets.filter(t => isPlainObject(t) && typeof t.id === "string" && t.id) : [];
         live.ready = true;
         clearTimeout(live.noBridgeTimer);
-        live.revision = Number.isInteger(data.revision) && data.revision >= 0 ? data.revision : 0;
+        const readyRevision = Number.isInteger(data.revision) && data.revision >= 0 ? data.revision : 0;
+        live.revision = sameDocument ? Math.max(live.revision, readyRevision) : readyRevision;
         live.targets = new Map(targets.map(t => [t.id, t]));
         targets.forEach(noteTargetMeta);
         followPromotedTargets(targets);
