@@ -3917,13 +3917,14 @@ if (remembered) kitId.value = remembered;
   }
   const ROLE_CSS_NAMES = { fontFamily:"font-family", fontSize:"font-size", fontWeight:"font-weight", lineHeight:"line-height",
     letterSpacing:"letter-spacing", textTransform:"text-transform" };
-  // The binding canonical sheet, duplicated from the bridge's serializeRoleCss (global rule 10): request role order, fixed
+  // The binding canonical sheet, duplicated from the bridge's roleCssBlocks (global rule 10): request role order, fixed
   // property order, LF, two-space indent. A Bootstrap 5 body or mono role that sets a font family first emits a :root block
   // of its adapter's variables; blocks are never merged. Heading and plain roles emit only their own rule.
   function serializeRoleSheet(roles) {
     return roles.map(role => {
-      const variables = Object.hasOwn(role.properties, "fontFamily") ? ROLE_ADAPTER_VARIABLES[role.adapter] || [] : [];
-      const root = variables.length ? `:root {\n${variables.map(name => `  ${name}: ${role.properties.fontFamily};\n`).join("")}}\n` : "";
+      const names = ROLE_ADAPTER_VARIABLES[role.adapter];
+      const root = names && Object.hasOwn(role.properties, "fontFamily")
+        ? `:root {\n${names.map(name => `  ${name}: ${role.properties.fontFamily};\n`).join("")}}\n` : "";
       const lines = ROLE_PROPS.filter(key => Object.hasOwn(role.properties, key)).map(key => {
         const value = role.properties[key];
         return `  ${ROLE_CSS_NAMES[key]}: ${key === "fontSize" ? `${value}px` : key === "letterSpacing" ? `${value}em` : value};\n`;

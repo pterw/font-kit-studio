@@ -774,17 +774,29 @@ class StudioRoleBridgeTests(StudioLegacyCase):
     @per_engine
     def test_every_request_from_the_bootstrap_4_fixture_and_the_plain_role_target_carries_the_plain_adapter(self, engine):
         """Given the Bootstrap 4 fixture and the plain role target under the real bridge, when every detected row is selected
-        with a size and Apply is pressed, then each role in the request carries plain, and no row shows an Adapter line."""
+        with a size no element computes before and Apply is pressed, then each role in the request carries plain, no row
+        shows an Adapter line, every receipt outcome has mismatched 0 and no losses, Studio reports that no checked element
+        failed to show it, and every element the request selectors match computes the typed size."""
         url4, html4 = self.fixture_page('bootstrap4-static')
-        for label, options in (('bootstrap4', {'target': url4, 'peer': html4}), ('role target', {})):
+        size = 27
+        for label, options, roles, matched in (('bootstrap4', {'target': url4, 'peer': html4}, 16, 20), ('role target', {}, 2, 2)):
             with self.subTest(target=label):
                 page, frame, errors = self.start(engine, **options)
                 self.assertEqual(page.locator('#roleRows > li p', has_text=re.compile(r'^Adapter: ')).count(), 0)
                 for index, name in enumerate(self.names(page), start=1):
                     name = name.rsplit(' (', 1)[0]
                     self.control(page, 'Preview this role', f'role-{index}', name).check()
-                    self.type_value(self.control(page, 'Size (px)', f'role-{index}', name), '24')
+                    self.type_value(self.control(page, 'Size (px)', f'role-{index}', name), str(size))
                 request = self.press_apply(page, frame)
-                self.assertGreaterEqual(len(request['roles']), 2)
+                self.assertEqual(len(request['roles']), roles)
                 self.assertEqual({item['adapter'] for item in request['roles']}, {'plain'})
+                self.wait_for_receipt(page, request)
+                self.wait_status(page, f'Preview applied to {roles} roles; 0 checked elements did not show it.')
+                outcomes = self.receipts(page)[-1]['outcomes']
+                self.assertEqual([(item['mismatched'], item['losses']) for item in outcomes], [(0, [])] * roles)
+                self.assertEqual(sum(item['matched'] for item in outcomes), matched)
+                for role in request['roles']:
+                    sizes = frame.evaluate('(selectors) => [...document.querySelectorAll(selectors.join(", "))].map(el => getComputedStyle(el).fontSize)',
+                                           role['selectors'])
+                    self.assertEqual(set(sizes), {f'{size}px'}, role['id'])
                 self.assertEqual(errors, [])
