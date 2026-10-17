@@ -189,10 +189,22 @@
     return open === null;
   }
 
+  // D072: a parenthesis outside quotes is refused (the same one-pass scan; no escapes), and so is a CSS-wide keyword, which
+  // CSS.supports accepts and which would blank the Bootstrap 5 :root variables.
+  function unquotedParenthesis(value) {
+    let open = null;
+    for (const ch of value) {
+      if (open) { if (ch === open) open = null; } else if (ch === '"' || ch === "'") open = ch;
+      else if (ch === '(' || ch === ')') return true;
+    }
+    return false;
+  }
+
   function roleFamily(value) {
     if (typeof value !== 'string') return undefined;
     const trimmed = value.trim();
-    if (trimmed.length < 1 || trimmed.length > 300 || ROLE_FAMILY_UNSAFE.test(trimmed) || !balancedQuotes(trimmed)) return undefined;
+    if (trimmed.length < 1 || trimmed.length > 300 || ROLE_FAMILY_UNSAFE.test(trimmed) || !balancedQuotes(trimmed)
+      || /^(?:inherit|initial|unset|revert|revert-layer)$/i.test(trimmed) || unquotedParenthesis(trimmed)) return undefined;
     return cssSupports('font-family', trimmed) ? trimmed : undefined;
   }
 
@@ -236,21 +248,21 @@
     textTransform: value => value
   };
 
-  // What the heading step of detection can emit: hN and .hN of one level, or one .display-N.
+  // What the heading step of detection can emit: a lone .display-N, else every selector hN or .hN of one level.
   function bootstrapHeadingSelectors(selectors) {
     if (selectors.length === 1 && /^\.display-[1-6]$/.test(selectors[0])) return true;
-    const levels = new Set(selectors.map(value => (/^\.?h([1-6])$/.exec(value) || [])[1]));
-    return levels.size === 1 && !levels.has(undefined);
+    const level = /^\.?h([1-6])$/.exec(selectors[0]);
+    return Boolean(level) && selectors.every(value => (/^\.?h([1-6])$/.exec(value) || [])[1] === level[1]);
   }
 
-  // Value pass over a shaped request. Returns {roles} (canonical, request order) or {reason, detail}.
-  // `evidence` is true when the page's own CSS defines both Bootstrap 5 body variables.
-  function canonicalizeRoles(roles, evidence) {
+  // Value pass over a shaped request, before anything is read from the page. Returns {roles, blocks, css} (canonical,
+  // request order) or {reason, detail}. Whether the page has the Bootstrap 5 evidence a non-plain adapter needs is the
+  // caller's check, once this pass has accepted the request.
+  function canonicalizeRoles(roles) {
     const checked = new Map(), out = [];
     for (const role of roles) {
       const selectors = Array.from(new Set(role.selectors));
-      if (role.adapter !== 'plain' && !evidence
-        || role.adapter === 'bootstrap5-heading' && !bootstrapHeadingSelectors(selectors)) {
+      if (role.adapter === 'bootstrap5-heading' && !bootstrapHeadingSelectors(selectors)) {
         return { reason: 'unsupported-value', detail: 'Unsupported adapter' };
       }
       for (const selector of selectors) {
@@ -266,7 +278,9 @@
       }
       out.push({ id: role.id, name: role.name, selectors, adapter: role.adapter, properties });
     }
-    return { roles: out };
+    const blocks = roleCssBlocks(out), css = blocks.join('');
+    if (new TextEncoder().encode(css).length > MAX_ROLE_CSS_BYTES) return { reason: 'size-limit' };
+    return { roles: out, blocks, css };
   }
 
   // The contract's loss order: property, then reason, then winning selector (null first, then code-unit order).
@@ -1276,11 +1290,20 @@
         letterSpacing: style.letterSpacing === 'normal' ? 0 : round(parseFloat(style.letterSpacing) / size, 4) };
     }
 
-    // The Bootstrap 5 variables as the page's CSS computes them on :root (trimmed; empty when undefined).
+    // The Bootstrap 5 variables as the page's CSS computes them on :root: whether both body variables are defined
+    // (the evidence), and the monospace one (trimmed; empty when undefined).
     bootstrapVariables() {
       const style = getComputedStyle(document.documentElement);
       const read = name => style.getPropertyValue(name).trim();
-      return { body: read('--bs-body-font-family'), sans: read('--bs-font-sans-serif'), mono: read('--bs-font-monospace') };
+      return { evidence: Boolean(read('--bs-body-font-family') && read('--bs-font-sans-serif')), mono: read('--bs-font-monospace') };
+    }
+
+    // Runs one synchronous read of the page's own :root values. A :root block in the preview could set them, so then the
+    // preview is off for the read; a plain block is font-only and the read needs no suspending and no write.
+    readWithoutRootPreview(read) {
+      if (!rolesHaveRootBlock(this.roleAccepted.roles)) return read();
+      const restore = this.suspendRoleSheet();
+      try { return read(); } finally { restore(); this.releaseRoleQuiet(); }
     }
 
     renderedRoleText(text, visibility = new WeakMap()) {
@@ -1355,21 +1378,13 @@
       this.roleSheet = null;
     }
 
-    // CSSOM-only verification: attached, enabled, and the parsed rules equal a reference parse of the
-    // canonical CSS. It never depends on what the rules match.
+    // CSSOM-only verification: attached, enabled, and the parser kept one rule per canonical block. A sheet the parser
+    // cuts short has fewer rules than blocks; a reference parse of the same text would cut it the same way. It never
+    // depends on what the rules match.
     verifyRoleSheet(node, css, ruleCount) {
       const sheet = node.sheet;
       if (!node.isConnected || node.textContent !== css || !sheet || sheet.ownerNode !== node || sheet.disabled) return false;
-      try {
-        const actual = Array.from(sheet.cssRules, rule => rule.cssText);
-        if (typeof CSSStyleSheet === 'function') {
-          const reference = new CSSStyleSheet();
-          reference.replaceSync(css);
-          const expected = Array.from(reference.cssRules, rule => rule.cssText);
-          return actual.length === expected.length && actual.every((text, i) => text === expected[i]);
-        }
-        return actual.length === ruleCount;
-      } catch (e) { return false; }
+      try { return sheet.cssRules.length === ruleCount; } catch (e) { return false; }
     }
 
     // The candidate is built beside the accepted node; the old node is replaced only after verification.
@@ -1390,7 +1405,10 @@
     handleRolesClear(data) { this.handleRoleMutation(data, 'clear'); }
 
     // Apply and clear: validate the whole request, then commit (install verified, state replaced, one
-    // revision). They share checkRevision with the queue but never use acknowledge().
+    // revision). They share checkRevision with the queue but never use acknowledge(). An invalid request, an oversized
+    // one included, is refused before anything is read from the page or written to it. Only a valid request with a
+    // Bootstrap 5 role then reads the evidence, and that read writes (the transition ban) only when the accepted
+    // preview holds a :root block; a valid request refused for missing evidence can therefore still write.
     handleRoleMutation(data, operation) {
       let size;
       try { size = new TextEncoder().encode(JSON.stringify(data)).length; }
@@ -1410,19 +1428,13 @@
       let roles = [], css = '', node = null, blocks = [];
       if (operation === 'apply') {
         if (this.rolePageURL() === null) { this.reject(data.requestId, 'unsupported-value', 'Unsupported page URL'); return; }
-        // Evidence is the app's own CSS: read it with the preview off, and drop the transition ban the read set.
-        let evidence = false;
-        if (data.roles.some(role => role.adapter !== 'plain')) {
-          const restore = this.suspendRoleSheet();
-          try { const found = this.bootstrapVariables(); evidence = Boolean(found.body && found.sans); }
-          finally { restore(); this.releaseRoleQuiet(); }
-        }
-        const built = canonicalizeRoles(data.roles, evidence);
+        const built = canonicalizeRoles(data.roles);
         if (built.reason) { this.reject(data.requestId, built.reason, built.detail); return; }
-        roles = built.roles;
-        blocks = roleCssBlocks(roles);
-        css = blocks.join('');
-        if (new TextEncoder().encode(css).length > MAX_ROLE_CSS_BYTES) { this.reject(data.requestId, 'size-limit'); return; }
+        ({ roles, blocks, css } = built);
+        // Evidence is the app's own CSS, never the preview's.
+        if (roles.some(role => role.adapter !== 'plain') && !this.readWithoutRootPreview(() => this.bootstrapVariables().evidence)) {
+          this.reject(data.requestId, 'unsupported-value', 'Unsupported adapter'); return;
+        }
         if (roles.length) {
           node = this.installRoleSheet(css, blocks.length);
           if (!node) { this.reject(data.requestId, 'stylesheet-blocked'); return; }
@@ -1838,10 +1850,10 @@
 
     // Evidence pages only: suggest Bootstrap adapters and names. A body or mono suggestion needs exactly one
     // qualifying group; a group that qualifies twice takes heading, then mono, then body.
-    suggestBootstrapAdapters(groups, facts, vars, bodyStyle) {
+    suggestBootstrapAdapters(groups, facts, monoFamily, bodyStyle) {
       const list = Array.from(groups.values());
       const one = group => (group.signatures.length === 1 ? group.signatures[0].style : null);
-      const mono = vars.mono ? familyNames(vars.mono) : null, body = JSON.stringify(bodyStyle);
+      const mono = monoFamily ? familyNames(monoFamily) : null, body = JSON.stringify(bodyStyle);
       const monos = list.filter(group => mono && one(group) && familyNames(one(group).fontFamily) === mono);
       const bodies = list.filter(group => one(group) && JSON.stringify(one(group)) === body);
       const names = { 'bootstrap5-mono': 'Monospace', 'bootstrap5-body': 'Body' };
@@ -1952,8 +1964,7 @@
     *collectRoleStyles(job, data) {
       const { groups, seen } = job;
       // Bootstrap 5 evidence comes from the first batch, where the owned sheet is already off: never from the preview.
-      const vars = this.bootstrapVariables(), bodyStyle = this.styleSignature(document.body);
-      const evidence = Boolean(vars.body && vars.sans);
+      const { evidence, mono } = this.bootstrapVariables(), bodyStyle = this.styleSignature(document.body);
       // Native syntax/root validation also runs cooperatively, after the evidence read.
       for (const role of data.knownRoles) for (const selector of role.selectors) {
         yield;
@@ -1998,7 +2009,7 @@
       }
       const facts = new Map();
       for (const group of groups.values()) { yield; facts.set(group, yield* this.roleBindings(group, members.get(group), query, evidence)); }
-      if (evidence) this.suggestBootstrapAdapters(groups, facts, vars, bodyStyle);
+      if (evidence) this.suggestBootstrapAdapters(groups, facts, mono, bodyStyle);
       const list = Array.from(groups.values());
       for (let i = 0; i < list.length; i += 1) for (let j = i + 1; j < list.length; j += 1) {
         let near = false;
@@ -2014,7 +2025,7 @@
       }
       for (const role of data.knownRoles) for (const selector of role.selectors) {
         yield;
-        const signatures = [];
+        const signatures = [], variants = new Map();
         const matched = query(selector);
         if (matched.some(el => el === document.documentElement || el === document.body)) {
           this.reject(job.requestId, 'unsupported-value'); this.cancelRoleJobs(); return null;
@@ -2023,8 +2034,9 @@
           yield;
           const style = styles.get(el);
           if (!style) continue;
-          let variant = signatures.find(v => JSON.stringify(v.style) === JSON.stringify(style));
-          if (!variant) { variant = { style, count: 0 }; signatures.push(variant); }
+          const key = JSON.stringify(style);
+          let variant = variants.get(key);
+          if (!variant) { variant = { style, count: 0 }; variants.set(key, variant); signatures.push(variant); }
           variant.count += 1;
         }
         job.selectorChecks.push({ roleId: role.id, selector,
@@ -3744,11 +3756,14 @@
       }
       Object.keys(this.options.tokens || {}).forEach((name) => names.add(name));
 
-      const rootStyle = window.getComputedStyle(root);
+      // The page's own values: a preview's :root block must not be reported as the page's tokens.
       const tokens = {};
-      names.forEach((name) => {
-        const value = rootStyle.getPropertyValue(name).trim();
-        if (value) tokens[name] = value;
+      this.readWithoutRootPreview(() => {
+        const rootStyle = window.getComputedStyle(root);
+        names.forEach((name) => {
+          const value = rootStyle.getPropertyValue(name).trim();
+          if (value) tokens[name] = value;
+        });
       });
       return tokens;
     }

@@ -23,7 +23,10 @@ Two things have their own version numbers:
 - The bridge previews text-style roles from one stylesheet it owns
   (`design:roles-apply`, `design:roles-clear`). It validates the whole request
   before writing, reports measured matches and property losses, and clears
-  the preview exactly. Detection keeps measuring the app's own styles; with a
+  the preview exactly. It refuses a role family that is a CSS-wide keyword or
+  holds a parenthesis outside quotes, and a role sheet the browser parses
+  short, and `design:ready` reports the page's own tokens while a preview is
+  applied. Detection keeps measuring the app's own styles; with a
   preview applied, CSS transitions do not start while it scans. On Bootstrap 5
   pages it reads Bootstrap's own `:root` font variables as evidence and suggests
   body, monospace and heading roles; a display heading binds its display class, so
