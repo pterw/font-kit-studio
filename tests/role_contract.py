@@ -35,7 +35,7 @@ REQUEST_BYTES, REPLY_BYTES, CSS_BYTES = 256 * 1024, 1024 * 1024, 128 * 1024   # 
 EMPTY_HASH = '811c9dc5'              # FNV-1a32 of the empty string
 ROLE_REVISION = 1                    # Addendum 26 item 1; 0.4.0 contract
 UNKNOWN_KEY = 'futureField'          # the key with_unknown_keys adds (Addendum 26 item 3)
-TOLERANT_KINDS = ('detected', 'roles-applied', 'role-state')   # Studio ignores unknown keys in these; R2.6S appends 'roles-page'
+TOLERANT_KINDS = ('detected', 'roles-applied', 'role-state', 'roles-page')   # Studio ignores unknown keys in these
 
 CASES = ('none', 'uppercase', 'lowercase', 'capitalize')                       # type Case
 ADAPTERS = ('plain', 'bootstrap5-body', 'bootstrap5-mono', 'bootstrap5-heading')   # RoleInput.adapter
@@ -153,7 +153,7 @@ def wire(message):
 
 
 def violations(kind, message):
-    """One string per value of `message` outside the table, for kind 'detected', 'roles-applied', 'rejected' or 'role-state'.
+    """One string per value of `message` outside the table, for kind 'detected', 'roles-applied', 'rejected', 'role-state' or 'roles-page'.
 
     It checks counts, lengths (UTF-16 units), bytes, enums, number ranges, families, the stable/reason rule, the page bindings
     (a body group binds exactly `body`, a mono page group binds code, kbd, pre, samp), one body and one mono role or group, `body` only
@@ -161,7 +161,7 @@ def violations(kind, message):
     ignores unknown keys (Addendum 26 item 3) and the bridge sends exactly the revision-1 fields, so a missing field raises KeyError,
     except a group's `adapter` (read with `get`: a missing one is a violation like a wrong one).
     """
-    if kind not in ('detected', 'roles-applied', 'rejected', 'role-state'):
+    if kind not in ('detected', 'roles-applied', 'rejected', 'role-state', 'roles-page'):
         raise ValueError(f'unknown kind {kind!r}')
     found = []
 
@@ -293,6 +293,8 @@ def violations(kind, message):
                          'winningSelector has a control character')
     elif kind == 'role-state':
         roles_part()
+    elif kind == 'roles-page':   # revision 1 sends exactly type, protocolVersion, sessionId, documentId, pageVersion, pageURL
+        count(message['pageVersion'], 2 ** 53 - 1, 'pageVersion')
     else:
         need(message['reason'] in REJECTION_REASONS, f'reason: {message["reason"]!r}')
         detail = message.get('detail')

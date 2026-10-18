@@ -354,22 +354,23 @@ class StudioRoleCase(unittest.TestCase):
 
 class StudioRoleBoundaryTests(StudioRoleCase):
     def test_bounded_rows_collection_and_utf8_request_limit_are_visible(self):
-        """Given 128 detected roles with long selectors, when Detect repeats, then the oversize request is refused
-        and the collection limit keeps new roles out, while the peer only ever received hello and detect."""
+        """Given 128 detected roles sharing one long selector, when Detect repeats, then the second request carries all 128
+        known roles, a 129th role is kept out by the collection limit and a reordered known role keeps role-1, while the
+        peer only ever received hello and detects."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, frame, errors = self.open(engine, TARGET + '/peer', PEER)
                 request = self.pending(page, frame)
                 groups = [group(f'g-{i}', f'Role {i}', f'Author {i}') for i in range(table.ROLES)]
-                selectors = [{'value': '.' + c * 1050, 'stable': True, 'reason': 'class'} for c in ('a', 'b')]
+                selectors = [{'value': '.' + 'a' * 1050, 'stable': True, 'reason': 'class'}]
                 for item in groups:
                     item['selectors'] = selectors
                 self.send(frame, self.reply(request, groups))
                 page.wait_for_function('document.querySelector("#roleRows").children.length===' + str(table.ROLES))
                 self.assertEqual(page.locator('#roleRows > li').last.get_attribute('data-role-id'), 'role-128')
                 page.get_by_role('button', name='Detect text styles').click()
-                page.wait_for_function('document.querySelector("#roleStatus").textContent.includes("request limit")')
-                self.assertEqual(frame.evaluate('requests.length'), 1)
+                frame.wait_for_function('requests.length === 2')
+                self.assertEqual(frame.evaluate('requests[1].knownRoles.length'), table.ROLES)
                 self.assertEqual(page.locator('#roleRows > li').count(), table.ROLES)
                 frame.evaluate('ready()')
                 page.wait_for_function('document.querySelector("#roleRows").children.length===0')
@@ -383,7 +384,7 @@ class StudioRoleBoundaryTests(StudioRoleCase):
                 self.send(frame, self.reply(request, [group('reordered', 'Existing role', 'Author 0')]))
                 page.wait_for_function('document.querySelector("#roleRows").children.length===1')
                 self.assertEqual(page.locator('#roleRows > li').first.get_attribute('data-role-id'), 'role-1')
-                self.assertEqual(self.sent(frame), ['design:hello', 'design:detect', 'design:detect', 'design:detect'])
+                self.assertEqual(self.sent(frame), ['design:hello'] + ['design:detect'] * 4)
                 self.unchanged_page(frame)
                 self.assertEqual(errors, [])
 
@@ -634,7 +635,8 @@ class StudioRoleBoundaryTests(StudioRoleCase):
 
     def test_request_limit_counts_utf8_bytes_not_characters(self):
         """Given roles whose selectors are multi-byte, when the known-roles request would pass a character count but
-        pass 256 KiB as bytes, then Detect refuses; with fewer roles the same selectors are sent."""
+        pass 256 KiB as bytes, then the 128-role route is refused whole with the limit text and Detect still sends the 100
+        stored roles; the 100-role route is stored."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, frame, errors = self.open(engine, TARGET + '/peer', PEER)
@@ -649,9 +651,10 @@ class StudioRoleBoundaryTests(StudioRoleCase):
                 page.wait_for_function(f'document.querySelector("#roleRows").children.length==={table.ROLES}')
                 characters = len(json.dumps(many, ensure_ascii=False))
                 self.assertLess(characters, table.REQUEST_BYTES, 'a length-based limit would let this through')
+                self.assertEqual(page.locator('#roleStatus').inner_text(), 'Collection limit reached; this page was not stored')
                 page.get_by_role('button', name='Detect text styles').click()
-                page.wait_for_function('document.querySelector("#roleStatus").textContent.includes("request limit")')
-                self.assertEqual(frame.evaluate('requests.length'), 2)
+                frame.wait_for_function('requests.length === 3')
+                self.assertEqual(len(frame.evaluate('requests[2].knownRoles')), 100)
                 self.assertEqual(errors, [])
 
     def test_detected_reply_at_one_mib_is_accepted_and_one_byte_more_is_not(self):
@@ -1140,15 +1143,15 @@ class StudioRoleApplyTests(StudioRoleCase):
 
     @per_engine
     def test_apply_refuses_a_request_over_256_kib_counted_in_utf8_bytes_and_names_the_limit(self, engine):
-        """Given 128 selected roles whose multi-byte selectors are under 256 KiB as characters but over it as UTF-8,
-        when Apply is considered, then it is disabled with the request-limit reason; unselecting enough rows makes
-        the same selectors fit and Apply sends them."""
+        """Given 128 selected roles whose multi-byte selectors fit a Detect request but, with each role's name and
+        properties, pass 256 KiB as UTF-8 bytes in the Apply request, when Apply is considered, then it is disabled with the
+        request-limit reason; unselecting enough rows makes the same selectors fit and Apply sends them."""
         page, frame, errors = self.open(engine, PEER_URL, PEER)
         roles = [self.role_input(f'role-{i}', f'Author {i}', fontSize=20) for i in range(1, table.ROLES + 1)]
         self.ready_with(page, frame, self.snapshot_state(roles), revision=0)
-        selector = [{'value': '.' + '界' * 700, 'stable': True, 'reason': 'class'}]
+        selector = [{'value': '.' + '界' * 660, 'stable': True, 'reason': 'class'}]
         self.detected(page, frame, [group(f'g-{i}', f'Author {i}', f'Author {i}', selectors=selector) for i in range(1, table.ROLES + 1)])
-        self.assertLess(len(json.dumps(roles, ensure_ascii=False)) + table.ROLES * 700, table.REQUEST_BYTES)
+        self.assertLess(len(json.dumps(roles, ensure_ascii=False)) + table.ROLES * 660, table.REQUEST_BYTES)
         enabled, reason = self.gate(page)
         self.assertFalse(enabled)
         self.assertIn('256 KiB', reason)
@@ -1927,17 +1930,25 @@ class StudioRoleStateTests(StudioRoleCase):
         self.assertEqual(errors, [])
 
     @per_engine
-    def test_the_page_notice_message_changes_nothing(self, engine):
-        """Given a detected page, when a design:roles-page notice arrives (PR C), then Studio's identity, rows and
-        statuses are unchanged: the next Apply still carries the old page version."""
+    def test_a_null_url_page_notice_disables_detect_and_apply_and_a_forged_one_changes_nothing(self, engine):
+        """Given a detected page, when a design:roles-page notice for version 5 with a null URL carries another session id,
+        then the status, Detect and the page version are unchanged (the next Apply carries 0); when the authenticated
+        notice arrives, then the rows are gone, Detect is disabled, the status is the unsupported-URL text and Apply is
+        disabled with it."""
         page, frame, errors = self.open(engine, PEER_URL, PEER)
         self.detected(page, frame)
         status = page.locator('#roleStatus').inner_text()
-        self.send(frame, {'type': 'design:roles-page', 'documentId': 'peer-document', 'pageVersion': 5, 'pageURL': None})
+        notice = {'type': 'design:roles-page', 'documentId': 'peer-document', 'pageVersion': 5, 'pageURL': None}
+        self.send(frame, notice, sessionId='wrong-session')
         self.settle(page, frame)
         self.assertEqual(page.locator('#roleStatus').inner_text(), status)
         self.assertTrue(self.button(page, 'Detect text styles').is_enabled())
         self.assertEqual(self.apply_role(page, frame, '24')['pageVersion'], 0)
+        self.send(frame, notice)
+        page.wait_for_function('(t) => document.querySelector("#roleStatus").textContent === t', arg=UNAVAILABLE)
+        self.assertEqual(page.locator('#roleRows > li').count(), 0)
+        self.assertTrue(self.button(page, 'Detect text styles').is_disabled())
+        self.assertEqual(self.gate(page), (False, UNAVAILABLE))
         self.assertEqual(errors, [])
 
     @per_engine
@@ -3126,6 +3137,10 @@ class StudioRoleReplyTests(StudioLegacyCase):
             receipt = self.receipt(self.apply_role(page, frame, '24'), [outcome(losses=[loss(selector='.winner')])])
             self.send(frame, wrap(receipt))
             self.wait_text(page, '#rolePreviewCss', receipt['canonicalCss'])
+        elif kind == 'roles-page':
+            self.detected(page, frame, [group()])
+            self.send(frame, wrap({'type': 'design:roles-page', 'documentId': 'hybrid-document', 'pageVersion': 1, 'pageURL': HYBRID_URL}))
+            self.wait_text(page, '#roleStatus', 'The page changed since the last Detect; press Detect text styles. This page has not been checked.')
         else:
             state = self.snapshot_state([self.role_input()], documentId='hybrid-document', pageURL=HYBRID_URL)
             frame.evaluate('(s) => { rs.state = s; fake.reannounce() }', wrap(state))
@@ -3133,18 +3148,19 @@ class StudioRoleReplyTests(StudioLegacyCase):
         shown = {'rows': page.locator('#roleRows').inner_text(), 'status': self.status(page),
                  'panel': page.locator('#detectedRoles').inner_text(), **self.preview(page)}
         after = aligned(self.exports(page))
-        requests = json.dumps(self.detected(page, frame)) + json.dumps(self.apply_role(page, frame, '25'))
+        later = {'pageVersion': 1, 'currentPageVersion': 1} if kind == 'roles-page' else {}   # the roles-page moved the page to version 1
+        requests = json.dumps(self.detected(page, frame, **later)) + json.dumps(self.apply_role(page, frame, '25'))
         self.assertEqual(errors, [])
         return shown, before, after, requests
 
     @per_engine
     def test_a_reply_with_unknown_keys_outside_echoed_roles_renders_exactly_like_the_plain_reply(self, engine):
-        """Given a detected reply, a receipt and a ready snapshot that carry an unknown key in every object except the
-        echoed roles, when each arrives, then Studio shows exactly what it shows for the plain message (rows, status,
-        preview CSS and outcomes). That is the tolerance this test proves. The export, marker and later-request assertions
-        are regression guards that hold by construction today (Studio stores only the validated copy and exports no role
-        data), so they cannot fail until Studio starts exporting or re-sending role data; the proof that raw reply objects
-        are never stored belongs to R2.6S."""
+        """Given a detected reply, a receipt, a ready snapshot and a roles-page that carry an unknown key in every object
+        except the echoed roles, when each arrives, then Studio shows exactly what it shows for the plain message (rows,
+        status, preview CSS and outcomes). That is the tolerance this test proves. The export, marker and later-request
+        assertions are regression guards that hold by construction today (Studio stores only the validated copy and exports
+        no role data), so they cannot fail until Studio starts exporting or re-sending role data; that raw reply objects
+        are never stored is not observable by name, and test_role_routes records that mutant as equivalent."""
         for kind in table.TOLERANT_KINDS:
             with self.subTest(kind=kind):
                 plain = self.tolerant_session(engine, kind, lambda message: message)
@@ -3360,8 +3376,9 @@ class StudioRoleReplyTests(StudioLegacyCase):
                  'pageVersion': 0, 'roles': [self.role_input()]}
         messages = {'detected': self.reply(request, [group(), group('scan-b', 'Text', None)]),
                     'roles-applied': self.receipt(apply, [outcome(losses=[loss(selector='.winner')])]),
-                    'role-state': self.snapshot_state(apply['roles'])}
-        self.assertEqual(table.TOLERANT_KINDS, ('detected', 'roles-applied', 'role-state'))
+                    'role-state': self.snapshot_state(apply['roles']),
+                    'roles-page': {'type': 'design:roles-page', 'documentId': 'peer-document', 'pageVersion': 1, 'pageURL': PEER_URL}}
+        self.assertEqual(table.TOLERANT_KINDS, ('detected', 'roles-applied', 'role-state', 'roles-page'))
         for kind, message in messages.items():
             with self.subTest(kind=kind):
                 built = table.with_unknown_keys(message)

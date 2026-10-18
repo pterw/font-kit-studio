@@ -11,7 +11,8 @@ from test_studio_roles import (APPLY, CLEAR, RESET_ALL, ROLE_PAGE, STALE, TARGET
 class StudioRoleIntegrationTests(StudioRoleCase):
     def test_fullscreen_preserves_roles_and_preview_height_through_escape(self):
         """Given detected roles, when the preview goes fullscreen in fluid and fixed widths and back with Escape, then
-        the preview stays above 500 px, the panel is inert while fullscreen, and its observations are unchanged."""
+        the preview stays above 500 px, the panel is inert while fullscreen, its rows are unchanged and its status reads
+        the page-changed sentence once the resize reaches Studio as a roles-page (a viewport change moves the page version)."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, frame, errors = self.open(engine, viewport={'width': 1280, 'height': 800})
@@ -22,10 +23,12 @@ class StudioRoleIntegrationTests(StudioRoleCase):
                 observed = observations()
                 self.assertEqual([row[0] for row in observed[1]], ['role-1', 'role-2'])
                 author = frame.locator('main').evaluate('el=>el.outerHTML')
+                changed = (PAGE_CHANGED, observed[1])
                 for width in ('#btnDeviceFluid', '#btnDeviceDesktop'):
                     page.locator(width).click()
                     page.locator('#btnToggleFullscreen').click()
                     page.wait_for_function('document.querySelector(".composer-shell").classList.contains("is-theater-fullscreen")')
+                    page.wait_for_function('(text) => document.querySelector("#roleStatus").textContent === text', arg=PAGE_CHANGED)
                     info = page.evaluate('''() => {
                         const s=document.querySelector('#previewScroller'), f=document.querySelector('#targetAppFrame');
                         s.scrollLeft=s.scrollWidth;
@@ -42,10 +45,10 @@ class StudioRoleIntegrationTests(StudioRoleCase):
                         self.assertEqual(info['width'], 1440)
                         self.assertGreater(info['width'], info['client'])
                     self.assertTrue(page.locator('#detectedRoles').evaluate('el=>!!el.closest("[inert]")'))
-                    self.assertEqual(observations(), observed)
+                    self.assertEqual(observations(), changed)
                     page.keyboard.press('Escape')
                     page.wait_for_function('!document.querySelector(".composer-shell").classList.contains("is-theater-fullscreen")')
-                    self.assertEqual(observations(), observed)
+                    self.assertEqual(observations(), changed)
                     button = page.get_by_role('button', name='Detect text styles', exact=True)
                     self.assertTrue(button.is_visible())
                     button.focus()
@@ -183,6 +186,7 @@ class StudioRoleIntegrationTests(StudioRoleCase):
 CAPTURE = """window.__s2b = { session: null, inbound: [] };
 addEventListener('message', e => { const d = e.data; if (d && d.protocolVersion === 1 && e.origin === 'http://target.test') {
   if (d.sessionId) __s2b.session = d.sessionId; __s2b.inbound.push(JSON.parse(JSON.stringify(d))); } });"""
+PAGE_CHANGED = 'The page changed since the last Detect; press Detect text styles. This page has not been checked.'
 # What each RoleOutcome reason reads as, per the R2.5 handoff.
 REASON_TEXT = {'author-rule': 'overridden by', 'inline': 'overridden by inline style', 'inherited': 'inherits from',
                'unreadable-sheet': 'a stylesheet could not be read', 'complex-cascade': 'overridden; source not provable',
@@ -701,8 +705,9 @@ class StudioRoleBridgeTests(StudioLegacyCase):
     @per_engine
     def test_fullscreen_with_a_populated_preview_keeps_its_height_inert_panel_and_observations(self, engine):
         """Given an applied preview with draft values, when the preview goes fullscreen in fluid and fixed 1440 widths
-        and back with Escape, then it stays above 500 px, the panel is inert, and the rows, CSS and statuses read the
-        same afterwards."""
+        and back with Escape, then it stays above 500 px, the panel is inert, and the rows, CSS and preview status read the
+        same afterwards while the role status reads the page-changed sentence once the resize reaches Studio as a roles-page
+        (a viewport change moves the page version)."""
         page, frame, errors = self.open(engine, init=CAPTURE, viewport={'width': 1280, 'height': 800})
         self.record(frame)
         self.assertIn('Detected', self.detect(page))
@@ -712,17 +717,19 @@ class StudioRoleBridgeTests(StudioLegacyCase):
                     page.locator('#roleRows > li').evaluate_all('rows => rows.map(row => [row.dataset.roleId, row.textContent])'),
                     page.locator('#roleRows [data-role-field]').evaluate_all('els => els.map(el => el.type === "checkbox" ? el.checked : el.value)'))
         observed = observations()
+        changed = (observed[0], PAGE_CHANGED, *observed[2:])
         for width in ('#btnDeviceFluid', '#btnDeviceDesktop'):
             page.locator(width).click()
             page.locator('#btnToggleFullscreen').click()
             page.wait_for_function('document.querySelector(".composer-shell").classList.contains("is-theater-fullscreen")')
+            page.wait_for_function('(text) => document.querySelector("#roleStatus").textContent === text', arg=PAGE_CHANGED)
             height = page.locator('#targetAppContainer').evaluate('el => el.getBoundingClientRect().height')
             self.assertGreater(height, 500, width)
             self.assertTrue(page.locator('#detectedRoles').evaluate('el => !!el.closest("[inert]")'))
-            self.assertEqual(observations(), observed)
+            self.assertEqual(observations(), changed)
             page.keyboard.press('Escape')
             page.wait_for_function('!document.querySelector(".composer-shell").classList.contains("is-theater-fullscreen")')
-            self.assertEqual(observations(), observed)
+            self.assertEqual(observations(), changed)
         self.assertEqual(errors, [])
 
     def fixture_page(self, name):

@@ -1251,12 +1251,16 @@ body.dark .live-overlay-label { color: #111; }
       <div class="bridge-bar-row"><h2 id="roleHeading">Detected roles</h2>
         <button id="detectTextStyles" class="btn" type="button" aria-describedby="roleStatus">Detect text styles</button></div>
       <p id="roleStatus" role="status" aria-label="Role detection status" aria-live="polite">Connect a Live App to detect text styles.</p>
+      <p id="roleNotice" role="status" aria-label="Role notice" aria-live="polite" hidden></p>
       <p>Light-DOM text only</p>
       <p>Detected values are the page baseline, measured without the role preview.</p>
       <ul id="roleRows" aria-label="Detected text roles"></ul>
+      <p id="roleVisited" hidden></p>
+      <ul id="roleInventory" aria-label="Visited pages by role" hidden></ul>
       <div class="role-actions">
         <button id="roleApply" class="btn" type="button">Apply selected roles</button>
         <button id="roleClear" class="btn" type="button">Clear preview</button>
+        <button id="roleClearVisited" class="btn" type="button">Clear visited pages</button>
         <span id="roleApplyHint" class="role-hint" data-hint-for="roleApply" hidden></span>
         <span id="roleClearHint" class="role-hint" data-hint-for="roleClear" hidden></span>
       </div>
@@ -3394,7 +3398,7 @@ if (remembered) kitId.value = remembered;
   const LIVE_CONTROL = { fontFamily:"liveFontFamily", fontSize:"liveFontSize", fontWeight:"liveFontWeight", lineHeight:"liveLineHeight",
     letterSpacing:"liveLetterSpacing", color:"liveColorHex", textAlign:"liveTextAlign", textTransform:"liveTextTransform", text:"liveText" };
   const BRIDGE_TYPES = new Set(["design:bridge-ready", "design:ready", "design:applied", "design:rejected",
-    "design:hover", "design:selected", "design:bounds", "design:targets", "design:warning", "design:detected", "design:roles-applied"]);
+    "design:hover", "design:selected", "design:bounds", "design:targets", "design:warning", "design:detected", "design:roles-applied", "design:roles-page"]);
 
   const targetAppUrlInput = q("targetAppUrl");
   const btnConnectTarget = q("btnConnectTarget");
@@ -3738,13 +3742,22 @@ if (remembered) kitId.value = remembered;
   }
 
   // Role observations never enter the mutation queue, saved overrides or exports.
-  const roleView = { origin:null, identity:null, pending:null, rows:[], ids:new Map(), nextId:0,
+  const roleView = { origin:null, identity:null, pending:null, rows:[], ids:new Map(), nextId:0, notice:"",
     status:"Connect a Live App to detect text styles.", stylesheet:false, limitReached:false };
   const ROLE_UNSUPPORTED = "This bridge does not support role detection/preview.";
   const ROLE_UNAVAILABLE = "Role detection/preview unavailable: unsupported page URL.";
   const ROLE_DETECT_UNREADABLE = "Studio could not read the page's reply to Detect; this page has not been checked.";
   const ROLE_DETECT_SILENT = "The page did not reply to Detect; this page has not been checked.";
   const ROLE_REPLY_UNREADABLE = "Studio could not read the page's reply; the preview on the page may differ from what Studio shows.";
+  const ROLE_DETECT_STALE = "The page's reply to Detect was out of date; press Detect text styles again; this page has not been checked.";
+  const ROLE_READY = "Ready to detect text styles.";
+  const ROLE_PAGE_CHANGED = "The page changed since the last Detect; press Detect text styles. This page has not been checked.";
+  const ROLE_LIMIT = "Collection limit reached; this page was not stored";
+  const ROLE_NOT_APPLIED = "Role preview is not applied on this page.";
+  const ROLE_NEW_ORIGIN = "A new Live App origin started a new collection; visited pages from the previous origin were cleared.";
+  const ROLE_CLEARED = "Visited pages cleared. The applied preview and inspector edits stay.";
+  // The visited-page collection: session only, never saved, exported or sent except as known roles. The origin is roleView.origin.
+  const roleCollection = { routes:new Map(), refs:new Map(), labels:new Map(), evidence:null };
   const ROLE_REASONS = ["time-budget", "element-limit", "group-limit", "variant-limit", "identity-limit", "reply-limit", "page-changed"];
   const ROLE_SELECTOR_PART = SELECTOR_PART.replace("data-design-id", "data-design-(?:id|role)");
   const ROLE_SELECTOR_STEP = `(?:(?:[a-z][a-z0-9-]*|\\*)(?:${ROLE_SELECTOR_PART})*|(?:${ROLE_SELECTOR_PART})+)`;
@@ -3802,6 +3815,7 @@ if (remembered) kitId.value = remembered;
     const s = identity.style;
     return JSON.stringify(["style", s.fontFamily, s.fontSize, s.fontWeight, s.textTransform, s.letterSpacing]);
   }
+  function roleStyleKey(style) { return roleIdentityKey({ kind:"style", style }); }
   function validRoleVariants(variants, count, limit = 8) {
     if (!Array.isArray(variants) || variants.length > limit) return false;
     const keys = new Set();
@@ -3809,7 +3823,7 @@ if (remembered) kitId.value = remembered;
     for (const variant of variants) {
       if (!exactRoleFields(variant, ["style", "count"]) || !validRoleStyle(variant.style)
         || !roleCount(variant.count, 10000) || variant.count === 0) return false;
-      const key = roleIdentityKey({ kind:"style", style:variant.style });
+      const key = roleStyleKey(variant.style);
       if (keys.has(key)) return false;
       keys.add(key); sum += variant.count;
     }
@@ -3833,7 +3847,7 @@ if (remembered) kitId.value = remembered;
         || identity.name !== identity.name.trim() || identity.name !== group.authorRole) return false;
     } else if (!exactRoleFields(identity, ["kind", "style"]) || identity.kind !== "style" || !validRoleStyle(identity.style)
       || group.authorRole !== null || group.signatures.length !== 1
-      || roleIdentityKey(identity) !== roleIdentityKey({ kind:"style", style:group.signatures[0].style })) return false;
+      || roleIdentityKey(identity) !== roleStyleKey(group.signatures[0].style)) return false;
     const selectors = new Set();
     if (!group.selectors.every(binding => {
       if (!exactRoleFields(binding, ["value", "stable", "reason"]) || !validRoleSelector(binding.value, binding.reason === "page")
@@ -3969,8 +3983,6 @@ if (remembered) kitId.value = remembered;
   // other key, in the role or its properties, gives null. `nested` maps a field to a shape, [shape] for a list of them, or a
   // function that chooses the shape from the value.
   const roleShape = (keys, nested = {}, strict = false) => ({ keys, nested, strict });
-  const ROLE_RECEIPT_KEYS = ["type", "protocolVersion", "sessionId", "requestId", "operation", "revision", "documentId", "pageVersion",
-    "currentPageVersion", "currentPageURL", "roles", "canonicalCss", "hashAlgorithm", "cssHash", "outcomesComplete", "outcomeReason", "outcomes"];
   const ROLE_WIRE_STYLE = roleShape(["fontFamily", "fontSize", "fontWeight", "textTransform", "letterSpacing"]);
   const ROLE_WIRE_VARIANT = roleShape(["style", "count"], { style:ROLE_WIRE_STYLE });
   const ROLE_WIRE_AUTHOR = roleShape(["kind", "name"]);
@@ -3985,9 +3997,13 @@ if (remembered) kitId.value = remembered;
       "currentPageVersion", "currentPageURL", "complete", "reason", "elapsedMs", "scannedElements", "groups", "selectorChecks"], {
       groups:[ROLE_WIRE_GROUP],
       selectorChecks:[roleShape(["roleId", "selector", "matchCount", "signatures"], { signatures:[ROLE_WIRE_VARIANT] })] }),
-    receipt:roleShape(ROLE_RECEIPT_KEYS, { roles:[ROLE_WIRE_INPUT], outcomes:[roleShape(["id", "matched", "checked", "mismatched", "complete", "losses"], {
-      losses:[roleShape(["property", "count", "winningSelector", "reason"])] })] }),
-    state:roleShape(["documentId", "pageVersion", "pageURL", "roles", "canonicalCss", "hashAlgorithm", "cssHash"], { roles:[ROLE_WIRE_INPUT] }) };
+    receipt:roleShape(["type", "protocolVersion", "sessionId", "requestId", "operation", "revision", "documentId", "pageVersion",
+      "currentPageVersion", "currentPageURL", "roles", "canonicalCss", "hashAlgorithm", "cssHash", "outcomesComplete", "outcomeReason", "outcomes"], {
+      roles:[ROLE_WIRE_INPUT],
+      outcomes:[roleShape(["id", "matched", "checked", "mismatched", "complete", "losses"], {
+        losses:[roleShape(["property", "count", "winningSelector", "reason"])] })] }),
+    state:roleShape(["documentId", "pageVersion", "pageURL", "roles", "canonicalCss", "hashAlgorithm", "cssHash"], { roles:[ROLE_WIRE_INPUT] }),
+    page:roleShape(["type", "protocolVersion", "sessionId", "documentId", "pageVersion", "pageURL"]) };
   function readRoleWire(value, shape) {
     if (typeof shape === "function") shape = shape(value);
     if (!shape || !isPlainObject(value)) return null;
@@ -4026,6 +4042,7 @@ if (remembered) kitId.value = remembered;
     const gone = rolePreview.roles.filter(role => !kept.has(role.id)).map(role => role.name);
     // A ready (a reload, another editor) replaces the state without any Studio action, so it names nothing as removed.
     rolePreview.removed = announce && gone.length ? `Removed from the preview: ${gone.join(", ")}.` : "";
+    if (announce) roleView.notice = "";
     Object.assign(rolePreview, { roles, css, hash, revision, documentId, outcomes, unconfirmed:false, message, shown:message, origin:live.expectedOrigin });
     seedRoleDrafts();
   }
@@ -4045,7 +4062,7 @@ if (remembered) kitId.value = remembered;
     const state = readRoleReply(data.roleState, ROLE_WIRE.state);
     const valid = isPlainObject(data.capabilities) && safeRoleWire(data.capabilities, 1024 * 1024)
       && data.capabilities.roleDetection === true && Number.isSafeInteger(data.capabilities.roleRevision) && data.capabilities.roleRevision >= 1
-      && roleCount(data.revision) && exactRoleFields(state, ["documentId", "pageVersion", "pageURL", "roles", "canonicalCss", "hashAlgorithm", "cssHash"])
+      && roleCount(data.revision) && exactRoleFields(state, ROLE_WIRE.state.keys)
       && roleText(state.documentId, 200) && roleCount(state.pageVersion) && validRoleURL(state.pageURL, true)
       && validAcceptedRoles(state.roles, state.canonicalCss, state.hashAlgorithm, state.cssHash);
     if (valid && roleView.identity?.documentId === state.documentId && state.pageVersion < roleView.identity.pageVersion) return;
@@ -4060,12 +4077,16 @@ if (remembered) kitId.value = remembered;
       return;
     }
     if (roleView.origin !== live.expectedOrigin) {
-      roleView.origin = live.expectedOrigin; roleView.ids.clear(); roleView.nextId = 0;
-      roleDrafts.clear(); roleView.limitReached = false;
+      if (roleView.origin !== null) roleView.notice = ROLE_NEW_ORIGIN;
+      roleView.origin = live.expectedOrigin; clearRoleCollection(false);
+    } else if (rolePreview.documentId !== state.documentId) {
+      // A new document of the same origin that lost a preview the page held: Studio never replays it (explicit Apply only).
+      roleView.notice = rolePreview.origin === live.expectedOrigin && rolePreview.roles.length > 0 && !state.roles.length ? ROLE_NOT_APPLIED : "";
     }
     roleView.stylesheet = data.capabilities.roleStylesheet === true;
     roleView.identity = { documentId:state.documentId, pageVersion:state.pageVersion, pageURL:state.pageURL };
-    roleView.status = state.pageURL === null ? ROLE_UNAVAILABLE : "Ready to detect text styles.";
+    compareEvidence(state.documentId, state.pageVersion, state.pageURL);
+    roleView.status = state.pageURL === null ? ROLE_UNAVAILABLE : ROLE_READY;
     const same = rolePreview.documentId === state.documentId && rolePreview.hash === state.cssHash;
     installAcceptedRoles(state.roles, state.canonicalCss, state.cssHash, data.revision, state.documentId,
       same ? rolePreview.outcomes : null,
@@ -4079,6 +4100,7 @@ if (remembered) kitId.value = remembered;
     button.disabled = !live.ready || !roleView.identity || roleView.identity.pageURL === null;
     button.title = button.disabled ? roleView.status : "Read the current page's text styles without changing it";
     q("roleStatus").textContent = roleView.status;
+    q("roleNotice").textContent = roleView.notice; q("roleNotice").hidden = !roleView.notice;
     // Rows are rebuilt only when a new result arrives, so typing and focus in a draft survive unrelated renders; when
     // they are rebuilt the focused field and its selection are put back.
     if (renderedRoleRows !== roleView.rows) {
@@ -4096,8 +4118,7 @@ if (remembered) kitId.value = remembered;
         const paragraph = text => { const node = document.createElement("p"); node.textContent = text; row.append(node); };
         paragraph(`${group.elementCount} eligible text parent${group.elementCount === 1 ? "" : "s"}: ${group.sampleText}`);
         for (const variant of group.signatures) {
-          const s = variant.style;
-          paragraph(`${variant.count} × ${s.fontFamily}: ${s.fontSize}px / ${s.fontWeight} / ${s.textTransform} / ${s.letterSpacing}em`);
+          paragraph(`${variant.count} × ${roleTupleText(variant.style)}`);
         }
         for (const binding of group.selectors) {
           const node = document.createElement("code");
@@ -4120,6 +4141,117 @@ if (remembered) kitId.value = remembered;
       }
     }
     renderRoleControls();
+    renderRoleInventory();
+  }
+  // ---- visited-page role evidence ---------------------------------------------------------------------------------
+  const roleTupleText = s => `${s.fontFamily}: ${s.fontSize}px / ${s.fontWeight} / ${s.textTransform} / ${s.letterSpacing}em`;
+  const roleStyleCopy = s => ({ fontFamily:s.fontFamily, fontSize:s.fontSize, fontWeight:s.fontWeight, textTransform:s.textTransform, letterSpacing:s.letterSpacing });
+  const detectRequest = (documentId, requestId, knownRoles) => ({ type:"design:detect", protocolVersion:1, sessionId:live.sessionId, requestId, documentId, knownRoles });
+  // Every issued id in issuance order with all its selectors; the click and the candidate check build it the same way.
+  const knownRolesFromCollection = (ids = roleView.ids, refs = roleCollection.refs) =>
+    [...ids.values()].map(id => ({ id, selectors:[...(refs.get(id)?.keys() ?? [])] }));
+  // Clearing visited pages keeps the identity -> id mapping (and label) of every role in the applied preview, so the next Detect
+  // matches those roles again; a new origin keeps nothing, and the counter decides whether ids are ever reused.
+  function clearRoleCollection(keepAppliedIds) {
+    const applied = new Set(keepAppliedIds ? rolePreview.roles.map(role => role.id) : []);
+    const kept = [...roleView.ids].filter(([, id]) => applied.has(id)), labels = new Map(kept.map(([, id]) => [id, roleCollection.labels.get(id)]));
+    Object.assign(roleCollection, { routes:new Map(), refs:new Map(), labels, evidence:null });
+    roleView.ids.clear(); roleDrafts.clear(); roleView.limitReached = false;
+    for (const [identity, id] of kept) roleView.ids.set(identity, id);
+    if (!keepAppliedIds) roleView.nextId = 0;
+  }
+  // Fields are copied one by one from the tolerant copy, so no key a newer bridge adds is kept.
+  const buildRouteSnapshot = (reply, ids) => ({ key:reply.currentPageURL, groups:reply.groups.map(group => ({
+    roleId:ids.get(roleIdentityKey(group.identity)),
+    variants:group.signatures.map(variant => ({ style:roleStyleCopy(variant.style), count:variant.count })),
+    selectors:group.selectors.map(binding => binding.value) })),
+    checks:reply.selectorChecks.map(check => ({ roleId:check.roleId, selector:check.selector, matchCount:check.matchCount,
+      found:check.signatures.map(variant => ({ style:roleStyleCopy(variant.style), count:variant.count })) })) });
+  // Stores one complete, current, valid reply, or refuses the whole route (limits, and the Detect request the result would send).
+  function storeRouteEvidence(reply) {
+    const ids = new Map(roleView.ids), labels = new Map(roleCollection.labels), routes = new Map(roleCollection.routes);
+    const refs = new Map([...roleCollection.refs].map(([id, selectors]) => [id, new Map(selectors)]));
+    let nextId = roleView.nextId;
+    for (const group of reply.groups) {
+      const identity = roleIdentityKey(group.identity);
+      if (!ids.has(identity)) {
+        ids.set(identity, `role-${++nextId}`);
+        labels.set(ids.get(identity), group.identity.kind === "author-role" ? group.identity.name : roleTupleText(group.identity.style));
+      }
+      const id = ids.get(identity), known = refs.get(id) || new Map();
+      refs.set(id, known);
+      for (const binding of group.selectors) if (!known.has(binding.value)) known.set(binding.value, group.signatures.map(variant => roleStyleCopy(variant.style)));
+    }
+    routes.set(reply.currentPageURL, buildRouteSnapshot(reply, ids));
+    const styles = known => new Set([...known.values()].flat().map(roleStyleKey));
+    // The worst-case ids (200 escaped control characters, the longest request id) make this an upper bound of any real request.
+    const fits = ids.size <= 128 && routes.size <= 32 && [...refs.values()].every(known => known.size <= 32 && styles(known).size <= 8)
+      && safeRoleWire(detectRequest("\u0000".repeat(200), "fks-detect-9007199254740991", knownRolesFromCollection(ids, refs)), 256 * 1024);
+    if (!fits) { roleView.limitReached = true; return false; }
+    Object.assign(roleCollection, { routes, refs, labels,
+      evidence:{ key:reply.currentPageURL, documentId:reply.documentId, pageVersion:reply.currentPageVersion, changed:false } });
+    Object.assign(roleView, { ids, nextId });
+    seedRoleDrafts();
+    return true;
+  }
+  // The stored route no longer describes the page once the document, the version or the URL moved; sticky until the next store.
+  function compareEvidence(documentId, pageVersion, pageURL) {
+    const evidence = roleCollection.evidence;
+    if (evidence && (evidence.documentId !== documentId || pageVersion > evidence.pageVersion || pageURL !== evidence.key)) evidence.changed = true;
+  }
+  const ROLE_ROUTE_TEXT = { checked:"Checked on:", "no-match":"No match on:", conflict:"Different style on:", changed:"Changed since checked:" };
+  // One line for every style a check found outside the reference styles of its selector.
+  function roleConflictLines(id, checks) {
+    const lines = [];
+    for (const check of checks) {
+      const reference = roleCollection.refs.get(id)?.get(check.selector) ?? [];
+      const known = new Set(reference.map(roleStyleKey));
+      for (const variant of check.found) {
+        if (!known.has(roleStyleKey(variant.style))) {
+          lines.push(`${check.selector}: expected ${reference.map(roleTupleText).join("; ")}, found ${variant.count} x ${roleTupleText(variant.style)}`);
+        }
+      }
+    }
+    return lines;
+  }
+  // The one state of a role on a stored route: changed, then conflict, then checked, then no match; null when the route never named the role.
+  function roleRouteState(id, key, snapshot) {
+    const group = snapshot.groups.find(found => found.roleId === id), checks = snapshot.checks.filter(check => check.roleId === id);
+    if (!group && !checks.length) return null;
+    const lines = roleConflictLines(id, checks);
+    const changed = roleCollection.evidence?.changed && roleCollection.evidence.key === key;
+    const state = changed ? "changed" : lines.length ? "conflict" : group || checks.some(check => check.matchCount > 0) ? "checked" : "no-match";
+    return { key, state, group, lines };
+  }
+  function renderRoleInventory() {
+    const visited = q("roleVisited"), list = q("roleInventory"), count = roleCollection.routes.size;
+    const shown = roleView.origin === live.expectedOrigin && count > 0;
+    visited.hidden = list.hidden = !shown;
+    list.replaceChildren();
+    if (!shown) return;
+    visited.textContent = `Checked on ${count} visited page${count === 1 ? "" : "s"}. Other pages have not been checked.`;
+    for (const [id, label] of roleCollection.labels) {
+      const item = document.createElement("li"), title = document.createElement("strong");
+      item.dataset.inventoryRole = id; title.textContent = `${label} (${id})`; item.append(title);
+      const found = [...roleCollection.routes].map(([key, snapshot]) => roleRouteState(id, key, snapshot)).filter(Boolean);
+      for (const state of Object.keys(ROLE_ROUTE_TEXT)) {
+        const entries = found.filter(route => route.state === state);
+        if (!entries.length) continue;
+        const heading = document.createElement("p"), pages = document.createElement("ul");
+        heading.textContent = ROLE_ROUTE_TEXT[state]; pages.dataset.rolePages = state;
+        for (const { key, group, lines } of entries) {
+          const entry = document.createElement("li");
+          entry.append(key.slice(live.expectedOrigin.length));
+          // A style role's one variant is its label; an author role lists its variants.
+          const variants = state === "checked" && group && (group.variants.length !== 1 || roleTupleText(group.variants[0].style) !== label)
+            ? group.variants.map(variant => `${variant.count} x ${roleTupleText(variant.style)}`) : [];
+          for (const text of [...variants, ...lines]) { const line = document.createElement("p"); line.textContent = text; entry.append(line); }
+          pages.append(entry);
+        }
+        item.append(heading, pages);
+      }
+      list.append(item);
+    }
   }
   // The draft fields for one detected role. Observed values are placeholders only: every field starts empty and the box
   // unchecked, so nothing is previewed that the user did not type.
@@ -4215,7 +4347,7 @@ if (remembered) kitId.value = remembered;
     const reason = roleCapabilityReason();
     if (reason) return { reason, roles };
     if (roleView.identity.pageURL === null) return { reason:ROLE_UNAVAILABLE, roles };
-    if (roleView.limitReached) return { reason:"Role collection limit reached (128 roles), so Apply is disabled.", roles };
+    if (roleView.limitReached) return { reason:"Collection limit reached, so Apply is disabled until you clear visited pages.", roles };
     const built = buildRoleRequest();
     if (built.problems.length) return { reason:built.problems[0] + (built.problems.length > 1 ? ` (${built.problems.length - 1} more)` : ""), roles };
     if (!built.roles.length) return { reason:"Tick Preview this role on a detected row and enter at least one value to apply.", roles };
@@ -4285,13 +4417,11 @@ if (remembered) kitId.value = remembered;
   q("detectTextStyles").addEventListener("click", () => {
     const identity = roleView.identity;
     if (!live.ready || !identity || identity.pageURL === null) return;
+    roleView.notice = "";
     const requestId = `fks-detect-${++live.requestSeq}`;
-    const knownRoles = roleView.rows.map(group => ({ id:roleView.ids.get(roleIdentityKey(group.identity)),
-      selectors:group.selectors.map(binding => binding.value) })).filter(role => role.id);
-    const request = { type:"design:detect", protocolVersion:1, sessionId:live.sessionId,
-      requestId, documentId:identity.documentId, knownRoles };
+    const request = detectRequest(identity.documentId, requestId, knownRolesFromCollection());
     if (!safeRoleWire(request, 256 * 1024)) { roleView.status = "Role detection request limit reached."; renderDetectedRoles(); return; }
-    const pending = { requestId, ...identity, knownRoles };
+    const pending = { requestId, ...identity, knownRoles:request.knownRoles };
     // A Detect nobody answers says so; the timer does nothing once this request is no longer the pending one.
     pending.timer = setTimeout(() => {
       if (roleView.pending !== pending) return;
@@ -4301,9 +4431,17 @@ if (remembered) kitId.value = remembered;
     roleView.status = "Detecting text styles…"; renderDetectedRoles();
     sendDesignMessage(request);
   });
+  // Clearing forgets the visited evidence only: the counter, the applied preview and the inspector edits stay, and nothing is sent.
+  q("roleClearVisited").addEventListener("click", () => {
+    if (roleView.pending) clearTimeout(roleView.pending.timer);
+    roleView.pending = null; roleView.rows = [];
+    clearRoleCollection(true);
+    if (roleView.identity) roleView.status = roleView.identity.pageURL === null ? ROLE_UNAVAILABLE : ROLE_READY;
+    roleView.notice = ROLE_CLEARED;
+    renderDetectedRoles();
+  });
   function validDetectedReply(data, pending) {
-    if (!safeRoleWire(data, 1024 * 1024) || !exactRoleFields(data, ["type", "protocolVersion", "sessionId", "requestId", "revision",
-      "documentId", "pageVersion", "pageURL", "currentPageVersion", "currentPageURL", "complete", "reason", "elapsedMs", "scannedElements", "groups", "selectorChecks"])
+    if (!safeRoleWire(data, 1024 * 1024) || !exactRoleFields(data, ROLE_WIRE.detected.keys)
       || !roleCount(data.revision) || !roleCount(data.pageVersion) || !roleCount(data.currentPageVersion)
       || data.pageVersion < pending.pageVersion || data.currentPageVersion < data.pageVersion
       || !validRoleURL(data.pageURL) || !validRoleURL(data.currentPageURL, true) || typeof data.complete !== "boolean"
@@ -4351,19 +4489,17 @@ if (remembered) kitId.value = remembered;
       || data.documentId !== pending.documentId) return;
     const reply = readRoleReply(data, ROLE_WIRE.detected);
     if (!reply || !validDetectedReply(reply, pending)) { roleDetectUnreadable(); return; }
-    if (reply.currentPageVersion < current.pageVersion) return;
+    if (reply.currentPageVersion < current.pageVersion) {
+      clearTimeout(pending.timer); roleView.pending = null; roleView.status = ROLE_DETECT_STALE; renderDetectedRoles(); return;
+    }
     roleView.pending = null;
     roleView.identity = { documentId:reply.documentId, pageVersion:reply.currentPageVersion, pageURL:reply.currentPageURL };
     if (reply.currentPageURL === null) { roleView.rows = []; roleView.status = ROLE_UNAVAILABLE; }
     else if (!reply.complete) { roleView.rows = reply.groups; roleView.status = `Incomplete detection (${reply.reason}); this page has not been checked.`; }
     else {
-      const newKeys = reply.groups.map(group => roleIdentityKey(group.identity)).filter(key => !roleView.ids.has(key));
-      if (roleView.ids.size + newKeys.length > 128) { roleView.status = "Collection limit reached; this page was not stored"; roleView.limitReached = true; }
-      else {
-        for (const key of newKeys) roleView.ids.set(key, `role-${++roleView.nextId}`);
-        seedRoleDrafts();
+      if (storeRouteEvidence(reply)) {
         roleView.status = `Detected ${reply.groups.length} roles from ${reply.scannedElements} eligible text parents on this page. Other pages have not been checked.`;
-      }
+      } else { roleView.status = ROLE_LIMIT; compareEvidence(reply.documentId, reply.currentPageVersion, reply.currentPageURL); }
       roleView.rows = reply.groups;
     }
     renderDetectedRoles();
@@ -4439,7 +4575,21 @@ if (remembered) kitId.value = remembered;
     const current = roleView.identity;
     if (!current || current.documentId !== documentId || pageVersion < current.pageVersion) return;
     roleView.identity = { documentId, pageVersion, pageURL };
+    compareEvidence(documentId, pageVersion, pageURL);
     if (pageURL === null) { roleView.rows = []; roleView.pending = null; roleView.status = ROLE_UNAVAILABLE; }
+  }
+  // The page's note that its route or content moved (data only): the identity advances, a stored route may now be stale, and
+  // nothing is sent. A pending Detect keeps its own status text.
+  function acceptRolesPage(raw) {
+    const identity = roleView.identity, data = identity && readRoleReply(raw, ROLE_WIRE.page);
+    if (!data || data.documentId !== identity.documentId || !roleCount(data.pageVersion) || data.pageVersion < identity.pageVersion
+      || !validRoleURL(data.pageURL, true) || data.pageVersion === identity.pageVersion && data.pageURL !== identity.pageURL) return;
+    advanceRoleIdentity(data.documentId, data.pageVersion, data.pageURL);
+    if (data.pageURL !== null && !roleView.pending) {
+      if (roleCollection.evidence?.changed) roleView.status = ROLE_PAGE_CHANGED;
+      else if (roleView.status === ROLE_UNAVAILABLE) roleView.status = ROLE_READY;   // the supported URL is back and nothing is stored
+    }
+    renderDetectedRoles();
   }
   // The selector that won is the author's own selectorText (a list, a descendant or a pseudo-class is fine): bounded
   // text only, shown through textContent and never held to the grammar of the selectors Studio sends.
@@ -4456,7 +4606,7 @@ if (remembered) kitId.value = remembered;
   }
   function validRoleReceipt(data, op) {
     const current = roleView.identity, apply = op.kind === "roles-apply";
-    if (!current || !safeRoleWire(data, 1024 * 1024) || !exactRoleFields(data, ROLE_RECEIPT_KEYS)
+    if (!current || !safeRoleWire(data, 1024 * 1024) || !exactRoleFields(data, ROLE_WIRE.receipt.keys)
       || data.operation !== op.operation || !roleCount(data.revision) || data.revision !== op.baseRevision + 1
       || data.documentId !== op.documentId || data.documentId !== current.documentId || data.pageVersion !== op.pageVersion
       || !roleCount(data.currentPageVersion) || data.currentPageVersion < data.pageVersion || !validRoleURL(data.currentPageURL, true)
@@ -4526,7 +4676,7 @@ if (remembered) kitId.value = remembered;
   function acceptResetRoleState(data) {
     const state = readRoleReply(data.roleState, ROLE_WIRE.state), current = roleView.identity;
     const valid = current && Number.isInteger(data.revision) && data.revision >= rolePreview.revision
-      && exactRoleFields(state, ["documentId", "pageVersion", "pageURL", "roles", "canonicalCss", "hashAlgorithm", "cssHash"])
+      && exactRoleFields(state, ROLE_WIRE.state.keys)
       && state.documentId === current.documentId && roleCount(state.pageVersion) && state.pageVersion >= current.pageVersion
       && validRoleURL(state.pageURL, true) && validAcceptedRoles(state.roles, state.canonicalCss, state.hashAlgorithm, state.cssHash)
       && state.roles.length === 0;
@@ -5633,6 +5783,7 @@ if (remembered) kitId.value = remembered;
       case "design:applied": handleReply(data, true); break;
       case "design:detected": acceptDetectedRoles(data); break;
       case "design:roles-applied": acceptRoleReceipt(data); break;
+      case "design:roles-page": acceptRolesPage(data); break;
       case "design:rejected":
         if (!rejectRoleDetect(data) && !rejectRoleOp(data)) handleReply(data, false);
         break;
