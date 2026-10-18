@@ -178,6 +178,7 @@
   const BOOTSTRAP_NAMES = [['lead', 'Lead'], ['small', 'Small'], ['btn', 'Button'], ['nav-link', 'Navigation link'],
     ['navbar-brand', 'Brand'], ['card-title', 'Card title'], ['form-label', 'Form label']];
   const MAX_ROLE_CSS_BYTES = 128 * 1024;
+  const ROLE_PAGE_GAP_MS = 250; // at most one design:roles-page per this many ms (trailing edge)
   const ROLE_FAMILY_UNSAFE = /[;{}<>\\\u0000-\u001f\u007f\u2028\u2029]|\/\*|\*\/|!\s*important|\b(?:url|expression|var|env|attr)\s*\(/i;
 
   // Quotes must pair up; CSS.supports alone accepts an unterminated string.
@@ -672,6 +673,10 @@
       this.roleAccepted = { roles: [], css: '', hash: '811c9dc5' };
       this.roleNative = 0; // internal epoch for native pseudo-state events; never on the wire
       this.roleEpoch = 0; // bumped by hello and dropSession: they suppress pending role receipts
+      this.announcedVersion = 0; // the wire pageVersion Studio last heard, from design:ready or design:roles-page
+      this.rolePageRec = null; // the one pending roles-page send: {epoch, cancel}
+      this.rolePageHold = null; // timer: the next send waits for it (ROLE_PAGE_GAP_MS)
+      this.roleHistory = []; // [name, wrapper, saved own descriptor or null] per history method this bridge wrapped
       this.options = {
         autoDiscover: true,
         autoDiscoverSemantic: true,
@@ -816,6 +821,11 @@
       this.listeners = [];
       if (this.mutationObserver) this.mutationObserver.disconnect();
       if (this.roleObserver) this.roleObserver.disconnect();
+      if (this.rolePageRec) this.rolePageRec.cancel();
+      this.rolePageRec = null;
+      clearTimeout(this.rolePageHold);
+      this.rolePageHold = null;
+      this.removeRoleHistory();
       this.removeRoleSheet();
       if (this.roleQuiet) this.roleQuiet.remove();
       if (this.resizeObserver) this.resizeObserver.disconnect();
@@ -1214,6 +1224,7 @@
         targets: this.getTargetManifest(false),
         changes: this.buildLedger()
       });
+      this.announcedVersion = this.pageVersion; // the ready stated this version: no roles-page for it
     }
 
     reject(requestId, reason, detail, targetId) {
@@ -1252,12 +1263,15 @@
     noteRoleMutations(records) {
       if (records.some(record => !this.isOverlayNode(record.target) && !this.isOwnedRoleMutation(record)
         && !(record.type === 'attributes' && this.isBridgeAttr(record.target, record.attributeName)))) {
-        this.pageVersion += 1;
+        this.bumpRolePage();
       }
     }
 
     observeRolePage() {
       if (this.roleObserver) return;
+      this.installRoleHistory();
+      // The route listeners and the viewport only schedule a send; refreshRolePage is what notices a new URL or stamp.
+      for (const type of ['popstate', 'hashchange', 'resize']) this.listen(window, type, () => this.scheduleRolePage());
       this.roleObserver = new MutationObserver(records => this.noteRoleMutations(records));
       this.roleObserver.observe(document.documentElement,
         { subtree: true, childList: true, characterData: true, attributes: true });
@@ -1291,8 +1305,92 @@
       if (this.roleObserver) this.noteRoleMutations(this.roleObserver.takeRecords());
       const style = this.roleStyleStamp();
       if (location.href !== this.roleURL || style !== this.roleStyle) {
-        this.pageVersion += 1; this.roleURL = location.href; this.roleStyle = style;
+        this.bumpRolePage(); this.roleURL = location.href; this.roleStyle = style;
       }
+    }
+
+    // The only place the wire pageVersion advances: every advance is also announced (design:roles-page).
+    bumpRolePage() {
+      this.pageVersion += 1;
+      this.scheduleRolePage();
+    }
+
+    // One pending send per burst: after a rendered frame (250 ms fallback for a page that never paints), at most
+    // one per ROLE_PAGE_GAP_MS. A change made while a send is held is picked up by expireRolePageHold.
+    scheduleRolePage() {
+      if (!this.studioSource || this.disposed) return;
+      if (this.rolePageRec && this.rolePageRec.epoch !== this.roleEpoch) { // a hello arrived since: start over
+        this.rolePageRec.cancel();
+        this.rolePageRec = null;
+      }
+      if (this.rolePageRec || this.rolePageHold !== null) return;
+      let fired = false, frame = 0;
+      const timers = [];
+      const rec = { epoch: this.roleEpoch, cancel: () => {
+        fired = true;
+        if (frame && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(frame);
+        timers.forEach(clearTimeout);
+      } };
+      const once = () => { if (!fired) { fired = true; this.sendRolePage(rec); } };
+      if (typeof requestAnimationFrame === 'function') frame = requestAnimationFrame(() => timers.push(setTimeout(once, 0)));
+      timers.push(setTimeout(once, 250)); // a hidden page may never paint
+      this.rolePageRec = rec;
+    }
+
+    // The record stays set while this runs, so the refresh's own bump cannot start a second send.
+    sendRolePage(rec) {
+      try {
+        if (this.disposed || !this.studioSource || rec.epoch !== this.roleEpoch) return;
+        this.refreshRolePage();
+        if (this.pageVersion === this.announcedVersion) return;
+        this.announcedVersion = this.pageVersion;
+        this.post({ type: 'design:roles-page', documentId: this.documentId, pageVersion: this.pageVersion,
+          pageURL: this.rolePageURL() });
+        this.rolePageHold = setTimeout(() => this.expireRolePageHold(), ROLE_PAGE_GAP_MS);
+      } finally {
+        if (this.rolePageRec === rec) this.rolePageRec = null;
+      }
+    }
+
+    // Trailing edge: a URL or viewport change made during the hold has no bump yet, so refresh before comparing.
+    expireRolePageHold() {
+      this.rolePageHold = null;
+      if (!this.studioSource || this.disposed) return;
+      this.refreshRolePage();
+      if (this.pageVersion !== this.announcedVersion && !this.rolePageRec) this.scheduleRolePage();
+    }
+
+    // Own properties of the history object, so History.prototype stays native. Known limit: code that cached the
+    // native pushState/replaceState before the first hello bypasses these; its change is caught by the next Detect,
+    // Apply or Clear (refreshRolePage), by popstate and hashchange, and by the content it renders. No polling.
+    installRoleHistory() {
+      if (typeof history === 'undefined') return;
+      const bridge = this;
+      for (const name of ['pushState', 'replaceState']) {
+        try {
+          const saved = Object.getOwnPropertyDescriptor(history, name) || null;
+          const original = history[name];
+          const wrapper = function (...args) {
+            const out = Reflect.apply(original, this, args); // a native throw reaches the app untouched
+            try { bridge.scheduleRolePage(); } catch (e) { /* a bridge fault never changes the app's result */ }
+            return out;
+          };
+          for (const key of ['name', 'length']) Object.defineProperty(wrapper, key, { value: original[key], configurable: true });
+          Object.defineProperty(history, name, { value: wrapper, configurable: true, writable: true, enumerable: true });
+          this.roleHistory.push([name, wrapper, saved]);
+        } catch (e) { /* a frozen or non-writable history leaves this method unobserved */ }
+      }
+    }
+
+    // Restores only a method still wrapped by this bridge; a later app wrapper stays and forwards to ours.
+    removeRoleHistory() {
+      for (const [name, wrapper, saved] of this.roleHistory) {
+        try {
+          if (history[name] !== wrapper) continue;
+          if (saved) Object.defineProperty(history, name, saved); else delete history[name];
+        } catch (e) { /* leave it as is */ }
+      }
+      this.roleHistory = [];
     }
 
     styleSignature(el) {
