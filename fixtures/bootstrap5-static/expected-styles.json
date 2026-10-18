@@ -53,7 +53,7 @@
     ],
     "unknownVersionVariant": {
       "method": "remove Bootstrap CSS version banner in a disposable copy",
-      "expected": "same rendered tuples; no known version evidence; adapter detection deferred to R2.4"
+      "expected": "same rendered tuples; no version banner; adapter evidence is the computed :root variables (--bs-body-font-family and --bs-font-sans-serif), which the banner does not carry, so Bootstrap 5 adapters are still suggested (D069)"
     }
   },
   "eligibleParentCount": 25,
