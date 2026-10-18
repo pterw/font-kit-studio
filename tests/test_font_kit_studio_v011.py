@@ -8,7 +8,7 @@ import zlib
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from support import ENGINES, HTML, canvas_snapshot, close_contexts, launch, new_context, shared_runtime  # noqa: E402
+from support import ENGINES, HTML, REPO, canvas_snapshot, close_contexts, launch, new_context, shared_runtime  # noqa: E402
 
 # 1x1 PNG, for controls that stay disabled until an image is chosen.
 PNG = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==')
@@ -531,7 +531,12 @@ class BrowserCase(unittest.TestCase):
 class StructureTests(unittest.TestCase):
     def test_version_and_existing_model(self):
         source = HTML.read_text(encoding='utf-8')
-        self.assertTrue('<title>Font Kit Studio v0.3.1</title>' in source, 'Document title names the release it ships in (D039)')
+        self.assertTrue('<title>Font Kit Studio v0.4.0</title>' in source, 'Document title names the release it ships in (D039)')
+        bridge = (REPO / 'fontkit-bridge.js').read_text(encoding='utf-8')
+        self.assertIn('fontkit-bridge.js version 0.4.0', '\n'.join(bridge.splitlines()[:10]))
+        self.assertIn('const PROTOCOL_VERSION = 1;', bridge)
+        package = json.loads((REPO / 'packages' / 'fontkitstudio' / 'package.json').read_text(encoding='utf-8'))
+        self.assertEqual(package['version'], '0.4.0')
         for symbol in ('makeRowSlot', 'findSlotById', 'selectedLocation', 'LEAF_SLOT_TYPES'):
             self.assertIn(symbol, source)
 
