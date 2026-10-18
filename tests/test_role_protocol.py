@@ -9,6 +9,21 @@ from test_role_stylesheet import RoleSheetCase, role
 
 
 class RoleProtocolTests(RoleBridgeCase):
+    def test_ready_advertises_role_revision_with_role_capabilities(self):
+        """Given the real bridge, when it greets and re-greets, then roleRevision is the int 1 beside roleDetection both times."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, _ = self.open(engine)
+                ready = self.hello(page)
+                capabilities = ready['capabilities']
+                self.assertTrue(capabilities['roleDetection'])
+                self.assertIn('roleRevision', capabilities)
+                self.assertIs(type(capabilities['roleRevision']), int)
+                self.assertEqual(capabilities['roleRevision'], 1)
+                again = self.hello(page)
+                self.assertIs(type(again['capabilities']['roleRevision']), int)
+                self.assertEqual(again['capabilities']['roleRevision'], 1)
+
     def test_final_wire_payload_stays_bounded_near_exact_utf8_reply_limit(self):
         """Given 128 roles of 32 selectors, when detect replies near the 1 MiB limit, then no complete reply exceeds it and the page still renders 16px."""
         for engine in ENGINES:

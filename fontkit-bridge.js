@@ -1207,7 +1207,7 @@
       this.post({
         type: 'design:ready',
         revision: this.revision,
-        capabilities: { inspect: true, patch: true, typography: true, text: true, tokens: true, reset: true, roleDetection: true, roleStylesheet: true },
+        capabilities: { inspect: true, patch: true, typography: true, text: true, tokens: true, reset: true, roleDetection: true, roleStylesheet: true, roleRevision: 1 },
         roleState: this.roleState(),
         viewport: { width: window.innerWidth, height: window.innerHeight },
         tokens: { css: this.getCurrentTokens() },

@@ -273,7 +273,7 @@ class HandshakeTests(BridgeCase):
                 self.assertEqual(ready['capabilities'], {
                     'inspect': True, 'patch': True, 'typography': True,
                     'text': True, 'tokens': True, 'reset': True, 'roleDetection': True,
-                    'roleStylesheet': True})
+                    'roleStylesheet': True, 'roleRevision': 1})
                 self.assertEqual(ready['viewport'], {'width': 1000, 'height': 600})
                 self.assertIn('Georgia', ready['tokens']['css']['--font-display'])
                 self.assertEqual(ready['tokens']['css']['--brand-ink'], '#111111')
