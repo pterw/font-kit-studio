@@ -192,6 +192,8 @@ Studio never writes the file until you press Sync (or turn on Auto-sync). It als
 
 Detected roles lists the text styles on your page and lets you try new values for each one. **Detect text styles** reads every distinct text style on the page and groups exact matches into roles. You preview new values for a role through one stylesheet that the bridge owns. Studio writes nothing to your source or to any file from it.
 
+![The Detected roles panel after Detect on the demo app: the status line for all 22 roles, the first three role rows with samples and counts (the rest of the list is cut from this image), and the visited-pages summary](docs/assets/screenshots/detected-roles-desktop.png)
+
 The panel is in the Live App view, below the preview. Before a page connects it reads `Connect a Live App to detect text styles.` It needs Studio and a bridge from 0.4.0 or later. With `npx fontkitstudio`, use `fontkitstudio` 0.4.0 or later, because the bridge ships in the package. Automated tests run Detect, Apply, a re-render and Clear through `npx fontkitstudio` in Vite 7 and Vite 8 projects. They run the same steps through the proxy in front of a Bootstrap 5 page whose policy allows its own scripts and inline styles, and through the proxy in front of Next.js. A Vite `build` with the plugin ships no bridge and no role CSS.
 
 #### What Detect reads

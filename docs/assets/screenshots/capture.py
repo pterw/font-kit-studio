@@ -193,6 +193,25 @@ def capture(browser, studio, target, rel, target_port, name, viewport):
         to_top('#liveMoveGuard', 'center')
         page.screenshot(path=str(OUT / f'arrange-guard-{name}.png'))
         page.keyboard.press('Escape')
+
+        # Detected roles: Detect only (no Apply), then the panel once the status and the summary have both arrived.
+        # The first Detect after leaving theater mode can end page-changed while the page settles; the next is complete.
+        page.mouse.move(0, 0)
+        for _ in range(3):
+            page.locator('#detectTextStyles').click()
+            page.wait_for_function('() => /^(Detected [0-9]+ roles from |Incomplete detection)/.test(document.querySelector("#roleStatus").textContent)', polling=POLL_MS)
+            if page.locator('#roleStatus').text_content().startswith('Detected'):
+                break
+        page.wait_for_function('() => /^Detected [0-9]+ roles from /.test(document.querySelector("#roleStatus").textContent)', polling=POLL_MS)
+        page.wait_for_function('() => document.querySelector("#roleVisited").textContent === '
+                               '"Checked on 1 visited page. Other pages have not been checked."', polling=POLL_MS)
+        # The demo has 22 roles, too tall for a README image: show the first three rows and visited-page entries.
+        page.evaluate('() => document.querySelectorAll("#roleRows > li:nth-child(n+4), #roleInventory > li:nth-child(n+4)")'
+                      '.forEach(el => { el.style.display = "none"; })')
+        page.evaluate('window.scrollTo(0, 0)')
+        page.mouse.move(0, 0)
+        box = page.locator('#detectedRoles').bounding_box()
+        page.screenshot(path=str(OUT / f'detected-roles-{name}.png'), full_page=True, clip=box)
     context.close()
 
 
