@@ -190,8 +190,7 @@
     return open === null;
   }
 
-  // D072: a parenthesis outside quotes is refused (the same one-pass scan; no escapes), and so is a CSS-wide keyword, which
-  // CSS.supports accepts and which would blank the Bootstrap 5 :root variables.
+  // D072: a parenthesis outside quotes is refused (the same one-pass scan; no escapes).
   function unquotedParenthesis(value) {
     let open = null;
     for (const ch of value) {
@@ -201,6 +200,7 @@
     return false;
   }
 
+  // D072: a CSS-wide keyword is refused too; CSS.supports accepts it and it would blank the Bootstrap 5 :root variables.
   function roleFamily(value) {
     if (typeof value !== 'string') return undefined;
     const trimmed = value.trim();
@@ -264,7 +264,7 @@
   // request order) or {reason, detail}. Whether the page has the Bootstrap 5 evidence a non-plain adapter needs is the
   // caller's check, once this pass has accepted the request.
   function canonicalizeRoles(roles) {
-    // Placement first (Addendum 23 item 3): at most one body and one mono role, and a body role holds exactly `body`.
+    // Placement first (Addendum 23 item 4): at most one body and one mono role, and a body role holds exactly `body`.
     // `body` is valid nowhere else, so the selector loop below skips it only for that role.
     for (const adapter of ['bootstrap5-body', 'bootstrap5-mono']) {
       if (roles.filter(role => role.adapter === adapter).length > 1) return { reason: 'unsupported-value', detail: 'Unsupported adapter' };
@@ -1272,6 +1272,11 @@
       this.installRoleHistory();
       // The route listeners and the viewport only schedule a send; refreshRolePage is what notices a new URL or stamp.
       for (const type of ['popstate', 'hashchange', 'resize']) this.listen(window, type, () => this.scheduleRolePage());
+      // A page frozen into or restored from the back/forward cache keeps its JS state: moving the internal epoch ends
+      // an in-flight Detect as page-changed, and the refresh bumps the wire version only if the URL, styles or viewport moved.
+      for (const type of ['pageshow', 'pagehide']) {
+        this.listen(window, type, () => { if (this.active && this.studioSource) this.roleNative += 1; this.scheduleRolePage(); });
+      }
       this.roleObserver = new MutationObserver(records => this.noteRoleMutations(records));
       this.roleObserver.observe(document.documentElement,
         { subtree: true, childList: true, characterData: true, attributes: true });

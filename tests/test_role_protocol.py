@@ -292,8 +292,8 @@ STYLE_GRID = """([count, columns, pad, classes, long]) => {
     main.appendChild(p);
   }
 }"""
-# AUTHOR_ROLES: `roles` author roles of `variants` sizes each, every element with class k; the sizes stay distinct up to 100 roles
-# of the same variant (v * 2 + r / 100), so `roles` x `variants` distinct signatures share the class.
+# AUTHOR_ROLES: `roles` author roles of `variants` sizes each, every element with class k; the sizes stay distinct up to 200 roles
+# of the same variant (v * 2 + r / 100 repeats only when two roles differ by 200), so `roles` x `variants` distinct signatures share the class.
 AUTHOR_ROLES = """([roles, variants]) => {
   const main = document.querySelector('main'); main.replaceChildren();
   for (let r = 0; r < roles; r++) for (let v = 0; v < variants; v++) {

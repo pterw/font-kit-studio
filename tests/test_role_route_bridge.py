@@ -1,6 +1,7 @@
 """The bridge tells Studio when the page's route or content moved: design:roles-page, data only."""
+import role_contract as table
 from support import ENGINES
-from role_support import EVIL, ROLE_PAGE, TARGET
+from role_support import EVIL, REPO, ROLE_PAGE, TARGET
 from test_role_stylesheet import PLAIN_24, PLAIN_24_HASH, RoleSheetCase, role
 
 SPA = TARGET + '/fixtures/multi-page/spa.html'
@@ -574,3 +575,297 @@ class SessionAndDetectTests(RoleRouteCase):
                         frame.locator(selector).click()
                         self.assertEqual(frame.locator('#route-content h1').inner_text(), heading)
                         self.assertEqual(self.urls(self.notices(page, start)), [SPA + suffix])
+
+
+SHOW = "dispatchEvent(new PageTransitionEvent('pageshow', {persisted: true}))"
+HIDE = "dispatchEvent(new PageTransitionEvent('pagehide', {persisted: true}))"
+SPY_6B2 = """(() => {
+  const log = window.spy6b2 = [], add = window.addEventListener, remove = window.removeEventListener;
+  const capture = o => o === true || !!(o && o.capture);
+  window.addEventListener = function (type, handler, options) {
+    if (type === 'pageshow' || type === 'pagehide') log.push(['add', type, handler, capture(options)]);
+    return add.call(this, type, handler, options);
+  };
+  window.removeEventListener = function (type, handler, options) {
+    if (type === 'pageshow' || type === 'pagehide') log.push(['remove', type, handler, capture(options)]);
+    return remove.call(this, type, handler, options);
+  };
+  window.control6b2 = {fired: 0, handler() { window.control6b2.fired += 1; }};
+  window.addEventListener('pageshow', window.control6b2.handler);
+})();
+"""
+REGISTRATIONS = """() => {
+  const control = window.control6b2.handler, mine = window.spy6b2.filter(e => e[2] !== control);
+  const count = kind => type => mine.filter(e => e[0] === kind && e[1] === type).length;
+  const unmatched = mine.filter(e => e[0] === 'add' && !mine.some(r => r[0] === 'remove' && r[1] === e[1] && r[2] === e[2] && r[3] === e[3])).length;
+  return {adds: [count('add')('pageshow'), count('add')('pagehide')], removes: window.spy6b2.filter(e => e[0] === 'remove' && e[2] === control).length, unmatched};
+}"""
+
+
+class LifecycleTests(RoleRouteCase):
+    """The dispatched pageshow and pagehide events stand in for the back/forward cache: Playwright Chromium reloads on back, so a real
+    freeze and restore never happens. These tests prove the handler wiring, not the browser's restore."""
+
+    def test_a_pageshow_alone_announces_a_url_changed_behind_the_wrapper(self):
+        """Given a URL changed by the cached native pushState and 300 ms of silence, when only a persisted pageshow is dispatched, then exactly one roles-page names that URL with a version above the ready's."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame, ready, start = self.start(engine)
+                frame.evaluate("History.prototype.pushState.call(history, null, '', '?route=bf')")
+                self.assertEqual(self.silence(page, start, 300), [])
+                frame.evaluate(SHOW)
+                got = self.notices(page, start)
+                self.assertEqual(self.urls(got), [ROLE_PAGE + '?route=bf'])
+                self.assertGreater(got[0]['pageVersion'], ready['roleState']['pageVersion'])
+
+    def test_a_pagehide_and_pageshow_of_an_unchanged_page_move_no_version(self):
+        """Given an unchanged page, when pagehide then pageshow are dispatched, then no roles-page is sent for 600 ms and a Detect reports the ready's pageVersion."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame, ready, start = self.start(engine)
+                frame.evaluate(HIDE)
+                frame.evaluate(SHOW)
+                self.assertEqual(self.silence(page, start), [])
+                self.assertEqual(self.detect(page)['pageVersion'], ready['roleState']['pageVersion'])
+
+    def test_a_detect_straddling_a_freeze_ends_page_changed_without_moving_the_version(self):
+        """Given a Detect still scanning the 5,000-element page, when pagehide and pageshow, pagehide alone or pageshow alone arrive, then the reply is incomplete page-changed with its pageVersion and URL equal to the current ones, no roles-page is sent, and a fresh Detect is complete."""
+        events = {'pagehide then pageshow': HIDE + '; ' + SHOW, 'pagehide alone': HIDE, 'pageshow alone': SHOW}
+        for engine in ENGINES:
+            for label, script in events.items():
+                with self.subTest(engine=engine, events=label):
+                    page, frame = self.open(engine, target=LARGE)
+                    self.hello(page)
+                    self.control(page, {'type': 'design:mode', 'mode': 'interact'})
+                    start = self.mark(page)
+                    page.evaluate('() => { window.pending6b2 = request({type: "design:detect"}); }')
+                    self.assertEqual(self.messages(page, 'design:detected', start), [])
+                    frame.evaluate(script)
+                    reply = page.evaluate('() => window.pending6b2')
+                    self.assertEqual((reply['type'], reply['complete'], reply['reason']), ('design:detected', False, 'page-changed'), reply)
+                    self.assertEqual((reply['pageVersion'], reply['pageURL']), (reply['currentPageVersion'], reply['currentPageURL']))
+                    self.assertEqual(self.silence(page, start), [])
+                    self.assertTrue(self.detect(page)['complete'])
+
+    def test_the_bridge_registers_one_pageshow_and_one_pagehide_listener_and_removes_both_on_dispose(self):
+        """Given the bridge run behind a spy on window's listener calls and a page-owned pageshow listener, when hello is sent and the bridge is disposed, then it holds one registration each, every one is removed with the same handler and capture, the page's listener is never removed and still fires, and a later URL change with pageshow sends nothing."""
+        source = SPY_6B2.encode() + (REPO / 'fontkit-bridge.js').read_bytes()
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, bridge_source=source)
+                self.hello(page)
+                fired = frame.evaluate('window.control6b2.fired')
+                self.assertEqual(frame.evaluate(REGISTRATIONS), {'adds': [1, 1], 'removes': 0, 'unmatched': 2})
+                frame.evaluate('__fontkitBridge.dispose()')
+                self.assertEqual(frame.evaluate(REGISTRATIONS), {'adds': [1, 1], 'removes': 0, 'unmatched': 0})
+                start = self.mark(page)
+                frame.evaluate("History.prototype.pushState.call(history, null, '', '?route=gone')")
+                frame.evaluate(SHOW)
+                self.assertEqual(frame.evaluate('window.control6b2.fired'), fired + 1)
+                self.assertEqual(self.silence(page, start), [])
+
+
+class DelayedRenderAndHmrTests(RoleRouteCase):
+    """Simulated hot updates; real Vite updates are covered by test_r2_react (349, 594, 648)."""
+
+    def test_a_delayed_render_announces_the_url_while_pending_and_again_when_the_content_renders(self):
+        """Given the SPA page in interact mode, when the delayed route is loaded and then resolved, then a roles-page names ?route=delayed while the content is pending, a later one has the same URL and a greater version once the heading reads Delayed evidence, and a Detect reports that version and that sample."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, target=SPA)
+                self.hello(page)
+                self.control(page, {'type': 'design:mode', 'mode': 'interact'})
+                frame.wait_for_function("() => window.__fontkitBridge && window.__fontkitBridge.mode === 'interact'")
+                start = self.mark(page)
+                frame.locator('#load-delayed').click()
+                pending = self.notices(page, start)
+                self.assertEqual(self.urls(pending), [SPA + '?route=delayed'])
+                self.assertEqual(frame.locator('#route-content').get_attribute('data-render-state'), 'pending')
+                mark = self.mark(page)
+                frame.locator('#resolve-delayed').click()
+                frame.wait_for_function("() => document.querySelector('#route-content h1').textContent === 'Delayed evidence'")
+                rendered = self.notices(page, mark, settle=500)
+                self.assertEqual(set(self.urls(rendered)), {SPA + '?route=delayed'})
+                self.assertGreater(rendered[-1]['pageVersion'], pending[0]['pageVersion'])
+                reply = self.detect(page)
+                self.assertEqual(reply['pageVersion'], rendered[-1]['pageVersion'])
+                self.assertIn('Delayed evidence', [group['sampleText'] for group in reply['groups']])
+
+    def test_a_css_hot_update_announces_with_the_same_url_and_a_detect_reads_the_new_size(self):
+        """Given a style node text replaced in place, or a stylesheet link whose href is swapped, when the page is quiet, then every roles-page keeps the URL with a version above the ready's and a Detect reports the 30px size."""
+        def replace_text(frame):
+            frame.evaluate("document.querySelector('style').textContent = '.body-copy { font-size: 30px }'")
+
+        def swap_href(frame):
+            frame.evaluate("""() => new Promise(resolve => {
+                const link = document.querySelector('link[data-t6b2]');
+                link.addEventListener('load', resolve, {once: true});
+                link.href = 'data:text/css,.body-copy{font-size:30px}';
+            })""")
+
+        def add_link(frame):
+            frame.evaluate("""() => new Promise(resolve => {
+                const link = document.createElement('link');
+                link.rel = 'stylesheet'; link.dataset.t6b2 = '1'; link.href = 'data:text/css,.body-copy{font-size:22px}';
+                link.addEventListener('load', resolve, {once: true}); document.head.appendChild(link);
+            })""")
+
+        updates = {'text replace': (lambda frame: None, replace_text), 'href swap': (add_link, swap_href)}
+        for engine in ENGINES:
+            for label, (before, update) in updates.items():
+                with self.subTest(engine=engine, update=label):
+                    page, frame = self.open(engine)
+                    before(frame)
+                    ready = self.hello(page)
+                    start = self.mark(page)
+                    update(frame)
+                    got = self.notices(page, start)
+                    self.assertEqual(set(self.urls(got)), {ROLE_PAGE})
+                    self.assertTrue(all(m['pageVersion'] > ready['roleState']['pageVersion'] for m in got), got)
+                    sizes = {sig['style']['fontSize'] for group in self.detect(page)['groups'] for sig in group['signatures']}
+                    self.assertEqual(sizes, {30})
+
+    def test_a_css_update_under_a_preview_leaves_the_owned_sheet_untouched_and_unannounced(self):
+        """Given an applied plain 24px preview, when the author style text is replaced with 30px, then the owned sheet is byte-identical, no roles-page announced the Apply, every roles-page for the update keeps the URL, and a Detect reports the author's 30px."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame, ready, start = self.start(engine)
+                self.assertEqual(self.apply(page, [role(fontSize=24)])['type'], 'design:roles-applied')
+                self.assertEqual(self.silence(page, start, 300), [])
+                owned = self.owned(frame)
+                frame.evaluate("document.querySelector('style:not([data-fontkit-role-styles])').textContent = '.body-copy { font-size: 30px }'")
+                got = self.notices(page, start)
+                self.assertEqual(set(self.urls(got)), {ROLE_PAGE})
+                self.assertEqual(self.owned(frame), owned)
+                self.assertEqual(owned, [PLAIN_24])
+                sizes = {sig['style']['fontSize'] for group in self.detect(page)['groups'] for sig in group['signatures']}
+                self.assertEqual(sizes, {30})
+
+
+class StaleScanTests(RoleRouteCase):
+    def test_a_scan_of_route_b_overtaken_by_route_c_never_presents_checked_evidence_for_c(self):
+        """Given a Detect scanning the 5,000-element page at route B, when the page pushes route C, then the one reply names B as pageURL and C as currentPageURL, is incomplete page-changed with a version below the current one, the last roles-page names C, and a fresh Detect is complete on C."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, target=LARGE)
+                self.hello(page)
+                self.control(page, {'type': 'design:mode', 'mode': 'interact'})
+                start = self.mark(page)
+                frame.evaluate("history.pushState(null, '', '?route=B')")
+                self.assertEqual(self.urls(self.notices(page, start)), [LARGE + '?route=B'])
+                mark = self.mark(page)
+                page.evaluate('() => { window.pending6b2 = request({type: "design:detect"}); }')
+                self.assertEqual(self.messages(page, 'design:detected', mark), [])
+                frame.evaluate("history.pushState(null, '', '?route=C')")
+                reply = page.evaluate('() => window.pending6b2')
+                self.assertEqual((reply['complete'], reply['reason']), (False, 'page-changed'), reply)
+                self.assertEqual((reply['pageURL'], reply['currentPageURL']), (LARGE + '?route=B', LARGE + '?route=C'))
+                self.assertLess(reply['pageVersion'], reply['currentPageVersion'])
+                last = self.notices(page, mark)[-1]
+                self.assertEqual((last['pageURL'], last['pageVersion']), (LARGE + '?route=C', reply['currentPageVersion']))
+                self.assertEqual([m['requestId'] for m in self.messages(page, 'design:detected', mark)], [reply['requestId']])
+                fresh = self.detect(page)
+                self.assertEqual((fresh['complete'], fresh['pageURL']), (True, LARGE + '?route=C'))
+
+    def test_a_selector_refused_inside_the_scan_leaves_only_the_rejection_behind(self):
+        """Given a known selector that matches the body element, when Studio detects, then the reply is a rejection with reason unsupported-value and no design:detected carries that request id within 600 ms."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame, _, _ = self.start(engine)
+                frame.evaluate("document.body.className = 'wide6b2'")
+                start = self.mark(page)
+                reply = self.detect(page, knownRoles=[{'id': 'wide', 'selectors': ['.wide6b2']}])
+                self.assertEqual((reply['type'], reply['reason']), ('design:rejected', 'unsupported-value'), reply)
+                page.wait_for_timeout(600)
+                self.assertEqual([m for m in self.messages(page, 'design:detected', start) if m['requestId'] == reply['requestId']], [])
+
+
+ENVELOPE = 'type protocolVersion sessionId'
+DETECTED_KEYS = ENVELOPE + ' requestId revision documentId pageVersion pageURL currentPageVersion currentPageURL complete reason elapsedMs scannedElements groups selectorChecks'
+GROUP_KEYS = 'id identity suggestedName authorRole signatures elementCount sampleText sharedClasses selectors bindingComplete nearDuplicateIds adapter'
+STYLE_KEYS = 'fontFamily fontSize fontWeight textTransform letterSpacing'
+APPLIED_KEYS = ENVELOPE + ' requestId operation revision documentId pageVersion currentPageVersion currentPageURL roles canonicalCss hashAlgorithm cssHash outcomesComplete outcomeReason outcomes'
+STATE_KEYS = 'documentId pageVersion pageURL roles canonicalCss hashAlgorithm cssHash'
+ROLE_KEYS = 'id name selectors adapter properties'
+
+
+class RevisionOneKeysTests(RoleRouteCase):
+    """The key sets are literals from the plan's type block and Messages table: the contract table checks values, not keys."""
+
+    def keys(self, message, literal):
+        self.assertEqual(set(message), set(literal.split()), message)
+
+    def test_the_detected_reply_has_exactly_the_revision_one_keys_at_every_level(self):
+        """Given a page with an author role and one matching known selector, when Studio detects, then the reply, a group, its identity, signature, selector binding, and the selector check carry exactly the plan's keys and the table finds no violation."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, _, _, _ = self.start(engine)
+                reply = self.detect(page, knownRoles=[{'id': 'known', 'selectors': ['.body-copy']}])
+                self.assertTrue(reply['complete'], reply)
+                self.keys(reply, DETECTED_KEYS)
+                self.assertEqual(table.violations('detected', reply), [])
+                for field in ('groups', 'selectorChecks'):
+                    self.assertTrue(reply[field], field)
+                author = next(g for g in reply['groups'] if g['identity']['kind'] == 'author-role')
+                automatic = next(g for g in reply['groups'] if g['identity']['kind'] == 'style')
+                for group in (author, automatic):
+                    self.keys(group, GROUP_KEYS)
+                    for field in ('signatures', 'selectors'):
+                        self.assertTrue(group[field], field)
+                    for signature in group['signatures']:
+                        self.keys(signature, 'style count')
+                        self.keys(signature['style'], STYLE_KEYS)
+                    for binding in group['selectors']:
+                        self.keys(binding, 'value stable reason')
+                self.keys(author['identity'], 'kind name')
+                self.keys(automatic['identity'], 'kind style')
+                self.keys(automatic['identity']['style'], STYLE_KEYS)
+                check = reply['selectorChecks'][0]
+                self.assertTrue(check['signatures'])
+                self.keys(check, 'roleId selector matchCount signatures')
+                for signature in check['signatures']:
+                    self.keys(signature, 'style count')
+                    self.keys(signature['style'], STYLE_KEYS)
+
+    def test_the_receipt_with_an_author_rule_loss_has_exactly_the_revision_one_keys(self):
+        """Given an author !important rule that beats the preview, when Studio applies 24px, then the receipt, a role, an outcome and a loss carry exactly the plan's keys and the table finds no violation."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame, _, _ = self.start(engine)
+                frame.evaluate("""() => { const s = document.createElement('style'); s.textContent = '.body-copy { font-size: 16px !important }';
+                    document.head.appendChild(s); }""")
+                receipt = self.apply(page, [role(fontSize=24)], **self.current(page))
+                self.assertEqual(receipt['type'], 'design:roles-applied', receipt)
+                self.keys(receipt, APPLIED_KEYS)
+                self.assertEqual(table.violations('roles-applied', receipt), [])
+                for field in ('roles', 'outcomes'):
+                    self.assertTrue(receipt[field], field)
+                self.keys(receipt['roles'][0], ROLE_KEYS)
+                outcome = receipt['outcomes'][0]
+                self.keys(outcome, 'id matched checked mismatched complete losses')
+                self.assertTrue(outcome['losses'], outcome)
+                self.keys(outcome['losses'][0], 'property count winningSelector reason')
+
+    def test_the_ready_role_state_has_exactly_the_revision_one_keys_with_and_without_a_role(self):
+        """Given a fresh page and then an accepted role, when Studio greets, then each design:ready roleState carries exactly the plan's keys, a role carries its five, and the table finds no violation."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, _, ready, _ = self.start(engine)
+                self.keys(ready['roleState'], STATE_KEYS)
+                self.assertEqual((ready['roleState']['roles'], table.violations('role-state', ready['roleState'])), ([], []))
+                self.assertEqual(self.apply(page, [role(fontSize=24)])['type'], 'design:roles-applied')
+                state = self.hello(page, 's2')['roleState']
+                self.keys(state, STATE_KEYS)
+                self.assertTrue(state['roles'])
+                self.keys(state['roles'][0], ROLE_KEYS)
+                self.assertEqual(table.violations('role-state', state), [])
+
+    def test_the_page_notice_has_exactly_the_six_keys(self):
+        """Given a push, when the page notice arrives, then it carries exactly type, protocolVersion, sessionId, documentId, pageVersion and pageURL."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame, _, start = self.start(engine)
+                frame.evaluate("history.pushState(null, '', '?route=keys')")
+                got = self.notices(page, start)
+                self.assertEqual(len(got), 1)
+                self.keys(got[0], ENVELOPE + ' documentId pageVersion pageURL')
