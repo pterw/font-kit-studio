@@ -101,8 +101,11 @@ product are not the same thing yet.
   config edit or script tag; `fontkitStudio()` keeps it in `vite.config`. Proven in CI on
   Vite 7 and 8, a static Bootstrap page under a strict CSP and Next.js 16. Published on npm
   as `fontkitstudio` with provenance; Studio and the bridge are also on the GitHub release.
-- **Designed, not built:** everything in "How it differs" above. Role detection (R2),
-  pairing and type scales (R3), token output (R4), the extension (R5).
+- **Built for 0.4.0 (R2), not yet released:** role detection and preview on the running app,
+  with Bootstrap 5 adapters and a session-only list of the visited pages each role was
+  checked on.
+- **Designed, not built:** the rest of "How it differs" above: pairing and type scales
+  (R3), token output (R4), the extension (R5).
 - **Against "just looking", fontkit loses on pages you do not run.** For a local app the
   one command removes the script tag. A site you do not run still needs one (or the
   bookmarklet), so a font-swap extension is faster for a quick peek there. That is by

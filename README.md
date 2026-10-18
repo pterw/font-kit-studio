@@ -41,7 +41,7 @@ You need Node 22.12 or later. In a Vite project (Vite 7 or 8), run this in the p
 npx fontkitstudio
 ```
 
-It runs your project's own dev server with Studio added, and opens Studio in your browser. It writes nothing to your project. To print the address instead of opening it, add `--no-open`. The command needs `fontkitstudio` 0.3.0 or later.
+It runs your project's own dev server with Studio added, and opens Studio in your browser. It writes nothing to your project. To print the address instead of opening it, add `--no-open`. The command needs `fontkitstudio` 0.3.0 or later. Text-style roles (see [Detected roles](#detected-roles)) need 0.4.0 or later.
 
 For any other local dev server, such as Next.js, start it as usual and give its address:
 
@@ -98,7 +98,7 @@ A few things Studio tells you on the way in:
 
 ### Open the Studio HTML file directly
 
-`fontkit-studio.html` is a single file with no dependencies. The old name, `font_kit_studio_v0.1.1.html`, is now a small page that forwards to it (keeping any query and hash) and goes away at R2 (0.4.0). The version of the release shows in the browser tab's title and in the line above Studio's heading. You can double-click the file, or open it from disk, and it works for the Library and the Composer. You can also connect it to a running app by typing the app's URL into **Live App URL**, and the inspector, the Changes panel and Copy all work.
+`fontkit-studio.html` is a single file with no dependencies. The old name, `font_kit_studio_v0.1.1.html`, was removed in 0.4.0 and no longer forwards. Move bookmarks to `fontkit-studio.html`; a query and hash are kept only if you type them again. The version of the release shows in the browser tab's title and in the line above Studio's heading. You can double-click the file, or open it from disk, and it works for the Library and the Composer. You can also connect it to a running app by typing the app's URL into **Live App URL**, and the inspector, the Changes panel and Copy all work.
 
 What does **not** work from a file: **Sync to file** and **Auto-sync** are switched off, because there is no server to write the file. Use `python scripts/serve.py` for those. The npm command does not serve Sync to file.
 
@@ -187,6 +187,142 @@ Studio never writes the file until you press Sync (or turn on Auto-sync). It als
 
 - **A fresh session writes nothing.** Until Studio has held a saved change since the page loaded, **Sync to file** is disabled with "No changes to save yet." If you turn on **Auto-sync** anyway, it writes nothing and says so. A stylesheet you wrote by hand is left as it is.
 - **After your own reset, Sync clears the file.** Once Studio has held a saved change, resetting the last one leaves nothing to save, but the file may still hold the old CSS. **Sync to file** then stays on, its tooltip says it writes an empty overrides file, and pressing it replaces the file with two comments: the header that names the Live App's URL, and `/* No live style overrides yet. */`. Auto-sync does the same on its own after the reset.
+
+### Detected roles
+
+Detected roles lists the text styles on your page and lets you try new values for each one. **Detect text styles** reads every distinct text style on the page and groups exact matches into roles. You preview new values for a role through one stylesheet that the bridge owns. Studio writes nothing to your source or to any file from it.
+
+The panel is in the Live App view, below the preview. Before a page connects it reads `Connect a Live App to detect text styles.` It needs Studio and a bridge from 0.4.0 or later. With `npx fontkitstudio`, use `fontkitstudio` 0.4.0 or later, because the bridge ships in the package. Automated tests run Detect, Apply, a re-render and Clear through `npx fontkitstudio` in Vite 7 and Vite 8 projects. They run the same steps through the proxy in front of a Bootstrap 5 page whose policy allows its own scripts and inline styles, and through the proxy in front of Next.js. A Vite `build` with the plugin ships no bridge and no role CSS.
+
+#### What Detect reads
+
+Detect reads the page's text styles without changing them. It counts text in the page's light DOM. It counts each parent element that holds text once, including text below the fold. It leaves out `head`, `script`, `style`, `template` and `noscript`, Studio's editor overlays and placed assets, anything with `display: none` or `visibility: hidden` or `collapse`, text with no area, and text under a fully transparent ancestor. Studio prints `Light-DOM text only`, because Detect does not cover:
+
+- form values and placeholders,
+- text made by pseudo-elements,
+- the inside of shadow roots,
+- nested frames,
+- SVG text.
+
+Two styles form one role only when font family, size, weight, case and tracking all match exactly. Sizes are rounded to two decimals. A role named with `data-design-role` keeps one identity even when its elements differ: Studio lists the variants and their counts. Studio flags near duplicates and never merges them. Two roles are near duplicates when family and case are equal, size is within 1 px, weight is within 100 and tracking is within 0.02 em. The row then reads `Near duplicates (kept separate): ...`.
+
+Detected values are the page baseline. Studio says `Detected values are the page baseline, measured without the role preview.` A complete scan reads `Detected N roles from M eligible text parents on this page. Other pages have not been checked.`
+
+A scan that stops early says so, and Studio does not mark that page as checked: `Incomplete detection (<reason>); this page has not been checked.` The reasons are:
+
+| Reason | What happened |
+|---|---|
+| `time-budget` | The scan took more than 2,000 ms. |
+| `element-limit` | The page has more than 10,000 eligible text elements. |
+| `group-limit` | The page has more than 128 distinct roles. |
+| `variant-limit` | One role has more than 8 distinct styles. |
+| `identity-limit` | A `data-design-role` name is over 200 characters, or a style value is not a plain number or case. |
+| `reply-limit` | The result is over 1 MiB. |
+| `page-changed` | The page changed while the scan ran. |
+
+A page of 5,000 eligible text elements finishes in 2 seconds on desktop Chromium in the tests. Other browsers and slower machines may take longer.
+
+#### Roles and bindings
+
+Each row shows the role's name and id (`role-1`, `role-2` and so on), how many eligible text parents it has with a sample of the text, and each style with its count. Ids are issued in order and kept while the collection lives. A new Live App origin restarts them.
+
+A binding is the selector Studio uses to reach the role's elements. Studio prefers an author role or ID, then a class whose matches are exactly the group, then a DOM path the bridge checked. Each selector is marked `stable` or `uncertain`, with its reason. A class that looks generated by a CSS-module build carries an uncertainty note; Studio does not claim to detect every build tool. `Shared classes:` lists a class that also styles other text. When no safe complete binding exists, the row stays visible and reads `Safe complete bindings unavailable.` It cannot be applied, and Studio never falls back to a broad selector.
+
+#### Adapters
+
+A plain role gets one rule. When the page's computed `:root` variables `--bs-body-font-family` and `--bs-font-sans-serif` are both set, the bridge treats the page as Bootstrap 5 and suggests an adapter. A page that defines both variables without Bootstrap gets the same suggestion. Studio shows the suggestion as `Adapter: Bootstrap 5 body variables`, `Adapter: Bootstrap 5 monospace variable` or `Adapter: Bootstrap 5 heading rule`, and shows no line for a plain role. The bridge checks the adapter again at Apply and refuses one the page no longer supports.
+
+- **Body** binds `body`. **Monospace** binds `code`, `kbd`, `pre` and `samp` when the group has no complete binding of its own. **Heading** binds a heading level or display class.
+- When a Body or Monospace role sets a font family, the bridge writes a `:root` block before the role's own rule, so inherited text follows. Body sets `--bs-body-font-family` and `--bs-font-sans-serif`. Monospace sets `--bs-font-monospace`. A role that sets only a size, weight or other value gets its plain rule alone.
+- A request holds at most one Body role and one Monospace role. Roles named with `data-design-role` stay plain.
+- Bootstrap 4 and unknown frameworks get plain rules only.
+
+#### Preview, Apply and Clear
+
+Each row has a **Preview this role** box and fields for font family, size, weight, line height, tracking and case. Most fields start empty and show the observed value as a placeholder. Line height shows `e.g. 1.5`, and Case shows `Unchanged (<observed>)`. Nothing previews until you tick the box and type a value. Studio never sends text, colour, alignment, order, images, font stylesheets or custom properties as a role.
+
+| Field | Accepts |
+|---|---|
+| Font family | 1 to 300 characters; no `; { } < >`, backslash, control characters, comments, `!important`, `url(`, `expression(`, `var(`, `env(` or `attr(`; not `inherit`, `initial`, `unset`, `revert` or `revert-layer`; a parenthesis only inside quotes |
+| Size (px) | 4 to 400 |
+| Weight | a whole number from 1 to 1000 |
+| Line height | 0.5 to 5 |
+| Tracking (em) | -0.5 to 2 |
+| Case | `none`, `uppercase`, `lowercase` or `capitalize` |
+
+**Apply selected roles** replaces the whole role set in one step, or changes nothing. If the bridge refuses, the previous preview stays and Studio says `Role preview apply rejected (<reason>); the previous preview is kept.` and, for `page-changed` and `revision-conflict`, adds a next-step sentence (and any detail the bridge gave). The reasons are `invalid-message`, `unsupported-value`, `revision-conflict`, `page-changed`, `stylesheet-blocked` and `size-limit` (a request over 256 KiB or a stylesheet over 128 KiB). For `page-changed`, press **Detect text styles** and try again. For `revision-conflict`, press the button again.
+
+**Clear preview** removes only the bridge's own stylesheet. Your DOM, inline styles, inspector edits, text, tokens and font links stay. **Reset all page edits** asks first, then removes every live edit on the page, including the role preview.
+
+A page whose policy forbids inline styles, for example `style-src 'none'`, blocks the preview stylesheet. Apply then shows `Role preview apply rejected (stylesheet-blocked); the previous preview is kept.` Studio does not ask you to weaken your policy.
+
+#### Receipts and losses
+
+After Apply, the page measures the result and Studio shows what the page confirmed. The summary reads `Preview applied to N roles; M checked elements did not show it.` ("role" and "element" are singular when the count is 1.) Each role then gets a line:
+
+`<name> (<id>): matched A, checked B eligible text elements, mismatched C`
+
+- **matched** is the number of elements the role's selectors reach.
+- **checked** is the number of those elements with rendered text that the page measured.
+- **mismatched** is the number of checked elements whose computed value is not the previewed value.
+
+Matched elements with no rendered text are not failures. Studio says how many it did not measure. The check reads computed styles. It proves that the requested value reached the element, not which font file painted the glyphs.
+
+When a page rule wins, Studio lists it as a loss: `<count> × <property>: <reason>`. The reasons are:
+
+- `overridden by <selector>` (or `overridden by an author rule` when the selector is not known),
+- `overridden by inline style`,
+- `inherits from parent via <selector>` (or `inherits from its parent`),
+- `a stylesheet could not be read`,
+- `overridden; source not provable`,
+- `the page disabled the preview sheet`,
+- `not attributed in time`.
+
+A losing page rule is reported and not fixed with `!important`. Studio lists at most 16 losses for each role and property.
+
+Two statuses mark an incomplete check: `Preview applied; checks incomplete (budget-exceeded).` and `Preview applied; page changed before checks finished`. In the second case the preview is applied, but its measurement is out of date. Press **Detect text styles**, then **Apply selected roles** again to recheck.
+
+#### Role preview output
+
+The panel shows the exact stylesheet text the page holds. Copy, Download, Sync to file, the Changes panel, exported JSON and saved overrides do not carry the role preview. Writing role output to files is not built; see [the roadmap](docs/roadmap/product-direction.md).
+
+A reload, reconnect or pop-out does not push the preview back. The new document has none, and you press **Apply selected roles** again. If a request is waiting when that happens, Studio says `Role preview request dropped: the page reloaded or reconnected before it was acknowledged. Press Detect text styles, then Apply or Clear again.`
+
+#### Visited pages
+
+You move through your app yourself and press **Detect text styles** on each page. Studio keeps the latest result for each page, keyed by path, query and hash, and replaces it when you revisit. For each role it then shows where the role was checked. There is no crawling and no whole-site count: "N visited pages" are the pages you pressed Detect on.
+
+- The summary reads `Checked on N visited pages. Other pages have not been checked.` (`Checked on 1 visited page.` for one page). It stays hidden until Studio stores a page.
+- Each role lists its pages under `Checked on:`, `No match on:`, `Different style on:` and `Changed since checked:`. A different style reads `<selector>: expected <tuple>, found <count> x <tuple>`.
+- If the page moved on since the last Detect, Studio says `The page changed since the last Detect; press Detect text styles. This page has not been checked.` If a Detect reply arrives too late, it says `The page's reply to Detect was out of date; press Detect text styles again; this page has not been checked.`
+
+The page list is session-only and per Live App origin. Studio saves nothing, exports nothing and sends your app nothing except the known role selectors in the next Detect. Closing or reloading Studio forgets it. Reloading the app, reconnecting or popping out on the same origin keeps the list, but the preview needs Apply again.
+
+The collection holds at most 128 roles, 32 selectors per role, 8 distinct reference styles per role and 32 pages. A page that would pass a limit, or make the next Detect request exceed 256 KiB, is refused as a whole and earlier evidence stays. Studio says `Collection limit reached; this page was not stored`, and Apply stays disabled (`Collection limit reached, so Apply is disabled until you clear visited pages.`) until you press **Clear visited pages**. That button forgets the evidence and keeps the applied preview and the ids of the roles in it. A different Live App origin starts a new collection: `A new Live App origin started a new collection; visited pages from the previous origin were cleared.` Clearing says `Visited pages cleared. The applied preview and inspector edits stay.`
+
+#### Page changes
+
+A change to the URL, the rendered content, author styles or the viewport marks earlier results out of date. The bridge's own writes, hover and focus, and font loading do not. The bridge notices `pushState`, `replaceState`, back and forward, hash changes and the browser's back/forward cache by itself, and tells Studio at most once every 250 ms. A page whose path, query and hash together pass 2,000 characters shows `Role detection/preview unavailable: unsupported page URL.` The inspector still works there.
+
+#### Version differences
+
+Studio ignores reply fields it does not know and stores none, so a bridge that adds reply fields still works with this Studio. The exception is the role values Studio itself sent: an unknown field there makes Studio refuse the reply. The bridge refuses a request with a field it does not know.
+
+- A bridge older than 0.4.0 has no role support. Studio says `This bridge does not support role detection/preview.` Update the `fontkit-bridge.js` you load, or `fontkitstudio`. Role messages use role revision 1. A bridge that advertises role capabilities without a valid `roleRevision` is treated as not supporting roles.
+- A reply Studio cannot read is shown: `Studio could not read the page's reply to Detect; this page has not been checked.` or `Studio could not read the page's reply; the preview on the page may differ from what Studio shows.`
+- A Detect with no answer for 8 seconds says `The page did not reply to Detect; this page has not been checked.`
+
+#### Known limits
+
+- **Bootstrap 5 inheritance.** A receipt for a Bootstrap 5 Body or Monospace role measures only the role's own selectors. Text that inherits the `:root` variables outside them changes without being measured. On a role bound to `body`, Studio says `applies page-wide through Bootstrap's body variables, and inherited text is not measured`.
+- A component with its own size rule, such as Bootstrap's `.btn`, keeps its size under a Body role.
+- A later author `body { ... }` rule of equal specificity outranks the Body block.
+- An element that declares the font variables again and is read directly, such as `<body data-bs-theme>` or a tooltip, has the same blind spot.
+- **Other cascade cases.** Rules Studio cannot trace (`overridden; source not provable`), stylesheets from other origins that the page cannot read, `@layer`, animations and inactive media rules show up as unknown or as losses. Studio does not guess.
+- **History code that ran first.** App code that saved the browser's own `history.pushState` or `replaceState` before the bridge connected bypasses the bridge's wrapper. The next Detect, Apply or Clear, `popstate`, `hashchange` or a render still notices the change.
+- **Silent style changes.** CSS added with `insertRule` and no visible DOM change is not announced; press **Detect text styles** again. A page frozen without a `pageshow` event is also seen only by the next Detect.
+- **Studio's own resizing.** Fullscreen and the device-width buttons resize the page, which counts as a page change. Studio shows the page-changed sentence and asks for a fresh Detect. The role rows and the applied preview stay.
+- **Strict policies.** A page that forbids inline styles blocks the preview stylesheet (see Preview, Apply and Clear).
 
 ### Arrange
 
@@ -439,7 +575,7 @@ export default defineNuxtConfig({
 
 ### Tailwind
 
-Font Kit Studio does not read or rewrite utility classes, and it does not patch class strings. It sets inline styles while you edit, and writes CSS rules that target `[data-design-id="…"]` or an auto-discovered selector. To bring the result into a Tailwind project:
+Font Kit Studio does not read or rewrite utility classes, and it does not patch class strings. It sets inline styles while you edit (a role preview uses one stylesheet the bridge owns instead; see [Detected roles](#detected-roles)), and writes CSS rules that target `[data-design-id="…"]` or an auto-discovered selector. To bring the result into a Tailwind project:
 
 - Put the Copy or Sync output in any stylesheet. Every generated declaration is `!important`, so it wins over utility classes whatever the load order. Or
 - Better, route your fonts through **semantic tokens** (a `--font-display` custom property or a theme font family) and change the token's value. The bridge reports custom properties such as `--font-display` and `--font-sans`.
@@ -544,8 +680,11 @@ Bridge                                   Studio
 | `design:select` | `targetId` or `null`, optional `requestId` | Selects, scrolls into view. Replies `design:selected`, which echoes a `requestId` that is a string of 1 to 100 characters. |
 | `design:mode` | `mode: "select" \| "interact"` and/or `overlay: boolean` | Switches click handling. `overlay: true` makes the bridge draw its own outline (pop-out). No reply. |
 | `design:move` | `requestId, baseRevision, targetId, to, strategy?, force?` | `to` is one of `{index}`, `{before}`, `{after}`, `{container, index?}`. `strategy` is `"dom"` (default) or `"css-order"`. |
-| `design:reset` | `requestId, baseRevision, targetId?` | Removes overrides and undoes moves for one target, or for everything. |
+| `design:reset` | `requestId, baseRevision, targetId?` | Removes overrides and undoes moves for one target, or for everything. A reset for everything also removes the role preview. |
 | `design:restore-text` | `requestId?, baseRevision?` | Restores the original text of every target and keeps styles. |
+| `design:detect` | `requestId, documentId, knownRoles` | Reads the page's text styles and checks the known role selectors. Changes nothing. Replies `design:detected`. |
+| `design:roles-apply` | `requestId, baseRevision, documentId, pageVersion, roles` | Replaces the whole role set in one step, or rejects it. An empty list clears. Replies `design:roles-applied`. |
+| `design:roles-clear` | `requestId, baseRevision, documentId, pageVersion` | Removes the role stylesheet. Repeating it succeeds. Replies `design:roles-applied` with `operation: "clear"`. |
 | `design:highlight`, `fontkit:change` | legacy | `highlight` acts like `select`. `fontkit:change` sets font tokens and replies `fontkit:ack`. |
 
 ### Bridge to Studio
@@ -553,9 +692,12 @@ Bridge                                   Studio
 | Message | Meaning |
 |---|---|
 | `design:bridge-ready` | The bridge is loaded. Sent to the parent or opener, with no page data. |
-| `design:ready` | Reply to `hello`: revision, capabilities, viewport, tokens, target manifests and the change ledger. |
+| `design:ready` | Reply to `hello`: revision, capabilities, `roleState`, viewport, tokens, target manifests and the change ledger. `capabilities` includes `roleDetection`, `roleStylesheet` and `roleRevision` (1 in 0.4.0). `roleState` holds the document id, page version and URL, and the accepted roles. |
 | `design:applied` | A request succeeded: revision, canonical patch, fresh manifest and the change ledger. |
-| `design:rejected` | Nothing changed. `reason` is `invalid-message`, `unknown-target`, `unsupported-property`, `unsupported-value` or `revision-conflict`, with `detail`. Move guards use `unsupported-value` with `detail.guard`; other refused moves use `detail.reason` (`index-out-of-range`, `unknown-container`, `into-self`, `into-descendant`, `relative-to-self`, `void-or-replaced-container`, `unarrangeable-reference`). |
+| `design:detected` | Reply to `design:detect`: the document id, the page identity captured and current, `complete` and `reason`, `groups` and `selectorChecks`. |
+| `design:roles-applied` | The receipt of an Apply or Clear: revision, the accepted `roles`, `canonicalCss`, `cssHash` and the measured outcomes. |
+| `design:roles-page` | The page's route, content or viewport changed: `documentId, pageVersion, pageURL`. Data only; it changes no roles. |
+| `design:rejected` | Nothing changed. `reason` is `invalid-message`, `unknown-target`, `unsupported-property`, `unsupported-value`, `revision-conflict`, `page-changed`, `stylesheet-blocked` or `size-limit`, with `detail`. Move guards use `unsupported-value` with `detail.guard`; other refused moves use `detail.reason` (`index-out-of-range`, `unknown-container`, `into-self`, `into-descendant`, `relative-to-self`, `void-or-replaced-container`, `unarrangeable-reference`). |
 | `design:hover` | The target under the pointer changed (select mode only). |
 | `design:selected` | A click or `design:select` picked a target (or none). Includes the full manifest. |
 | `design:bounds` | Where the selected target is now, after scroll, resize or layout changes. |
@@ -564,6 +706,8 @@ Bridge                                   Studio
 | `fontkit:ack` | Reply to the legacy `fontkit:change`. |
 
 The change ledger in `design:ready` and `design:applied` lists each container whose children were moved in `structure[]`, with `order` (the children's names) and `orderIds` (the same children by target id; names can repeat, ids cannot). Studio saves and replays DOM moves from `orderIds`.
+
+Role requests stay strict: the bridge refuses a request with a field it does not know. Studio reads role replies tolerantly and ignores fields it does not know. The fields of the role messages are in [the text-role plan](docs/plans/2026-10-03-r2-engine.md).
 
 ### Patch keys
 
@@ -580,7 +724,7 @@ The change ledger in `design:ready` and `design:applied` lists each container wh
 | `text` | up to 5000 characters, text targets only | the element's text |
 | `fontStylesheet` | `null`, a Google Fonts `css2` URL or an Adobe Fonts kit URL | a `<link>` in the page's head |
 
-`null` removes an override. The bridge applies each value as an inline `!important` style, and each successful change adds one to `revision`. A change that was built on an old revision is rejected with `revision-conflict`.
+`null` removes an override. The bridge applies each value as an inline `!important` style, and each successful change adds one to `revision`. A change that was built on an old revision is rejected with `revision-conflict`. These keys are for the inspector. Text roles use their own messages and a stylesheet the bridge owns (see [Detected roles](#detected-roles)).
 
 ## Security model
 
@@ -590,7 +734,7 @@ Font Kit Studio edits a live page from another window, so both sides check every
 
 **Inert by default.** Before Studio connects, the bridge does not change the page or block clicks. The only thing it sends is a `design:bridge-ready` that carries no page data, to the window that framed or opened the page. Your app works as normal.
 
-**What gets through.** Studio only loads `http:` and `https:` Live App URLs (`file:` only when Studio itself is a file) and never itself. The bridge only accepts the values in the patch table above. Text goes in as text, never as markup. Font stylesheets, one per patch or a composition's list of up to 16, must each be a Google Fonts `css2` URL or an Adobe Fonts kit URL. Placed images are `<img>` elements with PNG or SVG data, never inserted markup.
+**What gets through.** Studio only loads `http:` and `https:` Live App URLs (`file:` only when Studio itself is a file) and never itself. The bridge only accepts the values in the patch table above, and the six role properties with the limits under [Preview, Apply and Clear](#preview-apply-and-clear). Detect sends Studio a text sample of up to 200 characters, the selectors and the computed styles of each group, and Studio keeps them in memory only. Text goes in as text, never as markup. Font stylesheets, one per patch or a composition's list of up to 16, must each be a Google Fonts `css2` URL or an Adobe Fonts kit URL. Placed images are `<img>` elements with PNG or SVG data, never inserted markup.
 
 **The dev server.** By default it listens on loopback only. It checks the `Host` header (so a hostile website cannot reach it by DNS rebinding), checks `Origin` on writes, limits a write to 1 MiB, writes atomically to the single `.css` file you named inside this repo, and sends `Cache-Control: no-store`. `--no-sync` turns writes off. It serves the files of this repo on both ports, so do not expose it to untrusted networks.
 
@@ -644,7 +788,7 @@ In a container with a browser already installed: `FKS_ENGINES=chromium FKS_CHROM
 | `test_studio_stage.py` | Width buttons never crop the preview, and the font tokens follow a slot's role. |
 | `test_studio_visual.py` | Version labels, one primary action per panel, control heights, focus rings, contrast and the width of the Live App URL box. |
 | `test_studio_review_findings.py` | Saved DOM order with a duplicate `data-design-id`, and the 16-stylesheet limit. |
-| `test_studio_rename.py` | The old Studio file name forwards to `fontkit-studio.html` with its query and hash. |
+| `test_studio_rename.py` | `fontkit-studio.html` opens directly and keeps its query and hash, and the old file name is gone. |
 | `test_node_studio_server.py` | The npm package's Studio server in a real browser: the app never sees the per-run token, and a URL without it shows no Studio. |
 | `test_one_command_vite.py` | `npx fontkitstudio` in a real Vite project, on both fixtures: one bridge tag, and a hot update that keeps Studio connected. |
 | `test_one_command_proxy.py` | `npx fontkitstudio <url>` over a Bootstrap page with a strict Content-Security-Policy: select and edit, with no violation and no request to an https origin. |
@@ -658,6 +802,21 @@ In a container with a browser already installed: `FKS_ENGINES=chromium FKS_CHROM
 | `test_support.py` | The shared test harness: engine selection (an engine list that runs no browser is refused), the shared browser with a fresh context per test, the Firefox canary's test list, the Composer canvas snapshot helper, and a guard against reading a page's markup raw. |
 | `test_commit_messages.py` | The commit-message check, with a throwaway git repository: each forbidden form, allowed human co-authors, range parsing. |
 | `test_frontend_gate_*.py` | The gate's own logic: colour maths, contrast and layout judgements, report lines, the exit-code rule, CLI flags and the check table. `test_frontend_gate_fonts.py` and `test_frontend_gate_theme_browser.py` run a real browser; the others need none. |
+| `test_localhost_cookies.py` | Cookie delivery through the real command: `Lax`, `Strict` and omitted-`SameSite` cookies reach the framed app, seen in the app's own HTTP echo. |
+| `test_role_detection.py` | Text-style detection through the real bridge: rendered baselines, safe bindings and work done in bounded batches. |
+| `test_role_stylesheet.py` | Applying and clearing the role stylesheet through the real bridge: rendered styles, exact undo and honest receipts. |
+| `test_role_preview.py` | Receipt counts, loss reasons and proven winning selectors, checked against rendered styles. |
+| `test_role_adapters.py` | Bootstrap 5 adapters through the real bridge: suggestions, names, evidence, the exact CSS bytes and the re-check at Apply. |
+| `test_role_protocol.py` | The bridge's role request boundary across origins, including `roleRevision`, and the role contract table. |
+| `test_role_route_bridge.py` | The bridge announces route and content changes to Studio (`design:roles-page`): data only, coalesced, and its history wrappers are removed cleanly. |
+| `test_role_routes.py` | Studio's visited-page evidence: the collection, its limits, the four page states, the new-document and new-origin notices and Clear visited pages. |
+| `test_studio_roles.py` | Studio's role panel and preview controls against fake bridges: drafts, Apply and Clear, the request queue, Reset all page edits and adapters. |
+| `test_r2_integration.py` | Real Studio and real bridge together on role detection and preview: fullscreen, Reset all page edits, a blocked stylesheet and an unsupported page URL. |
+| `test_r2_react.py` | Role detection, preview and Clear on a real React app, with hostile selectors, re-renders and an offline guard. |
+| `test_r2_route_fixtures.py` | Real document and history changes on the multi-page fixture, checked against literal rendered values. |
+| `test_r2_static_fixtures.py` | The static fixture pages, checked offline against literal rendered values. |
+| `test_r2_entrypoints.py` | Detect, preview, re-render and Clear through the real command on Vite 7 and 8, the proxy on a Bootstrap 5 page and the proxy in front of Next.js; a Vite build ships no bridge and no role CSS. |
+| `test_release.py` | The release workflow and the script that makes release notes, parsed and run on temporary changelogs; nothing is published. |
 | `test_live_integration.py` | Everything together, with nothing faked: real server, real Studio, real bridge, real demo and the real clipboard. It also runs the README's own script tag and bookmarklet. |
 
 **Screenshots** in this README come from `docs/assets/screenshots/capture.py`, which drives the same real setup.
@@ -712,10 +871,11 @@ Known gaps:
 - Edits made while the page is reloading are dropped.
 - At 390 px wide, the "No bridge answered" badge can push the page sideways.
 - Rows hold 2 to 4 leaf slots. Nested rows and JPEG assets are out of scope.
+- Role preview is never written to a file, and the visited-page list is lost when Studio closes or reloads. See [Detected roles](#detected-roles) for the other limits.
 
 ## Roadmap
 
-For your own local app, `npx fontkitstudio` already removes the script tag. A **browser extension** for sites you do not run is an idea and is not built. See [`docs/roadmap/browser-extension.md`](docs/roadmap/browser-extension.md) for goals, a sketch, security rules and open questions. Where Font Kit Studio is heading, and why typography stays at its centre, is in [`docs/roadmap/product-direction.md`](docs/roadmap/product-direction.md).
+Role detection and preview ship in 0.4.0. Font pairing, type scales and token output are not built. For your own local app, `npx fontkitstudio` already removes the script tag. A **browser extension** for sites you do not run is an idea and is not built. See [`docs/roadmap/browser-extension.md`](docs/roadmap/browser-extension.md) for goals, a sketch, security rules and open questions. Where Font Kit Studio is heading, and why typography stays at its centre, is in [`docs/roadmap/product-direction.md`](docs/roadmap/product-direction.md).
 
 ## Provenance
 

@@ -31,6 +31,8 @@ The command opens Studio in your browser and prints its address on a line that s
 | `--no-open` | Print the address instead of opening the browser. |
 | `--studio-port <n>` | Keep Studio on one port, so its settings stay. |
 
+From 0.4.0 the bridge in the package also supports text-style roles. In Studio's Live App view you can detect the text styles on your page, preview new values for a role and clear the preview. It changes nothing in your project. See [Detected roles](https://github.com/pterw/font-kit-studio#detected-roles) in the repository README.
+
 ## Requirements
 
 - Node 22.12 or later.

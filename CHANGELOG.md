@@ -49,6 +49,23 @@ Two things have their own version numbers:
   A role detected on a Bootstrap 5 page names its adapter on its row, for
   example `Adapter: Bootstrap 5 body variables`.
   Reset all page edits removes every live edit on the page, after confirmation.
+- Studio remembers which visited pages each role was checked on, during the
+  session and per site: every role lists the pages where it matched, where it
+  found no match, where it found a different style, and the pages that changed
+  since they were checked (`Checked on N visited pages. Other pages have not
+  been checked.`). Moving to another page in the app is announced by the bridge,
+  so Studio knows the evidence is out of date. A new page says `Role preview is
+  not applied on this page.` and never reapplies a preview by itself. Clear
+  visited pages forgets the list but keeps the applied preview. A page that would
+  exceed the collection limits is refused as a whole, with a visible message.
+- Studio and a bridge from a different release keep working together for role
+  detection and preview: Studio ignores reply fields it does not know, and says
+  so when it cannot read a reply or gets none, instead of waiting forever.
+
+### Removed
+
+- `font_kit_studio_v0.1.1.html`, the redirect kept since 0.3.0 for old bookmarks.
+  Open `fontkit-studio.html` instead and update any bookmark to it.
 
 ## [0.3.1] - 2026-10-07
 
