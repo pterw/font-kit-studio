@@ -285,7 +285,7 @@ jobs:
           FKS_ENGINES: chromium
           FKS_REQUIRE_FIXTURES: '1'
           PYTHONPATH: tests
-        run: python -m unittest test_vite_build_guarantee test_one_command_vite test_one_command_proxy test_localhost_cookies test_friction test_vite_types -v
+        run: python -m unittest test_vite_build_guarantee test_one_command_vite test_one_command_proxy test_localhost_cookies test_friction test_vite_types test_r2_entrypoints.ViteEntrypointTests test_r2_entrypoints.ProxyEntrypointTests -v
 
   # Proxy mode in front of a real Next.js dev server, including its hot reload
   # over the proxy's WebSocket pass-through. Its own job: Next's install is large.
@@ -324,4 +324,4 @@ jobs:
           FKS_REQUIRE_FIXTURES: '1'
           NEXT_TELEMETRY_DISABLED: '1'
           PYTHONPATH: tests
-        run: python -m unittest test_one_command_next -v
+        run: python -m unittest test_one_command_next test_r2_entrypoints.NextEntrypointTests -v
