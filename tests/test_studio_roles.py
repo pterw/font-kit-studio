@@ -21,6 +21,9 @@ PEER_URL = TARGET + '/peer'
 HYBRID_URL = TARGET + '/hybrid.html'
 UNAVAILABLE = 'Role detection/preview unavailable: unsupported page URL.'
 UNSUPPORTED = 'This bridge does not support role detection/preview.'
+UNREADABLE_DETECT = "Studio could not read the page's reply to Detect; this page has not been checked."
+NO_REPLY_DETECT = 'The page did not reply to Detect; this page has not been checked.'
+UNREADABLE_REPLY = "Studio could not read the page's reply; the preview on the page may differ from what Studio shows."
 NO_PREVIEW = 'This bridge does not support role preview.'
 STALE = 'Preview applied; page changed before checks finished'
 APPLY = 'Apply selected roles'
@@ -89,9 +92,14 @@ addEventListener('message',e=>{if(e.source!==parent||e.origin!=='http://studio.t
  else if(e.data.type==='design:detect') requests.push(e.data);
 });
 </script>'''
-PEER = PEER_TEMPLATE.replace('__CAPS__', '{roleDetection:true,roleStylesheet:true}')
-PEER_DETECT_ONLY = PEER_TEMPLATE.replace('__CAPS__', '{roleDetection:true}')
+PEER = PEER_TEMPLATE.replace('__CAPS__', '{roleDetection:true,roleStylesheet:true,roleRevision:1}')
+PEER_DETECT_ONLY = PEER_TEMPLATE.replace('__CAPS__', '{roleDetection:true,roleRevision:1}')
 PEER_LEGACY = PEER_TEMPLATE.replace('__CAPS__', '{}')
+
+
+def peer_with_caps(literal):
+    """The peer announcing exactly the JavaScript object literal `literal` as its capabilities."""
+    return PEER_TEMPLATE.replace('__CAPS__', literal)
 
 # The legacy fake target, with the role capabilities and a ready roleState added at serve time. The two replacements
 # fail loudly if the fixture changes; the fake keeps answering legacy ops (and holds replies on request).
@@ -109,7 +117,7 @@ addEventListener('message',e=>{if(e.source!==parent||e.origin!=='http://studio.t
 def hybrid_page():
     source = FIXTURE.read_text(encoding='utf-8')
     assert source.count(_READY_CAPS) == 1 and source.count('</body>') == 1, 'fake-target.html changed shape'
-    source = source.replace(_READY_CAPS, _READY_CAPS[:-2] + ', roleDetection: true, roleStylesheet: true }, roleState: window.rs.state,')
+    source = source.replace(_READY_CAPS, _READY_CAPS[:-2] + ', roleDetection: true, roleStylesheet: true, roleRevision: 1 }, roleState: window.rs.state,')
     return source.replace('</body>', HYBRID_SHIM + '</body>')
 
 
@@ -411,7 +419,7 @@ class StudioRoleBoundaryTests(StudioRoleCase):
                 frame.goto('http://evil.test/redirected')
                 frame.evaluate('data=>parent.postMessage(data,"http://studio.test")',
                     {'type': 'design:ready', 'protocolVersion': 1, 'sessionId': session, 'revision': 0,
-                     'capabilities': {'roleDetection': True}, 'roleState': {
+                     'capabilities': {'roleDetection': True, 'roleRevision': 1}, 'roleState': {
                          'documentId': 'forged-document', 'pageVersion': 0, 'pageURL': TARGET + '/peer',
                          'roles': [], 'canonicalCss': '', 'hashAlgorithm': 'fnv1a32', 'cssHash': EMPTY_HASH}, 'targets': []})
                 page.evaluate('()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))')
@@ -422,13 +430,14 @@ class StudioRoleBoundaryTests(StudioRoleCase):
                 self.assertEqual(errors, [])
 
     def test_ready_requires_exact_snapshot_and_supported_capability(self):
-        """Given a connected peer, when ready arrives with a malformed snapshot or without role capabilities, then
-        Studio shows the unsupported reason and disables Detect, and a good ready recovers it."""
+        """Given a connected peer, when ready arrives with a malformed snapshot, a role with an unknown key, no role
+        capabilities or no role revision, then Studio shows the unsupported reason and disables Detect, and a good
+        ready recovers it. An unknown key on the state object itself is tolerated (StudioRoleReplyTests)."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, frame, errors = self.open(engine, TARGET + '/peer', PEER)
                 original = frame.evaluate('state')
-                invalid = {'null': None, 'extra key': {**original, 'extra': True}, 'negative version': {**original, 'pageVersion': -1},
+                invalid = {'null': None, 'extra role key': self.snapshot_state([{**self.role_input(), 'extra': 1}]), 'negative version': {**original, 'pageVersion': -1},
                            'fractional version': {**original, 'pageVersion': 1.5},
                            'wrong digest': {**original, 'cssHash': '00000000'},
                            'other algorithm': {**original, 'hashAlgorithm': 'sha256'},
@@ -449,6 +458,11 @@ class StudioRoleBoundaryTests(StudioRoleCase):
                         self.assertEqual(page.locator('#roleRows > li').count(), 0)
                         frame.evaluate('s=>{state=s;ready()}', original)
                         page.wait_for_function('!document.querySelector("#detectTextStyles").disabled')
+                frame.evaluate('()=>send({type:"design:ready",revision:0,targets:[],capabilities:{roleDetection:true,roleStylesheet:true},roleState:state})')
+                page.wait_for_function('document.querySelector("#roleStatus").textContent === "This bridge does not support role detection/preview."')
+                self.assertTrue(page.get_by_role('button', name='Detect text styles').is_disabled())
+                frame.evaluate('ready()')
+                page.wait_for_function('!document.querySelector("#detectTextStyles").disabled')
                 frame.evaluate('()=>send({type:"design:ready",revision:0,targets:[],capabilities:{},roleState:state})')
                 page.wait_for_function('document.querySelector("#detectTextStyles").disabled')
                 self.assertEqual(page.locator('#roleStatus').inner_text(), UNSUPPORTED)
@@ -530,7 +544,8 @@ class StudioRoleBoundaryTests(StudioRoleCase):
     def test_exact_hostile_shapes_leave_rendered_snapshot_and_legacy_ledger_intact(self):
         """Given a pending detect, when each malformed or hostile reply for it arrives followed by one valid fence
         reply, then the fence is what renders (so the hostile one was not accepted), the failing shape is named by
-        its subtest, and no hostile text renders."""
+        its subtest, and no hostile text renders. An extra key on the reply or on a group is tolerated instead
+        (StudioRoleReplyTests); a key inside an identity is still refused."""
         too_many = [group('many', 'Hostile many', 'Many'), group('last', 'Hostile last', 'Last')]
         too_many[0]['elementCount'] = table.ELEMENTS
         too_many[0]['signatures'][0]['count'] = table.ELEMENTS
@@ -541,7 +556,6 @@ class StudioRoleBoundaryTests(StudioRoleCase):
         shapes = {
             'foreign route': {'pageURL': TARGET + '/different', 'currentPageURL': TARGET + '/different'},
             'more elements than the limit': {'scannedElements': table.ELEMENTS + 1, 'groups': too_many},
-            'extra top-level key': {'extra': True}, 'extra group key': {'groups': hostile(extra=True)},
             'identity differs from authorRole': {'groups': hostile(identity={'kind': 'author-role', 'name': 'Other'})},
             'style identity differs from signature': {'groups': hostile(
                 identity={'kind': 'style', 'style': STYLE}, authorRole=None,
@@ -1071,8 +1085,8 @@ class StudioRoleApplyTests(StudioRoleCase):
             'body selector': with_role(selectors=['body']), 'unknown adapter': with_role(adapter='nope'),
             'empty properties': with_role(properties={}), 'colour property': with_role(properties={'color': 'red'}),
             'family with semicolon': with_role(properties={'fontFamily': 'a;b'}),
-            'family that is a CSS-wide keyword': refused_family(table.FAMILIES_REFUSED[0]),
-            'family that is a dashed function': refused_family(table.FAMILIES_REFUSED[8]),
+            'family that is a CSS-wide keyword': refused_family(next(f for f in table.FAMILIES_REFUSED if f.strip().lower() in table.FAMILY_KEYWORDS)),
+            'family that is a dashed function': refused_family(next(f for f in table.FAMILIES_REFUSED if '(' in f)),
             'size out of range': with_role(properties={'fontSize': 3}), 'extra role key': with_role(extra=1),
             'proto key in role': with_role(**{'__proto__': {}}),
             'duplicate outcome': {'outcomes': [first, first]}, 'outcome for an unknown role': with_outcome(id='role-9'),
@@ -1094,8 +1108,6 @@ class StudioRoleApplyTests(StudioRoleCase):
             'loss selector with a line separator': with_outcome(losses=[loss(selector='.a' + chr(0x2028))]),
             'loss selector with a paragraph separator': with_outcome(losses=[loss(selector='.a' + chr(0x2029))]),
             'loss selector not text': with_outcome(losses=[loss(selector=5)]),
-            'loss extra key': with_outcome(losses=[{**loss(), 'extra': 1}]),
-            'extra receipt key': {'extra': True},
         }
         hostile = {name: {**ok, **change} for name, change in shapes.items()}
         hostile['missing digest'] = drop('cssHash')
@@ -1492,9 +1504,10 @@ class StudioRoleQueueTests(StudioLegacyCase):
         self.assertEqual(errors, [])
 
     @per_engine
-    def test_malformed_rejections_are_ignored_and_leave_the_request_in_flight(self, engine):
+    def test_malformed_rejections_show_the_unreadable_status_and_leave_the_request_in_flight(self, engine):
         """Given an Apply in flight, when rejections with an extra key, an unknown reason, a non-text detail or a bad
-        revision arrive before a valid receipt, then only the receipt settles it."""
+        revision arrive before a valid receipt, then the status says Studio could not read the reply and only the
+        receipt settles the request."""
         page, frame, errors = self.open(engine, PEER_URL, PEER)
         self.detected(page, frame)
         request = self.apply_role(page, frame, '24')
@@ -1509,6 +1522,7 @@ class StudioRoleQueueTests(StudioLegacyCase):
                              'conflict detail text': {'reason': 'revision-conflict', 'detail': {'baseRevision': '0', 'revision': 3}}}.items():
             with self.subTest(shape=name):
                 self.send(frame, {**good, **change})
+        self.wait_status(page, UNREADABLE_REPLY)
         receipt = self.receipt(request)
         self.send(frame, receipt)
         page.wait_for_function('(css) => document.querySelector("#rolePreviewCss").textContent === css', arg=receipt['canonicalCss'])
@@ -1712,7 +1726,7 @@ class StudioResetAllTests(StudioLegacyCase):
         request = self.apply_role(page, frame, '24')
         self.send(frame, self.receipt(request))
         self.wait_status(page, 'Preview applied to 1 role')
-        replies = {'no roleState': {}, 'extra key': {'roleState': self.empty_state(extra=1)},
+        replies = {'no roleState': {},
                    'roles not empty': {'roleState': self.snapshot_state([self.role_input()])},
                    'other document': {'roleState': self.empty_state(documentId='other')},
                    'wrong digest': {'roleState': self.empty_state(cssHash='00000000')},
@@ -2998,4 +3012,406 @@ class StudioContractTableTests(StudioRoleCase):
                 page.wait_for_function('(text) => document.querySelector("#rolePreviewOutcomes").textContent.includes(text)', arg=shown, timeout=8000)
                 if refused:
                     self.assertNotIn('matched 8,', page.locator('#rolePreviewOutcomes').inner_text())
+        self.assertEqual(errors, [])
+
+
+MARKER = 'LEAK-7'
+MISSING = object()
+SETTLED = {'apply': 'Preview applied to 1 role; 0 checked elements did not show it.', 'clear': 'Preview cleared.'}
+IN_FLIGHT = {'apply': 'Applying role preview…', 'clear': 'Clearing role preview…'}
+
+
+class StudioRoleReplyTests(StudioLegacyCase):
+    """Addendum 26 items 1-4 on Studio's side: the role revision, replies read tolerantly, and a visible word when a
+    reply cannot be read or never comes. The real bridge always replies and sends exactly the revision-1 fields, so it can
+    show only the round trip (the first test); extra keys, unreadable replies and silence need a fake peer."""
+
+    def status(self, page):
+        return page.locator('#roleStatus').inner_text()
+
+    def wait_text(self, page, selector, text):
+        page.wait_for_function('([selector, text]) => document.querySelector(selector).textContent === text', arg=[selector, text], timeout=5000)
+
+    def wait_detected(self, page):
+        page.wait_for_function('document.querySelector("#roleStatus").textContent.startsWith("Detected")', timeout=5000)
+
+    def frozen_clock(self, page):
+        """Fake time stands still from here on and moves only with page.clock.run_for."""
+        page.clock.install(time=0)
+        page.clock.pause_at(1000)
+
+    def padded(self, message):
+        """The message with an unknown key that makes it exactly one byte over 1 MiB on the wire."""
+        base = {**message, table.UNKNOWN_KEY: ''}
+        return {**message, table.UNKNOWN_KEY: 'x' * (table.REPLY_BYTES + 1 - table.wire(base))}
+
+    @per_engine
+    def test_the_real_bridge_advertises_a_revision_and_detect_apply_clear_render(self, engine):
+        """Given the real bridge, when Studio connects, detects, applies a size to the Body role and clears it, then
+        Detect is enabled with the ready status, the Detect status reads Detected, Apply shows "Preview applied to 1
+        role" with the size on the page, and Clear shows "Preview cleared." with the page back at 16px."""
+        page, frame, errors = self.open(engine)
+        self.assertEqual((self.status(page), self.button(page, 'Detect text styles').is_enabled()), ('Ready to detect text styles.', True))
+        self.assertTrue(self.detect(page).startswith('Detected'))
+        row = page.locator('#roleRows > li[data-role-id]', has=page.locator('strong', has_text='Body')).first
+        role = row.get_attribute('data-role-id')
+        self.control(page, 'Preview this role', role).check()
+        self.type_value(self.control(page, 'Size (px)', role), '24')
+        self.button(page, APPLY).click()
+        page.wait_for_function('document.querySelector("#rolePreviewStatus").textContent.startsWith("Preview applied to 1 role")', timeout=8000)
+        author = frame.locator('[data-design-role="Body"]')
+        self.assertEqual(author.evaluate('el => getComputedStyle(el).fontSize'), '24px')
+        self.button(page, CLEAR).click()
+        self.wait_text(page, '#rolePreviewStatus', 'Preview cleared.')
+        self.assertEqual(author.evaluate('el => getComputedStyle(el).fontSize'), '16px')
+        self.assertEqual(errors, [])
+
+    @per_engine
+    def test_a_ready_without_a_valid_role_revision_is_a_bridge_without_role_support(self, engine):
+        """Given a connected peer, when ready announces roleRevision missing, 0, -1, 1.5, "1", true, null or 2**53, then
+        the status is the unsupported reason, Detect is disabled, no row is listed and the peer received only hello and
+        its detects; a good ready then recovers the ready status."""
+        rows = {'missing': MISSING, '0': 0, '-1': -1, '1.5': 1.5, 'a string': '1', 'true': True, 'null': None, '2**53': 2 ** 53}
+        page, frame, errors = self.open(engine, PEER_URL, PEER)
+        for name, value in rows.items():
+            with self.subTest(roleRevision=name):
+                self.detected(page, frame)
+                caps = {'roleDetection': True, 'roleStylesheet': True, **({} if value is MISSING else {'roleRevision': value})}
+                frame.evaluate('(c) => { caps = JSON.parse(c); ready() }', json.dumps(caps))
+                self.wait_text(page, '#roleStatus', UNSUPPORTED)
+                self.assertTrue(self.button(page, 'Detect text styles').is_disabled())
+                self.assertEqual(page.locator('#roleRows > li').count(), 0)
+                frame.evaluate('() => { caps = {roleDetection: true, roleStylesheet: true, roleRevision: 1}; ready() }')
+                self.wait_text(page, '#roleStatus', 'Ready to detect text styles.')
+        self.assertEqual(self.sent(frame), ['design:hello'] + ['design:detect'] * len(rows))
+        self.assertEqual(errors, [])
+
+    @per_engine
+    def test_a_higher_revision_is_accepted_and_still_receives_revision_1_requests(self, engine):
+        """Given a peer announcing roleRevision 2 or 2**53 - 1, when Studio detects and applies, then Detect is enabled,
+        the detect request holds exactly type, protocolVersion, sessionId, requestId, documentId and knownRoles, and the
+        apply request exactly type, protocolVersion, sessionId, requestId, baseRevision, documentId, pageVersion and roles."""
+        for revision in (2, 2 ** 53 - 1):
+            with self.subTest(roleRevision=revision):
+                page, frame, errors = self.open(engine, PEER_URL, peer_with_caps(f'{{roleDetection:true,roleStylesheet:true,roleRevision:{revision}}}'))
+                self.assertTrue(self.button(page, 'Detect text styles').is_enabled())
+                detect = self.detected(page, frame)
+                self.assertEqual(set(detect), {'type', 'protocolVersion', 'sessionId', 'requestId', 'documentId', 'knownRoles'})
+                apply = self.apply_role(page, frame, '24')
+                self.assertEqual(set(apply), {'type', 'protocolVersion', 'sessionId', 'requestId', 'baseRevision', 'documentId', 'pageVersion', 'roles'})
+                self.assertEqual(errors, [])
+
+    def saved_edit(self, page, frame):
+        """A saved inspector edit on the legacy fake target, so the code tabs have something to download."""
+        frame.evaluate('(id) => fake.select(id)', 'hero.lead')
+        page.wait_for_function('document.querySelector("#liveTargetName")?.dataset.targetId === "hero.lead"')
+        self.type_value(page.locator('#liveFontSize'), '9')
+        page.wait_for_function('/^Live · rev 1$/.test(document.querySelector("#bridgeStatusBadge").textContent)')
+
+    def tolerant_session(self, engine, kind, wrap):
+        """One fresh session on the legacy fake target in which the kind's reply arrives through `wrap`: what Studio shows, the
+        exports before and after the reply (the page's acknowledged revision aligned, as a role op raises it by one), and the
+        bytes of the next detect and apply requests."""
+        page, frame, errors = self.open_hybrid(engine)
+        self.saved_edit(page, frame)
+        aligned = lambda found: {key: re.sub(r'"revision": \d+', '"revision": N', text) for key, text in found.items()}
+        before = aligned(self.exports(page))
+        if kind == 'detected':
+            self.detected(page, frame, [group()])
+            request = self.pending(page, frame)
+            self.send(frame, wrap(self.reply(request, [group(), group('scan-b', 'Text', None)])))
+            page.wait_for_function('document.querySelector("#roleStatus").textContent.startsWith("Detected 2 roles")', timeout=5000)
+        elif kind == 'roles-applied':
+            self.detected(page, frame)
+            receipt = self.receipt(self.apply_role(page, frame, '24'), [outcome(losses=[loss(selector='.winner')])])
+            self.send(frame, wrap(receipt))
+            self.wait_text(page, '#rolePreviewCss', receipt['canonicalCss'])
+        else:
+            state = self.snapshot_state([self.role_input()], documentId='hybrid-document', pageURL=HYBRID_URL)
+            frame.evaluate('(s) => { rs.state = s; fake.reannounce() }', wrap(state))
+            self.wait_text(page, '#rolePreviewCss', state['canonicalCss'])
+        shown = {'rows': page.locator('#roleRows').inner_text(), 'status': self.status(page),
+                 'panel': page.locator('#detectedRoles').inner_text(), **self.preview(page)}
+        after = aligned(self.exports(page))
+        requests = json.dumps(self.detected(page, frame)) + json.dumps(self.apply_role(page, frame, '25'))
+        self.assertEqual(errors, [])
+        return shown, before, after, requests
+
+    @per_engine
+    def test_a_reply_with_unknown_keys_outside_echoed_roles_renders_exactly_like_the_plain_reply(self, engine):
+        """Given a detected reply, a receipt and a ready snapshot that carry an unknown key in every object except the
+        echoed roles, when each arrives, then Studio shows exactly what it shows for the plain message (rows, status,
+        preview CSS and outcomes). That is the tolerance this test proves. The export, marker and later-request assertions
+        are regression guards that hold by construction today (Studio stores only the validated copy and exports no role
+        data), so they cannot fail until Studio starts exporting or re-sending role data; the proof that raw reply objects
+        are never stored belongs to R2.6S."""
+        for kind in table.TOLERANT_KINDS:
+            with self.subTest(kind=kind):
+                plain = self.tolerant_session(engine, kind, lambda message: message)
+                future = self.tolerant_session(engine, kind, lambda message: table.with_unknown_keys(message, {'nested': [1, MARKER]}))
+                self.assertEqual(future[0], plain[0])
+                self.assertEqual(future[2], future[1])
+                for text in [*future[0].values(), *future[2].values(), future[3]]:
+                    self.assertNotIn(MARKER, text)
+
+    def hostile_rows(self, array_position):
+        """Each row turns a valid message into one that must still be refused; the unknown key is the only change but the last."""
+        return {'__proto__ inside an unknown key': lambda message: {**message, table.UNKNOWN_KEY: {'__proto__': {}}},
+                'constructor inside an unknown key': lambda message: {**message, table.UNKNOWN_KEY: {'constructor': {}}},
+                'prototype inside an unknown key': lambda message: {**message, table.UNKNOWN_KEY: {'prototype': {}}},
+                'a nonfinite number inside an unknown key': lambda message: {**message, table.UNKNOWN_KEY: float('inf')},
+                'one byte over 1 MiB in an unknown key': self.padded,
+                'an array where an object belongs': array_position}
+
+    def test_hostile_content_still_refuses_even_inside_an_unknown_key(self):
+        """Given a pending Detect and an Apply in flight, when a reply holds __proto__, constructor or prototype or a
+        nonfinite number inside an unknown key, is one byte over 1 MiB, or holds an array where an object belongs, followed
+        by one valid fence, then the fence is what renders for the Detect reply and for the receipt, and no hostile
+        text renders."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame, errors = self.open(engine, PEER_URL, PEER)
+                self.detected(page, frame)
+                for name, hostile in self.hostile_rows(lambda message: {**message, 'groups': [[]]}).items():
+                    with self.subTest(detect=name):
+                        request = self.pending(page, frame)
+                        self.send(frame, hostile(self.reply(request, [group(name='Hostile')])))
+                        self.send(frame, self.reply(request, [group(name='Fence')]))
+                        page.wait_for_function('document.querySelector("#roleRows").textContent.includes("Fence")', timeout=4000)
+                        self.assertNotIn('Hostile', page.locator('#roleRows').inner_text())
+                self.detected(page, frame)
+                for index, (name, hostile) in enumerate(self.hostile_rows(lambda message: {**message, 'outcomes': [[]]}).items()):
+                    with self.subTest(receipt=name):
+                        request = self.apply_role(page, frame, '24')
+                        self.send(frame, hostile(self.receipt(request, [outcome(matched=3)])))
+                        self.send(frame, self.receipt(request, [outcome(matched=100 + index, checked=100 + index)]))
+                        page.wait_for_function('(text) => document.querySelector("#rolePreviewOutcomes").textContent.includes(text)',
+                                               arg=f'matched {100 + index},', timeout=4000)
+                self.assertEqual(errors, [])
+
+    @per_engine
+    def test_an_unreadable_reply_to_detect_says_so_and_a_later_valid_reply_still_renders(self, engine):
+        """Given a pending Detect with rows on screen and the clock frozen, when a reply for another request or document
+        arrives, then the status stays "Detecting text styles…"; when a matching reply misses groups, holds a malformed
+        group or is over 1 MiB, then the status equals the could-not-read string, the rows are unchanged and it is still
+        that string after 9,000 ms; a valid reply for the same request then renders; a matching rejection with an extra
+        key does the same, one for another request changes nothing; pressing Detect again sends a new request that renders
+        and keeps "Detected" after 9,000 ms (a replaced timer's inertness is proved by the 8-second test)."""
+        page, frame, errors = self.open(engine, PEER_URL, PEER)
+        self.detected(page, frame)
+        rows = page.locator('#roleRows').inner_text()
+        self.frozen_clock(page)
+        request = self.pending(page, frame)
+        valid = self.reply(request, [group(name='Fresh')])
+        self.send(frame, {**valid, 'requestId': 'fks-detect-999', 'groups': 'x'})
+        self.send(frame, {**valid, 'documentId': 'other-document', 'groups': 'x'})
+        self.quiet(page)
+        self.assertEqual(self.status(page), 'Detecting text styles…')
+        unreadable = {'missing groups': {key: value for key, value in valid.items() if key != 'groups'},
+                      'malformed group': {**valid, 'groups': [{**group(), 'adapter': 'nope'}]}, 'oversize body': self.padded(valid)}
+        for name, message in unreadable.items():
+            with self.subTest(reply=name):
+                self.send(frame, message)
+                self.wait_text(page, '#roleStatus', UNREADABLE_DETECT)
+                self.assertEqual(page.locator('#roleRows').inner_text(), rows)
+        page.clock.run_for(9000)
+        self.assertEqual(self.status(page), UNREADABLE_DETECT)
+        self.send(frame, valid)
+        self.wait_detected(page)
+        self.assertIn('Fresh', page.locator('#roleRows').inner_text())
+        self.send(frame, unreadable['missing groups'])
+        self.quiet(page)
+        self.assertTrue(self.status(page).startswith('Detected'))
+        rows = page.locator('#roleRows').inner_text()
+        request = self.pending(page, frame)
+        rejected = {'type': 'design:rejected', 'revision': 0, 'reason': 'size-limit'}
+        self.send(frame, {**rejected, 'requestId': request['requestId'], 'extra': 1})
+        self.wait_text(page, '#roleStatus', UNREADABLE_DETECT)
+        self.assertEqual(page.locator('#roleRows').inner_text(), rows)
+        page.clock.run_for(9000)
+        self.assertEqual(self.status(page), UNREADABLE_DETECT)
+        self.send(frame, {**rejected, 'requestId': 'fks-detect-999'})
+        self.quiet(page)
+        self.assertEqual(self.status(page), UNREADABLE_DETECT)
+        again = self.pending(page, frame)
+        self.assertNotEqual(again['requestId'], request['requestId'])
+        self.send(frame, self.reply(again, [group(name='Third')]))
+        self.wait_detected(page)
+        self.assertIn('Third', page.locator('#roleRows').inner_text())
+        page.clock.run_for(9000)
+        self.assertTrue(self.status(page).startswith('Detected'))
+        self.assertEqual(errors, [])
+
+    @per_engine
+    def test_a_detect_nobody_answers_is_cleared_after_8_seconds_and_a_late_reply_is_ignored(self, engine):
+        """Given a Detect nobody answers and the clock frozen, when 7,999 ms pass, then the status is still "Detecting
+        text styles…"; at 8,000 ms it is the did-not-reply string and the rows are unchanged; a valid late reply changes
+        neither; a new Detect has a new request id and renders its reply; a Detect answered at 1 s keeps "Detected" at
+        20 s; a Detect pressed again at 5 s and answered at 6 s keeps "Detected" when the first one's timer fires at 8 s."""
+        page, frame, errors = self.open(engine, PEER_URL, PEER)
+        self.detected(page, frame)
+        rows = page.locator('#roleRows').inner_text()
+        self.frozen_clock(page)
+        first = self.pending(page, frame)
+        page.clock.run_for(7999)
+        self.assertEqual(self.status(page), 'Detecting text styles…')
+        page.clock.run_for(1)
+        self.assertEqual(self.status(page), NO_REPLY_DETECT)
+        self.assertEqual(page.locator('#roleRows').inner_text(), rows)
+        self.send(frame, self.reply(first, [group(name='Late')]))
+        self.quiet(page)
+        self.assertEqual(self.status(page), NO_REPLY_DETECT)
+        self.assertEqual(page.locator('#roleRows').inner_text(), rows)
+        second = self.pending(page, frame)
+        self.assertNotEqual(second['requestId'], first['requestId'])
+        self.send(frame, self.reply(second, [group(name='Second')]))
+        self.wait_detected(page)
+        self.assertIn('Second', page.locator('#roleRows').inner_text())
+        third = self.pending(page, frame)
+        page.clock.run_for(1000)
+        self.send(frame, self.reply(third, [group(name='Third')]))
+        self.wait_detected(page)
+        page.clock.run_for(20000)
+        self.assertTrue(self.status(page).startswith('Detected'))
+        self.assertIn('Third', page.locator('#roleRows').inner_text())
+        self.pending(page, frame)
+        page.clock.run_for(5000)
+        fifth = self.pending(page, frame)
+        page.clock.run_for(1000)
+        self.send(frame, self.reply(fifth, [group(name='Fifth')]))
+        self.wait_detected(page)
+        page.clock.run_for(2000)
+        self.assertTrue(self.status(page).startswith('Detected'))
+        self.assertIn('Fifth', page.locator('#roleRows').inner_text())
+        self.assertEqual(errors, [])
+
+    def op_session(self, engine, operation, frozen=False):
+        """A peer with a role detected and the operation's request in flight (the clock frozen first when asked)."""
+        page, frame, errors = self.open(engine, PEER_URL, PEER)
+        self.detected(page, frame)
+        if frozen:
+            self.frozen_clock(page)
+        return page, frame, self.apply_role(page, frame, '24') if operation == 'apply' else self.clear_preview(page, frame)
+
+    def unreadable_receipt(self, request):
+        """A receipt for the request that breaks one rule: an Apply without outcomes, a Clear that still lists a role."""
+        ok = self.receipt(request)
+        if request['type'] == 'design:roles-apply':
+            return {key: value for key, value in ok.items() if key != 'outcomes'}
+        role = self.role_input()
+        return {**self.with_css(ok, canonical_css([role])), 'roles': [role]}
+
+    @per_engine
+    def test_an_unreadable_apply_or_clear_receipt_says_so_and_does_not_settle(self, engine):
+        """Given an Apply or a Clear in flight, when a receipt for another request or document arrives, then the status
+        is unchanged; when the matching receipt is unreadable (an Apply without outcomes, a Clear that lists a role), then
+        the status equals the could-not-read string, the preview is unchanged, a second press queues and sends nothing,
+        and a valid receipt settles the first and sends the second; with the clock frozen the operation then still
+        reaches "No response to <operation>", an unreadable reply for that late operation shows nothing, and a late valid
+        receipt is accepted; an unreadable matching rejection shows the same string and the operation still times out."""
+        names = {'apply': (APPLY, 'design:roles-apply'), 'clear': (CLEAR, 'design:roles-clear')}
+        for operation, (label, kind) in names.items():
+            with self.subTest(operation=operation, phase='unreadable receipt'):
+                page, frame, request = self.op_session(engine, operation)
+                bad = self.unreadable_receipt(request)
+                self.send(frame, {**bad, 'requestId': 'fks-req-9999'})
+                self.send(frame, {**bad, 'documentId': 'other-document'})
+                self.quiet(page)
+                self.assertEqual(self.preview(page)['status'], IN_FLIGHT[operation])
+                self.send(frame, bad)
+                self.wait_text(page, '#rolePreviewStatus', UNREADABLE_REPLY)
+                self.assertEqual(self.preview(page)['css'], '')
+                self.button(page, label).click()
+                self.quiet(page)
+                self.assertEqual(len(self.ops(frame, kind)), 1)
+                self.send(frame, self.receipt(request))
+                self.wait_text(page, '#rolePreviewStatus', SETTLED[operation])
+                self.wait_for_ops(frame, kind, 2)
+            with self.subTest(operation=operation, phase='time out after an unreadable receipt'):
+                page, frame, request = self.op_session(engine, operation, frozen=True)
+                bad = self.unreadable_receipt(request)
+                self.send(frame, bad)
+                self.wait_text(page, '#rolePreviewStatus', UNREADABLE_REPLY)
+                page.clock.run_for(8000)
+                self.assertTrue(self.preview(page)['status'].startswith(f'No response to {operation}'))
+                self.send(frame, bad)
+                self.quiet(page)
+                self.assertTrue(self.preview(page)['status'].startswith(f'No response to {operation}'))
+                self.send(frame, self.receipt(request))
+                self.wait_text(page, '#rolePreviewStatus', SETTLED[operation])
+            with self.subTest(operation=operation, phase='unreadable rejection'):
+                page, frame, request = self.op_session(engine, operation, frozen=True)
+                self.send(frame, {'type': 'design:rejected', 'requestId': request['requestId'], 'revision': 0, 'reason': 'size-limit', 'extra': 1})
+                self.wait_text(page, '#rolePreviewStatus', UNREADABLE_REPLY)
+                page.clock.run_for(8000)
+                self.assertTrue(self.preview(page)['status'].startswith(f'No response to {operation}'))
+
+    def test_the_contract_table_builder_adds_the_unknown_key_at_every_dict_and_nothing_else(self):
+        """Given one valid message of each tolerant kind, when the builder adds the unknown key, then removing it
+        everywhere gives back the input, the key occurs once for every dict except the dicts inside the echoed roles, the
+        revision is 1, and a small literal message gets the key at the top, in a nested dict and in a dict inside a list
+        but not in the dicts under roles."""
+        def without(item):
+            if isinstance(item, list):
+                return [without(each) for each in item]
+            return {key: without(value) for key, value in item.items() if key != table.UNKNOWN_KEY} if isinstance(item, dict) else item
+        request = {'requestId': 'fks-detect-1', 'documentId': 'peer-document', 'knownRoles': [{'id': 'role-1', 'selectors': ['.body-copy']}]}
+        apply = {'type': 'design:roles-apply', 'requestId': 'fks-req-1', 'baseRevision': 0, 'documentId': 'peer-document',
+                 'pageVersion': 0, 'roles': [self.role_input()]}
+        messages = {'detected': self.reply(request, [group(), group('scan-b', 'Text', None)]),
+                    'roles-applied': self.receipt(apply, [outcome(losses=[loss(selector='.winner')])]),
+                    'role-state': self.snapshot_state(apply['roles'])}
+        self.assertEqual(table.TOLERANT_KINDS, ('detected', 'roles-applied', 'role-state'))
+        for kind, message in messages.items():
+            with self.subTest(kind=kind):
+                built = table.with_unknown_keys(message)
+                opens = lambda value: len(re.findall(r'\{(?=["}])', json.dumps(value)))   # a dict opens with {" or {}; CSS braces are followed by a newline
+                self.assertEqual(without(built), message)
+                self.assertEqual(json.dumps(built).count(f'"{table.UNKNOWN_KEY}"'), opens(message) - opens(message.get('roles', [])))
+                self.assertEqual(table.violations(kind, built), [])
+        value = {'nested': [1]}
+        literal = {'a': {'b': [{'c': 1}, 2]}, 'roles': [{'properties': {}}]}
+        expected = {'a': {'b': [{'c': 1, table.UNKNOWN_KEY: value}, 2], table.UNKNOWN_KEY: value}, 'roles': [{'properties': {}}],
+                    table.UNKNOWN_KEY: value}
+        built = table.with_unknown_keys(literal)
+        self.assertEqual(built, expected)
+        self.assertIsNot(built[table.UNKNOWN_KEY], built['a'][table.UNKNOWN_KEY])
+        self.assertEqual(table.ROLE_REVISION, 1)
+
+    @per_engine
+    def test_an_unknown_key_in_an_echoed_role_refuses_and_a_matching_reply_says_so(self, engine):
+        """Given a connected peer, when a ready snapshot's echoed role holds an unknown key or an unknown property, then
+        the status is the unsupported reason with Detect disabled and a good ready recovers; when a matching receipt's
+        echoed role holds one, then the status equals the could-not-read string and the valid receipt settles it; when a
+        reset reply's roleState holds an unknown key of its own, then the preview clears, and when its role holds one,
+        then the preview is marked as not confirmed."""
+        page, frame, errors = self.open(engine, PEER_URL, PEER)
+        good = frame.evaluate('state')
+        echoes = {'unknown key in a role': lambda role: {**role, 'extra': 1},
+                  'unknown key in properties': lambda role: {**role, 'properties': {**role['properties'], 'extra': 1}}}
+        for name, bad in echoes.items():
+            with self.subTest(ready=name):
+                self.ready_with(page, frame, self.snapshot_state([bad(self.role_input())]))
+                self.wait_text(page, '#roleStatus', UNSUPPORTED)
+                self.assertTrue(self.button(page, 'Detect text styles').is_disabled())
+                self.ready_with(page, frame, good)
+                self.wait_text(page, '#roleStatus', 'Ready to detect text styles.')
+        self.detected(page, frame)
+        for index, (name, bad) in enumerate(echoes.items()):
+            with self.subTest(receipt=name):
+                ok = self.receipt(self.apply_role(page, frame, str(24 + index)))
+                self.send(frame, {**ok, 'roles': [bad(ok['roles'][0])]})
+                self.wait_text(page, '#rolePreviewStatus', UNREADABLE_REPLY)
+                self.send(frame, ok)
+                self.wait_text(page, '#rolePreviewStatus', SETTLED['apply'])
+        with self.subTest(reset='unknown key on the state'):
+            reset = self.legacy_in_flight(page, frame)
+            self.send(frame, self.applied(reset, roleState={**self.snapshot_state([]), table.UNKNOWN_KEY: {'nested': [1]}}))
+            self.wait_status(page, 'Role preview cleared by Reset all page edits.')
+        with self.subTest(reset='unknown key in a role'):
+            self.send(frame, self.receipt(self.apply_role(page, frame, '26')))
+            self.wait_status(page, 'Preview applied to 1 role')
+            reset = self.legacy_in_flight(page, frame)
+            self.send(frame, self.applied(reset, roleState=self.snapshot_state([echoes['unknown key in a role'](self.role_input())])))
+            self.wait_status(page, 'could not be confirmed')
         self.assertEqual(errors, [])

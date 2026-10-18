@@ -3742,6 +3742,9 @@ if (remembered) kitId.value = remembered;
     status:"Connect a Live App to detect text styles.", stylesheet:false, limitReached:false };
   const ROLE_UNSUPPORTED = "This bridge does not support role detection/preview.";
   const ROLE_UNAVAILABLE = "Role detection/preview unavailable: unsupported page URL.";
+  const ROLE_DETECT_UNREADABLE = "Studio could not read the page's reply to Detect; this page has not been checked.";
+  const ROLE_DETECT_SILENT = "The page did not reply to Detect; this page has not been checked.";
+  const ROLE_REPLY_UNREADABLE = "Studio could not read the page's reply; the preview on the page may differ from what Studio shows.";
   const ROLE_REASONS = ["time-budget", "element-limit", "group-limit", "variant-limit", "identity-limit", "reply-limit", "page-changed"];
   const ROLE_SELECTOR_PART = SELECTOR_PART.replace("data-design-id", "data-design-(?:id|role)");
   const ROLE_SELECTOR_STEP = `(?:(?:[a-z][a-z0-9-]*|\\*)(?:${ROLE_SELECTOR_PART})*|(?:${ROLE_SELECTOR_PART})+)`;
@@ -3757,6 +3760,7 @@ if (remembered) kitId.value = remembered;
       if (new TextEncoder().encode(JSON.stringify(value)).length > limit) return false;
       while (stack.length) {
         const item = stack.pop();
+        if (typeof item === "number" && !Number.isFinite(item)) return false;
         if (!item || typeof item !== "object") continue;
         for (const key of Object.keys(item)) {
           if (["__proto__", "constructor", "prototype"].includes(key)) return false;
@@ -3855,7 +3859,7 @@ if (remembered) kitId.value = remembered;
   const ROLE_PROPS = ["fontFamily", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "textTransform"];
   const ROLE_FIELD_LABELS = { fontFamily:"font family", fontSize:"size", fontWeight:"weight", lineHeight:"line height",
     letterSpacing:"tracking", textTransform:"case" };
-  const ROLE_FIELD_HELP = { fontFamily:"1 to 300 characters, a valid font stack without ; { } < > backslashes, control characters, comments, !important, or url( expression( var( env( attr(, not a CSS-wide keyword (inherit, initial, unset, revert, revert-layer), and parentheses only inside quotes",
+  const ROLE_FIELD_HELP = { fontFamily:"1 to 300 characters, a valid font stack without ; { } < > backslashes, control characters, comments, !important, or url(, expression(, var(, env( or attr(, not a CSS-wide keyword (inherit, initial, unset, revert, revert-layer), and parentheses only inside quotes",
     fontSize:"4 to 400", fontWeight:"a whole number from 1 to 1000", lineHeight:"0.5 to 5", letterSpacing:"-0.5 to 2 em", textTransform:"none, uppercase, lowercase or capitalize" };
   const ROLE_NUMBERS = { fontSize:{ min:4, max:400, places:2 }, fontWeight:{ min:1, max:1000, places:0, integer:true },
     lineHeight:{ min:.5, max:5, places:3 }, letterSpacing:{ min:-.5, max:2, places:4 } };
@@ -3958,6 +3962,53 @@ if (remembered) kitId.value = remembered;
       && algorithm === "fnv1a32" && hash === fnv1a32(css) && (roles.length === 0) === (css === "")
       && css === serializeRoleSheet(roles);
   }
+  // ---- tolerant reader (Addendum 26 item 3) -------------------------------------------------------------
+  // A reply is read through its shape before any validator sees it. The copy holds only the listed fields at every level, so a
+  // key a newer bridge adds is dropped here and never reaches state, exports or saved files; a missing listed field, a non-object
+  // where an object belongs or a non-array where a list belongs gives null. Echoed roles are strict (Addendum 26 item 2): any
+  // other key, in the role or its properties, gives null. `nested` maps a field to a shape, [shape] for a list of them, or a
+  // function that chooses the shape from the value.
+  const roleShape = (keys, nested = {}, strict = false) => ({ keys, nested, strict });
+  const ROLE_RECEIPT_KEYS = ["type", "protocolVersion", "sessionId", "requestId", "operation", "revision", "documentId", "pageVersion",
+    "currentPageVersion", "currentPageURL", "roles", "canonicalCss", "hashAlgorithm", "cssHash", "outcomesComplete", "outcomeReason", "outcomes"];
+  const ROLE_WIRE_STYLE = roleShape(["fontFamily", "fontSize", "fontWeight", "textTransform", "letterSpacing"]);
+  const ROLE_WIRE_VARIANT = roleShape(["style", "count"], { style:ROLE_WIRE_STYLE });
+  const ROLE_WIRE_AUTHOR = roleShape(["kind", "name"]);
+  const ROLE_WIRE_STYLED = roleShape(["kind", "style"], { style:ROLE_WIRE_STYLE });
+  const ROLE_WIRE_INPUT = roleShape(["id", "name", "selectors", "adapter", "properties"], { properties:{ only:ROLE_PROPS } }, true);
+  const ROLE_WIRE_GROUP = roleShape(["id", "identity", "suggestedName", "authorRole", "signatures", "elementCount", "sampleText",
+    "sharedClasses", "selectors", "bindingComplete", "nearDuplicateIds", "adapter"], {
+    identity:value => value?.kind === "author-role" ? ROLE_WIRE_AUTHOR : value?.kind === "style" ? ROLE_WIRE_STYLED : null,
+    signatures:[ROLE_WIRE_VARIANT], selectors:[roleShape(["value", "stable", "reason"])] });
+  const ROLE_WIRE = {
+    detected:roleShape(["type", "protocolVersion", "sessionId", "requestId", "revision", "documentId", "pageVersion", "pageURL",
+      "currentPageVersion", "currentPageURL", "complete", "reason", "elapsedMs", "scannedElements", "groups", "selectorChecks"], {
+      groups:[ROLE_WIRE_GROUP],
+      selectorChecks:[roleShape(["roleId", "selector", "matchCount", "signatures"], { signatures:[ROLE_WIRE_VARIANT] })] }),
+    receipt:roleShape(ROLE_RECEIPT_KEYS, { roles:[ROLE_WIRE_INPUT], outcomes:[roleShape(["id", "matched", "checked", "mismatched", "complete", "losses"], {
+      losses:[roleShape(["property", "count", "winningSelector", "reason"])] })] }),
+    state:roleShape(["documentId", "pageVersion", "pageURL", "roles", "canonicalCss", "hashAlgorithm", "cssHash"], { roles:[ROLE_WIRE_INPUT] }) };
+  function readRoleWire(value, shape) {
+    if (typeof shape === "function") shape = shape(value);
+    if (!shape || !isPlainObject(value)) return null;
+    const keys = Object.keys(value);
+    if (shape.only) return keys.every(key => shape.only.includes(key)) ? { ...value } : null;
+    if (shape.strict && keys.length !== shape.keys.length) return null;
+    const copy = {};
+    for (const key of shape.keys) {
+      if (!Object.hasOwn(value, key)) return null;
+      const nested = shape.nested[key], item = value[key];
+      if (!nested) { copy[key] = Array.isArray(item) ? [...item] : item; continue; }
+      const read = Array.isArray(nested) ? Array.isArray(item) ? item.map(each => readRoleWire(each, nested[0])) : null
+        : readRoleWire(item, nested);
+      if (read === null || Array.isArray(read) && read.includes(null)) return null;
+      copy[key] = read;
+    }
+    return copy;
+  }
+  // The raw message is checked first (hostile keys, size and nonfinite numbers refuse wherever they sit, unknown subtrees
+  // included), then read; null means unreadable.
+  const readRoleReply = (raw, shape) => safeRoleWire(raw, 1024 * 1024) ? readRoleWire(raw, shape) : null;
   const newRoleDraft = () => ({ enabled:false, fontFamily:"", fontSize:"", fontWeight:"", lineHeight:"", letterSpacing:"", textTransform:"" });
   // Accepted roles seed drafts for issued ids that have none, so a later Detect shows them selected instead of dropping them.
   function seedRoleDrafts() {
@@ -3991,10 +4042,10 @@ if (remembered) kitId.value = remembered;
     renderDetectedRoles();
   }
   function acceptRoleReady(data) {
-    const state = data.roleState;
+    const state = readRoleReply(data.roleState, ROLE_WIRE.state);
     const valid = isPlainObject(data.capabilities) && safeRoleWire(data.capabilities, 1024 * 1024)
-      && data.capabilities.roleDetection === true && roleCount(data.revision) && safeRoleWire(state, 1024 * 1024)
-      && exactRoleFields(state, ["documentId", "pageVersion", "pageURL", "roles", "canonicalCss", "hashAlgorithm", "cssHash"])
+      && data.capabilities.roleDetection === true && Number.isSafeInteger(data.capabilities.roleRevision) && data.capabilities.roleRevision >= 1
+      && roleCount(data.revision) && exactRoleFields(state, ["documentId", "pageVersion", "pageURL", "roles", "canonicalCss", "hashAlgorithm", "cssHash"])
       && roleText(state.documentId, 200) && roleCount(state.pageVersion) && validRoleURL(state.pageURL, true)
       && validAcceptedRoles(state.roles, state.canonicalCss, state.hashAlgorithm, state.cssHash);
     if (valid && roleView.identity?.documentId === state.documentId && state.pageVersion < roleView.identity.pageVersion) return;
@@ -4240,7 +4291,13 @@ if (remembered) kitId.value = remembered;
     const request = { type:"design:detect", protocolVersion:1, sessionId:live.sessionId,
       requestId, documentId:identity.documentId, knownRoles };
     if (!safeRoleWire(request, 256 * 1024)) { roleView.status = "Role detection request limit reached."; renderDetectedRoles(); return; }
-    roleView.pending = { requestId, ...identity, knownRoles };
+    const pending = { requestId, ...identity, knownRoles };
+    // A Detect nobody answers says so; the timer does nothing once this request is no longer the pending one.
+    pending.timer = setTimeout(() => {
+      if (roleView.pending !== pending) return;
+      roleView.pending = null; roleView.status = ROLE_DETECT_SILENT; renderDetectedRoles();
+    }, REQUEST_TIMEOUT_MS);
+    roleView.pending = pending;
     roleView.status = "Detecting text styles…"; renderDetectedRoles();
     sendDesignMessage(request);
   });
@@ -4282,24 +4339,32 @@ if (remembered) kitId.value = remembered;
     }
     return !data.complete || [...remaining.values()].every(count => count === 0);
   }
+  // An unreadable reply to the pending Detect: say so, keep the request pending (a valid reply for it still renders) and stop
+  // the timer, so the message is not overwritten by "did not reply".
+  function roleDetectUnreadable() {
+    clearTimeout(roleView.pending.timer);
+    roleView.status = ROLE_DETECT_UNREADABLE; renderDetectedRoles();
+  }
   function acceptDetectedRoles(data) {
     const pending = roleView.pending, current = roleView.identity;
     if (!pending || !current || data.requestId !== pending.requestId || data.documentId !== current.documentId
-      || data.documentId !== pending.documentId || !validDetectedReply(data, pending)
-      || data.currentPageVersion < current.pageVersion) return;
+      || data.documentId !== pending.documentId) return;
+    const reply = readRoleReply(data, ROLE_WIRE.detected);
+    if (!reply || !validDetectedReply(reply, pending)) { roleDetectUnreadable(); return; }
+    if (reply.currentPageVersion < current.pageVersion) return;
     roleView.pending = null;
-    roleView.identity = { documentId:data.documentId, pageVersion:data.currentPageVersion, pageURL:data.currentPageURL };
-    if (data.currentPageURL === null) { roleView.rows = []; roleView.status = ROLE_UNAVAILABLE; }
-    else if (!data.complete) { roleView.rows = data.groups; roleView.status = `Incomplete detection (${data.reason}); this page has not been checked.`; }
+    roleView.identity = { documentId:reply.documentId, pageVersion:reply.currentPageVersion, pageURL:reply.currentPageURL };
+    if (reply.currentPageURL === null) { roleView.rows = []; roleView.status = ROLE_UNAVAILABLE; }
+    else if (!reply.complete) { roleView.rows = reply.groups; roleView.status = `Incomplete detection (${reply.reason}); this page has not been checked.`; }
     else {
-      const newKeys = data.groups.map(group => roleIdentityKey(group.identity)).filter(key => !roleView.ids.has(key));
+      const newKeys = reply.groups.map(group => roleIdentityKey(group.identity)).filter(key => !roleView.ids.has(key));
       if (roleView.ids.size + newKeys.length > 128) { roleView.status = "Collection limit reached; this page was not stored"; roleView.limitReached = true; }
       else {
         for (const key of newKeys) roleView.ids.set(key, `role-${++roleView.nextId}`);
         seedRoleDrafts();
-        roleView.status = `Detected ${data.groups.length} roles from ${data.scannedElements} eligible text parents on this page. Other pages have not been checked.`;
+        roleView.status = `Detected ${reply.groups.length} roles from ${reply.scannedElements} eligible text parents on this page. Other pages have not been checked.`;
       }
-      roleView.rows = data.groups;
+      roleView.rows = reply.groups;
     }
     renderDetectedRoles();
   }
@@ -4322,7 +4387,7 @@ if (remembered) kitId.value = remembered;
   function rejectRoleDetect(data) {
     if (typeof data.requestId !== "string" || !data.requestId.startsWith("fks-detect-")) return false;
     if (data.requestId !== roleView.pending?.requestId) return true;
-    if (!validRoleRejection(data)) return true;
+    if (!validRoleRejection(data)) { roleDetectUnreadable(); return true; }
     roleView.pending = null; roleView.status = `Role detection rejected (${data.reason}); this page has not been checked.`;
     renderDetectedRoles(); return true;
   }
@@ -4389,8 +4454,6 @@ if (remembered) kitId.value = remembered;
       && ROLE_LOSS_REASONS.includes(loss.reason) && (loss.winningSelector === null || roleLossSelector(loss.winningSelector)))
       && ROLE_PROPS.every(prop => outcome.losses.filter(loss => loss.property === prop).length <= 16);
   }
-  const ROLE_RECEIPT_KEYS = ["type", "protocolVersion", "sessionId", "requestId", "operation", "revision", "documentId", "pageVersion",
-    "currentPageVersion", "currentPageURL", "roles", "canonicalCss", "hashAlgorithm", "cssHash", "outcomesComplete", "outcomeReason", "outcomes"];
   function validRoleReceipt(data, op) {
     const current = roleView.identity, apply = op.kind === "roles-apply";
     if (!current || !safeRoleWire(data, 1024 * 1024) || !exactRoleFields(data, ROLE_RECEIPT_KEYS)
@@ -4416,9 +4479,19 @@ if (remembered) kitId.value = remembered;
       seen.add(outcome.id); return true;
     });
   }
-  function acceptRoleReceipt(data) {
-    const found = roleOpFor(data.requestId);
-    if (!found || !validRoleReceipt(data, found.op)) return;
+  // A reply for the operation in flight that cannot be read: say so, and settle nothing, so the operation still ends in a
+  // receipt or "No response to ...".
+  function roleOpUnreadable() {
+    rolePreview.message = ROLE_REPLY_UNREADABLE; renderDetectedRoles();
+  }
+  function acceptRoleReceipt(raw) {
+    const found = roleOpFor(raw.requestId);
+    if (!found) return;
+    const data = readRoleReply(raw, ROLE_WIRE.receipt);
+    if (!data || !validRoleReceipt(data, found.op)) {
+      if (!found.late && raw.documentId === found.op.documentId) roleOpUnreadable();
+      return;
+    }
     settleRoleOp(found, data.revision);
     advanceRoleIdentity(data.documentId, data.currentPageVersion, data.currentPageURL);
     if (data.revision > rolePreview.revision) {
@@ -4440,7 +4513,7 @@ if (remembered) kitId.value = remembered;
   function rejectRoleOp(data) {
     const found = roleOpFor(data.requestId);
     if (!found) return false;
-    if (!validRoleRejection(data)) return true;
+    if (!validRoleRejection(data)) { if (!found.late) roleOpUnreadable(); return true; }
     settleRoleOp(found, data.revision);
     rolePreview.message = `Role preview ${found.op.operation} rejected (${data.reason}); the previous preview is kept.${NEXT_STEPS[data.reason] || ""}${rejectionDetailText(data)}`;
     renderDetectedRoles();
@@ -4451,8 +4524,8 @@ if (remembered) kitId.value = remembered;
   // The empty roleState on the reply to an untargeted reset clears the visible preview; nothing else does. Without a
   // valid one the preview stays shown and is marked unconfirmed.
   function acceptResetRoleState(data) {
-    const state = data.roleState, current = roleView.identity;
-    const valid = current && Number.isInteger(data.revision) && data.revision >= rolePreview.revision && safeRoleWire(state, 1024 * 1024)
+    const state = readRoleReply(data.roleState, ROLE_WIRE.state), current = roleView.identity;
+    const valid = current && Number.isInteger(data.revision) && data.revision >= rolePreview.revision
       && exactRoleFields(state, ["documentId", "pageVersion", "pageURL", "roles", "canonicalCss", "hashAlgorithm", "cssHash"])
       && state.documentId === current.documentId && roleCount(state.pageVersion) && state.pageVersion >= current.pageVersion
       && validRoleURL(state.pageURL, true) && validAcceptedRoles(state.roles, state.canonicalCss, state.hashAlgorithm, state.cssHash)
