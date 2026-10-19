@@ -1,0 +1,11 @@
+[
+  {"name": "after head", "input": "<!doctype html><html><head><title>t</title></head><body>x</body></html>", "expected": "<!doctype html><html><head>{TAG}<title>t</title></head><body>x</body></html>"},
+  {"name": "head with attributes in capitals", "input": "<html><HEAD lang=\"x\"><title>t</title></HEAD></html>", "expected": "<html><HEAD lang=\"x\">{TAG}<title>t</title></HEAD></html>"},
+  {"name": "no head, after html", "input": "<html lang=\"en\"><body>x</body></html>", "expected": "<html lang=\"en\">{TAG}<body>x</body></html>"},
+  {"name": "header is not head", "input": "<header>top</header><html lang=\"en\"><body>x</body></html>", "expected": "<header>top</header><html lang=\"en\">{TAG}<body>x</body></html>"},
+  {"name": "doctype only", "input": "<!DOCTYPE html><p>hi</p>", "expected": "<!DOCTYPE html>{TAG}<p>hi</p>"},
+  {"name": "BOM and doctype", "input": "\u00ef\u00bb\u00bf<!doctype html><p>caf\u00c3\u00a9</p>", "expected": "\u00ef\u00bb\u00bf<!doctype html>{TAG}<p>caf\u00c3\u00a9</p>"},
+  {"name": "no markers", "input": "<p>hi</p>", "expected": "{TAG}<p>hi</p>"},
+  {"name": "empty page", "input": "", "expected": "{TAG}"},
+  {"name": "head in a comment after the real head", "input": "<html><head><!-- <head> --><title>t</title></head></html>", "expected": "<html><head>{TAG}<!-- <head> --><title>t</title></head></html>"}
+]
