@@ -38,7 +38,7 @@ jobs:
           fetch-tags: true
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -204,7 +204,7 @@ jobs:
       # (work/ is git-ignored scratch). Nothing is uploaded when there are none.
       - name: Upload gate screenshots
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: frontend-gate-screenshots
           path: work/frontend-gate/
@@ -237,8 +237,8 @@ jobs:
         working-directory: packages/fontkitstudio
         run: npm test
 
-  # The one command on real Vite projects, on the Node lines and systems D043
-  # fixes, with the friction test's time budget.
+  # The one command on real Vite projects and the React CSS-module corpus, on
+  # the Node lines and systems D043 fixes, with the friction test's time budget.
   fixtures:
     name: Fixtures, Vite 7 and 8 (${{ matrix.os }}, Node ${{ matrix.node }})
     runs-on: ${{ matrix.os }}
@@ -262,7 +262,7 @@ jobs:
           cache: npm
           cache-dependency-path: fixtures/*/package-lock.json
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
       - name: Install the fixtures
@@ -270,6 +270,7 @@ jobs:
           npm ci --prefix fixtures/vite-react
           npm ci --prefix fixtures/vite7-react
           npm ci --prefix fixtures/vite-ts
+          npm ci --prefix fixtures/vite-react-css-modules
       - name: Bundle Studio and the bridge
         run: npm --prefix packages/fontkitstudio run prepack
       - name: Bound browser dependency acquisition
@@ -285,7 +286,7 @@ jobs:
           FKS_ENGINES: chromium
           FKS_REQUIRE_FIXTURES: '1'
           PYTHONPATH: tests
-        run: python -m unittest test_vite_build_guarantee test_one_command_vite test_one_command_proxy test_localhost_cookies test_friction test_vite_types test_r2_entrypoints.ViteEntrypointTests test_r2_entrypoints.ProxyEntrypointTests -v
+        run: python -m unittest test_vite_build_guarantee test_one_command_vite test_one_command_proxy test_localhost_cookies test_friction test_vite_types test_r2_entrypoints.ViteEntrypointTests test_r2_entrypoints.ProxyEntrypointTests test_r2_react test_one_command_messages.HostRefusalTest -v
 
   # Proxy mode in front of a real Next.js dev server, including its hot reload
   # over the proxy's WebSocket pass-through. Its own job: Next's install is large.
@@ -303,7 +304,7 @@ jobs:
           cache: npm
           cache-dependency-path: fixtures/next-app/package-lock.json
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
       - name: Install the fixture
