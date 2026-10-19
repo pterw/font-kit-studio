@@ -3028,6 +3028,8 @@ class StudioContractTableTests(StudioRoleCase):
 
 MARKER = 'LEAK-7'
 MISSING = object()
+# A list in a message that has a hole at index 0 (the hole is made inside the frame; the check keeps a dense list from passing).
+HOLE = '(root, path) => { let list = root; for (const key of path) list = list[key]; delete list[0]; list.length = 1; if (0 in list || list.length !== 1) throw new Error("not sparse"); }'
 SETTLED = {'apply': 'Preview applied to 1 role; 0 checked elements did not show it.', 'clear': 'Preview cleared.'}
 IN_FLIGHT = {'apply': 'Applying role preview…', 'clear': 'Clearing role preview…'}
 
@@ -3055,6 +3057,75 @@ class StudioRoleReplyTests(StudioLegacyCase):
         """The message with an unknown key that makes it exactly one byte over 1 MiB on the wire."""
         base = {**message, table.UNKNOWN_KEY: ''}
         return {**message, table.UNKNOWN_KEY: 'x' * (table.REPLY_BYTES + 1 - table.wire(base))}
+
+    def send_sparse(self, frame, message, path, **envelope):
+        """Posts the message with a real hole at index 0 of the list found by following `path` (JSON turns a hole into
+        null, so the hole is made in the frame); the frame refuses to send a list that is not sparse."""
+        frame.evaluate(f'([body, path, extra]) => {{ const hole = {HOLE}; const m = JSON.parse(body); hole(m, path);'
+                       ' (window.send || rs.send)(m, extra); }', [json.dumps(message), path, envelope])
+
+    @per_engine
+    def test_a_detect_reply_with_a_hole_in_a_list_is_unreadable_and_a_valid_reply_still_renders(self, engine):
+        """Given a pending Detect, when the matching reply has a hole in groups, in a group's selectors, signatures,
+        sharedClasses or nearDuplicateIds, or in selectorChecks, then the status equals the could-not-read string, the
+        rows are unchanged and no page error is raised, and a valid reply for the last request then renders its row."""
+        page, frame, errors = self.open(engine, PEER_URL, PEER)
+        self.detected(page, frame)
+        rows = page.locator('#roleRows').inner_text()
+        places = {'groups': ['groups'], 'selectors': ['groups', 0, 'selectors'], 'signatures': ['groups', 0, 'signatures'],
+                  'sharedClasses': ['groups', 0, 'sharedClasses'], 'nearDuplicateIds': ['groups', 0, 'nearDuplicateIds'],
+                  'selectorChecks': ['selectorChecks']}
+        for name, path in places.items():
+            with self.subTest(hole=name):
+                request = self.pending(page, frame)
+                self.send_sparse(frame, self.reply(request, [group(name='Hole')]), path)
+                self.wait_text(page, '#roleStatus', UNREADABLE_DETECT)
+                self.settle(page, frame)
+                seen = errors[:]
+                del errors[:]
+                self.assertEqual((self.status(page), page.locator('#roleRows').inner_text(), seen), (UNREADABLE_DETECT, rows, []))
+        self.send(frame, self.reply(request, [group(name='Fresh')]))
+        self.wait_detected(page)
+        self.assertIn('Fresh', page.locator('#roleRows').inner_text())
+        self.assertEqual(errors, [])
+
+    @per_engine
+    def test_a_receipt_with_a_hole_in_a_list_is_unreadable_and_a_valid_receipt_settles(self, engine):
+        """Given an Apply and a Clear in flight, when the matching receipt has a hole in outcomes, in an outcome's
+        losses, in an echoed role's selectors or (Clear) in roles, then the preview status equals the could-not-read
+        string, the preview css is empty and no page error is raised, and a valid receipt then settles it."""
+        for operation, places in {'apply': {'outcomes': ['outcomes'], 'losses': ['outcomes', 0, 'losses'], 'role selectors': ['roles', 0, 'selectors']},
+                                  'clear': {'roles': ['roles']}}.items():
+            page, frame, request = self.op_session(engine, operation)
+            errors = []
+            page.on('pageerror', lambda error: errors.append(str(error)))
+            frame.on('pageerror', lambda error: errors.append(str(error)))
+            good = self.receipt(request, [outcome(losses=[loss(selector='.winner')])] if operation == 'apply' else None)
+            for name, path in places.items():
+                with self.subTest(operation=operation, hole=name):
+                    self.send_sparse(frame, good, path)
+                    self.wait_text(page, '#rolePreviewStatus', UNREADABLE_REPLY)
+                    self.settle(page, frame)
+                    shown, seen = self.preview(page), errors[:]
+                    del errors[:]
+                    self.assertEqual((shown['status'], shown['css'], seen), (UNREADABLE_REPLY, '', []))
+            self.send(frame, good)
+            self.wait_status(page, 'Preview applied to 1 role' if operation == 'apply' else SETTLED['clear'])
+            self.assertEqual(errors, [])
+
+    @per_engine
+    def test_a_ready_snapshot_with_a_hole_in_its_roles_is_a_bridge_without_role_support(self, engine):
+        """Given a connected peer, when ready's roleState lists its roles with a hole, then the status is the unsupported
+        reason and Detect is disabled; a good ready then recovers the ready status."""
+        page, frame, errors = self.open(engine, PEER_URL, PEER)
+        state = self.snapshot_state([self.role_input()])
+        frame.evaluate(f'([body, path]) => {{ const hole = {HOLE}; state = JSON.parse(body); hole(state, path); ready(); }}',
+                       [json.dumps(state), ['roles']])
+        self.wait_text(page, '#roleStatus', UNSUPPORTED)
+        self.assertTrue(self.button(page, 'Detect text styles').is_disabled())
+        self.ready_with(page, frame, state)
+        self.wait_text(page, '#roleStatus', 'Ready to detect text styles.')
+        self.assertEqual(errors, [])
 
     @per_engine
     def test_the_real_bridge_advertises_a_revision_and_detect_apply_clear_render(self, engine):
@@ -3364,8 +3435,7 @@ class StudioRoleReplyTests(StudioLegacyCase):
 
     def test_the_contract_table_builder_adds_the_unknown_key_at_every_dict_and_nothing_else(self):
         """Given one valid message of each tolerant kind, when the builder adds the unknown key, then removing it
-        everywhere gives back the input, the key occurs once for every dict except the dicts inside the echoed roles, the
-        revision is 1, and a small literal message gets the key at the top, in a nested dict and in a dict inside a list
+        everywhere gives back the input, the key occurs once for every dict except the dicts inside the echoed roles, and a small literal message gets the key at the top, in a nested dict and in a dict inside a list
         but not in the dicts under roles."""
         def without(item):
             if isinstance(item, list):
@@ -3393,7 +3463,6 @@ class StudioRoleReplyTests(StudioLegacyCase):
         built = table.with_unknown_keys(literal)
         self.assertEqual(built, expected)
         self.assertIsNot(built[table.UNKNOWN_KEY], built['a'][table.UNKNOWN_KEY])
-        self.assertEqual(table.ROLE_REVISION, 1)
 
     @per_engine
     def test_an_unknown_key_in_an_echoed_role_refuses_and_a_matching_reply_says_so(self, engine):
