@@ -7,7 +7,8 @@ and the order of work; this note owns the technical sketch.
 
 ## Why
 
-For an app you run locally, `npx fontkitstudio` adds the bridge for you (0.3.0). Anything
+For an app you run locally, `npx fontkitstudio` adds the bridge for you (0.3.0), and from 0.4.0
+`python serve.py <url>` does the same without Node ([spec](../specs/2026-10-19-python-proxy-design.md)). Anything
 else still needs one script tag in the app (or a bookmarklet run from a pop-out window), which
 is awkward: a staging site you cannot change, a teammate's deployed branch, or a quick look at
 a page you do not own.

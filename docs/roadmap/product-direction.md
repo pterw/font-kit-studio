@@ -104,6 +104,8 @@ product are not the same thing yet.
 - **Built for 0.4.0 (R2), not yet released:** role detection and preview on the running app,
   with Bootstrap 5 adapters and a session-only list of the visited pages each role was
   checked on.
+- **Planned for 0.4.0, in progress:** `python serve.py <url>` puts the same proxy in front of
+  a local app for developers with Python but no Node ([spec](../specs/2026-10-19-python-proxy-design.md)).
 - **Designed, not built:** the rest of "How it differs" above: pairing and type scales
   (R3), token output (R4), the extension (R5).
 - **Against "just looking", fontkit loses on pages you do not run.** For a local app the
