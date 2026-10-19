@@ -979,8 +979,8 @@ class ClearVisitedTests(RouteCase):
         the inventory, count and rows are gone, the notice and Ready status show, the preview text is unchanged, nothing
         more is sent, and the next Detect names role-1 with no selectors and lists Body as role-1."""
         page, frame, errors = self.peer(engine)
-        self.assertTrue(self.button(page, CLEAR_VISITED).is_enabled())
         self.apply_preview(page, frame)
+        self.assertTrue(self.button(page, CLEAR_VISITED).is_enabled())
         shown = self.preview(page)
         self.button(page, CLEAR_VISITED).click()
         self.assertEqual((self.notice(page), self.status(page), self.visited_text(page), self.inventory(page)), (CLEARED, READY, '', []))
@@ -1019,9 +1019,10 @@ class ClearVisitedTests(RouteCase):
 
     @per_engine
     def test_a_detect_pending_when_visited_pages_are_cleared_is_not_stored_by_its_late_reply(self, engine):
-        """Given a pending Detect, when Clear visited pages is pressed and the reply arrives, then no visited page, row or
+        """Given one stored page and a pending Detect, when Clear visited pages is pressed and the reply arrives, then no visited page, row or
         inventory appears and the status stays Ready."""
         page, frame, errors = self.peer(engine)
+        self.visit(page, frame, '/r0', [group()])   # Clear visited pages needs a stored page
         request = self.pending(page, frame)
         self.button(page, CLEAR_VISITED).click()
         self.send(frame, self.reply(request))

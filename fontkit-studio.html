@@ -911,8 +911,8 @@ body.dark .live-overlay-label { color: #111; }
   tab-size: 2;
 }
 .live-code-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 9px; }
-.btn:disabled { opacity: .5; cursor: not-allowed; }
-.btn:disabled:hover { border-color: var(--line); }
+.btn:disabled, .btn[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
+.btn:disabled:hover, .btn[aria-disabled="true"]:hover { border-color: var(--line); }
 .live-autosync { display: inline-flex; gap: 5px; align-items: center; color: var(--muted-strong); font-size: 11px; }
 .live-code-status { flex: 1 1 160px; min-width: 0; color: var(--muted-strong); font-size: 11px; overflow-wrap: anywhere; }
 .live-code-status[data-state="error"] { color: var(--warn-text); }
@@ -1249,7 +1249,8 @@ body.dark .live-overlay-label { color: #111; }
     </div>
     <section id="detectedRoles" class="detected-roles" aria-labelledby="roleHeading" hidden>
       <div class="bridge-bar-row"><h2 id="roleHeading">Detected roles</h2>
-        <button id="detectTextStyles" class="btn" type="button" aria-describedby="roleStatus">Detect text styles</button></div>
+        <button id="detectTextStyles" class="btn" type="button" aria-describedby="roleStatus">Detect text styles</button>
+        <span id="roleDetectHint" class="role-hint" data-hint-for="detectTextStyles" hidden></span></div>
       <p id="roleStatus" role="status" aria-label="Role detection status" aria-live="polite">Connect a Live App to detect text styles.</p>
       <p id="roleNotice" role="status" aria-label="Role notice" aria-live="polite" hidden></p>
       <p>Light-DOM text only</p>
@@ -1263,6 +1264,7 @@ body.dark .live-overlay-label { color: #111; }
         <button id="roleClearVisited" class="btn" type="button">Clear visited pages</button>
         <span id="roleApplyHint" class="role-hint" data-hint-for="roleApply" hidden></span>
         <span id="roleClearHint" class="role-hint" data-hint-for="roleClear" hidden></span>
+        <span id="roleClearVisitedHint" class="role-hint" data-hint-for="roleClearVisited" hidden></span>
       </div>
       <div class="role-preview" role="group" aria-labelledby="rolePreviewHeading">
         <h3 id="rolePreviewHeading">Role preview; file output comes later</h3>
@@ -3755,6 +3757,9 @@ if (remembered) kitId.value = remembered;
   const ROLE_LIMIT = "Collection limit reached; this page was not stored";
   const ROLE_NOT_APPLIED = "Role preview is not applied on this page.";
   const ROLE_NEW_ORIGIN = "A new Live App origin started a new collection; visited pages from the previous origin were cleared.";
+  const ROLE_NO_VISITED = "No visited pages stored yet.";
+  const ROLE_DETECTING = "Detecting text styles…";
+  const ROLE_APPLY_BUSY = "A role preview change is in progress.";
   const ROLE_CLEARED = "Visited pages cleared. The applied preview and inspector edits stay.";
   // The visited-page collection: session only, never saved, exported or sent except as known roles. The origin is roleView.origin.
   const roleCollection = { routes:new Map(), refs:new Map(), labels:new Map(), evidence:null };
@@ -4103,6 +4108,9 @@ if (remembered) kitId.value = remembered;
     section.hidden = !live.viewActive;
     button.disabled = !live.ready || !roleView.identity || roleView.identity.pageURL === null;
     button.title = button.disabled ? roleView.status : "Read the current page's text styles without changing it";
+    button.setAttribute("aria-describedby", "roleStatus");
+    const detectHint = q("roleDetectHint"); detectHint.textContent = ""; detectHint.hidden = true;
+    setInProgress(button, roleDetectBusy() && !button.disabled ? ROLE_DETECTING : null);
     q("roleStatus").textContent = roleView.status;
     q("roleNotice").textContent = roleView.notice; q("roleNotice").hidden = !roleView.notice;
     // Rows are rebuilt only when a new result arrives, so typing and focus in a draft survive unrelated renders; when
@@ -4338,8 +4346,13 @@ if (remembered) kitId.value = remembered;
   }
   // The request-size probe serializes every selected role, so it is recomputed only when something it reads changed.
   let roleApplyCache = null;
+  // A role apply or clear queued or in flight (a legacy op does not count).
+  const roleOpBusy = () => isRoleOp(live.inFlight) || live.queue.some(isRoleOp);
+  const roleClearVisitedReason = () => roleCollection.routes.size === 0 && !roleView.limitReached ? ROLE_NO_VISITED : null;
+  const roleClearReason = () => roleCapabilityReason() || (rolePreview.roles.length === 0 ? "No role preview applied." : null);
+  const roleDetectBusy = () => Boolean(roleView.pending) && !roleView.pending.unreadable;
   function roleApplyState() {
-    const inputs = [roleDraftVersion, renderedRoleRows, roleView.identity, roleView.stylesheet, roleView.limitReached, live.ready, live.revision, live.sessionId];
+    const inputs = [roleDraftVersion, renderedRoleRows, roleView.identity, roleView.stylesheet, roleView.limitReached, live.ready, live.revision, live.sessionId, roleOpBusy()];
     if (roleApplyCache && roleApplyCache.inputs.every((value, index) => value === inputs[index])) return roleApplyCache.state;
     const state = computeRoleApplyState();
     roleApplyCache = { inputs, state };
@@ -4351,6 +4364,7 @@ if (remembered) kitId.value = remembered;
     const reason = roleCapabilityReason();
     if (reason) return { reason, roles };
     if (roleView.identity.pageURL === null) return { reason:ROLE_UNAVAILABLE, roles };
+    if (roleOpBusy()) return { reason:ROLE_APPLY_BUSY, roles, busy:true };
     if (roleView.limitReached) return { reason:"Collection limit reached, so Apply is disabled until you clear visited pages.", roles };
     const built = buildRoleRequest();
     if (built.problems.length) return { reason:built.problems[0] + (built.problems.length > 1 ? ` (${built.problems.length - 1} more)` : ""), roles };
@@ -4377,8 +4391,11 @@ if (remembered) kitId.value = remembered;
         ? `${name}: ${bad.map(key => ROLE_FIELD_LABELS[key]).join(", ")} not valid (${ROLE_FIELD_HELP[bad[0]]}).${draft.enabled ? "" : " This row is not selected, so nothing is sent for it."}`
         : "";
     });
-    setDisabledReason(q("roleApply"), roleApplyState().reason);
-    setDisabledReason(q("roleClear"), roleCapabilityReason());
+    const state = roleApplyState();
+    setDisabledReason(q("roleApply"), state.busy ? null : state.reason);
+    setInProgress(q("roleApply"), state.busy ? state.reason : null);
+    setDisabledReason(q("roleClear"), roleClearReason());
+    setDisabledReason(q("roleClearVisited"), roleClearVisitedReason());
     setDisabledReason(q("roleResetAll"), live.ready ? null : ROLE_CONNECT_FIRST);
     renderRolePreview();
   }
@@ -4419,11 +4436,13 @@ if (remembered) kitId.value = remembered;
     }
   }
   q("detectTextStyles").addEventListener("click", () => {
+    if (roleDetectBusy()) return;
     const identity = roleView.identity;
     if (!live.ready || !identity || identity.pageURL === null) return;
     roleView.notice = "";
     const requestId = `fks-detect-${++live.requestSeq}`;
     const request = detectRequest(identity.documentId, requestId, knownRolesFromCollection());
+    // Kept as Addendum 27 item 2 requires; no path reaches it while storeRouteEvidence's worst-case fit check holds.
     if (!safeRoleWire(request, 256 * 1024)) { roleView.status = "Role detection request limit reached."; renderDetectedRoles(); return; }
     const pending = { requestId, ...identity, knownRoles:request.knownRoles };
     // A Detect nobody answers says so; the timer does nothing once this request is no longer the pending one.
@@ -4432,11 +4451,12 @@ if (remembered) kitId.value = remembered;
       roleView.pending = null; roleView.status = ROLE_DETECT_SILENT; renderDetectedRoles();
     }, REQUEST_TIMEOUT_MS);
     roleView.pending = pending;
-    roleView.status = "Detecting text styles…"; renderDetectedRoles();
+    roleView.status = ROLE_DETECTING; renderDetectedRoles();
     sendDesignMessage(request);
   });
   // Clearing forgets the visited evidence only: the counter, the applied preview and the inspector edits stay, and nothing is sent.
   q("roleClearVisited").addEventListener("click", () => {
+    if (roleClearVisitedReason()) return;
     dropPendingDetect(); roleView.rows = [];
     clearRoleCollection(true);
     if (roleView.identity) roleView.status = roleView.identity.pageURL === null ? ROLE_UNAVAILABLE : ROLE_READY;
@@ -4480,14 +4500,15 @@ if (remembered) kitId.value = remembered;
     }
     return !data.complete || [...remaining.values()].every(count => count === 0);
   }
-  // An unreadable reply to the pending Detect: say so, keep the request pending (a valid reply for it still renders) and stop
-  // the timer, so the message is not overwritten by "did not reply".
   function dropPendingDetect() {
     if (roleView.pending) clearTimeout(roleView.pending.timer);
     roleView.pending = null;
   }
+  // An unreadable reply to the pending Detect: say so, keep the request pending (a valid reply for it still renders),
+  // stop the timer so the message is not overwritten by "did not reply", and mark it so Detect can be pressed again.
   function roleDetectUnreadable() {
     clearTimeout(roleView.pending.timer);
+    roleView.pending.unreadable = true;
     roleView.status = ROLE_DETECT_UNREADABLE; renderDetectedRoles();
   }
   function acceptDetectedRoles(data) {
@@ -4546,7 +4567,7 @@ if (remembered) kitId.value = remembered;
     renderDetectedRoles();
   });
   q("roleClear").addEventListener("click", () => {
-    if (roleCapabilityReason()) return;
+    if (roleClearReason()) return;
     const queued = enqueueLiveOp({ kind:"roles-clear", operation:"clear", documentId:roleView.identity.documentId });
     rolePreview.message = queued ? "Clearing role preview…" : ROLE_CONNECT_FIRST;
     renderDetectedRoles();
@@ -7137,6 +7158,20 @@ if (remembered) kitId.value = remembered;
     hint.textContent = reason || "";
     hint.hidden = !reason;
     if (reason) el.setAttribute("aria-describedby", hint.id); else el.removeAttribute("aria-describedby");
+  }
+
+  // A transient busy state keeps keyboard focus, so it is aria-disabled, never disabled; the click handlers guard it.
+  // The caller has already restored disabled, title and aria-describedby, and owns any settled hint.
+  function setInProgress(el, reason) {
+    if (reason) {
+      if (el.dataset.normalTitle === undefined) el.dataset.normalTitle = el.getAttribute("title") || "";
+      el.disabled = false;
+      el.setAttribute("aria-disabled", "true");
+      el.title = reason;
+      const hint = document.querySelector(`[data-hint-for="${el.id}"]`);
+      hint.textContent = reason; hint.hidden = false;
+      el.setAttribute("aria-describedby", hint.id);
+    } else el.removeAttribute("aria-disabled");
   }
 
   // What Sync to file would write: Studio's saved overrides, saved composition tokens and DOM moves. These are exactly

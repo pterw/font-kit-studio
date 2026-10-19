@@ -11,6 +11,8 @@ import unittest
 from pathlib import Path
 from urllib.parse import quote
 
+from playwright.sync_api import expect
+
 import role_contract as table
 from support import ENGINES, HTML, REPO, new_context, route_virtual_origins
 
@@ -523,6 +525,9 @@ class StudioRoleBoundaryTests(StudioRoleCase):
             with self.subTest(engine=engine):
                 page, frame, errors = self.open(engine, TARGET + '/peer', PEER)
                 old = self.pending(page, frame)
+                # Detect cannot be pressed while one is pending: an unreadable matching reply frees the button and keeps `old` pending.
+                self.send(frame, {key: value for key, value in self.reply(old).items() if key != 'groups'})
+                page.wait_for_function('(text) => document.querySelector("#roleStatus").textContent === text', arg=UNREADABLE_DETECT)
                 current = self.pending(page, frame)
                 hostile = self.reply(current, [group(name='Forged')])
                 self.send(frame, self.reply(old, [group(name='Superseded')]))
@@ -738,7 +743,8 @@ class StudioRoleDraftTests(StudioRoleCase):
         enabled, reason = self.gate(page)
         self.assertFalse(enabled)
         self.assertIn('Tick Preview this role', reason)
-        self.assertTrue(self.button(page, CLEAR).is_enabled())
+        self.assertTrue(self.button(page, CLEAR).is_disabled())
+        self.assertEqual(self.hint(page, 'roleClearHint'), 'No role preview applied.')
         self.assertEqual(self.sent(frame), ['design:hello', 'design:detect'])
         self.unchanged_page(frame)
         self.assertEqual(errors, [])
@@ -1443,21 +1449,24 @@ class StudioRoleQueueTests(StudioLegacyCase):
         page, frame, errors = self.open(engine, PEER_URL, PEER)
         self.detected(page, frame)
         self.select_for_apply(page)
+        seed = self.press_apply(page, frame)   # an accepted preview, so Clear is enabled later
+        self.send(frame, self.receipt(seed))
+        self.wait_status(page, 'Preview applied to 1 role')
         reset = self.legacy_in_flight(page, frame)
         self.button(page, APPLY).click()
         self.quiet(page)
-        self.assertEqual(self.sent(frame), ['design:hello', 'design:detect', 'design:reset'])
-        self.pending(page, frame)
+        self.assertEqual(self.sent(frame), ['design:hello', 'design:detect', 'design:roles-apply', 'design:reset'])
         self.assertTrue(self.button(page, 'Detect text styles').is_enabled())
+        self.pending(page, frame)
         lookalike = self.receipt({'type': 'design:roles-apply', 'requestId': reset['requestId'], 'baseRevision': reset['baseRevision'],
                                   'documentId': 'peer-document', 'pageVersion': 0, 'roles': [self.role_input()]})
         self.send(frame, lookalike)
         self.quiet(page)
-        self.assertEqual(self.ops(frame, 'design:roles-apply'), [])
+        self.assertEqual(len(self.ops(frame, 'design:roles-apply')), 1)
         self.send(frame, self.applied(reset))
-        self.wait_for_ops(frame, 'design:roles-apply', 1)
-        apply = self.ops(frame, 'design:roles-apply')[0]
-        self.assertEqual(apply['baseRevision'], 1)
+        self.wait_for_ops(frame, 'design:roles-apply', 2)
+        apply = self.ops(frame, 'design:roles-apply')[-1]
+        self.assertEqual(apply['baseRevision'], 2)
         self.send(frame, self.applied(apply))
         self.send(frame, self.reply(self.ops(frame, 'design:detect')[-1], requestId=apply['requestId']))
         self.button(page, CLEAR).click()
@@ -1465,7 +1474,7 @@ class StudioRoleQueueTests(StudioLegacyCase):
         self.assertEqual(self.ops(frame, 'design:roles-clear'), [])
         self.send(frame, self.receipt(apply))
         self.wait_for_ops(frame, 'design:roles-clear', 1)
-        self.assertEqual(self.ops(frame, 'design:roles-clear')[0]['baseRevision'], 2)
+        self.assertEqual(self.ops(frame, 'design:roles-clear')[0]['baseRevision'], 3)
         self.assertEqual(errors, [])
 
     @per_engine
@@ -1553,12 +1562,15 @@ class StudioRoleQueueTests(StudioLegacyCase):
         sent with the unchanged revision."""
         page, frame, errors = self.open(engine, PEER_URL, PEER)
         self.detected(page, frame)
-        self.apply_role(page, frame, '24')
+        seed = self.apply_role(page, frame, '24')   # an accepted preview, so Clear is enabled
+        self.send(frame, self.receipt(seed))
+        self.wait_status(page, 'Preview applied to 1 role')
+        self.press_apply(page, frame)
         self.button(page, CLEAR).click()
         self.quiet(page)
         self.assertEqual(self.ops(frame, 'design:roles-clear'), [])
         self.wait_for_ops(frame, 'design:roles-clear', 1)
-        self.assertEqual(self.ops(frame, 'design:roles-clear')[0]['baseRevision'], 0)
+        self.assertEqual(self.ops(frame, 'design:roles-clear')[0]['baseRevision'], 1)
         self.assertEqual(errors, [])
 
     def reload_peer(self, page, frame):
@@ -3093,7 +3105,8 @@ class StudioRoleReplyTests(StudioLegacyCase):
     def test_a_receipt_with_a_hole_in_a_list_is_unreadable_and_a_valid_receipt_settles(self, engine):
         """Given an Apply and a Clear in flight, when the matching receipt has a hole in outcomes, in an outcome's
         losses, in an echoed role's selectors or (Clear) in roles, then the preview status equals the could-not-read
-        string, the preview css is empty and no page error is raised, and a valid receipt then settles it."""
+        string, the preview css is unchanged (empty under Apply, the seeded preview under Clear) and no page error is
+        raised, and a valid receipt then settles it."""
         for operation, places in {'apply': {'outcomes': ['outcomes'], 'losses': ['outcomes', 0, 'losses'], 'role selectors': ['roles', 0, 'selectors']},
                                   'clear': {'roles': ['roles']}}.items():
             page, frame, request = self.op_session(engine, operation)
@@ -3108,7 +3121,8 @@ class StudioRoleReplyTests(StudioLegacyCase):
                     self.settle(page, frame)
                     shown, seen = self.preview(page), errors[:]
                     del errors[:]
-                    self.assertEqual((shown['status'], shown['css'], seen), (UNREADABLE_REPLY, '', []))
+                    expected_css = '' if operation == 'apply' else canonical_css([self.role_input()])
+                    self.assertEqual((shown['status'], shown['css'], seen), (UNREADABLE_REPLY, expected_css, []))
             self.send(frame, good)
             self.wait_status(page, 'Preview applied to 1 role' if operation == 'apply' else SETTLED['clear'])
             self.assertEqual(errors, [])
@@ -3228,18 +3242,13 @@ class StudioRoleReplyTests(StudioLegacyCase):
     def test_a_reply_with_unknown_keys_outside_echoed_roles_renders_exactly_like_the_plain_reply(self, engine):
         """Given a detected reply, a receipt, a ready snapshot and a roles-page that carry an unknown key in every object
         except the echoed roles, when each arrives, then Studio shows exactly what it shows for the plain message (rows,
-        status, preview CSS and outcomes). That is the tolerance this test proves. The export, marker and later-request
-        assertions are regression guards that hold by construction today (Studio stores only the validated copy and exports
-        no role data), so they cannot fail until Studio starts exporting or re-sending role data; that raw reply objects
-        are never stored is not observable by name, and test_role_routes records that mutant as equivalent."""
+        status, preview CSS and outcomes). That is the tolerance this test proves; that raw reply objects are never stored
+        is not observable by name, and test_role_routes records that mutant as equivalent."""
         for kind in table.TOLERANT_KINDS:
             with self.subTest(kind=kind):
                 plain = self.tolerant_session(engine, kind, lambda message: message)
                 future = self.tolerant_session(engine, kind, lambda message: table.with_unknown_keys(message, {'nested': [1, MARKER]}))
                 self.assertEqual(future[0], plain[0])
-                self.assertEqual(future[2], future[1])
-                for text in [*future[0].values(), *future[2].values(), future[3]]:
-                    self.assertNotIn(MARKER, text)
 
     def hostile_rows(self, array_position):
         """Each row turns a valid message into one that must still be refused; the unknown key is the only change but the last."""
@@ -3334,7 +3343,7 @@ class StudioRoleReplyTests(StudioLegacyCase):
         """Given a Detect nobody answers and the clock frozen, when 7,999 ms pass, then the status is still "Detecting
         text styles…"; at 8,000 ms it is the did-not-reply string and the rows are unchanged; a valid late reply changes
         neither; a new Detect has a new request id and renders its reply; a Detect answered at 1 s keeps "Detected" at
-        20 s; a Detect pressed again at 5 s and answered at 6 s keeps "Detected" when the first one's timer fires at 8 s."""
+        20 s."""
         page, frame, errors = self.open(engine, PEER_URL, PEER)
         self.detected(page, frame)
         rows = page.locator('#roleRows').inner_text()
@@ -3361,21 +3370,16 @@ class StudioRoleReplyTests(StudioLegacyCase):
         page.clock.run_for(20000)
         self.assertTrue(self.status(page).startswith('Detected'))
         self.assertIn('Third', page.locator('#roleRows').inner_text())
-        self.pending(page, frame)
-        page.clock.run_for(5000)
-        fifth = self.pending(page, frame)
-        page.clock.run_for(1000)
-        self.send(frame, self.reply(fifth, [group(name='Fifth')]))
-        self.wait_detected(page)
-        page.clock.run_for(2000)
-        self.assertTrue(self.status(page).startswith('Detected'))
-        self.assertIn('Fifth', page.locator('#roleRows').inner_text())
         self.assertEqual(errors, [])
 
     def op_session(self, engine, operation, frozen=False):
-        """A peer with a role detected and the operation's request in flight (the clock frozen first when asked)."""
+        """A peer with a role detected and the operation's request in flight (the clock frozen first when asked). A Clear
+        needs an accepted preview, so one Apply and its receipt come first."""
         page, frame, errors = self.open(engine, PEER_URL, PEER)
         self.detected(page, frame)
+        if operation == 'clear':
+            self.send(frame, self.receipt(self.apply_role(page, frame, '24')))
+            self.wait_status(page, 'Preview applied to 1 role')
         if frozen:
             self.frozen_clock(page)
         return page, frame, self.apply_role(page, frame, '24') if operation == 'apply' else self.clear_preview(page, frame)
@@ -3392,8 +3396,9 @@ class StudioRoleReplyTests(StudioLegacyCase):
     def test_an_unreadable_apply_or_clear_receipt_says_so_and_does_not_settle(self, engine):
         """Given an Apply or a Clear in flight, when a receipt for another request or document arrives, then the status
         is unchanged; when the matching receipt is unreadable (an Apply without outcomes, a Clear that lists a role), then
-        the status equals the could-not-read string, the preview is unchanged, a second press queues and sends nothing,
-        and a valid receipt settles the first and sends the second; with the clock frozen the operation then still
+        the status equals the could-not-read string, the preview is unchanged, a second Clear press queues and sends
+        nothing and a script click on the busy Apply sends nothing; a valid receipt settles the first and sends the queued
+        second Clear, while Apply still has sent exactly one request; with the clock frozen the operation then still
         reaches "No response to <operation>", an unreadable reply for that late operation shows nothing, and a late valid
         receipt is accepted; an unreadable matching rejection shows the same string and the operation still times out."""
         names = {'apply': (APPLY, 'design:roles-apply'), 'clear': (CLEAR, 'design:roles-clear')}
@@ -3407,13 +3412,22 @@ class StudioRoleReplyTests(StudioLegacyCase):
                 self.assertEqual(self.preview(page)['status'], IN_FLIGHT[operation])
                 self.send(frame, bad)
                 self.wait_text(page, '#rolePreviewStatus', UNREADABLE_REPLY)
-                self.assertEqual(self.preview(page)['css'], '')
-                self.button(page, label).click()
+                shown = '' if operation == 'apply' else canonical_css([self.role_input()])
+                self.assertEqual(self.preview(page)['css'], shown)
+                if operation == 'apply':
+                    # Apply is aria-disabled while in flight: a keyboard or script click is the only one that reaches its guard.
+                    page.evaluate('document.querySelector("#roleApply").click()')
+                else:
+                    self.button(page, label).click()
                 self.quiet(page)
                 self.assertEqual(len(self.ops(frame, kind)), 1)
                 self.send(frame, self.receipt(request))
                 self.wait_text(page, '#rolePreviewStatus', SETTLED[operation])
-                self.wait_for_ops(frame, kind, 2)
+                if operation == 'clear':
+                    self.wait_for_ops(frame, kind, 2)
+                else:
+                    self.quiet(page)
+                    self.assertEqual(len(self.ops(frame, kind)), 1)
             with self.subTest(operation=operation, phase='time out after an unreadable receipt'):
                 page, frame, request = self.op_session(engine, operation, frozen=True)
                 bad = self.unreadable_receipt(request)
@@ -3501,3 +3515,357 @@ class StudioRoleReplyTests(StudioLegacyCase):
             self.send(frame, self.applied(reset, roleState=self.snapshot_state([echoes['unknown key in a role'](self.role_input())])))
             self.wait_status(page, 'could not be confirmed')
         self.assertEqual(errors, [])
+
+class StudioIdleRoleControlTests(StudioLegacyCase):
+    """Four Detected-roles buttons say why they cannot act: Clear visited pages and Clear preview are disabled while there
+    is nothing to clear; Detect and Apply are aria-disabled (not disabled, so keyboard focus stays) while their request is
+    open. The reason texts are the owner's (Addendum 28 item 2), written here as literals."""
+
+    NO_VISITED = 'No visited pages stored yet.'
+    NO_PREVIEW = 'No role preview applied.'
+    DETECTING = 'Detecting text styles…'
+    APPLY_BUSY = 'A role preview change is in progress.'
+    CONNECT_FIRST = 'Connect a Live App to preview roles.'
+    DETECT_TITLE = "Read the current page's text styles without changing it"
+    # The look of a control: its attributes and its hint span, as the page holds them.
+    BUSY_DETECT = {'disabled': False, 'aria': 'true', 'title': DETECTING, 'described': 'roleDetectHint', 'hint': DETECTING, 'hidden': False}
+    IDLE_DETECT = {'disabled': False, 'aria': None, 'title': DETECT_TITLE, 'described': 'roleStatus', 'hint': '', 'hidden': True}
+    BUSY_APPLY = {'disabled': False, 'aria': 'true', 'title': APPLY_BUSY, 'described': 'roleApplyHint', 'hint': APPLY_BUSY, 'hidden': False}
+    IDLE_APPLY = {'disabled': False, 'aria': None, 'title': None, 'described': None, 'hint': '', 'hidden': True}
+    # Frozen-clock and status helpers of the classes above, reused as they are.
+    frozen_clock = StudioRoleReplyTests.frozen_clock
+    status = StudioRoleReplyTests.status
+    wait_text = StudioRoleReplyTests.wait_text
+    wait_detected = StudioRoleReplyTests.wait_detected
+
+    def look(self, page, button_id, hint_id):
+        return page.evaluate('''([button, hint]) => { const el = document.getElementById(button), note = document.getElementById(hint);
+            return { disabled: el.disabled, aria: el.getAttribute("aria-disabled"), title: el.getAttribute("title"),
+                     described: el.getAttribute("aria-describedby"), hint: note.textContent, hidden: note.hidden }; }''', [button_id, hint_id])
+
+    def keys(self, page, button_id, *keys):
+        """Keyboard presses on a button: focus it, then press each key."""
+        page.locator(f'#{button_id}').focus()
+        for key in keys:
+            page.keyboard.press(key)
+
+    def focused(self, page):
+        return page.evaluate('document.activeElement.id')
+
+    def surface(self, page, frame):
+        """What a refused click must leave alone: the three status lines and everything Studio sent."""
+        return (page.locator('#roleStatus').inner_text(), page.locator('#roleNotice').inner_text(),
+                page.locator('#rolePreviewStatus').inner_text(), self.sent(frame))
+
+    def hold_detect(self, engine, frozen=False):
+        """A peer with one stored page and a Detect pressed by keyboard whose reply is held: page, frame, request, errors."""
+        page, frame, errors = self.open(engine, PEER_URL, PEER)
+        self.detected(page, frame)
+        if frozen:
+            self.frozen_clock(page)
+        self.keys(page, 'detectTextStyles', 'Enter')
+        frame.wait_for_function('() => requests.length > 1', polling=50)
+        return page, frame, frame.evaluate('requests[requests.length-1]'), errors
+
+    def hold_apply(self, engine, queued=False):
+        """A ticked, sized row and Apply pressed by keyboard: in flight (the receipt is held) or, with `queued`, waiting
+        behind a held legacy reset. Returns page, frame, the held request (the reset when queued) and errors."""
+        page, frame, errors = self.open(engine, PEER_URL, PEER)
+        self.detected(page, frame)
+        self.select_for_apply(page)
+        held = self.legacy_in_flight(page, frame) if queued else None
+        self.keys(page, 'roleApply', 'Enter')
+        if queued:
+            self.quiet(page)
+            return page, frame, held, errors
+        self.wait_for_ops(frame, 'design:roles-apply', 1)
+        return page, frame, self.ops(frame, 'design:roles-apply')[0], errors
+
+    def reload_silent(self, page, frame):
+        """Reloads the peer into a page that never says ready, so Studio stays disconnected."""
+        silent = PEER.replace(';ready()}', '}')
+        self.assertNotEqual(silent, PEER)
+        page.context.route(PEER_URL, lambda route: route.fulfill(body=silent, content_type='text/html'))
+        frame.evaluate('setTimeout(() => location.reload(), 0)')
+        page.wait_for_function('document.querySelector("#roleApply").disabled && document.querySelector("#detectTextStyles").disabled')
+
+    @per_engine
+    def test_clear_visited_pages_is_disabled_until_a_page_is_stored_and_again_after_it_clears(self, engine):
+        """Given a connected peer with nothing stored, when a complete Detect stores a page and Clear visited pages is
+        pressed from the keyboard, then the button is disabled with "No visited pages stored yet." before the Detect,
+        enabled with an empty hint after it and disabled with the hint again after Enter and again after Space; a first
+        Detect refused for size stores nothing yet leaves it enabled with an empty hint."""
+        with self.subTest(case='store and clear'):
+            page, frame, errors = self.open(engine, PEER_URL, PEER)
+            clear = self.button(page, 'Clear visited pages')
+            self.assertTrue(clear.is_disabled())
+            self.assertEqual(self.hint(page, 'roleClearVisitedHint'), self.NO_VISITED)
+            for key in ('Enter', 'Space'):
+                self.detected(page, frame)
+                self.assertTrue(clear.is_enabled())
+                self.assertEqual(self.hint(page, 'roleClearVisitedHint'), '')
+                self.keys(page, 'roleClearVisited', key)
+                page.wait_for_function('document.querySelector("#roleClearVisited").disabled')
+                self.assertEqual(self.hint(page, 'roleClearVisitedHint'), self.NO_VISITED)
+            self.assertEqual(errors, [])
+        with self.subTest(case='first route refused for the limit'):
+            page, frame, errors = self.open(engine, PEER_URL, PEER)
+            groups = [group(f'g-{i}', f'Role {i}', f'Author {i}', selectors=[
+                {'value': '.' + 'a' * 1100, 'stable': True, 'reason': 'class'},
+                {'value': '.' + 'b' * 1100, 'stable': True, 'reason': 'class'}]) for i in range(table.ROLES)]
+            self.send(frame, self.reply(self.pending(page, frame), groups))
+            page.wait_for_function('document.querySelector("#roleStatus").textContent.startsWith("Collection limit")')
+            self.assertFalse(page.locator('#roleVisited').is_visible())   # nothing was stored for this route
+            self.assertTrue(self.button(page, 'Clear visited pages').is_enabled())
+            self.assertEqual(self.hint(page, 'roleClearVisitedHint'), '')
+            self.assertEqual(errors, [])
+
+    @per_engine
+    def test_clear_preview_is_disabled_until_an_acknowledged_apply_and_again_after_an_acknowledged_clear(self, engine):
+        """Given a connected peer with no preview, when an Apply is sent, acknowledged, then cleared and acknowledged, and
+        ready snapshots with and without a role arrive, then Clear preview is disabled with "No role preview applied."
+        at first and while the Apply is unacknowledged, enabled after the receipt, disabled after the clear receipt and a
+        role-less ready, and enabled by a ready that reports a role."""
+        page, frame, errors = self.open(engine, PEER_URL, PEER)
+        clear = self.button(page, CLEAR)
+        self.assertTrue(clear.is_disabled())
+        self.assertEqual(self.hint(page, 'roleClearHint'), self.NO_PREVIEW)
+        self.detected(page, frame)
+        applying = self.apply_role(page, frame)
+        self.assertTrue(clear.is_disabled())
+        self.assertEqual(self.hint(page, 'roleClearHint'), self.NO_PREVIEW)
+        self.send(frame, self.receipt(applying))
+        self.wait_status(page, 'Preview applied to 1 role')
+        self.assertTrue(clear.is_enabled())
+        self.assertEqual(self.hint(page, 'roleClearHint'), '')
+        self.send(frame, self.receipt(self.clear_preview(page, frame)))
+        self.wait_status(page, 'Preview cleared.')
+        self.assertTrue(clear.is_disabled())
+        self.assertEqual(self.hint(page, 'roleClearHint'), self.NO_PREVIEW)
+        self.ready_with(page, frame, self.snapshot_state([]), revision=3)
+        self.assertTrue(clear.is_disabled())
+        self.assertEqual(self.hint(page, 'roleClearHint'), self.NO_PREVIEW)
+        self.ready_with(page, frame, self.snapshot_state([self.role_input()]), revision=4)
+        self.assertTrue(clear.is_enabled())
+        self.assertEqual(self.hint(page, 'roleClearHint'), '')
+        self.ready_with(page, frame, self.snapshot_state([]), revision=5)
+        self.assertTrue(clear.is_disabled())
+        self.assertEqual(self.hint(page, 'roleClearHint'), self.NO_PREVIEW)
+        self.assertEqual(errors, [])
+
+    @per_engine
+    def test_clear_preview_follows_the_real_bridges_acknowledged_apply_and_clear(self, engine):
+        """Given the real bridge, when Studio applies a size to the Body role and then clears it, then Clear preview is
+        disabled with "No role preview applied." before the Apply, enabled with an empty hint after the bridge's receipt and
+        disabled with the hint again after the bridge's clear receipt."""
+        page, frame, errors = self.open(engine)
+        clear = self.button(page, CLEAR)
+        self.assertTrue(clear.is_disabled())
+        self.assertEqual(self.hint(page, 'roleClearHint'), self.NO_PREVIEW)
+        self.assertTrue(self.detect(page).startswith('Detected'))
+        row = page.locator('#roleRows > li[data-role-id]', has=page.locator('strong', has_text='Body')).first
+        role = row.get_attribute('data-role-id')
+        self.control(page, 'Preview this role', role).check()
+        self.type_value(self.control(page, 'Size (px)', role), '24')
+        self.button(page, APPLY).click()
+        self.wait_status(page, 'Preview applied to 1 role')
+        self.assertTrue(clear.is_enabled())
+        self.assertEqual(self.hint(page, 'roleClearHint'), '')
+        clear.click()
+        self.wait_status(page, 'Preview cleared.')
+        self.assertTrue(clear.is_disabled())
+        self.assertEqual(self.hint(page, 'roleClearHint'), self.NO_PREVIEW)
+        self.assertEqual(errors, [])
+
+    @per_engine
+    def test_detect_stays_focused_but_inert_while_its_reply_is_pending_and_every_exit_restores_it(self, engine):
+        """Given Detect pressed from the keyboard with the peer holding the reply, when Enter and Space are pressed on it
+        again, then it is aria-disabled and not disabled, keeps focus, shows "Detecting text styles…" as title, hint and
+        accessible description, looks disabled (opacity 0.5, cursor not-allowed), and sends no second design:detect and
+        changes no status line; after the matching reply, a matching rejection, the 8-second timeout and Clear visited pages
+        it is back to its normal title, an empty hidden hint and aria-describedby roleStatus with focus still on it; with the
+        peer disconnected it is natively disabled with the status as title and no aria-disabled."""
+        page, frame, request, errors = self.hold_detect(engine)
+        detect = page.locator('#detectTextStyles')
+        before = self.surface(page, frame)
+        self.assertEqual(self.look(page, 'detectTextStyles', 'roleDetectHint'), self.BUSY_DETECT)
+        self.assertTrue(detect.is_disabled())
+        self.assertEqual(self.focused(page), 'detectTextStyles')
+        expect(detect).to_have_accessible_description(self.DETECTING)
+        self.assertEqual(detect.evaluate('(el) => [getComputedStyle(el).opacity, getComputedStyle(el).cursor]'), ['0.5', 'not-allowed'])
+        self.keys(page, 'detectTextStyles', 'Enter', 'Space')
+        self.quiet(page)
+        self.assertEqual(len(self.ops(frame, 'design:detect')), 2)
+        self.assertEqual(self.surface(page, frame), before)
+        self.assertEqual(self.look(page, 'detectTextStyles', 'roleDetectHint'), self.BUSY_DETECT)
+        for name in ('reply', 'rejection', 'clear visited'):
+            with self.subTest(exit=name):
+                page, frame, request, errors = self.hold_detect(engine)
+                if name == 'reply':
+                    self.send(frame, self.reply(request, [group(name='Fresh')]))
+                elif name == 'rejection':
+                    self.send(frame, {'type': 'design:rejected', 'requestId': request['requestId'], 'revision': 0, 'reason': 'size-limit'})
+                else:
+                    page.evaluate('document.querySelector("#roleClearVisited").click()')
+                page.wait_for_function('!document.querySelector("#detectTextStyles").hasAttribute("aria-disabled")')
+                self.assertEqual(self.look(page, 'detectTextStyles', 'roleDetectHint'), self.IDLE_DETECT)
+                self.assertTrue(page.locator('#detectTextStyles').is_enabled())
+                self.assertEqual(self.focused(page), 'detectTextStyles')
+        with self.subTest(exit='timeout'):
+            page, frame, request, errors = self.hold_detect(engine, frozen=True)
+            page.clock.run_for(7999)
+            self.assertEqual(self.look(page, 'detectTextStyles', 'roleDetectHint'), self.BUSY_DETECT)
+            page.clock.run_for(1)
+            self.assertEqual(self.status(page), NO_REPLY_DETECT)
+            self.assertEqual(self.look(page, 'detectTextStyles', 'roleDetectHint'), self.IDLE_DETECT)
+            self.assertTrue(page.locator('#detectTextStyles').is_enabled())
+            self.assertEqual(self.focused(page), 'detectTextStyles')
+        with self.subTest(exit='disconnect'):
+            page, frame, request, errors = self.hold_detect(engine)
+            self.reload_silent(page, frame)
+            look = self.look(page, 'detectTextStyles', 'roleDetectHint')
+            self.assertEqual((look['disabled'], look['aria'], look['hint'], look['hidden']), (True, None, '', True))
+            self.assertEqual(look['title'], self.status(page))
+
+    @per_engine
+    def test_an_unreadable_matching_reply_frees_detect_and_a_second_press_supersedes_the_first_request(self, engine):
+        """Given a pending Detect and a matching reply that misses its groups, when Detect is pressed again and the old
+        request's valid reply and then the new request's valid reply arrive, then Detect is enabled with no aria-disabled
+        and an empty hint and the status equals the could-not-read string after the unreadable reply, the second press
+        sends a new design:detect, the old reply renders nothing and the new one renders its row."""
+        page, frame, request, errors = self.hold_detect(engine)
+        valid = self.reply(request, [group(name='Old')])
+        self.send(frame, {key: value for key, value in valid.items() if key != 'groups'})
+        self.wait_text(page, '#roleStatus', UNREADABLE_DETECT)
+        self.assertEqual(self.look(page, 'detectTextStyles', 'roleDetectHint'), self.IDLE_DETECT)
+        self.assertTrue(page.locator('#detectTextStyles').is_enabled())
+        self.keys(page, 'detectTextStyles', 'Enter')
+        self.wait_for_ops(frame, 'design:detect', 3)
+        again = self.ops(frame, 'design:detect')[-1]
+        self.assertNotEqual(again['requestId'], request['requestId'])
+        self.send(frame, valid)
+        self.quiet(page)
+        self.assertNotIn('Old', page.locator('#roleRows').inner_text())
+        self.assertEqual(self.status(page), self.DETECTING)
+        self.send(frame, self.reply(again, [group(name='New')]))
+        self.wait_detected(page)
+        self.assertIn('New', page.locator('#roleRows').inner_text())
+        self.assertEqual(errors, [])
+
+    @per_engine
+    def test_apply_stays_focused_but_inert_while_a_role_op_is_open_and_every_exit_restores_it(self, engine):
+        """Given Apply pressed from the keyboard with the receipt held, or queued behind a held legacy reset, when Enter and
+        Space are pressed on it again and the held reply is then released, then it is aria-disabled and not disabled, keeps
+        focus and shows "A role preview change is in progress." as title, hint and accessible description, and exactly one
+        design:roles-apply is ever sent; after the receipt it has no aria-disabled, title or aria-describedby, an empty
+        hidden hint and focus, and a new press sends a second apply; a queued Clear makes it busy again; with the peer
+        disconnected it is natively disabled with the connect reason, and a row unticked while it was busy gives the draft
+        reason natively disabled with no aria-disabled."""
+        with self.subTest(case='in flight'):
+            page, frame, request, errors = self.hold_apply(engine)
+            apply = page.locator('#roleApply')
+            self.assertEqual(self.look(page, 'roleApply', 'roleApplyHint'), self.BUSY_APPLY)
+            self.assertTrue(apply.is_disabled())
+            self.assertEqual(self.focused(page), 'roleApply')
+            expect(apply).to_have_accessible_description(self.APPLY_BUSY)
+            self.keys(page, 'roleApply', 'Enter', 'Space')
+            self.quiet(page)
+            self.assertEqual(len(self.ops(frame, 'design:roles-apply')), 1)
+            self.send(frame, self.receipt(request))
+            self.wait_status(page, 'Preview applied to 1 role')
+            self.quiet(page)
+            self.assertEqual(len(self.ops(frame, 'design:roles-apply')), 1)
+            self.assertEqual(self.look(page, 'roleApply', 'roleApplyHint'), self.IDLE_APPLY)
+            self.assertTrue(apply.is_enabled())
+            self.assertEqual(self.focused(page), 'roleApply')
+            self.keys(page, 'roleApply', 'Enter')
+            self.wait_for_ops(frame, 'design:roles-apply', 2)
+            self.send(frame, self.receipt(self.ops(frame, 'design:roles-apply')[-1]))
+            self.wait_status(page, 'Preview applied to 1 role')
+            self.assertEqual(self.look(page, 'roleApply', 'roleApplyHint'), self.IDLE_APPLY)
+            clearing = self.clear_preview(page, frame)
+            self.assertEqual(self.look(page, 'roleApply', 'roleApplyHint'), self.BUSY_APPLY)
+            self.send(frame, self.receipt(clearing))
+            self.wait_status(page, 'Preview cleared.')
+            self.assertEqual(self.look(page, 'roleApply', 'roleApplyHint'), self.IDLE_APPLY)
+            self.assertEqual(errors, [])
+        with self.subTest(case='queued behind a legacy op'):
+            page, frame, reset, errors = self.hold_apply(engine, queued=True)
+            apply = page.locator('#roleApply')
+            self.assertEqual(self.look(page, 'roleApply', 'roleApplyHint'), self.BUSY_APPLY)
+            self.assertEqual(self.focused(page), 'roleApply')
+            expect(apply).to_have_accessible_description(self.APPLY_BUSY)
+            self.keys(page, 'roleApply', 'Enter', 'Space')
+            self.quiet(page)
+            self.assertEqual(self.ops(frame, 'design:roles-apply'), [])
+            self.send(frame, self.applied(reset))
+            self.wait_for_ops(frame, 'design:roles-apply', 1)
+            self.send(frame, self.receipt(self.ops(frame, 'design:roles-apply')[0]))
+            self.wait_status(page, 'Preview applied to 1 role')
+            self.quiet(page)
+            self.assertEqual(len(self.ops(frame, 'design:roles-apply')), 1)
+            self.assertEqual(self.look(page, 'roleApply', 'roleApplyHint'), self.IDLE_APPLY)
+            self.assertEqual(errors, [])
+        with self.subTest(case='disconnect while in flight'):
+            page, frame, request, errors = self.hold_apply(engine)
+            self.reload_silent(page, frame)
+            self.assertEqual(self.look(page, 'roleApply', 'roleApplyHint'),
+                             {'disabled': True, 'aria': None, 'title': self.CONNECT_FIRST, 'described': 'roleApplyHint',
+                              'hint': self.CONNECT_FIRST, 'hidden': False})
+            self.assertEqual(self.hint(page, 'roleApplyHint'), self.CONNECT_FIRST)
+        with self.subTest(case='row unticked while busy'):
+            page, frame, request, errors = self.hold_apply(engine)
+            self.control(page, 'Preview this role').uncheck()
+            self.assertEqual(self.look(page, 'roleApply', 'roleApplyHint'), self.BUSY_APPLY)
+            self.send(frame, self.receipt(request))
+            self.wait_status(page, 'Preview applied to 1 role')
+            look = self.look(page, 'roleApply', 'roleApplyHint')
+            self.assertEqual((look['disabled'], look['aria'], look['described'], look['hidden']), (True, None, 'roleApplyHint', False))
+            self.assertTrue(look['hint'].startswith('Tick Preview this role'))
+            self.assertEqual(self.hint(page, 'roleApplyHint'), look['hint'])
+
+    @per_engine
+    def test_reset_all_page_edits_stays_enabled_when_connected_idle_and_while_an_apply_is_in_flight(self, engine):
+        """Given a connected peer, when an Apply is in flight, then Reset all page edits is enabled with no visible reason
+        before and during it."""
+        page, frame, errors = self.open(engine, PEER_URL, PEER)
+        reset = self.button(page, RESET_ALL)
+        self.assertTrue(reset.is_enabled())
+        self.assertEqual(self.hint(page, 'roleResetAllHint'), '')
+        self.detected(page, frame)
+        self.apply_role(page, frame)
+        self.assertTrue(reset.is_enabled())
+        self.assertEqual(self.hint(page, 'roleResetAllHint'), '')
+        self.assertEqual(errors, [])
+
+    @per_engine
+    def test_a_click_that_reaches_a_busy_or_idle_control_through_the_page_changes_nothing(self, engine):
+        """Given Detect pending, Apply in flight, no preview applied and no visited page stored, when a click is dispatched
+        on each of those controls through the page (a script click for the two aria-disabled ones, a dispatched click event
+        for the two natively disabled ones, which get no DOM click from a script click), then the status, notice and
+        preview-status lines and the messages Studio sent are unchanged, and the held Apply is still the only one sent
+        once its receipt arrives."""
+        with self.subTest(button='Detect, pending'):
+            page, frame, request, errors = self.hold_detect(engine)
+            before = self.surface(page, frame)
+            page.evaluate('document.querySelector("#detectTextStyles").click()')
+            self.quiet(page)
+            self.assertEqual(self.surface(page, frame), before)
+        with self.subTest(button='Apply, in flight'):
+            page, frame, request, errors = self.hold_apply(engine)
+            before = self.surface(page, frame)
+            page.evaluate('document.querySelector("#roleApply").click()')
+            self.quiet(page)
+            self.assertEqual(self.surface(page, frame), before)
+            self.send(frame, self.receipt(request))
+            self.wait_status(page, 'Preview applied to 1 role')
+            self.quiet(page)
+            self.assertEqual(len(self.ops(frame, 'design:roles-apply')), 1)
+        for name, button_id in (('Clear preview, nothing applied', 'roleClear'), ('Clear visited pages, nothing stored', 'roleClearVisited')):
+            with self.subTest(button=name):
+                page, frame, errors = self.open(engine, PEER_URL, PEER)
+                self.assertTrue(page.locator(f'#{button_id}').is_disabled())
+                before = self.surface(page, frame)
+                page.evaluate('(id) => document.getElementById(id).dispatchEvent(new MouseEvent("click", { bubbles: true }))', button_id)
+                self.quiet(page)
+                self.assertEqual(self.surface(page, frame), before)

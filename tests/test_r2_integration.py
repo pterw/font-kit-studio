@@ -5,7 +5,7 @@ import re
 import role_contract as table
 from support import ENGINES, REPO
 from test_studio_roles import (APPLY, CLEAR, RESET_ALL, ROLE_PAGE, STALE, TARGET, UNAVAILABLE, StudioLegacyCase,
-                               StudioRoleCase, per_engine)
+                               StudioRoleCase, canonical_css, per_engine)
 
 
 class StudioRoleIntegrationTests(StudioRoleCase):
@@ -403,15 +403,19 @@ class StudioRoleBridgeTests(StudioLegacyCase):
             self.wait_for_receipt(page, self.apply_role(page, frame, size))
             self.assertEqual(self.size(frame, '[data-design-role="Body"]'), f'{size}px')
             self.assertEqual(self.size(frame, '[data-design-id="ordinary.body"]'), '16px')
-        for _ in range(2):
-            self.wait_for_receipt(page, self.clear_preview(page, frame))
-            self.assertEqual(self.size(frame, '[data-design-role="Body"]'), '16px')
+        state = page.evaluate('__s2b.inbound.find(m => m.type === "design:ready").roleState')
+        self.wait_for_receipt(page, self.clear_preview(page, frame))
+        self.assertEqual(self.size(frame, '[data-design-role="Body"]'), '16px')
+        # Studio disables Clear once its accepted preview is empty, so the repeat reaches the bridge as a raw request.
+        cleared = self.receipts(page)[-1]
+        self.raw(page, {'type': 'design:roles-clear', 'requestId': 'raw-clear-again', 'baseRevision': cleared['revision'],
+                        'documentId': state['documentId'], 'pageVersion': cleared['currentPageVersion']})
+        self.assertEqual(self.size(frame, '[data-design-role="Body"]'), '16px')
         found = self.receipts(page)
         self.assertEqual([m['revision'] for m in found], [1, 2, 3, 4, 5])
         self.assertEqual([m['operation'] for m in found], ['apply'] * 3 + ['clear'] * 2)
         last = found[-1]
         self.assertEqual((last['roles'], last['canonicalCss'], last['outcomes'], last['outcomesComplete']), ([], '', [], True))
-        state = page.evaluate('__s2b.inbound.find(m => m.type === "design:ready").roleState')
         empty = self.raw(page, {'type': 'design:roles-apply', 'requestId': 'raw-empty', 'baseRevision': 5,
                                 'documentId': state['documentId'], 'pageVersion': last['currentPageVersion'], 'roles': []})
         self.assertEqual((empty['type'], empty['revision'], empty['roles'], empty['canonicalCss'], empty['outcomes']),
@@ -654,6 +658,13 @@ class StudioRoleBridgeTests(StudioLegacyCase):
         page.wait_for_function('document.querySelector("#roleStatus").textContent.includes("unsupported page URL")')
         self.assertEqual(self.gate(page), (False, UNAVAILABLE))
         self.record(frame)
+        # Studio disables Clear with no accepted preview and Apply is disabled here, so a ready that reports a role seeds one.
+        ready = page.evaluate('__s2b.inbound.find(m => m.type === "design:ready")')
+        role = {'id': 'role-1', 'name': 'Body', 'selectors': ['[data-design-role="Body"]'], 'adapter': 'plain', 'properties': {'fontSize': 24}}
+        css = canonical_css([role])
+        forged = {**ready, 'sessionId': page.evaluate('__s2b.session'), 'roleState': {**ready['roleState'], 'roles': [role], 'canonicalCss': css, 'cssHash': table.fnv1a32(css)}}
+        frame.evaluate('(message) => parent.postMessage(message, "http://studio.test")', forged)
+        page.wait_for_function('(css) => document.querySelector("#rolePreviewCss").textContent === css', arg=css)
         request = self.clear_preview(page, frame)
         self.wait_for_receipt(page, request)
         receipt = self.receipts(page)[-1]
