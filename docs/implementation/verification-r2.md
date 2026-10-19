@@ -2,8 +2,9 @@
 
 Date: 2026-10-18. Branch: `feat/r2-visited-pages` (PR #24); base `fdb48d0` (PR B2 merged).
 Status: release point prepared; not yet merged, tagged or published.
-This evidence covers the settled PR C tree: the code at `d49158b` (the last code commit) plus the release-point docs
-committed after it. Earlier R2 evidence: [PR A](verification-r2-pr-a.md); PR B and PR B2 are recorded in the ledger.
+This evidence covers the settled PR C tree: the code at `d49158b` (the last product-code commit; only the
+screenshot script changed after it) plus the release-point docs committed after it, and the whole-branch review round
+below, whose final gates ran on `5e8af0f`. Earlier R2 evidence: [PR A](verification-r2-pr-a.md); PR B and PR B2 are recorded in the ledger.
 
 ## Environment and preparation
 
@@ -74,6 +75,41 @@ matrix (Vite command, plugin, build, types and the role entrypoint round trips),
 CSS-module step. The only advisory is the Node.js 20 deprecation notice for `actions/setup-python@v5` and
 `actions/upload-artifact@v4`, left to a separate workflow change.
 
+## Whole-branch review round (2026-10-19)
+
+Seven independent reviews covered the bridge runtime, Studio runtime, bridge-side and Studio-side tests, entrypoints and
+CI, contract conformance and the docs and evidence; each finding was checked in the source before it was routed. They
+found no Critical issue. The confirmed Important findings were fixed, each in its own commit: a reply list with a hole left Studio detecting forever; visited pages merged
+`body` with another selector, so the bridge refused every later Detect; a hosted-CI coverage claim was false for the
+host-refusal check; an unreachable click-time guard; a weak contract-table row; an entrypoint step that raced the page
+announcement; and an adapter test that the new body identity broke. Also in
+this PR: the CSS-module fixture in the Vite matrix, actions off Node 20, idle role controls that wait
+with a reason (Addendum 28, D077) and a Python proxy in `serve.py` (Addendum 29). A Playwright check against a real
+Flask app found the idle controls and confirmed the proxy end to end (connect, Detect on two pages, the new states).
+
+Final gates, one run each on the frozen tree `5e8af0f` (Windows 11, Chromium; every fixture installed):
+
+| Gate | Result |
+|---|---|
+| Chromium suite, six shards | 152 + 180 + 135 + 142 + 164 + 564 = 1,337 tests OK, no skips |
+| Static, provenance, bridge syntax, product ruff, whitespace | pass |
+| Commit messages | 32 commits OK |
+| Node package | 270 pass, 0 fail, 2 skipped (the two `package.json`-above-temp cases) |
+| Frontend gate | 30 of 30; blocking 7 of 7; 0 advisory lines |
+| Firefox canary (advisory) | 54 OK |
+
+Hosted CI on `31683d8` (run 39271130319) and `6a64a3f` (run 39281063810, after a GitHub Actions incident delayed it)
+passed 12 of 12; on `6a64a3f` the main suite ran 1,283 tests OK with 27 skips, the CSS-module step 10 and the Firefox
+canary 54. Every Vite matrix leg ran `test_r2_react` and `HostRefusalTest` with no skip, and no Node 20 notice remains.
+
+The 27 skips in the main suite, and the job that runs each with installs required: `vite-react` (9: friction,
+localhost cookies, host refusal, three one-command Vite cases, the Vite 8 build, the entrypoint build case and its round
+trip), `vite7-react` (4: the Vite 7 build, its one-command case, the entrypoint build case and its round trip) and
+`vite-ts` (2 type checks) run in the Vite 7 and 8 matrix; `vite-react-css-modules` (10: the nine `test_r2_react` cases and
+the CSS-module entrypoint round trip) runs in the matrix and in the quality-gate CSS-module step; `next-app` (2: the Next.js
+one-command case and its round trip) runs in the Next.js job. The Python proxy's round trip needs no Node and runs in the
+main suite.
+
 ## Known limits shipped in 0.4.0
 
 Documented in the README's Detected roles section: a Bootstrap 5 body or monospace receipt measures only its own
@@ -81,7 +117,9 @@ selectors; a component with its own size rule keeps its size under a Body role; 
 specificity wins; an element that declares the font variables again shows the same blind spot; app code that cached the
 native history methods before the bridge connected bypasses the route wrapper until the next Detect, Apply or Clear; a
 CSSOM `insertRule` without a DOM change needs Detect again; Studio's own fullscreen and device-width buttons count as a
-page change; a strict `style-src` blocks the role sheet; visited-page evidence is session-only and per origin. Real
+page change; a strict `style-src` blocks the role sheet; visited-page evidence is session-only and per origin.
+`serve.py`'s proxy refuses a chunked upload without a length (411) and its WebSocket tunnel can stall if both
+peers stop reading. Real
 back/forward-cache restores cannot be produced under Playwright, so those bridge tests prove the handler wiring with
 dispatched events.
 
@@ -91,4 +129,5 @@ dispatched events.
 2. Tag the merge commit `v0.4.0` (annotated) and push the tag; approve the `npm-release` environment.
 3. After publication: `npm view fontkitstudio@0.4.0`, `npx -y fontkitstudio@0.4.0 --version` from an empty folder,
    the provenance attestation, and the release assets' SHA-256 against
-   `git -c core.autocrlf=false archive v0.4.0 fontkit-studio.html fontkit-bridge.js`.
+   `git -c core.autocrlf=false archive v0.4.0 fontkit-studio.html fontkit-bridge.js scripts/serve.py`, and
+   `python serve.py <a local static page>` run from a folder holding only the three downloaded assets.

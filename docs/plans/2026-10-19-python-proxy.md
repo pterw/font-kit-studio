@@ -1,8 +1,6 @@
 # Python proxy in serve.py: Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or
-> superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-> In this repository implementers never commit: code phases return a patch, the controller lands (AGENTS.md).
+> Steps use checkbox (`- [ ]`) syntax for tracking; each task lands as its own commit (AGENTS.md).
 
 **Goal:** `python serve.py http://127.0.0.1:5000` opens Studio connected to a running app with no Node, no install
 and no pasted script.
@@ -53,15 +51,15 @@ FU-RT and FU-CSSE, which own `tests/test_r2_entrypoints.py` first). Each task la
   strings and the tag in `expected` is written as the literal `{TAG}` placeholder. Consumers replace `{TAG}` with
   their tag before comparing. PX2's Python test reads the same file.
 
-- [ ] Step 1: write the JSON with these cases, each `expected` derived by hand from the spec rule: after `<head>`;
+- [x] Step 1: write the JSON with these cases, each `expected` derived by hand from the spec rule: after `<head>`;
   `<HEAD lang="x">`; no head, after `<html>`; `<header>` but no `<head>` (tag after `<html>`, never after `<header>`);
   doctype only; UTF-8 BOM + doctype; no markers (tag at 0); empty page; a `<head>` inside a comment after a real
   `<head>` (first match wins).
-- [ ] Step 2: in `proxy.test.js`, add one test that loads the file and asserts `insertTag(Buffer.from(input,
+- [x] Step 2: in `proxy.test.js`, add one test that loads the file and asserts `insertTag(Buffer.from(input,
   'latin1'), TAG)` equals `expected` with `{TAG}` replaced, for every case. Run
   `npm --prefix packages/fontkitstudio test` and show it passing; show a mutant (`<head` regex changed to `<he`)
   failing.
-- [ ] Step 3: the patch and report; commit subject `test: share the proxy's tag-placement cases`.
+- [x] Step 3: the patch and report; commit subject `test: share the proxy's tag-placement cases`.
 
 ### Task PX2: serve.py target URL and HTTP proxy
 
@@ -99,7 +97,7 @@ def run_proxy(config, target, studio_origin) -> ThreadingHTTPServer:
 the proxy on `--target-port`, sync off, host names from the target (spec "Shape" item 2), output lines `Studio:`,
 `App:`, `Press Ctrl-C to stop.`, `Open:`; a bad target prints `serve.py: ` + `TARGET_ERROR` to stderr and returns 1.
 
-- [ ] Step 1: write `tests/test_serve_proxy.py` with a `FakeApp` (a `ThreadingHTTPServer` on a free port inside
+- [x] Step 1: write `tests/test_serve_proxy.py` with a `FakeApp` (a `ThreadingHTTPServer` on a free port inside
   the test, routes: `/` HTML page, `/style.css`, `/redirect-abs` (Location `http://127.0.0.1:<app port>/x`),
   `/redirect-rel` (Location `/x`), `/cookie` (two `Set-Cookie` headers and a CSP header), `/echo-headers` (returns
   the request's `Host`, `Origin`, `Accept-Encoding` as JSON)) and a helper that starts the real serve.py with
@@ -125,15 +123,15 @@ the proxy on `--target-port`, sync off, host names from the target (spec "Shape"
       line and exits 1.
   12. Host names: a `http://localhost:<port>` target gives `localhost` Studio and proxy addresses in the `Open:`
       line; `127.0.0.1` gives `127.0.0.1`; `[::1]` gives `127.0.0.1` (spec "Shape" item 2).
-- [ ] Step 2: run them at BASE: all fail (no target argument). Record the output.
-- [ ] Step 3: implement in serve.py: `parse_target`, `insert_tag`, `rewrite_location`, `find_asset`, the proxy
+- [x] Step 2: run them at BASE: all fail (no target argument). Record the output.
+- [x] Step 3: implement in serve.py: `parse_target`, `insert_tag`, `rewrite_location`, `find_asset`, the proxy
   handler (all methods forward; request headers per spec "Each request"; HTML buffered and tagged when the response
   is `text/html` with identity encoding, else streamed chunk by chunk with a `read1` loop; bridge path served
   locally), `Config` host names for proxy mode, and the `main` branch.
-- [ ] Step 4: run `PYTHONPATH=tests FKS_ENGINES=chromium python -m unittest test_serve_proxy test_preview_server
+- [x] Step 4: run `PYTHONPATH=tests FKS_ENGINES=chromium python -m unittest test_serve_proxy test_preview_server
   test_support -v`: all pass. Show one mutant per test failing (examples: tag inserted twice; CSS buffered and
   tagged; `Set-Cookie` folded into one header; `Origin` not rewritten; 502 handler crashing the server).
-- [ ] Step 5: patch and report; commit subject `feat(dev): proxy a local app from serve.py without Node`.
+- [x] Step 5: patch and report; commit subject `feat(dev): proxy a local app from serve.py without Node`.
 
 ### Task PX3: warnings and WebSocket tunnel
 
@@ -153,51 +151,51 @@ def loads_own_bridge(html: str) -> bool: ...                                # po
 def tunnel(client: socket.socket, upstream: socket.socket) -> None: ...     # raw bytes both ways until either closes
 ```
 
-- [ ] Step 1: tests (Given/When/Then): a page with `Content-Security-Policy: script-src 'none'` requested twice
+- [x] Step 1: tests (Given/When/Then): a page with `Content-Security-Policy: script-src 'none'` requested twice
   prints `CSP_MESSAGE` exactly once on stderr; the same for a `<meta http-equiv>` policy; a page that loads its own
   `/@fontkit/fontkit-bridge.js` prints `BRIDGE_TWICE_MESSAGE` once; a policy allowing `'self'` prints nothing; a
   WebSocket client (raw socket handshake in the test, no dependency) sends a frame through the proxy to a `FakeApp`
   echo endpoint and receives it back. Port the CSP cases from `packages/fontkitstudio/test/csp.test.js` as literal
   rows (oracle: the Node test's expectations).
-- [ ] Step 2: run at PX2's patch: they fail. Record.
-- [ ] Step 3: implement the three CSP functions (one-to-one with `csp.js`), call them on each HTML page before
+- [x] Step 2: run at PX2's patch: they fail. Record.
+- [x] Step 3: implement the three CSP functions (one-to-one with `csp.js`), call them on each HTML page before
   forwarding (once-per-run flags), and the `Upgrade: websocket` path: open a raw socket to the app, replay the
   request head, then `tunnel`.
-- [ ] Step 4: run the PX2 command: all pass; mutants: warning printed per page; CSP directive order ignored
+- [x] Step 4: run the PX2 command: all pass; mutants: warning printed per page; CSP directive order ignored
   (`default-src` beating `script-src`); tunnel closing after the first frame.
-- [ ] Step 5: patch and report; commit subject `feat(dev): warn on blocked bridges and pass WebSockets in serve.py`.
+- [x] Step 5: patch and report; commit subject `feat(dev): warn on blocked bridges and pass WebSockets in serve.py`.
 
 ### Task PX4: end-to-end through the Python proxy
 
 **Touches:** `tests/test_r2_entrypoints.py` (a new `PythonProxyEntrypointTests(RoundTrip, unittest.TestCase)` class
 only). **After:** PX2, FU-RT, FU-CSSE.
 
-- [ ] Step 1: the class starts the real serve.py with a target: a static server for
+- [x] Step 1: the class starts the real serve.py with a target: a static server for
   `fixtures/bootstrap5-static` started by the test on a free port (the same pages `ProxyEntrypointTests` uses), and
   runs `round_trip` with the same Bootstrap 5 case literals `ProxyEntrypointTests` uses (oracle: those literals and
   the fixture's `expected-styles.json`). No Node: no `skipIf(NODE is None)`.
-- [ ] Step 2: show it failing at PX2's BASE without the proxy mode (refusal or no bridge), then passing with PX2;
+- [x] Step 2: show it failing at PX2's BASE without the proxy mode (refusal or no bridge), then passing with PX2;
   show a mutant (proxy tags nothing) failing at Detect.
-- [ ] Step 3: run `PYTHONPATH=tests FKS_ENGINES=chromium python -m unittest
+- [x] Step 3: run `PYTHONPATH=tests FKS_ENGINES=chromium python -m unittest
   test_r2_entrypoints.PythonProxyEntrypointTests test_support -v`. CI: the main suite runs it (no fixture install
   needed); confirm it is not skipped there.
-- [ ] Step 4: patch and report; commit subject `test: run the role round trip through serve.py's proxy`.
+- [x] Step 4: patch and report; commit subject `test: run the role round trip through serve.py's proxy`.
 
 ### Task PX5: release asset
 
 **Touches:** `.github/workflows/release.yml`, `tests/test_release.py`. **After:** this plan's docs commit.
 
-- [ ] Step 1: a test in `tests/test_release.py` asserting the `gh release create` step lists `scripts/serve.py`
+- [x] Step 1: a test in `tests/test_release.py` asserting the `gh release create` step lists `scripts/serve.py`
   beside `fontkit-studio.html fontkit-bridge.js` (oracle: the spec's packaging sentence). It fails at BASE.
-- [ ] Step 2: add `scripts/serve.py` to that step's file list (the asset is named `serve.py`; use
+- [x] Step 2: add `scripts/serve.py` to that step's file list (the asset is named `serve.py`; use
   `scripts/serve.py#serve.py` only if `gh` needs the label form - check `gh release create --help`).
-- [ ] Step 3: run `PYTHONPATH=tests python -m unittest test_release -v`; mutant: the line without serve.py fails.
-- [ ] Step 4: patch and report; commit subject `ci: ship serve.py with the release assets`.
+- [x] Step 3: run `PYTHONPATH=tests python -m unittest test_release -v`; mutant: the line without serve.py fails.
+- [x] Step 4: patch and report; commit subject `ci: ship serve.py with the release assets`.
 
 ### Controller: docs and evidence
 
-- [ ] README: a "No Node: the Python proxy" subsection beside the proxy command, the test-table row for
+- [x] README: a "No Node: the Python proxy" subsection beside the proxy command, the test-table row for
   `test_serve_proxy.py`, the known limits from the spec; CHANGELOG Unreleased line (folded into [0.4.0]); release
   verification records the downloaded `serve.py` asset's SHA-256 and a run of it from an empty folder against a
   local static page.
-- [ ] Live check against the owner's app: `python scripts/serve.py http://127.0.0.1:5000`, Detect, Apply, Clear.
+- [x] Live check against the owner's app: `python scripts/serve.py http://127.0.0.1:5000`, Detect, Apply, Clear.
