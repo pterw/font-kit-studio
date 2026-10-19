@@ -104,6 +104,10 @@ the canary in `tests/firefox_canary.py` (D037):
 `PYTHONPATH=tests FKS_ENGINES=firefox python -m unittest firefox_canary -v`.
 When an engine is unavailable, say so in the ledger; never report it as verified.
 
+Next.js (Turbopack) refuses a fixture whose `node_modules` is a junction or symlink
+("points out of the filesystem root"). Run the Next.js fixture tests from a checkout with
+a real `npm ci` install, not from a worktree that links another checkout's fixtures.
+
 Run the app: `python scripts/serve.py`, then open the URL on its `Open:` line
 (Studio and the demo app run on separate localhost ports on purpose).
 
@@ -134,6 +138,11 @@ Record the test count and engines in the ledger entry. A gate you did not run
 is reported as not run. Release-point evidence goes in
 `docs/implementation/verification*.md`.
 
+A gate that fails once when the change under test cannot explain it (for example under
+heavy parallel load) is re-run once on the same tree before anyone acts. A pass marks an
+intermittent test defect: record it as a finding with both outputs, and fix it as its own
+task, never inside the change that met it.
+
 Code-graph tools (codebase-memory or similar) are preferred for discovery when
 installed: confirm the project and index generation first. When they are not
 available, record that and rely on direct source and runtime evidence; never
@@ -154,8 +163,10 @@ claim graph verification you did not get.
   Writes task briefs, dispatches agents, integrates results.
 - **Implementer:** owns only the files named in its brief. Tests first. Writes
   its report. New regressions need a failing behaviour test before the fix;
-  behaviour that already works is characterized as passing. Does not commit,
-  push, or spawn subagents.
+  behaviour that already works is characterized as passing. An existing test
+  outside its brief that the change breaks is reported with its output, never
+  edited; the controller decides the fix. Does not commit, push, or spawn
+  subagents.
 - **Reviewer:** read-only except for its own review file. Re-runs the gates,
   probes real behaviour, and returns `Approved`, `Approved with fixes` or
   `Changes required` with file:line evidence. Does not spawn subagents.
@@ -169,9 +180,13 @@ Rules of engagement:
 - One writer per file at a time. Parallel agents only with disjoint file sets.
 - Before parallel work that crosses a boundary (Studio and bridge), write the
   message contract into the plan first and mark it binding.
+- Every task brief gets an independent review against the source at its BASE
+  before dispatch. Most defects that later cost fix rounds (a test the fixture
+  would pass anyway, a mutant that cannot fail) are cheapest to catch there.
 - Every implementation task gets an independent review before commit. A fix
   round goes back to the same writer, then to a scoped re-review. Cap: five
-  rounds, then escalate to the owner.
+  rounds. Before any sixth, find the root cause of the open findings
+  (systematic debugging), then escalate to the owner.
 - Check branch, HEAD and status before mutating anything. Never revert
   another agent's edits.
 - Stop only processes you started, by PID. Never kill by name pattern
@@ -256,7 +271,10 @@ point the controller dates that entry; after the owner merges, the merge commit 
 `vX.Y.Z` (annotated). The owner pushes tags when the agent's git proxy refuses them. Release
 assets come from the tag, not a working tree, so their hashes match the evidence:
 `git -c core.autocrlf=false archive vX.Y.Z <files>` (a Windows checkout adds CRLF). The
-export format version changes only when the JSON format does.
+export format version changes only when the JSON format does. Before the final push of a
+release point, re-check every claim against fresh output: local and remote heads, product
+code identical to the tree the gates ran on, version labels, task records, and each number
+in the pull request body.
 
 **Every commit has a body.** The body says why the change was made (the
 problem, the decision, or the ruling it records), not a restatement of the
@@ -282,6 +300,11 @@ Forbidden:
 - Happy-path-only security boundaries. Every trust boundary needs a hostile
   case (wrong origin, wrong session, hostile payload).
 - Manufactured RED. Characterize behaviour that already works as passing.
+- Timing-dependent tests that can pass without their race happening. A test
+  that needs one event before another asserts that order first, so a fast or
+  slow run fails instead of passing vacuously. A mutant that a test kills only
+  some of the time is a finding: run a new timing-sensitive test and its mutant
+  repeatedly (for example 20 times each).
 
 Good patterns:
 

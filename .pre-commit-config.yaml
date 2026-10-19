@@ -35,7 +35,7 @@ repos:
         entry: python scripts/verify.py --static-only
         language: system
         pass_filenames: false
-        files: ^(fontkit-studio\.html|font_kit_studio_v0\.1\.1\.html|fontkit-bridge\.js|docs/reference/.+|scripts/verify\.py)$
+        files: ^(fontkit-studio\.html|fontkit-bridge\.js|docs/reference/.+|scripts/verify\.py)$
         stages: [pre-commit]
 
       - id: commit-signatures

@@ -723,6 +723,15 @@ class PlacementTests(AdapterCase):
                                   check['signatures'][0]['style']['fontSize'], check['signatures'][0]['style']['fontWeight']),
                                  (1, 1, 1, 16, 400))
 
+    def test_detect_refuses_a_known_role_on_uppercase_body(self):
+        """Given the Bootstrap 5 fixture, when Studio detects with a known role whose sole selector is BODY, then the reply is
+        design:rejected with reason unsupported-value."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.start(engine)
+                reply = self.detect(page, knownRoles=[{'id': 'known', 'selectors': ['BODY']}])
+                self.assertEqual((reply['type'], reply.get('reason')), ('design:rejected', 'unsupported-value'), reply)
+
 
 class EvidenceTests(AdapterCase):
     def test_a_stale_adapter_is_rejected_after_the_bootstrap_link_is_gone(self):

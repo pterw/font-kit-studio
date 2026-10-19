@@ -1332,9 +1332,9 @@ class InstallCountTests(RoleSheetCase):
         parser drop the rules after it, then it is rejected as stylesheet-blocked and the owned sheet, the size and the
         revision are the preview's."""
         for engine in ENGINES:
-            if engine != 'chromium':
-                self.skipTest("Firefox's CSS.supports already refuses `--x(`, so no sheet reaches the parser there")
             with self.subTest(engine=engine):
+                if engine != 'chromium':
+                    self.skipTest("Firefox's CSS.supports already refuses `--x(`, so no sheet reaches the parser there")
                 self.cut_sheet_is_blocked(engine, self.without_the_parenthesis_check())
 
     def test_the_install_check_does_not_depend_on_constructing_a_stylesheet(self):

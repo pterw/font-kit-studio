@@ -27,7 +27,7 @@
     ],
     "unknownVersionVariant": {
       "method": "remove Bootstrap CSS version banner in a disposable copy",
-      "expected": "same rendered tuples; no known version evidence; adapter detection deferred to R2.4"
+      "expected": "same rendered tuples; no version banner; no Bootstrap 4 adapter exists, so every group stays plain and bootstrap5 adapters are rejected as unsupported (D068, D069)"
     }
   },
   "eligibleParentCount": 20,

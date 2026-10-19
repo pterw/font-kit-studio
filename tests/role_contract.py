@@ -33,6 +33,9 @@ ROUTE_CHARS = 2000                   # route text: path, search and hash (route 
 FAMILY_CHARS = 300                   # a trimmed RoleInput family (value validation)
 REQUEST_BYTES, REPLY_BYTES, CSS_BYTES = 256 * 1024, 1024 * 1024, 128 * 1024   # UTF-8 JSON request and reply; canonical CSS
 EMPTY_HASH = '811c9dc5'              # FNV-1a32 of the empty string
+ROLE_REVISION = 1                    # Addendum 26 item 1; 0.4.0 contract
+UNKNOWN_KEY = 'futureField'          # the key with_unknown_keys adds (Addendum 26 item 3)
+TOLERANT_KINDS = ('detected', 'roles-applied', 'role-state', 'roles-page')   # Studio ignores unknown keys in these
 
 CASES = ('none', 'uppercase', 'lowercase', 'capitalize')                       # type Case
 ADAPTERS = ('plain', 'bootstrap5-body', 'bootstrap5-mono', 'bootstrap5-heading')   # RoleInput.adapter
@@ -150,14 +153,15 @@ def wire(message):
 
 
 def violations(kind, message):
-    """One string per value of `message` outside the table, for kind 'detected', 'roles-applied', 'rejected' or 'role-state'.
+    """One string per value of `message` outside the table, for kind 'detected', 'roles-applied', 'rejected', 'role-state' or 'roles-page'.
 
     It checks counts, lengths (UTF-16 units), bytes, enums, number ranges, families, the stable/reason rule, the page bindings
     (a body group binds exactly `body`, a mono page group binds code, kbd, pre, samp), one body and one mono role or group, `body` only
-    as a body role's one selector (selector checks are exempt) and the contract's invariants. It does not compare key sets: both sides already validate exact field lists, so a missing field raises KeyError,
+    as a body role's one selector (selector checks are exempt) and the contract's invariants. It does not compare key sets: Studio
+    ignores unknown keys (Addendum 26 item 3) and the bridge sends exactly the revision-1 fields, so a missing field raises KeyError,
     except a group's `adapter` (read with `get`: a missing one is a violation like a wrong one).
     """
-    if kind not in ('detected', 'roles-applied', 'rejected', 'role-state'):
+    if kind not in ('detected', 'roles-applied', 'rejected', 'role-state', 'roles-page'):
         raise ValueError(f'unknown kind {kind!r}')
     found = []
 
@@ -289,6 +293,8 @@ def violations(kind, message):
                          'winningSelector has a control character')
     elif kind == 'role-state':
         roles_part()
+    elif kind == 'roles-page':   # revision 1 sends exactly type, protocolVersion, sessionId, documentId, pageVersion, pageURL
+        count(message['pageVersion'], 2 ** 53 - 1, 'pageVersion')
     else:
         need(message['reason'] in REJECTION_REASONS, f'reason: {message["reason"]!r}')
         detail = message.get('detail')
@@ -296,6 +302,23 @@ def violations(kind, message):
         need('detail' not in message or isinstance(detail, str) or conflict and all(isinstance(v, int) and v >= 0 for v in detail.values()),
              f'detail: {detail!r}')
     return found
+
+
+def with_unknown_keys(message, value=None):
+    """A deep copy of a valid wire message with `futureField` added to every dict in it, the top level included, except the dicts
+    of an echoed role: everything under a `roles` list (the role and its `properties`) stays exact (Addendum 26 items 2 and 3)."""
+    value = {'nested': [1]} if value is None else value
+
+    def walk(item, echoed):
+        if isinstance(item, list):
+            return [walk(each, echoed) for each in item]
+        if not isinstance(item, dict):
+            return item
+        copy = {key: walk(inner, echoed or key == 'roles') for key, inner in item.items()}
+        if not echoed:
+            copy[UNKNOWN_KEY] = json.loads(json.dumps(value))
+        return copy
+    return walk(message, False)
 
 
 def _role(number, name, adapter, targets, **properties):

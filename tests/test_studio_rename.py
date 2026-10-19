@@ -1,42 +1,55 @@
-"""The old Studio file name forwards to fontkit-studio.html until R2 (D052)."""
+"""Studio opens directly at fontkit-studio.html; the old name is gone (D052)."""
 import unittest
+
+from playwright.sync_api import Error
 
 from support import ENGINES, HTML, REPO, close_contexts, new_context
 
 OLD = REPO / 'font_kit_studio_v0.1.1.html'
 
 
-class OldNameForwards(unittest.TestCase):
+class StudioFileName(unittest.TestCase):
     def setUp(self):
         self.contexts = []
 
     def tearDown(self):
         close_contexts(self.contexts)
 
-    def open_old(self, engine, suffix):
+    def new_page(self, engine):
         context = new_context(engine)
         self.contexts.append(context)
-        page = context.new_page()
-        page.goto(OLD.as_uri() + suffix)
-        page.wait_for_url(lambda url: '/fontkit-studio.html' in url)
-        return page
+        return context.new_page()
 
-    def test_forwards_with_query_and_hash(self):
+    def test_new_name_opens_directly_and_keeps_query_and_hash(self):
+        """Given Studio's file with a query and a hash, when it is opened,
+        then the page URL equals the file URL plus that suffix at once and
+        the title starts 'Font Kit Studio v'."""
+        suffix = '?target=http%3A%2F%2Flocalhost%3A9%2F&x=1#composer'
         for engine in ENGINES:
             with self.subTest(engine=engine):
-                suffix = '?target=http%3A%2F%2Flocalhost%3A9%2F&x=1#composer'
-                page = self.open_old(engine, suffix)
+                page = self.new_page(engine)
+                page.goto(HTML.as_uri() + suffix)
                 self.assertEqual(page.url, HTML.as_uri() + suffix)
                 self.assertTrue(page.title().startswith('Font Kit Studio v'))
 
-    def test_forwards_without_query(self):
+    def test_new_name_opens_without_query(self):
+        """Given the bare file URL of Studio, when it is opened, then the
+        page URL equals that file URL and the title starts
+        'Font Kit Studio v'."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
-                page = self.open_old(engine, '')
+                page = self.new_page(engine)
+                page.goto(HTML.as_uri())
                 self.assertEqual(page.url, HTML.as_uri())
+                self.assertTrue(page.title().startswith('Font Kit Studio v'))
 
-    def test_stub_is_small_and_names_the_new_file(self):
-        text = OLD.read_text(encoding='utf-8')
-        self.assertLess(len(text.splitlines()), 20)
-        self.assertIn('location.replace("fontkit-studio.html" + location.search + location.hash)', text)
-        self.assertIn('<a href="fontkit-studio.html">', text)
+    def test_old_name_is_absent_and_does_not_load(self):
+        """Given the old file name font_kit_studio_v0.1.1.html, when the tree
+        is checked and each engine opens it, then the file does not exist
+        and the navigation raises a load error."""
+        self.assertFalse(OLD.exists())
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page = self.new_page(engine)
+                with self.assertRaises(Error):
+                    page.goto(OLD.as_uri())

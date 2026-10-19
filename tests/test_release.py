@@ -4,6 +4,7 @@ Nothing here publishes: the workflows are parsed, and release_notes.py runs on
 temporary changelogs. actionlint is not a dependency, so the parse is the check.
 """
 
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -215,13 +216,39 @@ class ReleaseWorkflowTests(unittest.TestCase):
         for run in runs:
             self.assertNotIn("${{", run)
 
-    def test_release_uses_the_tag_and_attaches_both_files(self):
+    def test_release_uses_the_tag_and_attaches_every_asset(self):
         runs = [s["run"] for s in self.jobs["release"]["steps"] if "run" in s]
         text = "\n".join(runs)
         self.assertIn("gh release create", text)
         self.assertIn("--verify-tag", text)
         self.assertIn("fontkit-studio.html", text)
         self.assertIn("fontkit-bridge.js", text)
+
+    def test_release_command_uploads_exactly_the_three_assets_that_exist(self):
+        """Given the release step's gh release create command,
+        When its file arguments are parsed after the flags,
+        Then their base names are exactly fontkit-studio.html, fontkit-bridge.js
+        and serve.py, and every listed path is a file under the repository root.
+        """
+        # Oracle: the spec's packaging rule, three downloads named by literal.
+        runs = [s["run"] for s in self.jobs["release"]["steps"] if "run" in s]
+        text = "\n".join(runs).replace("\\\n", " ")
+        command = next(line for line in text.splitlines() if "gh release create" in line)
+        args = shlex.split(command)[3:]
+        files = []
+        position = 0
+        while position < len(args):
+            if args[position] in ("--notes-file", "--title"):
+                position += 2
+            elif args[position].startswith("--"):
+                position += 1
+            else:
+                files.append(args[position])
+                position += 1
+        files = files[1:]  # the first positional is the tag
+        self.assertEqual({Path(f).name for f in files}, {"fontkit-studio.html", "fontkit-bridge.js", "serve.py"})
+        for listed in files:
+            self.assertTrue((ROOT / listed).is_file(), listed)
 
 
 class QualityGateIsCallableTests(unittest.TestCase):

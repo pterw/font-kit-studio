@@ -515,8 +515,14 @@ class PreviewServerLifecycleTest(unittest.TestCase):
         finally:
             server.close()
 
-    def run_with_fake_browser(self, *flags):
-        """Run serve.py with $BROWSER set to a script that records the URL it was given."""
+    def run_with_fake_browser(self, *flags, wait_for_open=False):
+        """Run serve.py with $BROWSER set to a script that records the URL it was given.
+
+        With wait_for_open, poll (up to 15 s, stopping early if serve.py exits) until the log
+        holds the expected URL, then allow 1 s for a second launch to show, and only then stop.
+        Without it, poll (up to 15 s, stopping early if serve.py exits) for serve.py's Open: line
+        on stdout, settle 0.5 s, then stop: the caller proves the browser did not run.
+        """
         work = REPO / 'work'
         work.mkdir(exist_ok=True)
         scratch = Path(tempfile.mkdtemp(prefix='preview-browser-', dir=work))
@@ -524,20 +530,49 @@ class PreviewServerLifecycleTest(unittest.TestCase):
             log = scratch / 'opened.txt'
             script = scratch / 'fake_browser.py'
             script.write_text('import sys\nopen(sys.argv[1], "a").write(sys.argv[2] + "\\n")\n')
-            server = Server(*flags, env={'BROWSER': f'"{sys.executable}" "{script}" "{log}" %s'})
+            # -S skips site import so the fake browser logs fast even on a loaded machine.
+            server = Server(*flags, env={'BROWSER': f'"{sys.executable}" -S "{script}" "{log}" %s'})
             try:
                 expected = (f'http://localhost:{server.studio}/fontkit-studio.html'
                             f'?target=http://localhost:{server.target}/demo/')
-                self.assertEqual(server.stop(), 0, server.read_err())  # open() has returned by exit
-                opened = log.read_text().splitlines() if log.exists() else []
-                return opened, expected, server.read_out()
+
+                def read_log():
+                    return log.read_text().splitlines() if log.exists() else []
+
+                if wait_for_open:
+                    deadline = time.time() + 15
+                    while expected not in read_log() and server.proc.poll() is None:
+                        if time.time() > deadline:
+                            break
+                        time.sleep(0.05)
+                    self.assertIn(expected, read_log(),
+                                  f'no browser launch: {server.read_out()!r} {server.read_err()!r}')
+                    # A short wait that proves something did not happen: a second launch is
+                    # sequential, so give it 1 s to appear (early exit when it does).
+                    settle = time.time() + 1
+                    while len(read_log()) < 2 and time.time() < settle:
+                        time.sleep(0.05)
+                else:
+                    # Same kind of short wait: the launch follows the Open: print, so wait for
+                    # that line, then give a wrongly launched browser 0.5 s to log before stop.
+                    deadline = time.time() + 15
+                    while 'Open: ' not in server.read_out() and server.proc.poll() is None:
+                        if time.time() > deadline:
+                            break
+                        time.sleep(0.05)
+                    time.sleep(0.5)
+                self.assertEqual(server.stop(), 0, server.read_err())
+                return read_log(), expected, server.read_out()
             finally:
                 server.close()
         finally:
             shutil.rmtree(scratch, ignore_errors=True)
 
     def test_open_flag_opens_the_studio_url_once(self):
-        opened, expected, out = self.run_with_fake_browser('--open')
+        """Given serve.py started with --open and a fake browser, when the fake browser has logged
+        the URL and the server is stopped, then the log holds the Studio URL exactly once and
+        stdout carries the Open: line."""
+        opened, expected, out = self.run_with_fake_browser('--open', wait_for_open=True)
         self.assertEqual(opened, [expected])
         self.assertIn(f'Open: {expected}', out)
 

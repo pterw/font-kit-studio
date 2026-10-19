@@ -12,6 +12,8 @@ Two things have their own version numbers:
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-18
+
 ### Added
 
 - The bridge detects rendered Light-DOM text styles with exact groups, safe
@@ -49,6 +51,35 @@ Two things have their own version numbers:
   A role detected on a Bootstrap 5 page names its adapter on its row, for
   example `Adapter: Bootstrap 5 body variables`.
   Reset all page edits removes every live edit on the page, after confirmation.
+  Detect, Apply, Clear preview and Clear visited pages wait, with a short
+  reason, while they have nothing to act on or a request is still running;
+  Detect and Apply keep keyboard focus while they wait.
+- Studio remembers which visited pages each role was checked on, during the
+  session and per site: every role lists the pages where it matched, where it
+  found no match, where it found a different style, and the pages that changed
+  since they were checked (`Checked on N visited pages. Other pages have not
+  been checked.`). Moving to another page in the app is announced by the bridge,
+  so Studio knows the evidence is out of date. A new page says `Role preview is
+  not applied on this page.` and never reapplies a preview by itself. Clear
+  visited pages forgets the list but keeps the applied preview. A page that would
+  exceed the collection limits is refused as a whole, with a visible message.
+  A style bound to `body` on one page and to other selectors on another is kept
+  as two roles, so Detect keeps working across pages. Moving to another site
+  says that the previous site's pages were cleared only when there were some.
+- Studio and a bridge from a different release keep working together for role
+  detection and preview: Studio ignores reply fields it does not know, and says
+  so when it cannot read a reply or gets none, instead of waiting forever. A
+  reply with a gap in one of its lists counts as unreadable.
+- `python serve.py http://127.0.0.1:5000` connects Studio to a local app with
+  no Node and no change to the app: `serve.py` runs Studio and a proxy that adds
+  the bridge to the app's pages, as `npx fontkitstudio <url>` does. It needs only
+  Python 3, and the GitHub release now carries `serve.py` beside Studio and the
+  bridge, so it runs without a clone.
+
+### Removed
+
+- `font_kit_studio_v0.1.1.html`, the redirect kept since 0.3.0 for old bookmarks.
+  Open `fontkit-studio.html` instead and update any bookmark to it.
 
 ## [0.3.1] - 2026-10-07
 
@@ -296,7 +327,8 @@ The supplied single-file Studio, preserved at the tag `supplied-v0.1.1`.
 
 - Nested rows and JPEG assets are out of scope.
 
-[Unreleased]: https://github.com/pterw/font-kit-studio/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/pterw/font-kit-studio/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/pterw/font-kit-studio/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/pterw/font-kit-studio/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/pterw/font-kit-studio/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/pterw/font-kit-studio/compare/a6d2751...v0.2.1

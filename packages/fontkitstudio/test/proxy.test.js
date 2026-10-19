@@ -1,7 +1,7 @@
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, request, Server } from 'node:http';
 import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -10,7 +10,7 @@ import { pathToFileURL } from 'node:url';
 import { gzipSync } from 'node:zlib';
 
 import { BRIDGE_TWICE_MESSAGE, CSP_MESSAGE } from '../src/csp.js';
-import { BRIDGE_PATH, ProxyTargetError, parseProxyTarget, startProxy } from '../src/proxy.js';
+import { BRIDGE_PATH, ProxyTargetError, insertTag, parseProxyTarget, startProxy } from '../src/proxy.js';
 import { startUpstream } from './helpers/upstream.js';
 import { acceptKey, startWsUpstream } from './helpers/ws-upstream.js';
 
@@ -221,6 +221,20 @@ describe('tag insertion', () => {
     assert.equal(answer.headers['content-security-policy'], "script-src 'self'");
     assert.equal(answer.headers['x-app'], 'kept');
     assert.equal(answer.headers['transfer-encoding'], undefined);
+  });
+
+  // Oracle: tests/fixtures/proxy-insert-cases.json, expected values derived by hand from the spec rule.
+  test('places the tag as every shared case says', () => {
+    const cases = JSON.parse(
+      readFileSync(new URL('../../../tests/fixtures/proxy-insert-cases.json', import.meta.url), 'utf8'),
+    );
+    assert.ok(cases.length >= 9);
+    for (const { name, input, expected } of cases) {
+      assert.ok(![...input, ...expected].some((c) => c.charCodeAt(0) > 0xff), name);
+      assert.equal(expected.split('{TAG}').length, 2, name);
+      const want = expected.split('{TAG}').join(TAG);
+      assert.equal(insertTag(Buffer.from(input, 'latin1'), TAG).toString('latin1'), want, name);
+    }
   });
 
   test('uses <html> when there is no <head>, never <header>, and a doctype last', async () => {
