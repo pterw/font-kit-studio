@@ -11,27 +11,44 @@ are sent with Cache-Control: no-store.
 
   python3 scripts/serve.py [--host 127.0.0.1] [--studio-port 8000] [--target-port 8001]
                            [--overrides demo/fontkit-overrides.css] [--no-sync] [--open] [--quiet]
+
+With an app address, serve.py instead serves Studio and a reverse proxy in front of that app
+(loopback only) that adds the bridge to its HTML pages:
+
+  python3 serve.py http://127.0.0.1:5000 [--studio-port 8000] [--target-port 8001] [--open] [--quiet]
 """
 
 import argparse
 import errno
 import html
 from functools import partial
+import http.client
 from http import HTTPStatus
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
 from pathlib import Path
 import posixpath
+import re
 import signal
 import sys
 import tempfile
 import threading
-from urllib.parse import unquote
+from urllib.parse import quote, unquote, urlsplit
 import webbrowser
 
-REPO = Path(__file__).resolve().parents[1]
+HERE = Path(__file__).resolve().parent
+REPO = HERE.parent
 STUDIO_HTML = "fontkit-studio.html"
+BRIDGE_JS = "fontkit-bridge.js"
+BRIDGE_PATH = "/@fontkit/fontkit-bridge.js"
+TARGET_ERROR = "Font Kit Studio proxies only a local dev server (localhost, 127.0.0.1 or [::1])"
+PLAIN_ERROR = ("the demo app needs the repository. To edit your own app, pass its address: "
+               "python serve.py http://127.0.0.1:5000")
+ASSET_ERROR = f"cannot find {STUDIO_HTML} or {BRIDGE_JS} next to serve.py or in the repository"
+LOOPBACK_URL_HOSTS = ("localhost", "127.0.0.1", "[::1]")
+HOP_BY_HOP = ("connection", "keep-alive", "proxy-connection", "te", "trailer", "transfer-encoding", "upgrade")
+MAX_HTML_BYTES = 8 * 1024 * 1024  # the Node proxy's limit: a larger page streams through untagged
 MAX_BYTES = 1024 * 1024
 ENDPOINTS = "/__fontkit/"
 INDEX_NAMES = ("index.html", "index.htm")  # what SimpleHTTPRequestHandler serves for a directory
@@ -44,6 +61,7 @@ class Config:
         self.overrides_rel = overrides.relative_to(REPO).as_posix()
         self.sync = sync
         self.quiet = quiet
+        self.proxy = False
         public = "localhost" if host in ("127.0.0.1", "0.0.0.0", "") else host
         self.studio_url = f"http://{public}:{studio_port}"
         self.target_url = f"http://{public}:{target_port}/demo/"
@@ -55,6 +73,26 @@ class Config:
         if studio_port == 80:
             self.origins |= {f"http://{name}" for name in ("localhost", "127.0.0.1", public)}
         self.write_lock = threading.Lock()
+
+    @classmethod
+    def for_proxy(cls, name, studio_port, proxy_port, target, quiet):
+        """Proxy mode: `target` is parse_target()'s result, `name` the host name both servers use."""
+        self = cls.__new__(cls)
+        self.host, self.overrides, self.overrides_rel = "127.0.0.1", None, ""
+        self.sync, self.quiet, self.proxy, self.proxy_port = False, quiet, True, proxy_port
+        self.studio_url = f"http://{name}:{studio_port}"
+        # A browser leaves the port out of `Origin` on port 80, and the tag must name what it sends.
+        self.studio_origin = f"http://{name}" if studio_port == 80 else self.studio_url
+        self.proxy_origin = f"http://{name}:{proxy_port}"
+        self.target_url = (self.proxy_origin + target.path + (f"?{target.query}" if target.query else "")
+                           + (f"#{target.fragment}" if target.fragment else ""))
+        self.studio_path = f"/{STUDIO_HTML}?target={quote(self.target_url, safe=':/')}"
+        self.open_url = f"{self.studio_url}{self.studio_path}"
+        self.origins = {f"http://{n}:{studio_port}" for n in ("localhost", "127.0.0.1")}
+        if studio_port == 80:
+            self.origins |= {"http://localhost", "http://127.0.0.1"}
+        self.write_lock = threading.Lock()
+        return self
 
     def hosts(self, port):
         """Host header values accepted on `port` (DNS-rebinding guard), lower-case."""
@@ -155,6 +193,10 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_error(HTTPStatus.NOT_FOUND)
         if path == "/":
             return self.redirect(self.config.studio_path if self.studio else "/demo/")
+        if self.config.proxy:  # Studio's server serves Studio and its status check, nothing else
+            if path != "/" + STUDIO_HTML:
+                return self.send_error(HTTPStatus.NOT_FOUND)
+            return self.send_bytes(200, find_asset(STUDIO_HTML).read_bytes(), "text/html; charset=utf-8")
         if not self.real_path_servable():
             return self.send_error(HTTPStatus.NOT_FOUND)
         if path == "/" + self.config.overrides_rel and not self.config.overrides.is_file():
@@ -259,22 +301,216 @@ def resolve_overrides(value):
     return path
 
 
-def make_server(config, host, port, studio):
-    handler = type("StudioHandler" if studio else "TargetHandler", (Handler,),
-                   {"config": config, "studio": studio})
-    server_class = ThreadingHTTPServer
+def server_class():
     if sys.platform == "win32":
         # On Windows SO_REUSEADDR lets a second server bind a port that is already taken. The
         # option only counts when set before bind, so it goes on the class, not the instance.
-        server_class = type("ExclusiveHTTPServer", (ThreadingHTTPServer,), {"allow_reuse_address": False})
-    server = server_class((host, port), partial(handler, directory=str(REPO)))
+        return type("ExclusiveHTTPServer", (ThreadingHTTPServer,), {"allow_reuse_address": False})
+    return ThreadingHTTPServer
+
+
+def make_server(config, host, port, studio):
+    handler = type("StudioHandler" if studio else "TargetHandler", (Handler,),
+                   {"config": config, "studio": studio})
+    server = server_class()((host, port), partial(handler, directory=str(REPO)))
+    server.daemon_threads = True
+    return server
+
+
+def bracketed(parts):
+    """The host as WHATWG spells it: urlsplit drops the brackets of an IPv6 address."""
+    host = parts.hostname or ""
+    return f"[{host}]" if ":" in host else host
+
+
+def parse_target(url):
+    """The one check of the address to proxy: a local http dev server. Raises ValueError(TARGET_ERROR)."""
+    try:
+        parts = urlsplit(url)
+        host, _ = bracketed(parts), parts.port  # .port raises ValueError for a bad port
+    except ValueError:
+        raise ValueError(TARGET_ERROR) from None
+    if parts.scheme != "http" or host not in LOOPBACK_URL_HOSTS:
+        raise ValueError(TARGET_ERROR)
+    return parts._replace(path=parts.path or "/")
+
+
+def insert_tag(page, tag):
+    """After <head ...>, else <html ...>, else a leading (BOM +) doctype, else at 0. Byte-preserving."""
+    # Known divergence: a bytes \s is ASCII whitespace only; JavaScript's also matches the byte 0xA0.
+    for pattern in (rb"<head(\s[^>]*)?>", rb"<html(\s[^>]*)?>", rb"^(\xef\xbb\xbf)?\s*<!doctype[^>]*>"):
+        found = re.search(pattern, page, re.IGNORECASE)
+        if found:
+            return page[:found.end()] + tag + page[found.end():]
+    return tag + page
+
+
+def rewrite_location(value, target_port, proxy_origin):
+    """Absolute or //-relative http: Location under a loopback name and the target port -> proxy origin + rest."""
+    try:
+        parts = urlsplit("http://" + value[2:] if re.match(r"[\\/]{2}", value) else value)
+        port = parts.port
+    except ValueError:  # what a browser cannot parse stays as the app sent it
+        return value
+    if parts.scheme != "http" or bracketed(parts) not in LOOPBACK_URL_HOSTS or (port or 80) != target_port:
+        return value
+    return (proxy_origin + (parts.path or "/") + (f"?{parts.query}" if parts.query else "")
+            + (f"#{parts.fragment}" if parts.fragment else ""))
+
+
+def find_asset(name):
+    """Next to serve.py first, then the repository root."""
+    for folder in (HERE, REPO):
+        if (folder / name).is_file():
+            return folder / name
+    raise FileNotFoundError(name)
+
+
+class ProxyHandler(BaseHTTPRequestHandler):
+    """Forwards every request to the app, tags its HTML pages and serves the bridge itself."""
+    config = target = target_origin = target_host = tag = bridge = hosts = own_origins = None
+
+    def log_message(self, format, *args):
+        if not self.config.quiet:
+            super().log_message(format, *args)
+
+    def reply(self, status, body, headers):
+        self.started = True
+        self.send_response_only(status)
+        for pair in (*headers, ("Content-Length", str(len(body))), ("Connection", "close")):
+            self.send_header(*pair)
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(body)
+
+    def send_text(self, status, text):
+        self.reply(status, text.encode(), [("Content-Type", "text/plain; charset=utf-8")])
+
+    def under_proxy(self, value):
+        """The rest of a URL under one of the proxy's own loopback origins, else None."""
+        for own in self.own_origins:
+            rest = value[len(own):]
+            if value.lower().startswith(own) and (rest == "" or rest[0] in "/?#"):
+                return rest
+        return None
+
+    def forward_headers(self):
+        """The request's (name, value) pairs for the app: duplicates kept, Host and Accept-Encoding replaced."""
+        out = []
+        for name, value in self.headers.items():
+            lower = name.lower()
+            rest = self.under_proxy(value) if lower in ("origin", "referer") else None
+            if lower in HOP_BY_HOP or lower in ("host", "accept-encoding"):
+                continue
+            if rest == "" and lower == "origin":
+                value = self.target_origin
+            elif rest is not None and lower == "referer":
+                value = self.target_origin + rest
+            out.append((name, value))
+        return out + [("Host", self.target_host), ("Accept-Encoding", "identity"), ("Connection", "close")]
+
+    def response_headers(self, resp):
+        return [(name, rewrite_location(value, self.target.port or 80, self.config.proxy_origin)
+                 if name.lower() == "location" else value)
+                for name, value in resp.getheaders() if name.lower() not in HOP_BY_HOP]
+
+    def send_head(self, resp, headers):
+        self.started = True
+        self.send_response_only(resp.status, resp.reason)
+        for pair in (*headers, ("Connection", "close")):
+            self.send_header(*pair)
+        self.end_headers()
+
+    def send_tagged(self, resp, page):
+        body = insert_tag(page, self.tag)
+        skip = ("content-length", "etag", "last-modified", "cache-control")
+        headers = [pair for pair in self.response_headers(resp) if pair[0].lower() not in skip]
+        self.send_head(resp, headers + [("Content-Length", str(len(body))), ("Cache-Control", "no-store")])
+        self.wfile.write(body)
+
+    def stream(self, resp, first=b""):
+        if first:
+            self.wfile.write(first)
+        while chunk := resp.read1(65536):  # read1, not read(n): a live stream must not wait for 64 KiB
+            self.wfile.write(chunk)
+
+    def taggable(self, resp):
+        kind = (resp.getheader("Content-Type") or "").split(";")[0].strip().lower()
+        return (self.command != "HEAD" and resp.status == 200 and kind == "text/html"
+                and resp.getheader("Content-Encoding", "identity").lower() == "identity")
+
+    def forward(self):
+        self.started = False
+        if (self.headers.get("Host") or "").strip().lower() not in self.hosts:
+            return self.send_text(421, "Host header not allowed.")
+        if not self.path.startswith("/"):
+            return self.send_text(400, "Bad request.")
+        if self.path.split("?", 1)[0] == BRIDGE_PATH and self.command in ("GET", "HEAD"):
+            return self.reply(200, self.bridge, [("Content-Type", "text/javascript; charset=utf-8"),
+                                                 ("Cache-Control", "no-store"),
+                                                 ("X-Content-Type-Options", "nosniff")])
+        if "Transfer-Encoding" in self.headers and "Content-Length" not in self.headers:
+            return self.send_error(HTTPStatus.LENGTH_REQUIRED)
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+            if length < 0:
+                raise ValueError(length)
+        except ValueError:
+            return self.send_text(400, "Bad request.")
+        conn = http.client.HTTPConnection(self.target.hostname, self.target.port or 80, timeout=None)
+        try:
+            try:
+                conn.putrequest(self.command, self.path, skip_host=True, skip_accept_encoding=True)
+                for name, value in self.forward_headers():
+                    conn.putheader(name, value)
+            except ValueError:  # e.g. a non-ASCII byte in the request target
+                return self.send_text(400, "Bad request.")
+            conn.endheaders()
+            while length:
+                chunk = self.rfile.read(min(65536, length))
+                if not chunk:  # the client left mid-upload: abandon the app's request too
+                    self.close_connection = True
+                    return
+                conn.send(chunk)
+                length -= len(chunk)
+            resp = conn.getresponse()
+            page = resp.read(MAX_HTML_BYTES + 1) if self.taggable(resp) else None
+            if page is not None and len(page) <= MAX_HTML_BYTES:
+                return self.send_tagged(resp, page)
+            self.send_head(resp, self.response_headers(resp))
+            self.stream(resp, page or b"")
+        except (OSError, http.client.HTTPException):
+            self.close_connection = True  # with the headers out already, nothing more can be said
+            if not self.started:
+                self.send_text(502, f"Font Kit Studio cannot reach the dev server at {self.target_origin}. "
+                                    "Is it running?")
+        finally:
+            conn.close()
+
+    do_GET = do_HEAD = do_POST = do_PUT = do_PATCH = do_DELETE = do_OPTIONS = forward
+
+
+def run_proxy(config, target, studio_origin):
+    """The proxy server on config's proxy port, bound but not serving; requests forwarded with http.client."""
+    own = config.hosts(config.proxy_port)
+    port = target.port or 80
+    suffix = f":{port}" if port != 80 else ""
+    handler = type("ProxyHandler", (ProxyHandler,), {
+        "config": config, "target": target, "hosts": own,
+        "own_origins": tuple(f"http://{host}" for host in own),
+        "target_origin": f"http://{bracketed(target)}{suffix}", "target_host": bracketed(target) + suffix,
+        "tag": f'<script src="{BRIDGE_PATH}" data-allowed-origins="{studio_origin}"></script>'.encode(),
+        "bridge": find_asset(BRIDGE_JS).read_bytes()})
+    server = server_class()((config.host, config.proxy_port), handler)
     server.daemon_threads = True
     return server
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Font Kit Studio local preview server")
-    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("target", nargs="?", help="address of your app (http://127.0.0.1:5000): "
+                        "proxy it and add the bridge to its pages instead of serving the demo")
+    parser.add_argument("--host", default="127.0.0.1", help="address to bind (ignored with an app address)")
     parser.add_argument("--studio-port", type=int, default=8000)
     parser.add_argument("--target-port", type=int, default=8001)
     parser.add_argument("--overrides", default="demo/fontkit-overrides.css",
@@ -285,25 +521,45 @@ def main(argv=None):
     parser.add_argument("--quiet", action="store_true", help="do not log requests")
     args = parser.parse_args(argv)
 
-    try:
-        overrides = resolve_overrides(args.overrides)
-    except ValueError as error:
-        parser.error(str(error))
+    target = None
+    if args.target:
+        try:
+            target = parse_target(args.target)
+            for name in (STUDIO_HTML, BRIDGE_JS):
+                find_asset(name)
+        except (ValueError, FileNotFoundError) as error:
+            print(f"serve.py: {error if isinstance(error, ValueError) else ASSET_ERROR}", file=sys.stderr)
+            return 1
+    elif HERE.name != "scripts" or not (REPO / "demo" / "index.html").is_file():
+        print(f"serve.py: {PLAIN_ERROR}", file=sys.stderr)
+        return 1
+    else:
+        try:
+            overrides = resolve_overrides(args.overrides)
+        except ValueError as error:
+            parser.error(str(error))
     if args.studio_port == args.target_port:
         parser.error("--studio-port and --target-port must differ")
 
-    config = Config(args.host, args.studio_port, args.target_port, overrides, args.sync, args.quiet)
+    if target:
+        name = "localhost" if target.hostname == "localhost" else "127.0.0.1"
+        config = Config.for_proxy(name, args.studio_port, args.target_port, target, args.quiet)
+        target_server = partial(run_proxy, config, target, config.studio_origin)
+    else:
+        config = Config(args.host, args.studio_port, args.target_port, overrides, args.sync, args.quiet)
+        target_server = partial(make_server, config, config.host, args.target_port, False)
     servers = []
-    for flag, port, studio in (("--studio-port", args.studio_port, True),
-                               ("--target-port", args.target_port, False)):
+    for flag, port, make in (("--studio-port", args.studio_port,
+                              partial(make_server, config, config.host, args.studio_port, True)),
+                             ("--target-port", args.target_port, target_server)):
         try:
-            servers.append(make_server(config, args.host, port, studio))
+            servers.append(make())
         except OSError as error:
             in_use = error.errno in {errno.EADDRINUSE, getattr(errno, "WSAEADDRINUSE", None)}
             if in_use:
                 print(f"serve.py: {flag} {port} is in use; pick another with {flag} <port>", file=sys.stderr)
             else:  # e.g. a --host this machine does not own: the port flag is not the cause
-                print(f"serve.py: cannot listen on {args.host}:{port} ({flag}): {error}", file=sys.stderr)
+                print(f"serve.py: cannot listen on {config.host}:{port} ({flag}): {error}", file=sys.stderr)
             for server in servers:
                 server.server_close()
             return 1
@@ -317,9 +573,12 @@ def main(argv=None):
         thread.start()
 
     print(f"Studio:  {config.studio_url}{config.studio_path}")
-    # The demo app's own address, on its own port. It is context, not the link to open: the Open: line below is.
-    print(f"Demo:    {config.target_url}")
-    print(f"Sync:    {'on' if config.sync else 'off'} -> {config.overrides_rel}")
+    if target:
+        print(f"App:     {args.target}")  # the address as typed; the Open: line carries the proxy's
+    else:
+        # The demo app's own address, on its own port. It is context, not the link to open: the Open: line below is.
+        print(f"Demo:    {config.target_url}")
+        print(f"Sync:    {'on' if config.sync else 'off'} -> {config.overrides_rel}")
     print("Press Ctrl-C to stop.")
     print(f"Open: {config.open_url}", flush=True)
     if args.open and not webbrowser.open(config.open_url):
