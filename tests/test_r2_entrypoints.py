@@ -1,7 +1,8 @@
 """Role round trips through the real `fontkitstudio` command, the Vite plugins and the proxies (R2.7I1).
 
 Each case opens the real Studio over the command's own URL, presses Detect text styles, previews one
-role by keystrokes, rerenders the page its own way, shows that Clear needs a fresh Detect, and clears.
+role by keystrokes, rerenders the page its own way, waits for Studio to say the page changed, detects
+again, and clears.
 Members of the existing one-command and fixture modules are borrowed by assignment (public ones only):
 test_one_command_vite.OneCommandViteBrowserTest: start, pump, stop, wait_badge;
 test_one_command_next.OneCommandNextBrowserTest: start_next, drain, tail, stop_next, start_command, wait_badge;
@@ -27,7 +28,7 @@ from support import ENGINES, close_contexts
 
 OWNED = 'style[data-fontkit-role-styles]'
 GUARD = {'aborted': 2, 'fallback': 0}
-STALE = 'The page changed: press Detect text styles, then try again.'
+PAGE_CHANGED = 'The page changed since the last Detect; press Detect text styles. This page has not been checked.'
 PROXY_CSP = "script-src 'self'; style-src 'self' 'unsafe-inline'"
 SNAP = """() => {
     const props = ['fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'textTransform'];
@@ -47,7 +48,7 @@ BOOTSTRAP = Case('[data-design-id="bs.hero.title"]', '[data-design-id="bs.hero.t
 
 
 class RoundTrip:
-    """The shared Detect, preview, rerender, refused Clear, Detect, Clear sequence (not a TestCase)."""
+    """The shared Detect, preview, rerender, page-changed sentence, Detect, Clear sequence (not a TestCase)."""
     guarded_context = react.ReactCorpusTest.guarded_context
 
     def open_studio(self, engine, url, init_script=None):
@@ -83,9 +84,9 @@ class RoundTrip:
     def wait_owned(self, frame, count):
         frame.wait_for_function('([sel, n]) => document.querySelectorAll(sel).length === n', arg=[OWNED, count], polling=50)
 
-    def preview_status(self, page, text):
+    def wait_page_changed(self, page):
         page.wait_for_function(
-            '(t) => document.querySelector("#rolePreviewStatus").textContent.includes(t)', arg=text)
+            '(t) => document.querySelector("#roleStatus").textContent === t', arg=PAGE_CHANGED, timeout=15000)
 
     def round_trip(self, engine, url, case, rerender, init_script=None, restore=None):
         """Returns (errors, console_errors, counts, page, frame) after every step has been asserted."""
@@ -117,10 +118,7 @@ class RoundTrip:
             self.assertEqual(frame.locator(OWNED).count(), 1)
             self.assertEqual(frame.evaluate('document.querySelectorAll("[style]").length'), before[2])
             rendered = frame.evaluate(SNAP)
-            page.get_by_role('button', name='Clear preview', exact=True).click()
-            self.preview_status(page, STALE)
-            self.assertEqual(self.computed(frame, case), case.after)
-            self.assertEqual(frame.locator(OWNED).count(), 1)
+            self.wait_page_changed(page)
             self.detect(page)
             page.get_by_role('button', name='Clear preview', exact=True).click()
             self.wait_owned(frame, 0)
@@ -171,18 +169,18 @@ class ViteEntrypointTests(RoundTrip, unittest.TestCase):
 
     def test_vite8_command_detect_apply_rerender_clear(self):
         """Given `fontkitstudio` run in fixtures/vite-react, when Studio detects, previews Size 48 on the title
-        role, the page renders twice from a click, Clear is pressed, Detect is pressed again and Clear again,
-        then the title is 48px before and after the render with the same owned sheet and no style attribute,
-        the first Clear shows the page-changed step and changes nothing, and the last Clear removes the sheet
-        and restores every computed property and the markup."""
+        role, the page renders twice from a click, Studio shows the page-changed sentence, Detect is pressed
+        again and Clear is pressed, then the title is 48px before and after the render with the same owned
+        sheet and no style attribute, and Clear removes the sheet and restores every computed property and
+        the markup."""
         self.command_round_trip('vite-react')
 
     def test_vite7_command_detect_apply_rerender_clear(self):
         """Given `fontkitstudio` run in fixtures/vite7-react, when Studio detects, previews Size 48 on the title
-        role, the page renders twice from a click, Clear is pressed, Detect is pressed again and Clear again,
-        then the title is 48px before and after the render with the same owned sheet and no style attribute,
-        the first Clear shows the page-changed step and changes nothing, and the last Clear removes the sheet
-        and restores every computed property and the markup."""
+        role, the page renders twice from a click, Studio shows the page-changed sentence, Detect is pressed
+        again and Clear is pressed, then the title is 48px before and after the render with the same owned
+        sheet and no style attribute, and Clear removes the sheet and restores every computed property and
+        the markup."""
         self.command_round_trip('vite7-react')
 
     def test_vite_builds_ship_neither_bridge_nor_role_css(self):
@@ -238,11 +236,10 @@ class ProxyEntrypointTests(RoundTrip, unittest.TestCase):
     def test_bootstrap_proxy_detect_apply_rerender_clear(self):
         """Given a Bootstrap 5 page behind the proxy whose policy allows its own scripts and inline styles (the
         strict style-src 'self' outcome, stylesheet-blocked, is proved in test_r2_integration.py), when Studio
-        detects, previews Weight 700 on the title role, the page replaces its own title element, Clear is
-        pressed, Detect is pressed again and Clear again, then the title weight is 500, 700, 700 on the new
-        node, the old node is disconnected, the first Clear shows the page-changed step, the last Clear
-        removes the sheet and restores every computed property, and neither document records a CSP
-        violation."""
+        detects, previews Weight 700 on the title role, the page replaces its own title element, Studio
+        shows the page-changed sentence, Detect is pressed again and Clear is pressed, then the title weight
+        is 500, 700, 700 on the new node, the old node is disconnected, Clear removes the sheet and restores
+        every computed property, and neither document records a CSP violation."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 _, _, _, page, frame = self.round_trip(
@@ -286,10 +283,10 @@ class NextEntrypointTests(RoundTrip, unittest.TestCase):
 
     def test_next_proxy_detect_apply_rerender_clear(self):
         """Given Next.js dev behind `fontkitstudio <url>`, when Studio detects, previews Size 48 on the title
-        role, globals.css hot-updates through the proxy, Clear is pressed, Detect is pressed again and Clear
-        again, then the title is 40px, 48px, 48px with the lead colour changed, the page not reloaded and the
-        sheet unchanged, the first Clear shows the page-changed step, the last Clear removes the sheet and
-        restores every computed property, and no hydration error is logged."""
+        role, globals.css hot-updates through the proxy, Studio shows the page-changed sentence, Detect is pressed
+        again and Clear is pressed, then the title is 40px, 48px, 48px with the lead colour changed, the page
+        not reloaded and the sheet unchanged, Clear removes the sheet and restores every computed property,
+        and no hydration error is logged."""
         css = nxt.APP / 'app' / 'globals.css'
         original = css.read_bytes()
         changed = original.replace(b'rgb(51, 51, 51)', b'rgb(200, 0, 0)')
