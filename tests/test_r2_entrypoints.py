@@ -14,6 +14,7 @@ import re
 import subprocess
 import unittest
 from collections import namedtuple
+from urllib.parse import parse_qs, urlsplit
 
 import support
 import test_one_command_next as nxt
@@ -25,6 +26,7 @@ from fixture_support import require_fixture
 from helpers_csp_server import start_csp_server
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 from support import ENGINES, close_contexts
+from test_serve_proxy import Proxy
 
 OWNED = 'style[data-fontkit-role-styles]'
 GUARD = {'aborted': 2, 'fallback': 0}
@@ -271,6 +273,42 @@ class ProxyEntrypointTests(RoundTrip, unittest.TestCase):
         unchanged), the same owned sheet stays with no style attribute added, Clear removes the sheet and
         leaves the markup as re-rendered and restores every computed property, both canaries are blocked with no fallback (no HTTPS
         request), no page error is raised and neither document records a CSP violation."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                _, _, _, page, frame = self.round_trip(
+                    engine, self.url, BOOTSTRAP, self.replace_title, init_script=prox.RECORD_VIOLATIONS)
+                self.assertEqual(frame.evaluate('window.__cspViolations'), [])
+                self.assertEqual(page.evaluate('window.__cspViolations'), [])
+
+
+class PythonProxyEntrypointTests(RoundTrip, unittest.TestCase):
+    wait_badge = prox.OneCommandProxyBrowserTest.wait_badge
+    replace_title = ProxyEntrypointTests.replace_title
+
+    def setUp(self):
+        self.contexts = []
+        self.addCleanup(lambda: close_contexts(self.contexts))
+        server, _ = start_csp_server(prox.FIXTURE, csp=PROXY_CSP)
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)   # runs after the proxy stops
+        port = server.server_address[1]
+        proxy = Proxy(f'http://127.0.0.1:{port}/index.html')
+        self.addCleanup(proxy.close)
+        self.url = proxy.open_url
+        self.assertTrue(self.url.startswith('http://127.0.0.1:'), self.url)
+        self.assertEqual(parse_qs(urlsplit(self.url).query)['target'],
+                         [f'http://127.0.0.1:{proxy.proxy}/index.html'])
+
+    def test_bootstrap_python_proxy_detect_apply_rerender_clear(self):
+        """Given a Bootstrap 5 page served with a policy that allows its own scripts and inline styles and
+        reached only through serve.py's proxy (no Node), when Studio detects, previews Weight 700 on the title
+        role, the page replaces its own title element, Studio shows the page-changed sentence, Detect is
+        pressed again and Clear is pressed, then each Detect reports Detected, the title weight is 500, 700, 700
+        on the new node, the old node is disconnected, the preview CSS shows font-weight: 700, the preview is a
+        stylesheet only (markup and the other rows unchanged), the same owned sheet stays with no style
+        attribute added, Clear removes the sheet and leaves the markup as re-rendered and restores every
+        computed property, both canaries are blocked with no fallback (no HTTPS request), no page error is
+        raised and neither document records a CSP violation."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 _, _, _, page, frame = self.round_trip(
