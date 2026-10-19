@@ -82,4 +82,4 @@ jobs:
         run: |
           python3 scripts/dev/release_notes.py "${TAG#v}" > notes.md
           gh release create "$TAG" --verify-tag --notes-file notes.md --title "$TAG" \
-            fontkit-studio.html fontkit-bridge.js
+            fontkit-studio.html fontkit-bridge.js scripts/serve.py
