@@ -37,6 +37,32 @@ class RoleRouteCase(RoleSheetCase):
     def urls(self, notices):
         return [m['pageURL'] for m in notices]
 
+    def scanning(self, engine, before=None):
+        """A Detect still scanning the 5,000-element page: returns (page, frame, mark), its reply is window.pendingDetect."""
+        page, frame = self.open(engine, target=LARGE)
+        self.hello(page)
+        self.control(page, {'type': 'design:mode', 'mode': 'interact'})
+        if before:
+            before(page, frame)
+        mark = self.mark(page)
+        page.evaluate('() => { window.pendingDetect = request({type: "design:detect"}); }')
+        self.assertEqual(self.messages(page, 'design:detected', mark), [])
+        return page, frame, mark
+
+    def stamp_notices(self, page):
+        """Record the absolute time of each roles-page the host receives from the target frame."""
+        page.evaluate("""() => { window.noticeStamps = []; addEventListener('message', event => {
+            if (event.source === frame.contentWindow && event.data && event.data.type === 'design:roles-page')
+                noticeStamps.push(performance.timeOrigin + performance.now()); }); }""")
+
+    def stamped(self, where, script):
+        """Run `script` in a page or frame; returns the absolute time read just before it ran."""
+        return where.evaluate('() => { const at = performance.timeOrigin + performance.now(); ' + script + '; return at; }')
+
+    def assert_inside_hold(self, page, change_stamp):
+        self.assertLess(change_stamp - page.evaluate('noticeStamps[0]'), 200,
+                        'the second change landed after the 250 ms hold, so this run did not exercise the trailing send')
+
     def proof(self, page, frame):
         """One history push shows this page can send; returns after its hold has passed."""
         start = self.mark(page)
@@ -46,7 +72,7 @@ class RoleRouteCase(RoleSheetCase):
 
 class RouteAnnouncementTests(RoleRouteCase):
     def test_url_only_routes_announce_each_literal_url_without_a_dom_change(self):
-        """Given the role page after hello, when it pushes, replaces, sets a hash and goes back, then each yields one roles-page with the literal URL and a greater version while the body text is unchanged."""
+        """Given the role page after hello, when it pushes, replaces, sets a hash and goes back, then each yields one roles-page with the literal URL and a greater version that the contract table accepts while the body text is unchanged."""
         steps = [("history.pushState({a: 1}, '', '?route=x')", '?route=x'),
                  ("history.replaceState(null, '', '?route=y')", '?route=y'),
                  ("location.hash = '#z'", '?route=y#z'), ('history.back()', '?route=y')]
@@ -60,6 +86,7 @@ class RouteAnnouncementTests(RoleRouteCase):
                         frame.evaluate(script)
                         got = self.notices(page, start)
                         self.assertEqual(self.urls(got), [ROLE_PAGE + suffix])
+                        self.assertEqual(table.violations('roles-page', got[0]), [])
                         self.assertGreater(got[0]['pageVersion'], version)
                         version = got[0]['pageVersion']
                         self.assertEqual(frame.locator('.body-copy').first.inner_text(), 'Author body')
@@ -85,22 +112,23 @@ class RouteAnnouncementTests(RoleRouteCase):
                 self.assertEqual(self.urls(self.notices(page, start)), [ROLE_PAGE + '#h'])
 
     def test_a_change_inside_the_hold_is_announced_once_by_the_trailing_send(self):
-        """Given a first route message, when a second change comes 50 ms later with no DOM change, then one more roles-page with the new identity and a greater version arrives within 600 ms and no third follows."""
+        """Given a first route message, when a second change comes 50 ms later with no DOM change, then the second change landed under 200 ms after the first notice reached the host, and one more roles-page with the new identity and a greater version arrives within 600 ms and no third follows."""
         seconds = {
-            'push': (lambda page, frame: frame.evaluate("history.pushState(null, '', '?route=b')"), '?route=b'),
-            'resize': (lambda page, frame: page.evaluate("document.querySelector('#target').style.width = '1000px'"), '?route=a'),
-            'hash': (lambda page, frame: frame.evaluate("location.hash = '#hh'"), '?route=a#hh'),
+            'push': (lambda page, frame: self.stamped(frame, "history.pushState(null, '', '?route=b')"), '?route=b'),
+            'resize': (lambda page, frame: self.stamped(page, "document.querySelector('#target').style.width = '1000px'"), '?route=a'),
+            'hash': (lambda page, frame: self.stamped(frame, "location.hash = '#hh'"), '?route=a#hh'),
         }
         for engine in ENGINES:
             for kind, (change, suffix) in seconds.items():
                 with self.subTest(engine=engine, second=kind):
                     page, frame, _, start = self.start(engine)
+                    self.stamp_notices(page)
                     frame.evaluate("history.pushState(null, '', '?route=a')")
                     first = self.notices(page, start, settle=0)
                     self.assertEqual(self.urls(first), [ROLE_PAGE + '?route=a'])
                     page.wait_for_timeout(50)
                     mark = self.mark(page)
-                    change(page, frame)
+                    self.assert_inside_hold(page, change(page, frame))
                     second = self.notices(page, mark, timeout=600, settle=700)
                     self.assertEqual(self.urls(second), [ROLE_PAGE + suffix])
                     self.assertGreater(second[0]['pageVersion'], first[0]['pageVersion'])
@@ -185,17 +213,19 @@ class ContentAndStyleTests(RoleRouteCase):
                 self.assertEqual([m['pageVersion'] for m in got], [reply['pageVersion']])
 
     def test_an_unsupported_url_is_sent_as_null_and_the_supported_url_follows_inside_the_hold(self):
-        """Given a 2,000-character URL, when it replaces the route, then one roles-page has pageURL null and a greater version, and replacing back 50 ms later sends the supported URL within 600 ms."""
+        """Given a 2,000-character URL, when it replaces the route, then one roles-page has pageURL null and a greater version the contract table accepts, the replace back lands under 200 ms after it reached the host, and the supported URL follows within 600 ms."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, frame, ready, start = self.start(engine)
+                self.stamp_notices(page)
                 frame.evaluate("history.replaceState(null, '', '/?' + 'x'.repeat(1999))")
                 first = self.notices(page, start, settle=0)
                 self.assertEqual(self.urls(first), [None])
+                self.assertEqual(table.violations('roles-page', first[0]), [])
                 self.assertGreater(first[0]['pageVersion'], ready['roleState']['pageVersion'])
                 page.wait_for_timeout(50)
                 mark = self.mark(page)
-                frame.evaluate("history.replaceState(null, '', '/tests/fixtures/bridge/target-role-protocol.html')")
+                self.assert_inside_hold(page, self.stamped(frame, "history.replaceState(null, '', '/tests/fixtures/bridge/target-role-protocol.html')"))
                 second = self.notices(page, mark, timeout=600, settle=0)
                 self.assertEqual(self.urls(second), [ROLE_PAGE])
                 self.assertGreater(second[0]['pageVersion'], first[0]['pageVersion'])
@@ -349,6 +379,22 @@ class WrapperTests(RoleRouteCase):
                     self.assertEqual(self.silence(page, mark), [])
 
 
+SPY_BT = """(() => {
+  const log = window.spyBt = [], wrapped = {setTimeout, clearTimeout, requestAnimationFrame};
+  const make = (kind, id, delay) => log.push(['make', kind, id, delay, performance.now()]);
+  window.setTimeout = function (fn, delay, ...rest) {
+    const id = wrapped.setTimeout.call(this, function (...a) { log.push(['fire', 'timeout', id]); return fn.apply(this, a); }, delay, ...rest);
+    make('timeout', id, delay); return id;
+  };
+  window.clearTimeout = function (id) { log.push(['clear', 'timeout', id]); return wrapped.clearTimeout.call(this, id); };
+  window.requestAnimationFrame = function (fn) {
+    const id = wrapped.requestAnimationFrame.call(this, function (...a) { log.push(['fire', 'frame', id]); return fn.apply(this, a); });
+    make('frame', id); return id;
+  };
+})();
+"""
+
+
 class InstallAndRemovalTests(RoleRouteCase):
     def test_history_is_native_and_silent_before_hello(self):
         """Given a page before any hello, when it pushes a URL, then pushState and replaceState are the prototype's, history has no own State names, nothing is posted to Studio, and the later ready carries that URL."""
@@ -411,6 +457,33 @@ class InstallAndRemovalTests(RoleRouteCase):
                 after = frame.evaluate(BOTH)
                 self.assertEqual(after, before)
                 self.assertTrue(frame.evaluate('() => history.pushState === History.prototype.pushState && history.replaceState === History.prototype.replaceState'))
+
+    def test_a_disposed_bridge_posts_nothing_after_a_pending_send_or_a_running_hold(self):
+        """Given a bridge that has proved it can send and a timer spy, when it is disposed in the task that schedules a send (animation frame and 250 ms timer pending) or while a hold runs, then the spy shows that state first and no roles-page arrives within 600 ms. The spent 250 ms fallback timer of an earlier send stays pending by design, so not every timer is asserted cleared."""
+        source = SPY_BT.encode() + (REPO / 'fontkit-bridge.js').read_bytes()
+        pending = """() => { const spy = window.spyBt, from = spy.length; history.pushState(null, '', '?route=d1');
+            const mine = spy.slice(from), made = (kind, delay) => mine.some(e => e[0] === 'make' && e[1] === kind && (delay === undefined || e[3] === delay));
+            const flag = made('frame') && made('timeout', 250) && !mine.some(e => e[0] === 'fire'); __fontkitBridge.dispose(); return flag; }"""
+        holding = """() => { const spy = window.spyBt; history.pushState(null, '', '?route=d3');
+            const holds = spy.filter(e => e[0] === 'make' && e[1] === 'timeout' && e[3] === 250), hold = holds[holds.length - 1];
+            const flag = !!hold && !spy.some(e => e[0] !== 'make' && e[2] === hold[2] && e[1] === 'timeout') && performance.now() - hold[4] < 200;
+            __fontkitBridge.dispose(); return flag; }"""
+        for engine in ENGINES:
+            for case in ('pending send', 'running hold'):
+                with self.subTest(engine=engine, case=case):
+                    page, frame = self.open(engine, bridge_source=source)
+                    self.hello(page)
+                    self.proof(page, frame)
+                    if case == 'pending send':
+                        mark = self.mark(page)
+                        self.assertTrue(frame.evaluate(pending), 'no send was pending, so this run did not exercise dispose during a send')
+                    else:
+                        start = self.mark(page)
+                        frame.evaluate("history.pushState(null, '', '?route=d2')")
+                        self.assertEqual(self.urls(self.notices(page, start, settle=0)), [ROLE_PAGE + '?route=d2'])
+                        mark = self.mark(page)
+                        self.assertTrue(frame.evaluate(holding), 'the hold was already over, so this run did not exercise dispose during a hold')
+                    self.assertEqual(self.silence(page, mark), [])
 
     def test_dispose_gives_an_app_owned_property_its_descriptor_back(self):
         """Given an own, non-enumerable pushState set by the app before hello, when the bridge is disposed, then that same function returns as an own non-enumerable, writable, configurable property."""
@@ -520,14 +593,9 @@ class SessionAndDetectTests(RoleRouteCase):
         """Given a Detect still scanning the 5,000-element page, when the page pushes a URL, then the stale page-changed reply still arrives, a roles-page names the new URL and a fresh Detect is complete there."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
-                page, frame = self.open(engine, target=LARGE)
-                self.hello(page)
-                self.control(page, {'type': 'design:mode', 'mode': 'interact'})
-                start = self.mark(page)
-                page.evaluate('() => { window.pending6b1 = request({type: "design:detect"}); }')
-                self.assertEqual(self.messages(page, 'design:detected', start), [])
+                page, frame, start = self.scanning(engine)
                 frame.evaluate("history.pushState(null, '', '?route=B')")
-                reply = page.evaluate('() => window.pending6b1')
+                reply = page.evaluate('() => window.pendingDetect')
                 self.assertEqual((reply['type'], reply['complete'], reply['reason']), ('design:detected', False, 'page-changed'), reply)
                 self.assertEqual(self.urls(self.notices(page, start)), [LARGE + '?route=B'])
                 fresh = self.detect(page)
@@ -634,14 +702,9 @@ class LifecycleTests(RoleRouteCase):
         for engine in ENGINES:
             for label, script in events.items():
                 with self.subTest(engine=engine, events=label):
-                    page, frame = self.open(engine, target=LARGE)
-                    self.hello(page)
-                    self.control(page, {'type': 'design:mode', 'mode': 'interact'})
-                    start = self.mark(page)
-                    page.evaluate('() => { window.pending6b2 = request({type: "design:detect"}); }')
-                    self.assertEqual(self.messages(page, 'design:detected', start), [])
+                    page, frame, start = self.scanning(engine)
                     frame.evaluate(script)
-                    reply = page.evaluate('() => window.pending6b2')
+                    reply = page.evaluate('() => window.pendingDetect')
                     self.assertEqual((reply['type'], reply['complete'], reply['reason']), ('design:detected', False, 'page-changed'), reply)
                     self.assertEqual((reply['pageVersion'], reply['pageURL']), (reply['currentPageVersion'], reply['currentPageURL']))
                     self.assertEqual(self.silence(page, start), [])
@@ -747,17 +810,14 @@ class StaleScanTests(RoleRouteCase):
         """Given a Detect scanning the 5,000-element page at route B, when the page pushes route C, then the one reply names B as pageURL and C as currentPageURL, is incomplete page-changed with a version below the current one, the last roles-page names C, and a fresh Detect is complete on C."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
-                page, frame = self.open(engine, target=LARGE)
-                self.hello(page)
-                self.control(page, {'type': 'design:mode', 'mode': 'interact'})
-                start = self.mark(page)
-                frame.evaluate("history.pushState(null, '', '?route=B')")
-                self.assertEqual(self.urls(self.notices(page, start)), [LARGE + '?route=B'])
-                mark = self.mark(page)
-                page.evaluate('() => { window.pending6b2 = request({type: "design:detect"}); }')
-                self.assertEqual(self.messages(page, 'design:detected', mark), [])
+                def push_b(page, frame):
+                    start = self.mark(page)
+                    frame.evaluate("history.pushState(null, '', '?route=B')")
+                    self.assertEqual(self.urls(self.notices(page, start)), [LARGE + '?route=B'])
+
+                page, frame, mark = self.scanning(engine, push_b)
                 frame.evaluate("history.pushState(null, '', '?route=C')")
-                reply = page.evaluate('() => window.pending6b2')
+                reply = page.evaluate('() => window.pendingDetect')
                 self.assertEqual((reply['complete'], reply['reason']), (False, 'page-changed'), reply)
                 self.assertEqual((reply['pageURL'], reply['currentPageURL']), (LARGE + '?route=B', LARGE + '?route=C'))
                 self.assertLess(reply['pageVersion'], reply['currentPageVersion'])
@@ -861,7 +921,7 @@ class RevisionOneKeysTests(RoleRouteCase):
                 self.assertEqual(table.violations('role-state', state), [])
 
     def test_the_page_notice_has_exactly_the_six_keys(self):
-        """Given a push, when the page notice arrives, then it carries exactly type, protocolVersion, sessionId, documentId, pageVersion and pageURL."""
+        """Given a push, when the page notice arrives, then it carries exactly type, protocolVersion, sessionId, documentId, pageVersion and pageURL, the contract table finds no violation, and the same notice with pageVersion 2 ** 53 is reported for pageVersion."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, frame, _, start = self.start(engine)
@@ -869,3 +929,6 @@ class RevisionOneKeysTests(RoleRouteCase):
                 got = self.notices(page, start)
                 self.assertEqual(len(got), 1)
                 self.keys(got[0], ENVELOPE + ' documentId pageVersion pageURL')
+                self.assertEqual(table.violations('roles-page', got[0]), [])
+                broken = table.violations('roles-page', {**got[0], 'pageVersion': 2 ** 53})
+                self.assertTrue(broken and 'pageVersion' in broken[0], broken)

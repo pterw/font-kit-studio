@@ -1081,6 +1081,8 @@
       return !closed;
     }
 
+    // The history wrappers, window listeners and observers installed for role routes stay installed after
+    // dropSession (dispose calls it too); without a session they cannot post, and dispose removes them.
     dropSession() {
       this.cancelRoleJobs();
       this.roleEpoch += 1;
