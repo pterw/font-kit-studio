@@ -1,5 +1,6 @@
 """Proxy mode of scripts/serve.py: the real script as a process in front of a small fake app."""
 
+import base64
 import gzip
 import hashlib
 import http.client
@@ -39,6 +40,21 @@ GZIPPED = gzip.compress(PAGE, mtime=0)
 CHUNKS = (b'<html><head><title>one', b'</title></head><body>two</body></html>')
 BIG_EXACT = b'<head>' + b'x' * (LIMIT - 6)
 BIG_OVER = b'<head>' + b'x' * (LIMIT - 5)
+CSP_NONE = ('Content-Security-Policy', "script-src 'none'")
+CSP_META = (b'<!doctype html><html><head><meta http-equiv="Content-Security-Policy" '
+            b'content="default-src \'none\'"><title>meta</title></head><body>x</body></html>')
+OWN_BRIDGE = (b'<!doctype html><html><head><script src="/vendor/fontkit-bridge.js"></script>'
+              b'<title>own</title></head><body>x</body></html>')
+CSP_MESSAGE = ("Font Kit Studio: this page's Content-Security-Policy blocks the bridge (it does not allow the "
+               "page's own scripts). Add 'self' to script-src while you develop.")
+BRIDGE_TWICE_MESSAGE = ('Font Kit Studio: this page also loads its own fontkit-bridge.js. If Studio does not '
+                        'connect, remove that script while you use serve.py.')
+WS_KEY = 'dGhlIHNhbXBsZSBub25jZQ=='  # RFC 6455 section 1.3
+WS_ACCEPT = 's3pPLMBiTxaQ9kYGzzhZRbK+xOo='
+WS_HELLO = bytes.fromhex('81 85 37 fa 21 3d 7f 9f 4d 51 58')  # the RFC's masked "Hello"
+WS_ECHO = bytes.fromhex('81 05 48 65 6c 6c 6f')
+REFUSAL_421 = b'HTTP/1.1 421 Misdirected Request\r\nConnection: close\r\nContent-Length: 0\r\n\r\n'
+REFUSAL_400 = b'HTTP/1.1 400 Bad Request\r\nConnection: close\r\nContent-Length: 0\r\n\r\n'
 
 
 def tag_for(origin):
@@ -94,6 +110,13 @@ class FakeApp:
             '/chunked': self.chunked,
             '/big-exact': lambda h: self.send(h, 200, [('Content-Type', 'text/html')], BIG_EXACT),
             '/big-over': lambda h: self.send(h, 200, [('Content-Type', 'text/html')], BIG_OVER),
+            '/csp-header': lambda h: self.send(h, 200, [('Content-Type', 'text/html'), CSP_NONE], PAGE),
+            '/csp-meta': lambda h: self.send(h, 200, [('Content-Type', 'text/html')], CSP_META),
+            '/csp-self': lambda h: self.send(h, 200, [('Content-Type', 'text/html'),
+                                                      ('Content-Security-Policy', "script-src 'self'")], PAGE),
+            '/own-bridge': lambda h: self.send(h, 200, [('Content-Type', 'text/html')], OWN_BRIDGE),
+            '/csp-404': lambda h: self.send(h, 404, [('Content-Type', 'text/html'), CSP_NONE], PAGE),
+            '/csp-big': lambda h: self.send(h, 200, [('Content-Type', 'text/html'), CSP_NONE], BIG_OVER),
             '/stream': self.stream,
             '/endless': self.endless,
             '/upload': self.upload,
@@ -600,6 +623,429 @@ class ReleaseLayoutTests(unittest.TestCase):
         shutil.copy(REPO / 'scripts' / 'serve.py', alone / 'serve.py')
         result = run_once('http://127.0.0.1:5000', serve=alone / 'serve.py')
         self.assertEqual((result.returncode, result.stdout, result.stderr), (1, '', MISSING_LINE + '\n'))
+
+
+class WebSocketApp:
+    """A raw-socket WebSocket server (an http.server handler cannot hold the connection).
+
+    mode 'echo': answer 101, then send every received frame back unmasked.
+    mode 'push-close': answer 101, send one frame ("bye") and close.
+    mode 'refuse': answer 400 with a body and close.
+    Every request head is recorded in `heads`; `eof` is set when a client closes an echo connection.
+    """
+
+    def __init__(self, mode='echo'):
+        self.mode = mode
+        self.heads = []
+        self.connections = 0
+        self.eof = threading.Event()
+        self.stopping = threading.Event()
+        self.open = []
+        self.listener = socket.socket()
+        self.listener.bind(('127.0.0.1', 0))
+        self.listener.listen()
+        self.listener.settimeout(0.1)  # the accept loop polls the stopping flag
+        self.port = self.listener.getsockname()[1]
+        self.thread = threading.Thread(target=self.accept, daemon=True)
+        self.thread.start()
+
+    def accept(self):
+        while not self.stopping.is_set():
+            try:
+                conn, _ = self.listener.accept()
+            except socket.timeout:
+                continue
+            except OSError:
+                return
+            conn.settimeout(10)
+            self.connections += 1
+            self.open.append(conn)
+            threading.Thread(target=self.serve, args=(conn,), daemon=True).start()
+
+    def serve(self, conn):
+        try:
+            data = b''
+            while b'\r\n\r\n' not in data:
+                chunk = conn.recv(65536)
+                if not chunk:
+                    return
+                data += chunk
+            head, _, surplus = data.partition(b'\r\n\r\n')  # surplus is the first frame bytes
+            self.heads.append(head.decode('latin-1'))
+            if self.mode == 'refuse':
+                conn.sendall(b'HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: 4\r\n\r\nnope')
+                return
+            key = re.search(r'^Sec-WebSocket-Key: (\S+)', head.decode('latin-1'), re.MULTILINE | re.IGNORECASE)
+            accept = base64.b64encode(hashlib.sha1((key.group(1) + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11')
+                                                   .encode()).digest()).decode()
+            conn.sendall(f'HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n'
+                         f'Sec-WebSocket-Accept: {accept}\r\n\r\n'.encode())
+            if self.mode == 'push-close':
+                conn.sendall(b'\x81\x03bye')
+                return
+            self.echo(conn, surplus)
+        except OSError:
+            pass
+        finally:
+            conn.close()
+
+    def echo(self, conn, buffer):
+        while True:
+            while len(buffer) >= 6 and len(buffer) >= 6 + (buffer[1] & 0x7F):
+                size = buffer[1] & 0x7F  # frames here are short and masked
+                mask, payload = buffer[2:6], buffer[6:6 + size]
+                conn.sendall(bytes([buffer[0], size]) + bytes(b ^ mask[i % 4] for i, b in enumerate(payload)))
+                buffer = buffer[6 + size:]
+            chunk = conn.recv(65536)
+            if not chunk:
+                self.eof.set()
+                return
+            buffer += chunk
+
+    def stop(self):
+        self.stopping.set()
+        self.listener.close()
+        for conn in self.open:
+            conn.close()
+        self.thread.join(5)
+
+
+def masked(payload, mask=b'\x01\x02\x03\x04'):
+    return bytes([0x81, 0x80 | len(payload)]) + mask + bytes(b ^ mask[i % 4] for i, b in enumerate(payload))
+
+
+def upgrade_request(port, path='/socket', host=None, origin=None):
+    host = host or f'127.0.0.1:{port}'
+    origin = origin or f'http://127.0.0.1:{port}'
+    return (f'GET {path} HTTP/1.1\r\nHost: {host}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n'
+            f'Sec-WebSocket-Key: {WS_KEY}\r\nSec-WebSocket-Version: 13\r\nOrigin: {origin}\r\n\r\n').encode()
+
+
+def read_head(sock):
+    data = b''
+    while not data.endswith(b'\r\n\r\n'):
+        chunk = sock.recv(1)
+        if not chunk:
+            raise AssertionError(f'closed before the end of the head: {data!r}')
+        data += chunk
+    return data.decode('latin-1')
+
+
+def read_exact(sock, size):
+    data = b''
+    while len(data) < size:
+        chunk = sock.recv(size - len(data))
+        if not chunk:
+            raise AssertionError(f'closed after {data!r}, wanted {size} bytes')
+        data += chunk
+    return data
+
+
+class CspPortTests(unittest.TestCase):
+    """Every row of packages/fontkitstudio/test/csp.test.js, as a literal."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.serve = load_serve()
+
+    def blocks(self, policy, origin=None):
+        return self.serve.blocks_same_origin_script(policy, origin)
+
+    def test_policy_rows_without_an_origin(self):
+        """Given the 20 policies of the Node suite, when blocks_same_origin_script judges each
+        without an origin, then it returns exactly the Node suite's True or False."""
+        rows = [
+            ("script-src 'self'", False), ("default-src 'self'", False), ("script-src 'nonce-x'", True),
+            ("script-src 'self' 'strict-dynamic'", True), ("default-src 'none'", True),
+            ("script-src-elem 'self'; script-src 'none'", False),
+            ("script-src-elem 'none'; script-src 'self'", True),
+            ("script-src 'none'; default-src 'self'", True), ("style-src 'none'", False),
+            ("img-src 'none'; default-src 'self'", False), ('', False), ('   ', False),
+            ('script-src *', False), ('script-src http:', False), ('script-src https:', True),
+            ("script-src 'self'; script-src 'none'", False), ("SCRIPT-SRC 'SELF'", False),
+            ("Script-Src 'Nonce-x' 'STRICT-DYNAMIC'", True), ("script-src 'self', script-src 'none'", True),
+            ("script-src 'self', style-src 'none'", False),
+        ]
+        self.assertEqual(len(rows), 20)
+        for policy, blocked in rows:
+            with self.subTest(policy=policy):
+                self.assertIs(self.blocks(policy), blocked)
+
+    def test_list_and_non_text_policies(self):
+        """Given lists of policies and values that are not text, when judged, then a list blocks
+        when any one blocks, an empty list does not, and None and 5 never block."""
+        self.assertIs(self.blocks(["script-src 'self'", "script-src 'nonce-x'"]), True)
+        self.assertIs(self.blocks(["script-src 'self'", "default-src 'self'"]), False)
+        self.assertIs(self.blocks([]), False)
+        self.assertIs(self.blocks([None, "script-src 'none'"]), True)
+        for value in (None, 5):
+            with self.subTest(value=value):
+                self.assertIs(self.blocks(value), False)
+
+    def test_policies_that_name_the_page_origin(self):
+        """Given the 10 allowing and 20 blocking policies of the Node suite and the origin
+        http://localhost:5173, when judged, then the first ten do not block and the other twenty do."""
+        origin = 'http://localhost:5173'
+        allows = [
+            'script-src http://localhost:5173', 'script-src localhost:5173', 'script-src HTTP://LOCALHOST:5173',
+            'script-src http://localhost:*', 'script-src localhost:*', 'script-src http://localhost:5173/',
+            'script-src http://localhost:5173/@fontkit/',
+            'script-src localhost:5173/@fontkit/fontkit-bridge.js',
+            "script-src-elem localhost:5173; script-src 'none'",
+            "default-src 'none'; script-src 'nonce-q' localhost:5173",
+        ]
+        blocks = [
+            'script-src http://localhost:5174', 'script-src localhost', 'script-src http://127.0.0.1:5173',
+            'script-src https://localhost:5173', 'script-src https://localhost:*', 'script-src localhost:5173/js/',
+            'script-src localhost:5173/@fontkit/other.js', 'script-src localhost:5173/@fontkit',
+            'script-src localhost:5173/@FONTKIT/', 'script-src localhost:5173/@fontkit/Fontkit-Bridge.js',
+            'script-src *.localhost:5173', 'script-src *.localhost', 'script-src', 'script-src ;;',
+            "script-src 'strict-dynamic' localhost:5173", 'script-src http://:5173', 'script-src localhost:abc',
+            'script-src ://localhost:5173', 'script-src https:', "script-src-elem 'none'; script-src localhost:5173",
+        ]
+        self.assertEqual((len(allows), len(blocks)), (10, 20))
+        for policy in allows:
+            with self.subTest(allows=policy):
+                self.assertIs(self.blocks(policy, origin), False)
+        for policy in blocks:
+            with self.subTest(blocks=policy):
+                self.assertIs(self.blocks(policy, origin), True)
+
+    def test_origin_edge_rows(self):
+        """Given two policies, default ports, IPv6 and unusable origins, when judged, then every
+        result equals the Node suite's: the second policy can block, port 80 matches only a page
+        without a port, [::1] matches by name, and with no usable origin only self, * and http: allow."""
+        origin = 'http://localhost:5173'
+        self.assertIs(self.blocks("script-src localhost:5173, script-src 'nonce-q'", origin), True)
+        self.assertIs(self.blocks(['script-src localhost:5173', "script-src 'none'"], origin), True)
+        self.assertIs(self.blocks(['script-src localhost:5173', 'script-src localhost:*'], origin), False)
+        self.assertIs(self.blocks('script-src localhost:80', 'http://localhost'), False)
+        self.assertIs(self.blocks('script-src localhost', 'http://localhost'), False)
+        self.assertIs(self.blocks('script-src localhost:80', origin), True)
+        self.assertIs(self.blocks('script-src localhost:5173x', origin), True)  # not in the Node file: no partial match
+        self.assertIs(self.blocks('script-src [::1]:5173', 'http://[::1]:5173'), False)
+        self.assertIs(self.blocks('script-src localhost:5173', 'http://[::1]:5173'), True)
+        for bad in (None, 'nonsense', 'https://localhost:5173', 5, 'http://localhost:abc', 'http://:5173'):
+            with self.subTest(origin=bad):
+                self.assertIs(self.blocks('script-src localhost:5173', bad), True)
+                self.assertIs(self.blocks("script-src 'self'", bad), False)
+
+    def test_meta_policies(self):
+        """Given the Node suite's mixed-case page and its empty cases, when read, then only the two
+        Content-Security-Policy tags are returned in order, a page without one, a non-string and an
+        empty http-equiv give [], and a CSP tag with an empty content gives ['']."""
+        page = '\n'.join([
+            '<meta http-equiv="Content-Security-Policy" content="script-src \'self\'">',
+            '<META CONTENT="default-src \'none\'" HTTP-EQUIV=\'content-security-policy\'>',
+            '<meta http-equiv="Content-Security-Policy-Report-Only" content="default-src \'none\'">',
+            '<meta http-equiv="refresh" content="5">',
+            '<meta name="x" content="script-src \'none\'">',
+        ])
+        self.assertEqual(self.serve.meta_policies(page), ["script-src 'self'", "default-src 'none'"])
+        self.assertEqual(self.serve.meta_policies('<p>hi</p>'), [])
+        self.assertEqual(self.serve.meta_policies(None), [])
+        self.assertEqual(self.serve.meta_policies('<meta http-equiv="" content="">'), [])
+        self.assertEqual(self.serve.meta_policies('<meta http-equiv="Content-Security-Policy" content="">'), [''])
+
+    def test_loads_own_bridge(self):
+        """Given the Node suite's four positive and five negative pages, plus an empty src, when
+        checked, then the positive ones return True and the others False."""
+        for page in ('<script src="/vendor/fontkit-bridge.js"></script>',
+                     "<SCRIPT async src='https://x.test/fontkit-bridge.min.js'>",
+                     '<script src=fontkit-bridge.js></script>',
+                     '<script\n  type="module"\n  src = "./fontkit-bridge.js?v=2"></script>'):
+            with self.subTest(page=page):
+                self.assertIs(self.serve.loads_own_bridge(page), True)
+        for page in ('<script src="/app.js"></script>', '<script>var s = "fontkit-bridge.js";</script>',
+                     '<p>fontkit-bridge.js</p>', '<link href="fontkit-bridge.js">', None, '<script src="">'):
+            with self.subTest(page=page):
+                self.assertIs(self.serve.loads_own_bridge(page), False)
+
+    def test_messages_are_the_exact_texts(self):
+        """Given the spec's strings, when compared, then CSP_MESSAGE and BRIDGE_TWICE_MESSAGE equal
+        them character for character."""
+        self.assertEqual(self.serve.CSP_MESSAGE, CSP_MESSAGE)
+        self.assertEqual(self.serve.BRIDGE_TWICE_MESSAGE, BRIDGE_TWICE_MESSAGE)
+
+
+class WarningTests(ProxyCase):
+    def warnings(self, proxy):
+        return proxy.read_err().splitlines()
+
+    def test_csp_header_warns_once(self):
+        """Given a page whose header blocks scripts, when fetched twice, then stderr holds the CSP
+        message after the first fetch already, and exactly once after both."""
+        _, proxy = self.start()
+        fetch(proxy.proxy, 'GET', '/csp-header')
+        self.assertEqual(self.warnings(proxy), [CSP_MESSAGE])
+        fetch(proxy.proxy, 'GET', '/csp-header')
+        proxy.stop()
+        self.assertEqual(self.warnings(proxy), [CSP_MESSAGE])
+
+    def test_csp_meta_warns_once(self):
+        """Given a page whose meta tag blocks scripts, when fetched twice, then stderr holds the
+        CSP message exactly once."""
+        _, proxy = self.start()
+        for _ in range(2):
+            fetch(proxy.proxy, 'GET', '/csp-meta')
+        proxy.stop()
+        self.assertEqual(self.warnings(proxy), [CSP_MESSAGE])
+
+    def test_allowing_and_plain_pages_are_silent(self):
+        """Given a page with script-src 'self' and a page without a policy, when fetched, then
+        stderr is empty."""
+        _, proxy = self.start()
+        fetch(proxy.proxy, 'GET', '/csp-self')
+        fetch(proxy.proxy, 'GET', '/')
+        proxy.stop()
+        self.assertEqual(self.warnings(proxy), [])
+
+    def test_own_bridge_warns_once(self):
+        """Given a page that loads its own bridge, when fetched twice, then stderr holds the
+        bridge-twice message exactly once."""
+        _, proxy = self.start()
+        for _ in range(2):
+            fetch(proxy.proxy, 'GET', '/own-bridge')
+        proxy.stop()
+        self.assertEqual(self.warnings(proxy), [BRIDGE_TWICE_MESSAGE])
+
+    def test_the_two_messages_have_their_own_flags(self):
+        """Given a bridge page and a CSP page, when each is fetched twice in one run, then stderr
+        holds the bridge-twice message once and the CSP message once, in that order."""
+        _, proxy = self.start()
+        for path in ('/own-bridge', '/csp-header', '/own-bridge', '/csp-header'):
+            fetch(proxy.proxy, 'GET', path)
+        proxy.stop()
+        self.assertEqual(self.warnings(proxy), [BRIDGE_TWICE_MESSAGE, CSP_MESSAGE])
+
+    def test_only_a_buffered_taggable_page_is_checked(self):
+        """Given a blocking CSP on a HEAD, a 404 page and a page over the size limit, when each is
+        fetched, then stderr is still empty after each one."""
+        _, proxy = self.start()
+        for method, path in (('HEAD', '/csp-header'), ('GET', '/csp-404'), ('GET', '/csp-big')):
+            with self.subTest(method=method, path=path):
+                fetch(proxy.proxy, method, path)
+                self.assertEqual(self.warnings(proxy), [])
+
+    def test_the_warning_does_not_change_the_response(self):
+        """Given a page that warns, when fetched, then the body is the page with one tag, the
+        status is 200 and the app's CSP header is passed unchanged."""
+        _, proxy = self.start()
+        status, headers, body = fetch(proxy.proxy, 'GET', '/csp-header')
+        self.assertEqual(status, 200)
+        self.assertEqual(body, PAGE.replace(b'<head>', b'<head>' + tag_for(proxy.studio_origin), 1))
+        self.assertEqual(values(headers, 'Content-Security-Policy'), ["script-src 'none'"])
+        self.assertEqual(values(headers, 'Content-Length'), [str(len(body))])
+
+
+class TunnelTests(ProxyCase):
+    def start_ws(self, mode='echo'):
+        """A WebSocketApp and a Proxy in front of it, both stopped by cleanup."""
+        app = WebSocketApp(mode)
+        self.addCleanup(app.stop)
+        proxy = Proxy(f'http://127.0.0.1:{app.port}')
+        self.addCleanup(proxy.close)
+        return app, proxy
+
+    def connect(self, proxy, **kwargs):
+        sock = socket.create_connection(('127.0.0.1', proxy.proxy), timeout=5)
+        self.addCleanup(sock.close)
+        sock.sendall(upgrade_request(proxy.proxy, **kwargs))
+        return sock
+
+    def test_frames_echo_through_the_proxy(self):
+        """Given the RFC 6455 handshake sent through the proxy, when the RFC's masked Hello and
+        then two more frames follow, then the client reads a 101 with the RFC's accept value and
+        the unmasked echo of each frame on the same connection."""
+        _, proxy = self.start_ws()
+        sock = self.connect(proxy)
+        head = read_head(sock)
+        self.assertTrue(head.startswith('HTTP/1.1 101 '), head)
+        self.assertIn(f'Sec-WebSocket-Accept: {WS_ACCEPT}\r\n', head)
+        for frame, echo in ((WS_HELLO, WS_ECHO), (WS_HELLO, WS_ECHO), (masked(b'Hi'), b'\x81\x02Hi')):
+            sock.sendall(frame)
+            self.assertEqual(read_exact(sock, len(echo)), echo)
+
+    def test_the_app_gets_the_rewritten_request_once(self):
+        """Given an upgrade with the proxy's Host and Origin, when the app records it, then it saw
+        one request: GET /socket HTTP/1.1, Host and Origin of the app, the key, Upgrade websocket,
+        Connection Upgrade only, Accept-Encoding identity."""
+        app, proxy = self.start_ws()
+        sock = self.connect(proxy)
+        read_head(sock)
+        sock.sendall(WS_HELLO)
+        read_exact(sock, len(WS_ECHO))
+        self.assertEqual(len(app.heads), 1)
+        first, *lines = app.heads[0].split('\r\n')
+        seen = {}
+        for line in lines:
+            name, _, value = line.partition(': ')
+            seen.setdefault(name.lower(), []).append(value)
+        self.assertEqual(first, 'GET /socket HTTP/1.1')
+        self.assertEqual(seen['host'], [f'127.0.0.1:{app.port}'])
+        self.assertEqual(seen['origin'], [f'http://127.0.0.1:{app.port}'])
+        self.assertEqual(seen['sec-websocket-key'], [WS_KEY])
+        self.assertEqual((seen['upgrade'], seen['connection']), (['websocket'], ['Upgrade']))
+        self.assertEqual(seen['accept-encoding'], ['identity'])
+
+    def test_either_side_closing_ends_the_tunnel(self):
+        """Given an open tunnel, when the client closes, then the app reads EOF; given an app that
+        sends one frame and closes, then the client reads that frame and then EOF."""
+        app, proxy = self.start_ws()
+        sock = self.connect(proxy)
+        read_head(sock)
+        sock.close()
+        self.assertTrue(app.eof.wait(10))
+        _, proxy = self.start_ws('push-close')
+        sock = self.connect(proxy)
+        read_head(sock)
+        self.assertEqual(read_exact(sock, 5), b'\x81\x03bye')
+        self.assertEqual(sock.recv(1), b'')
+
+    def test_foreign_host_and_bad_target_are_refused(self):
+        """Given an upgrade with the Host evil.test and one with the target *, when sent, then the
+        answers are exactly the 421 and the 400 refusals and the app saw no connection."""
+        app, proxy = self.start_ws()
+        self.assertEqual(raw(proxy.proxy, upgrade_request(proxy.proxy, host='evil.test')), REFUSAL_421)
+        self.assertEqual(raw(proxy.proxy, upgrade_request(proxy.proxy, path='*')), REFUSAL_400)
+        self.assertEqual(app.connections, 0)
+
+    def test_the_apps_refusal_reaches_the_client_unchanged(self):
+        """Given an app that answers an upgrade with a 400 and a body and closes, when sent through
+        the proxy, then the client reads exactly those bytes and then EOF."""
+        _, proxy = self.start_ws('refuse')
+        answer = raw(proxy.proxy, upgrade_request(proxy.proxy))
+        self.assertEqual(answer, b'HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\n'
+                                 b'Content-Length: 4\r\n\r\nnope')
+
+    def test_unreachable_app_drops_the_connection_quietly(self):
+        """Given a stopped app, when an upgrade arrives, then the client gets zero bytes, the next
+        bridge request is 200 and stderr has no Traceback."""
+        app, proxy = self.start_ws()
+        app.stop()
+        self.assertEqual(raw(proxy.proxy, upgrade_request(proxy.proxy)), b'')
+        self.assertEqual(fetch(proxy.proxy, 'GET', BRIDGE_PATH)[0], 200)
+        proxy.stop()
+        self.assertNotIn('Traceback', proxy.read_err())
+
+    def test_an_upgrade_on_the_bridge_path_goes_to_the_app(self):
+        """Given an upgrade for the bridge path, when sent, then the client reads the app's 101 and
+        the app saw that path; a plain GET of the path still returns the repository's bridge bytes."""
+        app, proxy = self.start_ws()
+        sock = self.connect(proxy, path=BRIDGE_PATH)
+        self.assertTrue(read_head(sock).startswith('HTTP/1.1 101 '))
+        self.assertEqual(app.heads[0].split('\r\n')[0], f'GET {BRIDGE_PATH} HTTP/1.1')
+        status, _, body = fetch(proxy.proxy, 'GET', BRIDGE_PATH)
+        self.assertEqual((status, body), (200, (REPO / 'fontkit-bridge.js').read_bytes()))
+
+    def test_bytes_sent_with_the_handshake_are_not_lost(self):
+        """Given the handshake and the first frame sent in one write, when the app echoes, then
+        the client reads the echo of that frame."""
+        _, proxy = self.start_ws()
+        with socket.create_connection(('127.0.0.1', proxy.proxy), timeout=5) as sock:
+            sock.sendall(upgrade_request(proxy.proxy) + WS_HELLO)
+            self.assertTrue(read_head(sock).startswith('HTTP/1.1 101 '))
+            self.assertEqual(read_exact(sock, len(WS_ECHO)), WS_ECHO)
 
 
 if __name__ == '__main__':

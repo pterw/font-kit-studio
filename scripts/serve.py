@@ -30,7 +30,9 @@ import os
 from pathlib import Path
 import posixpath
 import re
+import selectors
 import signal
+import socket
 import sys
 import tempfile
 import threading
@@ -50,6 +52,14 @@ LOOPBACK_URL_HOSTS = ("localhost", "127.0.0.1", "[::1]")
 HOP_BY_HOP = ("connection", "keep-alive", "proxy-connection", "te", "trailer", "transfer-encoding", "upgrade")
 MAX_HTML_BYTES = 8 * 1024 * 1024  # the Node proxy's limit: a larger page streams through untagged
 MAX_BYTES = 1024 * 1024
+CSP_MESSAGE = ("Font Kit Studio: this page's Content-Security-Policy blocks the bridge (it does not allow the "
+               "page's own scripts). Add 'self' to script-src while you develop.")
+BRIDGE_TWICE_MESSAGE = ("Font Kit Studio: this page also loads its own fontkit-bridge.js. If Studio does not "
+                        "connect, remove that script while you use serve.py.")
+SCRIPT_DIRECTIVES = ("script-src-elem", "script-src", "default-src")
+HOST_SOURCE = re.compile(r"(?:([a-z][a-z0-9+.-]*)://)?(\[[^\]]+\]|[^:/\s]+)(?::([0-9]+|\*))?(/\S*)?",
+                         re.IGNORECASE | re.ASCII)
+SPACE = " \t\n\v\f\r"  # what strip() removes; str.strip() with no argument also takes 0x1C-0x1F and 0x85
 ENDPOINTS = "/__fontkit/"
 INDEX_NAMES = ("index.html", "index.htm")  # what SimpleHTTPRequestHandler serves for a directory
 
@@ -345,6 +355,122 @@ def insert_tag(page, tag):
     return tag + page
 
 
+# The functions down to tunnel() port packages/fontkitstudio/src/csp.js and run on a page decoded as latin-1,
+# as Node does. re.ASCII keeps \s, \b and the case folding to what JavaScript does on those characters.
+# Known divergence: JavaScript's \s and trim() also match the byte 0xA0; here only ASCII whitespace does.
+def parse_origin(page_origin):
+    """The page's own origin when it is a plain http one, as (host, port); anything else gives None."""
+    if not isinstance(page_origin, str):
+        return None
+    try:
+        parts = urlsplit(page_origin)
+        port = parts.port
+    except ValueError:
+        return None
+    if parts.scheme != "http" or not parts.hostname:
+        return None
+    return bracketed(parts), str(port or 80)
+
+
+def source_allows_bridge(value, origin):
+    """Whether one host-source names the page's origin and the bridge's path.
+
+    Scheme and host compare without case; the path keeps its case, as browsers compare it
+    case-sensitively. Anything that does not parse, or is not clearly the page's origin, does not match.
+    """
+    found = HOST_SOURCE.fullmatch(value)  # fullmatch: `$` would also match before a trailing newline
+    if not found:
+        return False
+    scheme, host, port, path = found.groups()
+    port = port or "80"
+    if scheme is not None and scheme.lower() != "http":
+        return False
+    if host.lower() != origin[0] or port not in ("*", origin[1]):
+        return False
+    if not path:
+        return True
+    return BRIDGE_PATH.startswith(path) if path.endswith("/") else path == BRIDGE_PATH
+
+
+def policy_blocks(policy, origin):
+    """One policy: the first of script-src-elem, script-src, default-src that it sets decides."""
+    directives = {}
+    for part in policy.split(";"):
+        name, *values = re.split(r"\s+", part.strip(SPACE), flags=re.ASCII)
+        if name and name.lower() not in directives:
+            directives[name.lower()] = values
+    key = next((name for name in SCRIPT_DIRECTIVES if name in directives), None)
+    if key is None:
+        return False
+    values = directives[key]
+    if any(value.lower() == "'strict-dynamic'" for value in values):
+        return True
+    return not any(value.lower() in ("'self'", "*", "http:")
+                   or (origin is not None and source_allows_bridge(value, origin)) for value in values)
+
+
+def blocks_same_origin_script(policy, page_origin=None):
+    """policy: a header value (policies may be comma-separated) or a list of them.
+
+    Several policies all apply, so one that blocks is enough. page_origin (optional, such as
+    'http://localhost:5173'): a source that names it also allows the bridge. Non-text policies never block.
+    """
+    origin = parse_origin(page_origin)
+    return any(policy_blocks(one, origin)
+               for each in (policy if isinstance(policy, list) else [policy])
+               if isinstance(each, str) for one in each.split(","))
+
+
+def attribute(tag, name):
+    pattern = rf"\s{name}\s*=\s*(?:\"([^\"]*)\"|'([^']*)'|([^\s\"'>]+))"
+    found = re.search(pattern, tag, re.IGNORECASE | re.ASCII)
+    return next((group for group in found.groups() if group is not None), None) if found else None
+
+
+def meta_policies(html):
+    """The content of every <meta http-equiv="Content-Security-Policy"> in a page."""
+    if not isinstance(html, str):
+        return []
+    policies = []
+    for tag in re.findall(r"<meta\b[^>]*>", html, re.IGNORECASE | re.ASCII):
+        equiv, content = attribute(tag, "http-equiv"), attribute(tag, "content")
+        if equiv is not None and equiv.strip(SPACE).lower() == "content-security-policy" and content is not None:
+            policies.append(content)
+    return policies
+
+
+def loads_own_bridge(html):
+    """Whether the page already has a <script src> that names fontkit-bridge."""
+    if not isinstance(html, str):
+        return False
+    return any("fontkit-bridge" in (attribute(tag, "src") or "").lower()
+               for tag in re.findall(r"<script\b[^>]*>", html, re.IGNORECASE | re.ASCII))
+
+
+def tunnel(client, upstream, first=b""):
+    """Raw bytes both ways until either side reaches EOF or errors; then both sockets close."""
+    try:
+        upstream.sendall(first)
+        with selectors.DefaultSelector() as selector:
+            selector.register(client, selectors.EVENT_READ, upstream)
+            selector.register(upstream, selectors.EVENT_READ, client)
+            while True:
+                for key, _ in selector.select():
+                    data = key.fileobj.recv(65536)
+                    if not data:
+                        return
+                    key.data.sendall(data)
+    except OSError:
+        pass
+    finally:  # either side ending ends both; the shutdown gives the client its EOF now
+        try:
+            client.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
+        client.close()
+        upstream.close()
+
+
 def rewrite_location(value, target_port, proxy_origin):
     """Absolute or //-relative http: Location under a loopback name and the target port -> proxy origin + rest."""
     try:
@@ -369,6 +495,7 @@ def find_asset(name):
 class ProxyHandler(BaseHTTPRequestHandler):
     """Forwards every request to the app, tags its HTML pages and serves the bridge itself."""
     config = target = target_origin = target_host = tag = bridge = hosts = own_origins = None
+    said = said_lock = None  # the warnings already printed in this run, set by run_proxy
 
     def log_message(self, format, *args):
         if not self.config.quiet:
@@ -394,7 +521,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 return rest
         return None
 
-    def forward_headers(self):
+    def forward_headers(self, close=True):
         """The request's (name, value) pairs for the app: duplicates kept, Host and Accept-Encoding replaced."""
         out = []
         for name, value in self.headers.items():
@@ -407,7 +534,8 @@ class ProxyHandler(BaseHTTPRequestHandler):
             elif rest is not None and lower == "referer":
                 value = self.target_origin + rest
             out.append((name, value))
-        return out + [("Host", self.target_host), ("Accept-Encoding", "identity"), ("Connection", "close")]
+        out += [("Host", self.target_host), ("Accept-Encoding", "identity")]
+        return out + [("Connection", "close")] if close else out
 
     def response_headers(self, resp):
         return [(name, rewrite_location(value, self.target.port or 80, self.config.proxy_origin)
@@ -439,9 +567,62 @@ class ProxyHandler(BaseHTTPRequestHandler):
         return (self.command != "HEAD" and resp.status == 200 and kind == "text/html"
                 and resp.getheader("Content-Encoding", "identity").lower() == "identity")
 
+    def host_ok(self):
+        return (self.headers.get("Host") or "").strip().lower() in self.hosts
+
+    def say(self, message):
+        """One line on stderr, once per run, flushed before the page that caused it is sent."""
+        with self.said_lock:
+            if message in self.said:
+                return
+            self.said.add(message)
+        print(message, file=sys.stderr, flush=True)
+
+    def check_page(self, resp, page):
+        html = page.decode("latin-1")
+        if loads_own_bridge(html):
+            self.say(BRIDGE_TWICE_MESSAGE)
+        policies = [resp.getheader("Content-Security-Policy"), *meta_policies(html)]
+        if blocks_same_origin_script(policies, self.config.proxy_origin):
+            self.say(CSP_MESSAGE)
+
+    def is_upgrade(self):
+        tokens = ",".join(self.headers.get_all("Connection", [])).lower().split(",")
+        return "Upgrade" in self.headers and "upgrade" in (token.strip() for token in tokens)
+
+    def refuse(self, line):
+        self.wfile.write(f"HTTP/1.1 {line}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n".encode())
+
+    def buffered(self):
+        """The bytes the client sent past the request head that rfile already holds, taken without blocking."""
+        self.connection.setblocking(False)
+        try:
+            pending = self.rfile.peek(1)  # a blocking peek on an empty buffer would wait for the client
+        finally:
+            self.connection.setblocking(True)
+        return self.rfile.read(len(pending))
+
+    def upgrade(self):
+        """A WebSocket (the app's own hot reload): the same checks and rewrites, then raw bytes both ways."""
+        self.close_connection = True
+        if not self.host_ok():
+            return self.refuse("421 Misdirected Request")
+        if not self.path.startswith("/"):
+            return self.refuse("400 Bad Request")
+        try:
+            upstream = socket.create_connection((self.target.hostname, self.target.port or 80))
+        except OSError:  # the app is down: the client just loses the connection
+            return
+        headers = self.forward_headers(close=False)
+        headers += [(name, ", ".join(self.headers.get_all(name))) for name in ("Connection", "Upgrade")]
+        head = f"{self.command} {self.path} HTTP/1.1\r\n" + "".join(f"{n}: {v}\r\n" for n, v in headers) + "\r\n"
+        tunnel(self.connection, upstream, head.encode("latin-1") + self.buffered())
+
     def forward(self):
         self.started = False
-        if (self.headers.get("Host") or "").strip().lower() not in self.hosts:
+        if self.is_upgrade():
+            return self.upgrade()
+        if not self.host_ok():
             return self.send_text(421, "Host header not allowed.")
         if not self.path.startswith("/"):
             return self.send_text(400, "Bad request.")
@@ -476,6 +657,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
             resp = conn.getresponse()
             page = resp.read(MAX_HTML_BYTES + 1) if self.taggable(resp) else None
             if page is not None and len(page) <= MAX_HTML_BYTES:
+                self.check_page(resp, page)
                 return self.send_tagged(resp, page)
             self.send_head(resp, self.response_headers(resp))
             self.stream(resp, page or b"")
@@ -496,7 +678,7 @@ def run_proxy(config, target, studio_origin):
     port = target.port or 80
     suffix = f":{port}" if port != 80 else ""
     handler = type("ProxyHandler", (ProxyHandler,), {
-        "config": config, "target": target, "hosts": own,
+        "config": config, "target": target, "hosts": own, "said": set(), "said_lock": threading.Lock(),
         "own_origins": tuple(f"http://{host}" for host in own),
         "target_origin": f"http://{bracketed(target)}{suffix}", "target_host": bracketed(target) + suffix,
         "tag": f'<script src="{BRIDGE_PATH}" data-allowed-origins="{studio_origin}"></script>'.encode(),
