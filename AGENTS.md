@@ -143,6 +143,15 @@ heavy parallel load) is re-run once on the same tree before anyone acts. A pass 
 intermittent test defect: record it as a finding with both outputs, and fix it as its own
 task, never inside the change that met it.
 
+Landing a change runs every test module that exercises the files it touches, not only the
+task's own focused tests: a change to `fontkit-studio.html` once broke a test in a Studio
+module the task's focused list did not name.
+
+Each push cancels the branch's running CI. While GitHub Actions is degraded, hold the
+intermediate pushes and push once. A job whose steps all passed but whose status never
+completes is not evidence until GitHub marks it complete; a run a push did not start often
+appears once delayed events are delivered.
+
 Code-graph tools (codebase-memory or similar) are preferred for discovery when
 installed: confirm the project and index generation first. When they are not
 available, record that and rely on direct source and runtime evidence; never
@@ -273,8 +282,9 @@ assets come from the tag, not a working tree, so their hashes match the evidence
 `git -c core.autocrlf=false archive vX.Y.Z <files>` (a Windows checkout adds CRLF). The
 export format version changes only when the JSON format does. Before the final push of a
 release point, re-check every claim against fresh output: local and remote heads, product
-code identical to the tree the gates ran on, version labels, task records, and each number
-in the pull request body.
+code identical to the tree the gates ran on, version labels, task records, each number
+in the pull request body, and the added docs and messages for process state
+(anti-pattern 15).
 
 **Every commit has a body.** The body says why the change was made (the
 problem, the decision, or the ruling it records), not a restatement of the
@@ -304,7 +314,11 @@ Forbidden:
   that needs one event before another asserts that order first, so a fast or
   slow run fails instead of passing vacuously. A mutant that a test kills only
   some of the time is a finding: run a new timing-sensitive test and its mutant
-  repeatedly (for example 20 times each).
+  repeatedly (for example 20 times each), under the load the plan states: a
+  lighter load once hid a mutant that survived 9 runs in 20 under the full one.
+- A mutant that was never run. Before a mutant's failure counts, show that the
+  mutated code is what the test loaded; a served copy can silently fall back to
+  the original, and the test then passes against unmutated code.
 
 Good patterns:
 
@@ -315,6 +329,9 @@ Good patterns:
 - Both handshake orders and reload/navigation cases for anything stateful.
 - Starting `scripts/serve.py` on OS-assigned free ports and stopping it in a
   `finally` or `tearDown`.
+- Comparing elements by stable identities. Bridge-assigned ids
+  (`auto:<tag>:<role>:<n>`) change when a node is replaced, and the bridge marks
+  newly discovered nodes after a short delay: wait for that before taking a snapshot.
 
 ---
 
