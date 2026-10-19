@@ -2399,16 +2399,16 @@ class StudioAdapterTests(StudioLegacyCase):
 
     @per_engine
     def test_a_groups_adapter_changed_between_two_detects_is_what_the_next_request_carries(self, engine):
-        """Given a body group applied and acknowledged, when the next Detect reports the same group as a heading and
-        Apply is pressed again, then the first request carried bootstrap5-body and the second bootstrap5-heading."""
+        """Given a heading group applied and acknowledged, when the next Detect reports the same group as plain and Apply
+        is pressed again, then the first request carried bootstrap5-heading, the second plain, and no page errors."""
         page, frame, errors = self.open(engine, PEER_URL, PEER)
-        self.detected(page, frame, [group(selectors=table.PAGE_BODY, adapter='bootstrap5-body')])
+        self.detected(page, frame, [group(adapter='bootstrap5-heading')])
         first = self.apply_role(page, frame, '24')
         self.send(frame, self.receipt(first))
         self.wait_status(page, 'Preview applied to 1 role')
-        self.detected(page, frame, [group(adapter='bootstrap5-heading')])
+        self.detected(page, frame, [group(adapter='plain')])
         second = self.apply_role(page, frame, '25')
-        self.assertEqual([first['roles'][0]['adapter'], second['roles'][0]['adapter']], ['bootstrap5-body', 'bootstrap5-heading'])
+        self.assertEqual([first['roles'][0]['adapter'], second['roles'][0]['adapter']], ['bootstrap5-heading', 'plain'])
         self.assertEqual(errors, [])
 
     @per_engine
