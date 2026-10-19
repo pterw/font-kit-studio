@@ -12,7 +12,7 @@ Two things have their own version numbers:
 
 ## [Unreleased]
 
-## [0.4.0] - 2026-10-18
+## [0.4.0] - 2026-10-19
 
 ### Added
 
