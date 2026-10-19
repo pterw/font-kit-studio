@@ -1,9 +1,12 @@
 """Proxy mode of scripts/serve.py: the real script as a process in front of a small fake app."""
 
 import base64
+import contextlib
+import errno
 import gzip
 import hashlib
 import http.client
+import io
 import json
 import os
 import re
@@ -15,7 +18,9 @@ import sys
 import tempfile
 import threading
 import time
+import types
 import unittest
+import unittest.mock
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import quote, unquote, urlsplit
@@ -226,7 +231,7 @@ def restart_app(port):
 class Proxy:
     """scripts/serve.py <target> as a process; ready when its Open: line is written."""
 
-    def __init__(self, target, *extra, serve=SERVE):
+    def __init__(self, target, serve=SERVE):
         work = REPO / 'work'  # gitignored scratch
         work.mkdir(exist_ok=True)
         self.scratch = Path(tempfile.mkdtemp(prefix='serve-proxy-', dir=work))
@@ -235,7 +240,7 @@ class Proxy:
         self.err = open(self.scratch / 'stderr.txt', 'w+', encoding='utf-8')
         self.proc = subprocess.Popen(
             [sys.executable, str(serve), target, '--quiet', '--studio-port', str(self.studio),
-             '--target-port', str(self.proxy), *extra],
+             '--target-port', str(self.proxy)],
             cwd=Path(serve).parent, stdout=self.out, stderr=self.err,
             env={**os.environ, 'PYTHONIOENCODING': 'utf-8'},
             creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0)
@@ -297,11 +302,11 @@ def run_once(*args, serve=SERVE):
 
 
 class ProxyCase(unittest.TestCase):
-    def start(self, target=None, **kwargs):
+    def start(self):
         """A FakeApp and a Proxy in front of it; both are stopped by cleanup, even on failure."""
         app = FakeApp()
         self.addCleanup(app.close)
-        proxy = Proxy(target or f'http://127.0.0.1:{app.port}', **kwargs)
+        proxy = Proxy(f'http://127.0.0.1:{app.port}')
         self.addCleanup(proxy.close)
         return app, proxy
 
@@ -390,7 +395,8 @@ class PageTests(ProxyCase):
         """Given a request with the proxy's Host, Accept-Encoding gzip, br, an Origin and a
         Referer under the proxy and a Cookie, when the app echoes what it saw, then it got
         exactly one Host (its own) and one Accept-Encoding (identity), both addresses moved to
-        the app's origin, the cookie untouched, and a foreign Origin stays as it was."""
+        the app's origin, the cookie untouched, and a foreign Origin stays as it was; a Referer
+        that only starts with the proxy's address (a longer port) is forwarded unchanged."""
         app, proxy = self.start()
         own, site = f'http://127.0.0.1:{proxy.proxy}', f'http://127.0.0.1:{app.port}'
         headers = {'Accept-Encoding': 'gzip, br', 'Origin': own, 'Referer': own + '/from?q=1',
@@ -400,6 +406,8 @@ class PageTests(ProxyCase):
                                 'Origin': [site], 'Referer': [site + '/from?q=1'], 'Cookie': ['sid=abc']})
         seen = json.loads(fetch(proxy.proxy, 'GET', '/echo-headers', {'Origin': 'http://evil.test'})[2])
         self.assertEqual(seen['Origin'], ['http://evil.test'])
+        seen = json.loads(fetch(proxy.proxy, 'GET', '/echo-headers', {'Referer': own + '0/x'})[2])
+        self.assertEqual(seen['Referer'], [own + '0/x'])
 
     def test_unreachable_app_answers_502_and_recovers(self):
         """Given a working proxy, when the app stops, then two requests in a row get 502 with
@@ -444,20 +452,23 @@ class PageTests(ProxyCase):
         self.assertEqual(body, BIG_EXACT.replace(b'<head>', b'<head>' + tag, 1))
         self.assertEqual(values(headers, 'Cache-Control'), ['no-store'])
         status, headers, body = fetch(proxy.proxy, 'GET', '/big-over')
-        self.assertEqual(body == BIG_OVER, True)
+        self.assertTrue(body == BIG_OVER, f'{len(body)} bytes, wanted {len(BIG_OVER)}')
         self.assertEqual(values(headers, 'Content-Length'), [str(LIMIT + 1)])
         self.assertEqual(values(headers, 'Cache-Control'), [])
 
     def test_streaming_is_not_held_back(self):
         """Given a response that sends one chunk and then waits, when the client has read that
-        chunk through the proxy, then the rest is released and arrives after it: the first chunk
-        reached the client before the response ended."""
+        chunk through the proxy, then the first chunk reached the client before the response
+        ended, the rest arrives after it and the connection ends with firstsecond; a proxy that
+        closes or goes quiet before the first chunk fails with the bytes seen, it does not hang."""
         app, proxy = self.start()
         with socket.create_connection(('127.0.0.1', proxy.proxy), timeout=5) as sock:
             sock.sendall(f'GET /stream HTTP/1.0\r\nHost: 127.0.0.1:{proxy.proxy}\r\n\r\n'.encode())
-            seen = b''
+            seen, deadline = b'', time.time() + 5
             while b'first' not in seen:
-                seen += sock.recv(65536)
+                chunk = sock.recv(65536)
+                self.assertTrue(chunk and time.time() < deadline, f'no first chunk, saw {seen!r}')
+                seen += chunk
             self.assertNotIn(b'second', seen)
             app.release.set()
             while chunk := sock.recv(65536):
@@ -475,7 +486,8 @@ class PageTests(ProxyCase):
     def test_malformed_requests(self):
         """Given a chunked POST without a length, a request target that is not a path, a target
         with a non-ASCII byte and a bad Content-Length, then they answer 411, 400 Bad request.,
-        400 Bad request. and 400 Bad request., and a body that ends early gets no answer."""
+        400 Bad request. and 400 Bad request. with the app seeing no request, and a body that ends
+        early gets no answer."""
         app, proxy = self.start()
         head = f'Host: 127.0.0.1:{proxy.proxy}\r\n'
         cases = (
@@ -505,6 +517,17 @@ class PageTests(ProxyCase):
         self.assertEqual(fetch(proxy.proxy, 'GET', '/style.css')[0], 200)
         proxy.stop()
         self.assertNotIn('Traceback', proxy.read_err())
+
+    def test_stopping_with_a_stream_open_exits_cleanly(self):
+        """Given a response that never ends and a client still reading it, when serve.py is
+        told to stop, then it exits 0 and prints Stopped. (without daemon threads it waits for
+        the stream and is killed after 10 s)."""
+        _, proxy = self.start()
+        with socket.create_connection(('127.0.0.1', proxy.proxy), timeout=10) as sock:
+            sock.sendall(f'GET /endless HTTP/1.0\r\nHost: 127.0.0.1:{proxy.proxy}\r\n\r\n'.encode())
+            self.assertTrue(sock.recv(1024))
+            self.assertEqual(proxy.stop(), 0)
+        self.assertIn('Stopped.', proxy.read_out())
 
 
 class StudioServerTests(ProxyCase):
@@ -572,6 +595,27 @@ class TargetTests(unittest.TestCase):
                 result = run_once(target)
                 self.assertEqual((result.returncode, result.stdout), (1, ''))
                 self.assertEqual(result.stderr, REFUSAL + '\n')
+
+    def test_both_servers_bind_loopback(self):
+        """Given proxy mode, when main binds its servers and the second bind fails, then the
+        Studio server and the proxy were each asked to bind 127.0.0.1 and nothing else."""
+        serve, binds = load_serve(), []
+
+        class Recorder:
+            def __init__(self, address, handler):
+                binds.append(address[0])
+                if len(binds) == 2:
+                    raise OSError(errno.EACCES, 'recorded, not bound')
+
+            def server_close(self):
+                pass
+
+        serve.server_class = lambda: Recorder
+        studio, proxy = free_ports()
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            code = serve.main(['http://127.0.0.1:5000', '--quiet', '--studio-port', str(studio),
+                               '--target-port', str(proxy)])
+        self.assertEqual((code, binds), (1, ['127.0.0.1', '127.0.0.1']))
 
     def test_insert_tag_follows_the_shared_cases(self):
         """Given every case of proxy-insert-cases.json, when insert_tag runs on its latin-1
@@ -714,10 +758,11 @@ def masked(payload, mask=b'\x01\x02\x03\x04'):
     return bytes([0x81, 0x80 | len(payload)]) + mask + bytes(b ^ mask[i % 4] for i, b in enumerate(payload))
 
 
-def upgrade_request(port, path='/socket', host=None, origin=None):
+def upgrade_request(port, path='/socket', host=None, origin=None, connection=('Upgrade',)):
     host = host or f'127.0.0.1:{port}'
     origin = origin or f'http://127.0.0.1:{port}'
-    return (f'GET {path} HTTP/1.1\r\nHost: {host}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n'
+    lines = ''.join(f'Connection: {value}\r\n' for value in connection)
+    return (f'GET {path} HTTP/1.1\r\nHost: {host}\r\nUpgrade: websocket\r\n{lines}'
             f'Sec-WebSocket-Key: {WS_KEY}\r\nSec-WebSocket-Version: 13\r\nOrigin: {origin}\r\n\r\n').encode()
 
 
@@ -938,6 +983,61 @@ class WarningTests(ProxyCase):
         self.assertEqual(values(headers, 'Content-Length'), [str(len(body))])
 
 
+class SayTests(unittest.TestCase):
+    def test_a_broken_stderr_does_not_turn_a_page_into_a_502(self):
+        """Given a stderr whose write raises OSError and one that is closed (ValueError), when a
+        CSP page is fetched through an in-process proxy, then each answers 200 with the tagged page."""
+        serve = load_serve()
+        app = FakeApp()
+        self.addCleanup(app.close)
+        closed = io.StringIO()
+        closed.close()
+        broken = types.SimpleNamespace(write=self.fail_write, flush=lambda: None)
+        for name, stderr in (('OSError', broken), ('ValueError', closed)):
+            with self.subTest(name):
+                studio, port = free_ports()
+                target = serve.parse_target(f'http://127.0.0.1:{app.port}')
+                config = serve.Config.for_proxy('127.0.0.1', studio, port, target, True)
+                server = serve.run_proxy(config, target, config.studio_origin)
+                thread = threading.Thread(target=server.serve_forever, daemon=True)
+                thread.start()
+                try:
+                    with unittest.mock.patch.object(sys, 'stderr', stderr):
+                        status, _, body = fetch(port, 'GET', '/csp-header')
+                finally:
+                    server.shutdown()
+                    server.server_close()
+                    thread.join(5)
+                self.assertEqual((status, body), (200, PAGE.replace(
+                    b'<head>', b'<head>' + tag_for(config.studio_origin), 1)))
+
+    @staticmethod
+    def fail_write(text):
+        raise OSError('stderr is gone')
+
+    def test_the_line_is_written_while_the_lock_is_held(self):
+        """Given a stderr whose write is parked, when say prints, then the said lock is held
+        during the write (the race itself cannot be reproduced deterministically)."""
+        serve = load_serve()
+        entered, release = threading.Event(), threading.Event()
+
+        def park(text):
+            entered.set()
+            release.wait(10)
+
+        me = types.SimpleNamespace(said=set(), said_lock=threading.Lock())
+        parked = types.SimpleNamespace(write=park, flush=lambda: None)
+        with unittest.mock.patch.object(sys, 'stderr', parked):
+            thread = threading.Thread(target=serve.ProxyHandler.say, args=(me, 'warning'))
+            thread.start()
+            try:
+                self.assertTrue(entered.wait(10))
+                self.assertTrue(me.said_lock.locked())
+            finally:
+                release.set()
+                thread.join(10)
+
+
 class TunnelTests(ProxyCase):
     def start_ws(self, mode='echo'):
         """A WebSocketApp and a Proxy in front of it, both stopped by cleanup."""
@@ -1037,6 +1137,26 @@ class TunnelTests(ProxyCase):
         self.assertEqual(app.heads[0].split('\r\n')[0], f'GET {BRIDGE_PATH} HTTP/1.1')
         status, _, body = fetch(proxy.proxy, 'GET', BRIDGE_PATH)
         self.assertEqual((status, body), (200, (REPO / 'fontkit-bridge.js').read_bytes()))
+
+    def test_upgrade_needs_an_upgrade_token_in_connection(self):
+        """Given Upgrade: websocket with Connection keep-alive, Upgrade, and with two Connection
+        lines, when sent, then each gets a 101 and the app saw the Connection values joined by
+        a comma and a space; given a GET with Upgrade: websocket and Connection: close, then the
+        client gets the proxy's own HTTP/1.0 200 (a normal request), not the app's HTTP/1.1.
+        Node's HTTP parser makes this rule: probed on Node 24.16.0, proxy.js only listens."""
+        app, proxy = self.start_ws()
+        for connection in (('keep-alive, Upgrade',), ('keep-alive', 'Upgrade')):
+            sock = self.connect(proxy, connection=connection)
+            self.assertTrue(read_head(sock).startswith('HTTP/1.1 101 '))
+        seen = [[line for line in head.split('\r\n') if line.startswith('Connection:')] for head in app.heads]
+        self.assertEqual(seen, [['Connection: keep-alive, Upgrade']] * 2)
+        web = FakeApp()
+        self.addCleanup(web.close)
+        plain = Proxy(f'http://127.0.0.1:{web.port}')
+        self.addCleanup(plain.close)
+        with socket.create_connection(('127.0.0.1', plain.proxy), timeout=5) as sock:
+            sock.sendall(upgrade_request(plain.proxy, path='/echo-headers', connection=('close',)))
+            self.assertTrue(read_head(sock).startswith('HTTP/1.0 200 '))
 
     def test_bytes_sent_with_the_handshake_are_not_lost(self):
         """Given the handshake and the first frame sent in one write, when the app echoes, then

@@ -576,7 +576,10 @@ class ProxyHandler(BaseHTTPRequestHandler):
             if message in self.said:
                 return
             self.said.add(message)
-        print(message, file=sys.stderr, flush=True)
+            try:  # a closed or broken stderr must not fail the page; the line is lost, the page is served
+                print(message, file=sys.stderr, flush=True)
+            except (OSError, ValueError):
+                pass
 
     def check_page(self, resp, page):
         html = page.decode("latin-1")
