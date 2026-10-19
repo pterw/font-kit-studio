@@ -35,6 +35,11 @@ INVENTORY = '''() => [...document.querySelectorAll('#roleInventory > li')].map(l
   return {id: li.dataset.inventoryRole, title: li.querySelector('strong').textContent, states: Object.fromEntries(lists),
     checked: Object.fromEntries(lists).checked?.entries ?? []};
 })'''
+NESTED_POST = '''(data) => new Promise(resolve => { const child = document.createElement("iframe"); child.onload = resolve;
+  child.srcdoc = "<script>parent.parent.postMessage(" + JSON.stringify(data) + ", \\"http://studio.test\\")<" + "/script>"; document.body.append(child) })'''
+BS5_INDEX = TARGET + '/fixtures/bootstrap5-static/index.html'
+BS5_PAGE_B = TARGET + '/s2-b.html'
+BS5_PAGE_C = TARGET + '/fixtures/bootstrap5-static/s2-c.html'
 HEADINGS = {'checked': 'Checked on:', 'no-match': 'No match on:', 'conflict': 'Different style on:', 'changed': 'Changed since checked:'}
 
 
@@ -56,6 +61,16 @@ def author(name, styles, *selectors, group_id=None):
     found['signatures'] = [{'style': style, 'count': 1} for style in styles]
     found['elementCount'] = len(styles)
     return found
+
+
+def body_group(group_id='b', style=None):
+    """A style group the bridge bound to `body` as the Bootstrap 5 body (D074)."""
+    return group(group_id, 'Body', None, style or STYLE.copy(), table.PAGE_BODY, adapter='bootstrap5-body')
+
+
+def plain_group(group_id='p', style=None):
+    """A style group the bridge bound to a class, with no adapter."""
+    return group(group_id, 'Text', None, style or STYLE.copy(), sel('.x'))
 
 
 def tuple_text(style):
@@ -283,7 +298,43 @@ class RolesPageReaderTests(RouteCase):
                 self.settle(page, frame)
                 self.settle(page, frame)
                 self.assertEqual(self.status(page), REJECTED)
+        with self.subTest(message='a nested frame of the target (right origin, wrong source)'):
+            frame.evaluate(NESTED_POST, {**base, 'sessionId': session, 'protocolVersion': 1})   # valid in every field, so acceptance shows as CHANGED
+            self.settle(page, frame)
+            self.settle(page, frame)
+            self.assertEqual(self.status(page), REJECTED)
         self.assertEqual(self.apply_role(page, frame, '24')['pageVersion'], 1)
+        self.assertEqual(errors, [])
+
+    @per_engine
+    def test_a_roles_page_from_a_foreign_origin_changes_nothing(self, engine):
+        """Given a rejected Detect after a changed page, when the target frame navigates to another origin whose page
+        posts an otherwise valid roles-page with the right session before it finishes loading, then the status is
+        still the rejection text."""
+        page, frame, errors = self.peer(engine)
+        self.detected(page, frame)
+        self.page_message(frame, 1)
+        self.wait_status(page, CHANGED)
+        request = self.pending(page, frame)
+        self.send(frame, {'type': 'design:rejected', 'requestId': request['requestId'], 'revision': 0, 'reason': 'unsupported-value'})
+        self.wait_status(page, REJECTED)
+        message = {'type': 'design:roles-page', 'protocolVersion': 1, 'sessionId': frame.evaluate('session'), 'documentId': 'peer-document',
+                   'pageVersion': 9, 'pageURL': PEER_URL}
+        script = '<img src="/hold.png"><script>parent.postMessage(' + json.dumps(message) + ', "http://studio.test")</script>'
+        held = []
+        page.context.route('http://evil.test/hold.png', lambda route: held.append(route))
+        page.context.route('http://evil.test/roles-page.html', lambda route: route.fulfill(body=script, content_type='text/html'))
+        frame.evaluate('setTimeout(() => { location.href = "http://evil.test/roles-page.html" }, 0)')
+        for _ in range(200):
+            if held:
+                break
+            page.wait_for_timeout(50)
+        self.assertTrue(held, 'the foreign page is still loading')
+        self.settle(page, frame)
+        self.settle(page, frame)
+        self.assertEqual(self.status(page), REJECTED)
+        for route in held:
+            route.fulfill(status=204)
         self.assertEqual(errors, [])
 
     @per_engine
@@ -806,6 +857,105 @@ class OriginTests(RouteCase):
                 self.assertEqual(errors, [])
 
 
+class OriginNoticeTests(RouteCase):
+    OTHER = PEER.replace("n===1?'peer-document'", "n===1?'other-origin-document'")
+
+    @per_engine
+    def test_a_new_origin_with_nothing_stored_shows_no_notice(self, engine):
+        """Given a first connection with no Detect, when Studio connects to another origin, then the notice is empty and
+        the notice element holds no new-origin text."""
+        page, frame, errors = self.peer(engine)
+        self.wait_status(page, READY)
+        self.switch_to(page, 'http://evil.test/peer', self.OTHER)
+        self.assertEqual(self.notice(page), '')
+        self.assertNotIn('new Live App origin', page.locator('#roleNotice').text_content())
+        self.assertEqual(errors, [])
+
+    @per_engine
+    def test_a_new_origin_after_clearing_stored_pages_shows_no_notice(self, engine):
+        """Given a preview applied for a stored page and then Clear visited pages, when Studio connects to another origin,
+        then the notice is empty: neither the new-origin nor the cleared sentence."""
+        page, frame, errors = self.peer(engine)
+        self.apply_preview(page, frame)
+        self.button(page, CLEAR_VISITED).click()
+        self.assertEqual(self.notice(page), CLEARED)
+        self.switch_to(page, 'http://evil.test/peer', self.OTHER)
+        self.assertEqual(self.notice(page), '')
+        self.assertNotIn('new Live App origin', page.locator('#roleNotice').text_content())
+        self.assertEqual(errors, [])
+
+    @per_engine
+    def test_a_new_origin_after_a_ready_with_an_applied_preview_and_no_detect_shows_no_notice(self, engine):
+        """Given a ready that reports an accepted role preview and no Detect, when Studio connects to another origin, then
+        the notice is empty."""
+        page, frame, errors = self.peer(engine)
+        self.ready_with(page, frame, self.snapshot_state([self.role_input()]))
+        self.assertIn('font-size: 24px', self.preview(page)['css'])
+        self.switch_to(page, 'http://evil.test/peer', self.OTHER)
+        self.assertEqual(self.notice(page), '')
+        self.assertEqual(errors, [])
+
+
+class BodyRoleTests(RouteCase):
+    @per_engine
+    def test_a_body_bound_group_and_a_plain_group_of_one_style_keep_separate_roles(self, engine):
+        """Given route /a with a style bound to body (Bootstrap 5 body) and route /b with the same style bound to .x,
+        when both are detected, then the status is Detected, two pages are counted, the inventory holds role-1 and role-2
+        both labelled with the tuple text, role-1 lists /a only, role-2 lists /b only, and the next Detect request names
+        role-1 with body and role-2 with .x."""
+        page, frame, errors = self.peer(engine)
+        self.visit(page, frame, '/a', [body_group()])
+        self.visit(page, frame, '/b', [plain_group()], {})
+        self.assertTrue(self.status(page).startswith('Detected'), self.status(page))
+        self.assertEqual(self.visited_text(page), visited(2))
+        text = 'sans-serif: 16px / 400 / none / 0em'
+        self.assertEqual([item['title'] for item in self.inventory(page)], [f'{text} (role-1)', f'{text} (role-2)'])
+        self.assertEqual((self.pages(page, 'role-1'), self.pages(page, 'role-2')), (['/a'], ['/b']))
+        request = self.pending(page, frame)
+        self.assertEqual(request['knownRoles'], [{'id': 'role-1', 'selectors': ['body']}, {'id': 'role-2', 'selectors': ['.x']}])
+        self.assertEqual(errors, [])
+
+    @per_engine
+    def test_role_ids_follow_first_seen_order_and_are_never_reused_across_body_bound_routes(self, engine):
+        """Given /a body-bound, /b plain and /c body-bound with another style, when each route is detected again, then each
+        Detect request names role-1 with body, role-2 with .x and role-3 with body, and the inventory keeps the ids
+        role-1, role-2 and role-3."""
+        page, frame, errors = self.peer(engine)
+        eighteen = styled(18)
+        routes = {'/a': [body_group()], '/b': [plain_group()], '/c': [body_group('c', eighteen)]}
+        found = {('role-1', 'body'): [(STYLE.copy(), 1)], ('role-2', '.x'): [(STYLE.copy(), 1)], ('role-3', 'body'): [(eighteen, 1)]}
+        for path in ('/a', '/b', '/c'):
+            self.visit(page, frame, path, routes[path], found)
+        expected = [{'id': 'role-1', 'selectors': ['body']}, {'id': 'role-2', 'selectors': ['.x']}, {'id': 'role-3', 'selectors': ['body']}]
+        for path in ('/a', '/b', '/c'):
+            request = self.visit(page, frame, path, routes[path], found)
+            self.assertEqual(request['knownRoles'], expected)
+            self.assertEqual([item['id'] for item in self.inventory(page)], ['role-1', 'role-2', 'role-3'])
+        self.assertEqual(self.visited_text(page), visited(3))
+        self.assertEqual(errors, [])
+
+    @per_engine
+    def test_clear_visited_pages_keeps_the_applied_body_roles_id_and_it_still_matches(self, engine):
+        """Given a body-bound role applied as role-1 and a plain Other role-2, when Clear visited pages is pressed and both
+        are detected again, then the Detect request names only role-1 with no selectors, the rows are role-1 and role-3,
+        and the Apply request carries role-1 with body, the Bootstrap 5 body adapter and size 24, and role-3 at size 30."""
+        page, frame, errors = self.peer(engine)
+        groups = [body_group(), group('o', 'Other', None, styled(20), sel('.o'))]
+        self.detected(page, frame, groups)
+        self.send(frame, self.receipt(self.apply_role(page, frame)))
+        page.wait_for_function('document.querySelector("#rolePreviewStatus").textContent.includes("Preview applied to 1 role")')
+        self.button(page, CLEAR_VISITED).click()
+        request = self.detected(page, frame, groups)
+        self.assertEqual(request['knownRoles'], [{'id': 'role-1', 'selectors': []}])
+        self.assertEqual(page.locator('#roleRows > li').evaluate_all('els => els.map(e => e.dataset.roleId)'), ['role-1', 'role-3'])
+        self.control(page, 'Preview this role', 'role-3', 'Other').check()
+        self.type_value(self.control(page, 'Size (px)', 'role-3', 'Other'), '30')
+        sent = self.press_apply(page, frame)
+        self.assertEqual([(role['id'], role['selectors'], role['adapter'], role['properties']) for role in sent['roles']],
+                         [('role-1', ['body'], 'bootstrap5-body', {'fontSize': 24}), ('role-3', ['.o'], 'plain', {'fontSize': 30})])
+        self.assertEqual(errors, [])
+
+
 class ClearVisitedTests(RouteCase):
     @per_engine
     def test_clear_visited_pages_after_an_overflow_lifts_the_limit_hint_and_enables_apply(self, engine):
@@ -1115,4 +1265,63 @@ class RealBridgeNoticeTests(RealBridgeCase):
         self.wait_status(page, READY)
         self.assertEqual(self.notice(page), '')
         self.assertEqual((self.visited_text(page), [item['title'] for item in self.inventory(page)]), (visited(1), titles))
+        self.assertEqual(errors, [])
+
+
+class RealBridgeBodyRoleTests(RealBridgeCase):
+    BODY_STYLE = """() => { const s = getComputedStyle(document.body);
+      return {family: s.fontFamily, size: s.fontSize, weight: s.fontWeight, transform: s.textTransform, tracking: s.letterSpacing}; }"""
+
+    def bootstrap_page(self, extra=''):
+        """The Bootstrap 5 fixture page with the real bridge tag, and `extra` markup before its single head end."""
+        source = (REPO / 'fixtures' / 'bootstrap5-static' / 'index.html').read_text(encoding='utf-8')
+        self.assertEqual((source.count('</body>'), source.count('</head>')), (1, 1))
+        return source.replace('</head>', extra + '</head>').replace('</body>', self.TAG + '</body>')
+
+    def row_ids(self, page, text):
+        """The ids of the Detected roles rows whose text contains `text`."""
+        return page.locator('#roleRows > li', has_text=text).evaluate_all('els => els.map(e => e.dataset.roleId)')
+
+    def entry(self, page, role):
+        return next(item for item in self.inventory(page) if item['id'] == role)
+
+    @per_engine
+    def test_the_bootstrap_body_role_and_a_plain_role_of_one_style_on_other_routes_never_break_a_later_detect(self, engine):
+        """Given the Bootstrap 5 page, a plain page whose class carries the body's own computed style, and the same
+        Bootstrap page with a bigger body size, each detected through the real bridge, then the Bootstrap body row binds body
+        and the plain row binds .x with the same tuple label; the inventory holds 19, 20 and then a further entry for the
+        bigger body style; the body role lists only its own pages; and every later Detect starts with Detected."""
+        plain = '<!doctype html><meta charset="utf-8"><style>.x{font-family:%s;font-size:%s;font-weight:%s;text-transform:%s;letter-spacing:%s}</style><p class="x">Plain</p>' + self.TAG
+        page, frame, errors = self.open(engine, BS5_INDEX, self.bootstrap_page())
+        page.context.route(BS5_PAGE_C, lambda route: route.fulfill(body=self.bootstrap_page('<style>body{font-size:18px}</style>'), content_type='text/html'))
+        page.locator('#bridgeModeInteract').click()
+        computed = frame.evaluate(self.BODY_STYLE)
+        page.context.route(BS5_PAGE_B, lambda route: route.fulfill(body=plain % tuple(computed.values()), content_type='text/html'))
+        self.assertTrue(self.detect(page).startswith('Detected'))
+        self.assertEqual(len(self.inventory(page)), 19)
+        body = self.row_ids(page, 'Adapter: Bootstrap 5 body')
+        self.assertEqual(len(body), 1)
+        self.assertIn('body', page.locator(f'#roleRows > li[data-role-id="{body[0]}"]').inner_text())
+        frame.evaluate(f'location.href = "{BS5_PAGE_B}"')
+        self.wait_status(page, READY)
+        self.assertTrue(self.detect(page).startswith('Detected'), self.status(page))
+        self.assertEqual(self.visited_text(page), visited(2))
+        self.assertEqual(len(self.inventory(page)), 20)
+        shown = page.locator('#roleRows > li').evaluate_all('els => els.map(e => [e.dataset.roleId, e.innerText])')
+        self.assertEqual(len(shown), 1)
+        self.assertNotIn(shown[0][0], body)
+        self.assertIn('.x', shown[0][1])
+        self.assertNotIn('Adapter:', shown[0][1])
+        titles = {item['id']: item['title'] for item in self.inventory(page)}
+        self.assertEqual(titles[body[0]].rsplit(' (', 1)[0], titles[shown[0][0]].rsplit(' (', 1)[0])
+        self.assertEqual(self.pages(page, body[0]), [BS5_INDEX.removeprefix(TARGET)])
+        self.assertEqual(self.pages(page, shown[0][0]), [BS5_PAGE_B.removeprefix(TARGET)])
+        self.assertTrue(self.detect(page).startswith('Detected'), self.status(page))
+        frame.evaluate(f'location.href = "{BS5_PAGE_C}"')
+        self.wait_status(page, READY)
+        self.assertTrue(self.detect(page).startswith('Detected'), self.status(page))
+        bigger = [item for item in self.inventory(page) if item['title'].startswith('sans-serif: 18px / 400 / none / 0em (')]
+        self.assertEqual(len(bigger), 1)
+        self.assertNotEqual(bigger[0]['id'], body[0])
+        self.assertEqual(self.pages(page, bigger[0]['id']), [BS5_PAGE_C.removeprefix(TARGET)])
         self.assertEqual(errors, [])

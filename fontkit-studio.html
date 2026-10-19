@@ -3816,6 +3816,8 @@ if (remembered) kitId.value = remembered;
     return JSON.stringify(["style", s.fontFamily, s.fontSize, s.fontWeight, s.textTransform, s.letterSpacing]);
   }
   function roleStyleKey(style) { return roleIdentityKey({ kind:"style", style }); }
+  // A group bound only to `body` has its own role identity, so it never shares an id (or a selector union) with plain groups.
+  const roleGroupKey = group => roleIdentityKey(group.identity) + (group.selectors.length === 1 && group.selectors[0].value === "body" ? "|body" : "");
   function validRoleVariants(variants, count, limit = 8) {
     if (!Array.isArray(variants) || variants.length > limit) return false;
     const keys = new Set();
@@ -4079,7 +4081,7 @@ if (remembered) kitId.value = remembered;
       return;
     }
     if (roleView.origin !== live.expectedOrigin) {
-      if (roleView.origin !== null) roleView.notice = ROLE_NEW_ORIGIN;
+      roleView.notice = roleCollection.routes.size > 0 ? ROLE_NEW_ORIGIN : "";
       roleView.origin = live.expectedOrigin; clearRoleCollection(false);
     } else if (rolePreview.documentId !== state.documentId) {
       // A new document of the same origin that lost a preview the page held: Studio never replays it (explicit Apply only).
@@ -4111,7 +4113,7 @@ if (remembered) kitId.value = remembered;
       const focus = active && list.contains(active) && active.dataset.roleField
         ? { id:active.closest("li").dataset.roleId, field:active.dataset.roleField, start:active.selectionStart, end:active.selectionEnd } : null;
       list.replaceChildren();
-      const rowIds = new Map(roleView.rows.map(group => [group.id, roleView.ids.get(roleIdentityKey(group.identity))]));
+      const rowIds = new Map(roleView.rows.map(group => [group.id, roleView.ids.get(roleGroupKey(group))]));
       for (const group of roleView.rows) {
         const row = document.createElement("li");
         row.dataset.roleId = rowIds.get(group.id) || "";
@@ -4164,7 +4166,7 @@ if (remembered) kitId.value = remembered;
   }
   // Fields are copied one by one from the tolerant copy, so no key a newer bridge adds is kept.
   const buildRouteSnapshot = (reply, ids) => ({ key:reply.currentPageURL, groups:reply.groups.map(group => ({
-    roleId:ids.get(roleIdentityKey(group.identity)),
+    roleId:ids.get(roleGroupKey(group)),
     variants:group.signatures.map(variant => ({ style:roleStyleCopy(variant.style), count:variant.count })),
     selectors:group.selectors.map(binding => binding.value) })),
     checks:reply.selectorChecks.map(check => ({ roleId:check.roleId, selector:check.selector, matchCount:check.matchCount,
@@ -4175,7 +4177,7 @@ if (remembered) kitId.value = remembered;
     const refs = new Map([...roleCollection.refs].map(([id, selectors]) => [id, new Map(selectors)]));
     let nextId = roleView.nextId;
     for (const group of reply.groups) {
-      const identity = roleIdentityKey(group.identity);
+      const identity = roleGroupKey(group);
       if (!ids.has(identity)) {
         ids.set(identity, `role-${++nextId}`);
         labels.set(ids.get(identity), group.identity.kind === "author-role" ? group.identity.name : roleTupleText(group.identity.style));
@@ -4318,7 +4320,7 @@ if (remembered) kitId.value = remembered;
   function buildRoleRequest() {
     const roles = [], problems = [];
     for (const group of roleView.rows) {
-      const id = roleView.ids.get(roleIdentityKey(group.identity)), draft = id && roleDrafts.get(id);
+      const id = roleView.ids.get(roleGroupKey(group)), draft = id && roleDrafts.get(id);
       if (!draft?.enabled) continue;
       const who = `${group.suggestedName} (${id})`;
       if (!group.bindingComplete || !group.selectors.length) { problems.push(`${who} has no safe complete selectors; untick it to apply the others.`); continue; }
