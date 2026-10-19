@@ -34,7 +34,8 @@ SNAP = """() => {
     const props = ['fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'textTransform'];
     const rows = [...document.querySelectorAll('[data-design-id]')].map((el) => {
         const s = getComputedStyle(el);
-        return [el.dataset.designId, props.map((p) => s[p])];
+        // Bridge counter ids (auto:<tag>:<role>:<n>) change when a node is replaced (D016): key them without the counter.
+        return [el.dataset.designId.replace(/^(auto:.*):[0-9]+$/, '$1'), props.map((p) => s[p])];
     });
     return [document.querySelector('main').outerHTML, rows, document.querySelectorAll('[style]').length];
 }"""
@@ -43,6 +44,8 @@ VITE = Case('[data-design-id="vite.hero.title"]', '[data-design-id="vite.hero.ti
             'fontSize', '32px', '48px', 'font-size: 48px')
 NEXT = Case('[data-design-id="next.hero.title"]', '[data-design-id="next.hero.title"]', 'Size (px)', '48',
             'fontSize', '40px', '48px', 'font-size: 48px')
+CSS_MODULES = Case('[data-design-id="modules.title"]', '[data-design-role="display"]', 'Size (px)', '48',
+                   'fontSize', '40px', '48px', 'font-size: 48px')
 BOOTSTRAP = Case('[data-design-id="bs.hero.title"]', '[data-design-id="bs.hero.title"]', 'Weight', '700',
                  'fontWeight', '500', '700', 'font-weight: 700')
 
@@ -161,27 +164,52 @@ class ViteEntrypointTests(RoundTrip, unittest.TestCase):
             'document.querySelector(\'[data-design-id="vite.hero.cta"]\').textContent === "Clicked 2 times"',
             polling=50)
 
-    def command_round_trip(self, fixture):
+    def replace_text(self, page, frame):
+        page.locator('#bridgeModeInteract').click()
+        page.wait_for_function('document.querySelector("#bridgeModeInteract").getAttribute("aria-pressed") === "true"')
+        old = frame.query_selector('h1')
+        frame.get_by_role('button', name='Replace text', exact=True).click()
+        frame.wait_for_function('document.querySelector("h1").textContent === "Module title 1"', polling=50)
+        # The bridge marks the new section with its own data-design-id after a debounce; settle before the snapshot.
+        frame.wait_for_function('document.querySelector("h1").closest("section").hasAttribute("data-design-id")', polling=50)
+        self.assertFalse(old.evaluate('el => el.isConnected'))
+
+    def command_round_trip(self, fixture, case=VITE, rerender=None):
         url = self.start(fixture)
         for engine in ENGINES:
             with self.subTest(engine=engine):
-                self.round_trip(engine, url, VITE, self.click_twice)
+                self.round_trip(engine, url, case, rerender or self.click_twice)
 
     def test_vite8_command_detect_apply_rerender_clear(self):
         """Given `fontkitstudio` run in fixtures/vite-react, when Studio detects, previews Size 48 on the title
         role, the page renders twice from a click, Studio shows the page-changed sentence, Detect is pressed
-        again and Clear is pressed, then the title is 48px before and after the render with the same owned
-        sheet and no style attribute, and Clear removes the sheet and restores every computed property and
-        the markup."""
+        again and Clear is pressed, then each Detect reports Detected, the title is 32px before, 48px after
+        the preview and after the render, the preview CSS shows font-size: 48px, the preview is a stylesheet
+        only (markup and the other rows unchanged), the same owned sheet stays with no style attribute added,
+        Clear removes the sheet and leaves the markup as re-rendered and restores every computed property, both canaries are
+        blocked with no fallback (no HTTPS request) and no page error is raised."""
         self.command_round_trip('vite-react')
 
     def test_vite7_command_detect_apply_rerender_clear(self):
         """Given `fontkitstudio` run in fixtures/vite7-react, when Studio detects, previews Size 48 on the title
         role, the page renders twice from a click, Studio shows the page-changed sentence, Detect is pressed
-        again and Clear is pressed, then the title is 48px before and after the render with the same owned
-        sheet and no style attribute, and Clear removes the sheet and restores every computed property and
-        the markup."""
+        again and Clear is pressed, then each Detect reports Detected, the title is 32px before, 48px after
+        the preview and after the render, the preview CSS shows font-size: 48px, the preview is a stylesheet
+        only (markup and the other rows unchanged), the same owned sheet stays with no style attribute added,
+        Clear removes the sheet and leaves the markup as re-rendered and restores every computed property, both canaries are
+        blocked with no fallback (no HTTPS request) and no page error is raised."""
         self.command_round_trip('vite7-react')
+
+    def test_css_modules_command_detect_apply_rerender_clear(self):
+        """Given `fontkitstudio` run in fixtures/vite-react-css-modules (hashed class names), when Studio
+        detects, previews Size 48 on the display role, the page replaces its title node from the Replace text
+        button, Studio shows the page-changed sentence, Detect is pressed again and Clear is pressed, then
+        each Detect reports Detected, the title is 40px before, 48px after the preview and on the new node,
+        the old node is disconnected, the preview CSS shows font-size: 48px, the preview is a stylesheet only
+        (markup and the other rows unchanged), the same owned sheet stays with no style attribute added, Clear
+        removes the sheet and leaves the markup as re-rendered and restores every computed property, both canaries are blocked with
+        no fallback (no HTTPS request) and no page error is raised."""
+        self.command_round_trip('vite-react-css-modules', CSS_MODULES, self.replace_text)
 
     def test_vite_builds_ship_neither_bridge_nor_role_css(self):
         """Given vite build of both fixtures with the permanent plugin in the config, when every output file is
@@ -237,9 +265,12 @@ class ProxyEntrypointTests(RoundTrip, unittest.TestCase):
         """Given a Bootstrap 5 page behind the proxy whose policy allows its own scripts and inline styles (the
         strict style-src 'self' outcome, stylesheet-blocked, is proved in test_r2_integration.py), when Studio
         detects, previews Weight 700 on the title role, the page replaces its own title element, Studio
-        shows the page-changed sentence, Detect is pressed again and Clear is pressed, then the title weight
-        is 500, 700, 700 on the new node, the old node is disconnected, Clear removes the sheet and restores
-        every computed property, and neither document records a CSP violation."""
+        shows the page-changed sentence, Detect is pressed again and Clear is pressed, then each Detect
+        reports Detected, the title weight is 500, 700, 700 on the new node, the old node is disconnected, the
+        preview CSS shows font-weight: 700, the preview is a stylesheet only (markup and the other rows
+        unchanged), the same owned sheet stays with no style attribute added, Clear removes the sheet and
+        leaves the markup as re-rendered and restores every computed property, both canaries are blocked with no fallback (no HTTPS
+        request), no page error is raised and neither document records a CSP violation."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 _, _, _, page, frame = self.round_trip(
@@ -284,9 +315,12 @@ class NextEntrypointTests(RoundTrip, unittest.TestCase):
     def test_next_proxy_detect_apply_rerender_clear(self):
         """Given Next.js dev behind `fontkitstudio <url>`, when Studio detects, previews Size 48 on the title
         role, globals.css hot-updates through the proxy, Studio shows the page-changed sentence, Detect is pressed
-        again and Clear is pressed, then the title is 40px, 48px, 48px with the lead colour changed, the page
-        not reloaded and the sheet unchanged, Clear removes the sheet and restores every computed property,
-        and no hydration error is logged."""
+        again and Clear is pressed, then each Detect reports Detected, the title is 40px, 48px, 48px with the
+        lead colour changed, the page not reloaded and the sheet unchanged, the preview CSS shows font-size:
+        48px, the preview is a stylesheet only (markup and the other rows unchanged), no style attribute is
+        added, Clear removes the sheet and leaves the markup as re-rendered and restores every computed property, both canaries are
+        blocked with no fallback (no HTTPS request), no page error is raised and no hydration error is
+        logged."""
         css = nxt.APP / 'app' / 'globals.css'
         original = css.read_bytes()
         changed = original.replace(b'rgb(51, 51, 51)', b'rgb(200, 0, 0)')
