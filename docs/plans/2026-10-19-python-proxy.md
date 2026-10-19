@@ -128,7 +128,7 @@ the proxy on `--target-port`, sync off, host names from the target (spec "Shape"
 - [ ] Step 2: run them at BASE: all fail (no target argument). Record the output.
 - [ ] Step 3: implement in serve.py: `parse_target`, `insert_tag`, `rewrite_location`, `find_asset`, the proxy
   handler (all methods forward; request headers per spec "Each request"; HTML buffered and tagged when the response
-  is `text/html` with identity encoding, else streamed with `shutil.copyfileobj` in 64 KiB chunks; bridge path served
+  is `text/html` with identity encoding, else streamed chunk by chunk with a `read1` loop; bridge path served
   locally), `Config` host names for proxy mode, and the `main` branch.
 - [ ] Step 4: run `PYTHONPATH=tests FKS_ENGINES=chromium python -m unittest test_serve_proxy test_preview_server
   test_support -v`: all pass. Show one mutant per test failing (examples: tag inserted twice; CSS buffered and

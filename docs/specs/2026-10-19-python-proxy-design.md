@@ -60,7 +60,8 @@ To the app:
 
 From the app:
 
-- An HTML response (`text/html`, identity encoding) is buffered and gets exactly one tag,
+- A 200 response to a GET that is `text/html` with identity encoding (the Node rule; HEAD, 304 and error pages pass
+  untouched) is buffered and gets exactly one tag,
   `<script src="/@fontkit/fontkit-bridge.js" data-allowed-origins="<Studio origin>"></script>`, inserted after
   `<head>`, else after `<html>`, else after a leading doctype (with an optional UTF-8 byte-order mark), else at 0.
   The match is case-insensitive and byte-preserving (latin-1 semantics, the Node `insertTag` rule). `Content-Length`
@@ -68,7 +69,7 @@ From the app:
 - Before forwarding a page, the proxy reads the `Content-Security-Policy` header and `<meta http-equiv>` policies. If
   they block a same-origin script, it prints the CSP message once per run; if the page already loads its own
   `fontkit-bridge.js`, it prints the second message once per run. Headers pass through unchanged.
-- Any other response streams through in chunks, unbuffered.
+- Any other response streams through chunk by chunk as it arrives (`read1`), so live streams are not held back.
 - A `Location` that is absolute or protocol-relative, `http:`, under any loopback name and the target's port, is
   rewritten to the proxy's origin; a relative one is left as it is.
 - `GET /@fontkit/fontkit-bridge.js` (query ignored) is answered by the proxy with the bridge's bytes. Every other path
@@ -95,12 +96,14 @@ Reused verbatim from the Node package:
   scripts). Add 'self' to script-src while you develop.`
 - 502 body: `Font Kit Studio cannot reach the dev server at <target origin>. Is it running?`
 
-New (owner approval requested with this spec):
+New (approved by the owner with this spec, 2026-10-19):
 
 - Bridge twice: `Font Kit Studio: this page also loads its own fontkit-bridge.js. If Studio does not connect, remove
   that script while you use serve.py.`
 - Plain mode without the repository: `serve.py: the demo app needs the repository. To edit your own app, pass its
   address: python serve.py http://127.0.0.1:5000`
+- Missing Studio or bridge file in proxy mode (exit 1): `serve.py: cannot find fontkit-studio.html or
+  fontkit-bridge.js next to serve.py or in the repository`
 
 ## Testing
 
@@ -124,4 +127,8 @@ New (owner approval requested with this spec):
 - Two proxies can drift. The shared JSON cases cover the riskiest rule (tag placement); the rest is held by this
   spec's contract, tested on each side.
 - `http.server` is not built for heavy traffic. It serves one developer's browser on loopback, which is its use.
-- A chunked or very large HTML page is buffered whole before tagging, as the Node proxy does.
+- A request body sent without a length (a chunked upload) is refused with 411; the Node proxy streams it. Kept for
+  simplicity (owner preference for KISS, 2026-10-19).
+- The WebSocket tunnel writes with blocking sends: if both peers stop reading while both buffers are full, it stalls.
+- An HTML page is buffered up to the Node proxy's size limit and tagged; a larger one streams through untagged, as
+  the Node proxy does.
