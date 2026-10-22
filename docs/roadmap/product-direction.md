@@ -101,10 +101,10 @@ product are not the same thing yet.
   config edit or script tag; `fontkitStudio()` keeps it in `vite.config`. Proven in CI on
   Vite 7 and 8, a static Bootstrap page under a strict CSP and Next.js 16. Published on npm
   as `fontkitstudio` with provenance; Studio and the bridge are also on the GitHub release.
-- **Built for 0.4.0 (R2), not yet released:** role detection and preview on the running app,
+- **Released in 0.4.0 (R2, 2026-10-19):** role detection and preview on the running app,
   with Bootstrap 5 adapters and a session-only list of the visited pages each role was
   checked on.
-- **Built for 0.4.0, not yet released:** `python serve.py <url>` puts a proxy in front of a local
+- **Released in 0.4.0:** `python serve.py <url>` puts a proxy in front of a local
   app for developers with Python but no Node, and the release carries `serve.py`
   ([spec](../specs/2026-10-19-python-proxy-design.md)).
 - **Designed, not built:** the rest of "How it differs" above: pairing and type scales

@@ -1,7 +1,7 @@
 # R2 (0.4.0) release-point verification
 
 Date: 2026-10-18. Branch: `feat/r2-visited-pages` (PR #24); base `fdb48d0` (PR B2 merged).
-Status: release point prepared; not yet merged, tagged or published.
+Status: published as 0.4.0 on 2026-10-19 (see Publication checks).
 This evidence covers the settled PR C tree: the code at `d49158b` (the last product-code commit; only the
 screenshot script changed after it) plus the release-point docs committed after it, and the whole-branch review round
 below, whose final gates ran on `5e8af0f`. Earlier R2 evidence: [PR A](verification-r2-pr-a.md); PR B and PR B2 are recorded in the ledger.
@@ -131,3 +131,24 @@ dispatched events.
    the provenance attestation, and the release assets' SHA-256 against
    `git -c core.autocrlf=false archive v0.4.0 fontkit-studio.html fontkit-bridge.js scripts/serve.py`, and
    `python serve.py <a local static page>` run from a folder holding only the three downloaded assets.
+
+## Publication checks (2026-10-19)
+
+PR #24 merged at `ffd2343`; PR #25 (the CHANGELOG release date and agent rules, Markdown only) merged at `c006e6c`, whose
+product code is identical to `ffd2343` and to the gated tree `5e8af0f`. `v0.4.0` is an annotated tag on `c006e6c`.
+
+- Release workflow run 39294582349: the gates passed 12 of 12 on the tag; `publish` ran after the `npm-release` approval.
+- npm: `fontkitstudio@0.4.0` is `latest`; `dist.shasum` `a52b2f6aea55953e85eae17218e856c385823748` and `gitHead`
+  `c006e6cad5d7c98c908e323d220498ed5e97b399` match the publish log; 16 files. The registry answered 404 for about a
+  minute after publish, then the version.
+- Provenance: an SLSA v1 provenance attestation on the registry entry; the publish log records the statement in the
+  Sigstore transparency log (index 3324497884).
+- `npx -y fontkitstudio@0.4.0 --version` from an empty folder prints `0.4.0`.
+- GitHub release `v0.4.0` (not a draft or prerelease) carries `fontkit-studio.html`, `fontkit-bridge.js` and `serve.py`;
+  each downloaded asset's SHA-256 equals `git -c core.autocrlf=false archive v0.4.0`'s copy:
+  `0d87e1679fc9bf88637e93bf9ed7c9b1ef655647275600ddf204bf6375208a54` (Studio),
+  `09b5c682f52afe09a5c57cbde1f819d0afec812b86406ed8610da686ac34c2f4` (bridge),
+  `a04f7293adf7ad6682fdb412d0a495c1a8f90300fb2e35e4937b395136e42027` (`serve.py`).
+- The downloaded `serve.py`, run from a folder holding only the three assets in front of a local static page, served
+  the page with one bridge tag after `<head>` and the rest unchanged, served the released bridge bytes at
+  `/@fontkit/fontkit-bridge.js` and served Studio (200); without an address it printed the plain-mode line and exited 1.
