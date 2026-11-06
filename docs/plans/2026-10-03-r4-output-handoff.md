@@ -58,6 +58,15 @@ file, round trip, one model, format version; plus the write-endpoint hostile cas
 - Licence data accuracy. Mitigation: licences come from the catalogue metadata; anything
   not identified is labelled "unknown", never guessed.
 
+## Input from the real-app audit (2026-11-06)
+
+From the [audit](../implementation/audit-2026-11-06-real-apps.md). Open questions only.
+
+- D2-5, C2-3c: Sync's role restyling is outside the export by design (the README Changes panel paragraph that says Copy and
+  Sync to file do not carry role restyling). R4's "preview equals file" has to settle this: does the file carry it, or does
+  the preview stop showing it?
+- B08, D2-4: the file's token names must be the names the page reads, or say that they are not.
+
 ## Ledger
 
 | Date | Event |

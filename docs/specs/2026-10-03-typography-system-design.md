@@ -297,3 +297,12 @@ Answered on 2026-10-04: 1 by D040 (`fontkitstudio`), 2 by D046
 3. **Studio's file name and version label.** R1 bundles Studio in the package, which is
    the natural point to replace `font_kit_studio_v0.1.1.html` and the `v0.1.1` label
    (D009, D009a) with a versionless name and the real version.
+
+## Notes from the real-app audit (2026-11-06)
+
+The [audit](../implementation/audit-2026-11-06-real-apps.md) tested these points on two real apps.
+
+- Writing the standard token names (`--font-sans` and the like) assumes the page reads them. On PokeCipher nothing
+  does (B08, D2-4). Question: how does a pairing find the names a page reads? 0.4.1 adds a warning; C2-3a, owned by 0.4.2, lists them.
+- The bridge's auto-discovery covers text only inside `header`, `main`, `article` or `section`.
+  Many spans, labels and `dt`/`dd` are not targets (C2-2d, B17). Question: how wide must discovery be? Owned by 0.4.2.

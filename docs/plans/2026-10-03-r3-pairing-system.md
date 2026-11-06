@@ -61,6 +61,14 @@ Out: writing the type-system file (R4).
   tasks with their own test modules; consider the single-file question above early.
 - Catalogue snapshot size. Mitigation: metadata only, fonts fetched on preview.
 
+## Input from the real-app audit (2026-11-06)
+
+From the [audit](../implementation/audit-2026-11-06-real-apps.md). Open questions only.
+
+- C2-3a: Studio lists none of the page's CSS tokens (0.4.2 lists them). Does a pairing bind to the names the page reads?
+- B08, D2-4: Sync writes fixed token names that a page may not read. Do roles write the page's own names?
+- C2-2d, B17: auto-discovery misses many text elements (0.4.2). Do R3 roles need the wider list?
+
 ## Ledger
 
 | Date | Event |
