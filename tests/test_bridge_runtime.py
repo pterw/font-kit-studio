@@ -3338,6 +3338,40 @@ class SpaRobustnessTests(BridgeCase):
                 self.assertEqual(self.errors(frame), [])
 
 
+class LostEditWarningTests(BridgeCase):
+    MESSAGE = ('The page replaced this element, so its edit could not be re-applied. '
+               'The edit is still in the export.')
+
+    def test_an_edit_lost_to_a_replaced_auto_id_element_is_reported(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, target=SPA_PAGE)
+                heading = self.target_by_text(self.hello(page), 'Auto heading')['id']
+                self.applied(page, heading, {'fontSize': 40})
+                start = self.mark(page)
+                frame.evaluate('render()')
+                self.wait_message(page, 'design:warning', start)
+                page.wait_for_timeout(300)
+                warnings = self.messages(page, 'design:warning', start)
+                self.assertEqual(len(warnings), 1, warnings)
+                self.assertEqual(
+                    (warnings[0]['kind'], warnings[0]['targetId'], warnings[0]['requestId'], warnings[0]['message']),
+                    ('edit-not-reapplied', heading, None, self.MESSAGE))
+
+    def test_a_replaced_author_element_or_an_unedited_auto_element_posts_no_warning(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, target=SPA_PAGE)
+                self.hello(page)
+                self.applied(page, 'spa.title', {'fontSize': 50})
+                start = self.mark(page)
+                frame.evaluate('render()')
+                page.wait_for_timeout(500)
+                # The current spa.title is the replacement node: its 50px is what makes the empty list meaningful.
+                self.assertEqual(self.inline(frame, 'spa.title', 'font-size'), ['50px', 'important'])
+                self.assertEqual(self.messages(page, 'design:warning', start), [])
+
+
 class RepeatedConstructionTests(BridgeCase):
     """`new FontKitBridge(...)` again on a page that already has a bridge (HMR): what applies and what is ignored."""
     CALL = """(options) => {

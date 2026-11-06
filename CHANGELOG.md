@@ -47,6 +47,8 @@ Two things have their own version numbers:
   pasted rule still matches after the page toggles them.
 - Studio's default specimen text is now neutral; saved compositions keep their
   text.
+- Live edit now tells you when the app replaces an element whose edit could not
+  be re-applied; the edit stays in the export.
 
 ## [0.4.0] - 2026-10-19
 

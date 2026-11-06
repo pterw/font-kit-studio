@@ -3438,7 +3438,12 @@
     // A re-render removed an author target that had overrides: remember its
     // element so the replacement (same data-design-id) can get them back.
     stashLost(record) {
-      if (!record.stable || record.element.isConnected || !this.isDirty(record)) return;
+      if (record.element.isConnected || !this.isDirty(record)) return;
+      if (!record.stable) {
+        this.postWarning('edit-not-reapplied', record.id,
+          'The page replaced this element, so its edit could not be re-applied. The edit is still in the export.');
+        return;
+      }
       this.lost.set(record.id, { element: record.element, at: Date.now() });
       if (this.lost.size > LOST_MAX) this.lost.delete(this.lost.keys().next().value);
     }
