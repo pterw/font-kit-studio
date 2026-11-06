@@ -50,6 +50,8 @@ Plans: `docs/plans/2026-09-30-v0.1.1-responsive-rows.md` (complete), `docs/plans
 
 - **Task 16 landed (2026-11-06).** G2-18: neutral default copy. RED/GREEN: the copy test failed with the old sentence; the saved-text test is a characterization, and fails if the importer prefers the default. Landing gates on the integrated wave: 807 Chromium tests in 19 modules, plus static checks, bridge syntax, product ruff and whitespace, all pass. Firefox not run.
 
+- **Task 12 landed (2026-11-06).** D2-11, B19, one commit each. RED/GREEN: the B19 test passed 10 of 10 and caught its break 10 of 10, with the count 1 with the guard and 2 without it. Landing gates on the integrated wave: 807 Chromium tests in 19 modules, plus static checks, bridge syntax, product ruff and whitespace, all pass. Firefox not run.
+
 ## R2 engine planning
 
 - **R2 draft prepared (2026-10-08).** Expanded [work order](../plans/2026-10-03-r2-engine.md) on `docs/r2-engine-plan` from `1348268`, after the separate 0.3.1 publication closeout `dc1da53`. D058 resolves the two draft thresholds. Detection, preview and visited-page work have separate PRs, explicit owned files, reviewed atomic landings and focused browser gates; Library/Composer audit evidence remains required before final approval. Current source and two read-only research reports inform the contract; neither constitutes implementation. Plan review and documentation landing checks are pending. RED/GREEN: not applicable to this planning-only delta; 0 new tests, no browser engine verified. Next: independent plan review, then controller commit/push; obtain audit-brief approval before dispatching it.

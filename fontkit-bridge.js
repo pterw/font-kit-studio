@@ -3459,6 +3459,8 @@
         if (!this.warnedLoops.has(record.id)) {
           this.warnedLoops.add(record.id);
           console.warn(`[FontKitBridge] "${record.id}" keeps being re-rendered; not re-applying its overrides again.`);
+          this.postWarning('edit-reapply-stopped', record.id,
+            'The page keeps re-creating this element, so its edits are no longer re-applied. They stay in the export.');
         }
         return;
       }

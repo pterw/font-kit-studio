@@ -49,6 +49,8 @@ Two things have their own version numbers:
   text.
 - Live edit now tells you when the app replaces an element whose edit could not
   be re-applied; the edit stays in the export.
+- Live edit now tells you when the app keeps re-creating an element and its
+  edits stop being re-applied.
 
 ## [0.4.0] - 2026-10-19
 

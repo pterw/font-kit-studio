@@ -3372,6 +3372,33 @@ class LostEditWarningTests(BridgeCase):
                 self.assertEqual(self.messages(page, 'design:warning', start), [])
 
 
+class ReapplyStoppedWarningTests(BridgeCase):
+    MESSAGE = ('The page keeps re-creating this element, so its edits are no longer re-applied. '
+               'They stay in the export.')
+
+    def test_the_loop_guard_stopping_an_edit_is_reported_once(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, target=SPA_PAGE)
+                self.hello(page)
+                self.applied(page, 'spa.title', {'fontSize': 50})
+                start = self.mark(page)
+                frame.evaluate('window.pingPong = true; render();')
+                first = self.wait_message(page, 'design:warning', start, "d.kind === 'edit-reapply-stopped'")
+                self.assertEqual(
+                    (first['kind'], first['targetId'], first['requestId'], first['message']),
+                    ('edit-reapply-stopped', 'spa.title', None, self.MESSAGE))
+                frame.evaluate('window.pingPong = false')
+                page.wait_for_timeout(500)
+                # A quiet page and a new edit: the guard is still tripped, so no second warning.
+                self.applied(page, 'spa.title', {'fontSize': 44})
+                frame.evaluate('render()')
+                page.wait_for_timeout(800)
+                stopped = [w for w in self.messages(page, 'design:warning', start)
+                           if w['kind'] == 'edit-reapply-stopped']
+                self.assertEqual(len(stopped), 1, stopped)
+
+
 class RepeatedConstructionTests(BridgeCase):
     """`new FontKitBridge(...)` again on a page that already has a bridge (HMR): what applies and what is ignored."""
     CALL = """(options) => {
