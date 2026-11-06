@@ -1438,6 +1438,13 @@
       const alpha = /\/\s*([^\s)]+)\s*\)$/.exec(css.color);
       if (!visible(el) || ['hidden', 'collapse'].includes(css.visibility)
         || /rgba\([^)]*,\s*0\)$/.test(css.color) || alpha && parseFloat(alpha[1]) === 0) return false;
+      // A closed <details> body has no rects until it is laid out, and reading them is what lays it out, so the first and
+      // later reads disagree. Its text counts as rendered everywhere, by this rule, never by a rect read.
+      for (let d = el.closest('details'); d; d = d.parentElement && d.parentElement.closest('details')) {
+        if (d.open) continue;
+        const summary = el.closest('summary');
+        if (!(summary && summary.parentElement === d)) return true;
+      }
       // display:contents has no element box; the direct text range still renders.
       const range = document.createRange(); range.selectNodeContents(text);
       return Array.from(range.getClientRects()).some(rect => {

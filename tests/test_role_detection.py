@@ -636,6 +636,71 @@ class RoleDetectionTests(RoleBridgeCase):
                 self.assertEqual(frame.locator('main').evaluate('el => el.outerHTML'), before)
 
 
+class ClosedDetailsDetectionTests(RoleBridgeCase):
+    @staticmethod
+    def identity(reply):
+        return ([(g['identity'], g['elementCount']) for g in reply['groups']], reply['scannedElements'])
+
+    def test_first_detect_on_the_demo_page_completes_like_the_second(self):
+        """Given the bundled demo with three closed details, when Studio detects twice, then the first reply is complete with 63 scanned and equals the second."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, target=TARGET + '/demo/index.html')
+                self.hello(page)
+                self.assertFalse(frame.evaluate("() => document.querySelector('details').open"))
+                first = self.detect(page)
+                self.assertTrue(first['complete'], first)
+                self.assertEqual(first['pageVersion'], first['currentPageVersion'])
+                second = self.detect(page)
+                self.assertTrue(second['complete'], second)
+                self.assertEqual(self.identity(first), self.identity(second))
+                self.assertEqual(first['scannedElements'], 63)
+
+    def test_details_text_is_counted_by_where_it_sits_not_by_a_rect_read(self):
+        """Given one details shape added to the fixture, when Studio detects, then hidden text in a closed body and clipped text outside any details are excluded, while summary text and text in an open details are counted."""
+        cases = {
+            'hidden text in a closed body': ('<details><summary>S</summary><p style="display:none">h</p></details>', 1),
+            'summary of a closed details': ('<details><summary>S</summary></details>', 1),
+            'clipped text outside any details': ('<div style="height:0;overflow:hidden"><p>c</p></div>', 0),
+            'body of an open details': ('<details open><summary>S</summary><p>b</p></details>', 2),
+            'clipped summary of a closed details': ('<details><summary style="height:0;overflow:hidden">S</summary></details>', 0),
+            'open details inside a closed one': ('<details><summary>S</summary><details open><summary>T</summary><p style="height:0;overflow:hidden">b</p></details></details>', 3),
+        }
+        for engine in ENGINES:
+            page, _ = self.open(engine)
+            self.hello(page)
+            base = self.detect(page)['scannedElements']
+            for name, (html, added) in cases.items():
+                with self.subTest(engine=engine, case=name):
+                    page, frame = self.open(engine)
+                    frame.evaluate("html => document.querySelector('main').insertAdjacentHTML('beforeend', html)", html)
+                    self.hello(page)
+                    reply = self.detect(page)
+                    self.assertTrue(reply['complete'], reply)
+                    self.assertEqual(reply['scannedElements'], base + added)
+
+    def test_an_animation_during_a_scan_still_ends_page_changed_beside_a_closed_details(self):
+        """Given a closed details and a scan in flight, when an animation restyles a counted element, then the reply is incomplete as page-changed and a fresh scan completes."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, target=TARGET + '/fixtures/large-page/index.html')
+                frame.evaluate("() => document.body.insertAdjacentHTML('beforeend', "
+                               "'<details><summary>Question</summary><p>Hidden answer</p></details>')")
+                self.hello(page)
+                frame.evaluate("""() => addEventListener('message', function change(event) {
+                    if (event.data.type !== 'design:detect') return;
+                    removeEventListener('message', change);
+                    setTimeout(() => {
+                        window.probeAnimation = document.querySelector('.g00').animate({ fontSize: ['16px', '31px'] }, { duration: 1e6, fill: 'forwards' });
+                    }, 0);
+                })""")
+                reply = self.detect(page)
+                self.assertEqual((reply['complete'], reply['reason']), (False, 'page-changed'), reply)
+                self.assertEqual(reply['pageVersion'], reply['currentPageVersion'], reply)
+                frame.evaluate('() => window.probeAnimation.cancel()')
+                self.assertTrue(self.detect(page)['complete'])
+
+
 class TransitionBaselineTests(RoleSheetCase):
     def test_detect_with_a_live_preview_reads_the_baseline_on_a_page_with_transitions(self):
         """Given a page whose paragraphs transition font-size and a live 30px preview, when Studio

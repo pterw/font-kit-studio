@@ -19,6 +19,11 @@ Two things have their own version numbers:
   Gold, Dusty Rose, Powder Blue, Lavender, Sage, Periwinkle); compositions saved
   with the old names still open with the same colours.
 
+### Fixed
+
+- The first Detect on a page with a closed disclosure (`<details>`) now
+  completes instead of reporting an incomplete detection.
+
 ## [0.4.0] - 2026-10-19
 
 ### Added
