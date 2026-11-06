@@ -7202,7 +7202,8 @@ if (remembered) kitId.value = remembered;
   function elementHasChanges(id) {
     return Object.keys(live.overrides[id] || {}).length > 0
       || live.changes.targets.some(entry => entry.targetId === id && (Object.keys(entry.declarations).length || entry.text !== null))
-      || live.changes.structure.some(entry => entry.orderIds.includes(id));
+      || live.changes.structure.some(entry => entry.orderIds.includes(id))
+      || live.structure.some(entry => entry.ids.includes(id));
   }
 
   function applyColourSource(source, fields) {

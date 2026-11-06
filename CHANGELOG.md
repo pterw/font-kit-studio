@@ -29,6 +29,8 @@ Two things have their own version numbers:
   edited paragraph, instead of the text captured when the edit began.
 - The bridge now warns when a page sets `data-allowed-origins` on a script it
   could not read, such as a hashed module bundle.
+- Reset this element stays available after a reload when the element has a saved
+  move.
 
 ## [0.4.0] - 2026-10-19
 
