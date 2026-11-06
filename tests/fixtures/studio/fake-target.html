@@ -281,8 +281,8 @@
     post({ type: "design:targets", targets: DEFS.filter(def => ids.includes(def.id)).map(def => manifest(def, fake.bulk)) });
   };
   fake.bounds = function (id) { post({ type: "design:bounds", targetId: id, rect: rect(byId.get(id).el) }); };
-  fake.warn = function (message, targetId, requestId) {
-    post({ type: "design:warning", requestId, targetId, kind: "runtime-error", message: String(message).slice(0, 300) });
+  fake.warn = function (message, targetId, requestId, kind = "runtime-error") {
+    post({ type: "design:warning", requestId, targetId, kind, message: String(message).slice(0, 300) });
   };
   fake.ledger = ledger;
   // Hostile or buggy manifests: any previousId value, announced with the full target list.

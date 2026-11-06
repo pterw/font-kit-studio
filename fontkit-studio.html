@@ -6411,16 +6411,17 @@ if (remembered) kitId.value = remembered;
   });
 
   // ---- runtime warnings from the target (design:warning) --------------------------------------------
+  const WARNING_KINDS = ["runtime-error", "token-not-applied", "edit-not-reapplied", "edit-reapply-stopped"];
   function noteWarning(data) {
     const message = typeof data.message === "string" ? data.message.trim().slice(0, 300) : "";
-    if (data.kind !== "runtime-error" || !message) return;
-    live.warnings.push({ message, targetId: typeof data.targetId === "string" ? data.targetId.slice(0, 300) : "" });
+    if (!WARNING_KINDS.includes(data.kind) || !message) return;
+    live.warnings.push({ kind: data.kind, message, targetId: typeof data.targetId === "string" ? data.targetId.slice(0, 300) : "" });
     if (live.warnings.length > MAX_WARNINGS) live.warnings.shift();
     renderWarnings();
   }
 
   function warningLabel(warning) {
-    return warning.targetId && warning.targetId !== "global" ? (live.targetMeta[warning.targetId]?.name || warning.targetId) : "";
+    return warning.targetId && warning.targetId !== "global" ? ((Object.hasOwn(live.targetMeta, warning.targetId) && live.targetMeta[warning.targetId]?.name) || warning.targetId) : "";
   }
 
   // textContent only: the message comes from the (untrusted) page under edit.
@@ -6430,8 +6431,12 @@ if (remembered) kitId.value = remembered;
     bridgeWarning.hidden = !latest;
     if (latest) {
       const label = warningLabel(latest);
-      bridgeWarningText.textContent = `Runtime error in the Live App${label ? ` after changing ${label}` : ""}: ${latest.message}`;
+      bridgeWarningText.textContent = latest.kind === "runtime-error"
+        ? `Runtime error in the Live App${label ? ` after changing ${label}` : ""}: ${latest.message}`
+        : `Note from the Live App${label ? ` about ${label}` : ""}: ${latest.message}`;
     }
+    liveCodeWarnings.setAttribute("aria-label", live.warnings.length && live.warnings.every(warning => warning.kind !== "runtime-error")
+      ? "Notes from the Live App" : "Runtime warnings from the Live App");
     liveCodeWarnings.hidden = !live.warnings.length;
     liveCodeWarnings.replaceChildren(...live.warnings.map(warning => {
       const item = document.createElement("li");

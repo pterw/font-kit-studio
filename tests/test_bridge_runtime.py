@@ -2631,6 +2631,66 @@ class RuntimeWarningTests(ArrangeCase):
                 self.assertEqual(self.messages(page, 'design:warning', start), [])
 
 
+class PostedWarningTests(ArrangeCase):
+    KINDS = ('token-not-applied', 'edit-not-reapplied', 'edit-reapply-stopped')
+
+    def post_warning(self, page, frame, *args):
+        start = self.mark(page)
+        frame.evaluate('(args) => window.__fontkitBridge.postWarning(...args)', list(args))
+        return start
+
+    def test_a_posted_warning_carries_the_kind_message_and_cap(self):
+        """Given a Studio-connected page, when the bridge posts each of the three
+        note kinds with a long message, then Studio receives that kind, target,
+        request id and session id, with the message cut to 300 characters."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame, _ = self.start(engine)
+                for kind in self.KINDS:
+                    start = self.post_warning(page, frame, kind, 'arr.btn.a', 'x' * 900, 'r7')
+                    warning = self.wait_message(page, 'design:warning', start)
+                    self.assertEqual((warning['kind'], warning['targetId'], warning['requestId'], warning['sessionId']),
+                                     (kind, 'arr.btn.a', 'r7', 's1'))
+                    self.assertEqual(warning['message'], 'x' * 300)
+
+    def test_a_missing_target_or_request_id_is_global_and_null(self):
+        """Given a Studio-connected page, when a warning is posted with an empty,
+        missing or non-string target or request id, then the target arrives as
+        'global' and the request id as null."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame, _ = self.start(engine)
+                for target in (None, '', 7):
+                    start = self.post_warning(page, frame, 'token-not-applied', target, 'no element changed')
+                    warning = self.wait_message(page, 'design:warning', start)
+                    self.assertEqual((warning['targetId'], warning['requestId']), ('global', None))
+                for request_id in (None, 7):
+                    start = self.post_warning(page, frame, 'token-not-applied', 'arr.btn.a', 'x', request_id)
+                    self.assertIsNone(self.wait_message(page, 'design:warning', start)['requestId'])
+                start = self.mark(page)
+                frame.evaluate('window.__fontkitBridge.postWarning("token-not-applied", "arr.btn.a", "x")')
+                self.assertIsNone(self.wait_message(page, 'design:warning', start)['requestId'])
+
+    def test_nothing_is_posted_for_an_unknown_kind_or_without_a_studio(self):
+        """Given a Studio-connected page, when a warning has a kind outside the
+        three, an empty or non-string message, or the page has no Studio, then
+        no design:warning message is posted."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame, _ = self.start(engine)
+                start = self.mark(page)
+                for kind in ('runtime-error', 'made-up'):
+                    frame.evaluate('(k) => window.__fontkitBridge.postWarning(k, "arr.btn.a", "boom", "r1")', kind)
+                for message in ('', None, 5):
+                    frame.evaluate('(m) => window.__fontkitBridge.postWarning("edit-not-reapplied", "arr.btn.a", m)', message)
+                page.wait_for_timeout(300)
+                self.assertEqual(self.messages(page, 'design:warning', start), [])
+                frame.evaluate('window.__fontkitBridge.studioSource = null')
+                start = self.post_warning(page, frame, 'edit-not-reapplied', 'arr.btn.a', 'boom')
+                page.wait_for_timeout(300)
+                self.assertEqual(self.messages(page, 'design:warning', start), [])
+
+
 class PopOutOverlayTests(BridgeCase):
     OVERLAY_NODES = "document.querySelectorAll('#fontkit-bridge-overlay, #fontkit-bridge-hover').length"
 

@@ -1999,6 +1999,71 @@ class StudioArrangeTests(ArrangeCase):
                 self.assertEqual(errors, [])
 
 
+class LiveAppNoteTests(ArrangeCase):
+    KINDS = ('token-not-applied', 'edit-not-reapplied', 'edit-reapply-stopped')
+
+    def open_selected(self, engine):
+        page, errors, frame = self.open_arrange(engine)
+        self.select(page, frame, 'hero.title')
+        return page, errors, frame
+
+    def test_each_new_kind_shows_in_the_banner_and_list_with_the_target_name(self):
+        """Given a selected element in the Live App, when it posts each new note
+        kind, then the banner and list show the note with the target name and
+        the list is labelled as notes, with no runtime-error wording; a global
+        target and the names 'constructor' and '__proto__' are shown as given."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors, frame = self.open_selected(engine)
+                name = page.locator('#liveTargetName').inner_text()
+                self.assertTrue(name)
+                for position, kind in enumerate(self.KINDS, 1):
+                    message = f'note {kind}'
+                    frame.evaluate('([m, k]) => window.fake.warn(m, "hero.title", "r1", k)', [message, kind])
+                    page.wait_for_function('(n) => document.querySelectorAll("#liveCodeWarnings li").length === n', arg=position)
+                    self.assertEqual(page.locator('#bridgeWarningText').inner_text(),
+                                     f'Note from the Live App about {name}: {message}')
+                    self.assertIn(message, page.locator('#liveCodeWarnings').inner_text())
+                    self.assertEqual(page.locator('#liveCodeWarnings').get_attribute('aria-label'), 'Notes from the Live App')
+                    self.assertNotIn('Runtime error', page.locator('#bridgeWarning').inner_text())
+                    self.assertNotIn('Runtime error', page.locator('#liveCodeWarnings').inner_text())
+                frame.evaluate('window.fake.warn("global note", "global", "r2", "token-not-applied")')
+                page.wait_for_function('() => document.querySelector("#bridgeWarningText").textContent === "Note from the Live App: global note"')
+                for hostile in ('constructor', '__proto__'):
+                    frame.evaluate('(t) => window.fake.warn("odd target", t, "r3", "edit-not-reapplied")', hostile)
+                    page.wait_for_function('(t) => document.querySelector("#bridgeWarningText").textContent === `Note from the Live App about ${t}: odd target`', arg=hostile)
+                self.assertEqual(errors, [])
+
+    def test_an_unknown_kind_is_still_ignored(self):
+        """Given a selected element in the Live App, when it posts a warning of
+        an unknown kind, then Studio shows no banner."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors, frame = self.open_selected(engine)
+                frame.evaluate('window.fake.warn("quiet", "hero.title", "r1", "made-up")')
+                page.wait_for_timeout(250)
+                self.assertFalse(page.locator('#bridgeWarning').is_visible())
+                self.assertEqual(errors, [])
+
+    def test_a_runtime_error_after_a_note_restores_the_runtime_label(self):
+        """Given a note already listed, when a runtime error arrives, then the
+        banner reads as a runtime error and the list is labelled as runtime
+        warnings, and stays so after Dismiss empties the list."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors, frame = self.open_selected(engine)
+                frame.evaluate('window.fake.warn("a note", "hero.title", "r1", "edit-not-reapplied")')
+                page.wait_for_function('() => document.querySelectorAll("#liveCodeWarnings li").length === 1')
+                frame.evaluate('window.fake.warn("TypeError: boom", "hero.title", "r2")')
+                page.wait_for_function('() => document.querySelectorAll("#liveCodeWarnings li").length === 2')
+                self.assertTrue(page.locator('#bridgeWarningText').inner_text().startswith('Runtime error in the Live App'))
+                self.assertEqual(page.locator('#liveCodeWarnings').get_attribute('aria-label'), 'Runtime warnings from the Live App')
+                page.locator('#bridgeWarningDismiss').click()
+                self.assertEqual(page.locator('#liveCodeWarnings li').count(), 0)
+                self.assertEqual(page.locator('#liveCodeWarnings').get_attribute('aria-label'), 'Runtime warnings from the Live App')
+                self.assertEqual(errors, [])
+
+
 class StudioPopoutTests(ArrangeCase):
     def instrument_open(self, page, block=False):
         page.evaluate("""(block) => { window.__opens = []; const original = window.open.bind(window);

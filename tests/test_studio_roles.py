@@ -712,6 +712,45 @@ class StudioRoleBoundaryTests(StudioRoleCase):
                 self.assertEqual(errors, [])
 
 
+class StudioPostedWarningTests(StudioRoleCase):
+    KINDS = ('token-not-applied', 'edit-not-reapplied', 'edit-reapply-stopped')
+    HOSTILE = '<img src=x onerror="window.__xss=1">boom'
+
+    def post(self, frame, kind, message):
+        frame.evaluate('([k, m]) => window.__fontkitBridge.postWarning(k, "global", m)', [kind, message])
+
+    def test_every_new_kind_reaches_studio_as_capped_text_and_nothing_else_does(self):
+        """Given the Live App inside Studio, when it posts each new note kind
+        with hostile markup, then Studio shows it as plain text and runs
+        nothing; long messages are cut to 300 characters, and unknown kinds,
+        prototype names and a wrong session id show nothing."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame, errors = self.open(engine)
+                for kind in self.KINDS:
+                    self.post(frame, kind, self.HOSTILE)
+                    page.wait_for_function('() => document.querySelectorAll("#liveCodeWarnings li").length === 1')
+                    self.assertIn(self.HOSTILE, page.locator('#bridgeWarningText').inner_text())
+                    self.assertIn(self.HOSTILE, page.locator('#liveCodeWarnings').text_content())
+                    self.assertEqual(page.locator('#bridgeWarning img, #liveCodeWarnings img').count(), 0)
+                    self.assertIsNone(page.evaluate('window.__xss'))
+                    page.locator('#bridgeWarningDismiss').click()
+                self.post(frame, 'edit-not-reapplied', 'x' * 900)
+                page.wait_for_function('() => document.querySelectorAll("#liveCodeWarnings li").length === 1')
+                self.assertEqual(page.evaluate('() => document.querySelector("#liveCodeWarnings li").textContent.length'), 300)
+                page.locator('#bridgeWarningDismiss').click()
+                for kind in ('made-up', 'constructor', '__proto__'):
+                    self.post(frame, kind, 'should not show')
+                    frame.evaluate('(k) => window.__fontkitBridge.post({type: "design:warning", targetId: "global", kind: k, message: "forced"})', kind)
+                frame.evaluate("""parent.postMessage({type: "design:warning", protocolVersion: 1, sessionId: "fks-wrong",
+                    kind: "edit-not-reapplied", message: "forged note"}, "*")""")
+                self.settle(page, frame)
+                page.wait_for_timeout(250)
+                self.assertFalse(page.locator('#bridgeWarning').is_visible())
+                self.assertEqual(page.locator('#liveCodeWarnings li').count(), 0)
+                self.assertEqual(errors, [])
+
+
 class FnvVectorTests(unittest.TestCase):
     def test_the_digest_helper_matches_the_published_fnv1a_vectors(self):
         """Given the standard FNV-1a 32-bit test vectors, when the test helper hashes them, then it matches, so the

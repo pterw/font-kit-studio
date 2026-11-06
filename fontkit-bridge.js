@@ -2273,6 +2273,20 @@
       });
     }
 
+    // A note for the user about an outcome the page cannot show. Not a runtime error: Studio words it differently.
+    postWarning(kind, targetId, message, requestId = null) {
+      const kinds = ['token-not-applied', 'edit-not-reapplied', 'edit-reapply-stopped'];
+      if (!this.studioSource || !kinds.includes(kind)) return;
+      if (typeof message !== 'string' || !message) return;
+      this.post({
+        type: 'design:warning',
+        requestId: typeof requestId === 'string' ? requestId : null,
+        targetId: typeof targetId === 'string' && targetId ? targetId : 'global',
+        kind,
+        message: message.slice(0, WARNING_MAX_LENGTH)
+      });
+    }
+
     // ---------------------------------------------------------------------
     // design:update — targeted (validated, atomic) and legacy composition
     // ---------------------------------------------------------------------
