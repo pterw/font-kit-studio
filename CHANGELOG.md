@@ -45,6 +45,8 @@ Two things have their own version numbers:
   or downloaded.
 - Exported selectors no longer carry state classes such as `is-active`, so a
   pasted rule still matches after the page toggles them.
+- Studio's default specimen text is now neutral; saved compositions keep their
+  text.
 
 ## [0.4.0] - 2026-10-19
 

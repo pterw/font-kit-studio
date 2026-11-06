@@ -230,6 +230,58 @@ class NoDemoOfferTests(LiveCase):
                 self.assertEqual(page.locator('#btnConnectTarget').inner_text(), 'Connect Live App')
 
 
+class FreshStudioDefaultCopy(LiveCase):
+    NEUTRAL_SAMPLE = 'The quick brown fox jumps over the lazy dog.'
+    NEUTRAL_HEADLINE = 'Type something worth reading.'
+    NEUTRAL_METADATA = 'JAN 01 · 24 ITEMS · ANYWHERE'
+    OLD_HEADLINE = 'Every life is a night sky.'
+    OLD_METADATA = 'SEP 17 · 24 MOMENTS · OTTAWA'
+
+    def composer(self, engine):
+        page, errors = self.open(engine, target=None)
+        page.locator('#modeComposer').click()
+        return page, errors
+
+    def role_text(self, page, role):
+        page.locator('#slotInspector [data-bind="role"]').select_option(role)
+        return page.locator('#slotInspector [data-bind="text"]').input_value()
+
+    def test_fresh_studio_shows_the_neutral_copy(self):
+        """Given a freshly opened Studio
+        When the specimen field, the canvas and each role's default text are read
+        Then none of it comes from the repository Studio was written in."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors = self.composer(engine)
+                self.assertEqual(page.locator('#sampleText').input_value(), self.NEUTRAL_SAMPLE)
+                # rowdemo shows no Display, but its Metadata slot runs on the default.
+                self.assertIn(self.NEUTRAL_METADATA, page.locator('.slot-text').evaluate_all('(els) => els.map((el) => el.textContent)'))
+                self.assertEqual(self.role_text(page, 'Display'), self.NEUTRAL_HEADLINE)
+                self.assertEqual(self.role_text(page, 'H1'), self.NEUTRAL_HEADLINE)
+                self.assertEqual(self.role_text(page, 'Metadata'), self.NEUTRAL_METADATA)
+                self.assertEqual(self.role_text(page, 'Body')[:30], 'Write down one small moment a ')
+                self.assertEqual(self.role_text(page, 'Lead'), 'Some moments refuse to disappear quietly.')
+                self.assertEqual(self.role_text(page, 'Caption'), 'Figure 01 — observation field')
+                self.assertEqual(errors, [])
+
+    def test_saved_composition_keeps_its_old_text(self):
+        """Given a composition file whose Display and Metadata slots carry the old sentences
+        When it is imported
+        Then the slots show those sentences, not the new defaults."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors = self.composer(engine)
+                exported = self.export(page)
+                slots = exported['composition']['slots']
+                slots[0].update(role='Display', text=self.OLD_HEADLINE)
+                slots[1].update(role='Metadata', text=self.OLD_METADATA)
+                self.import_document(page, exported)
+                shown = page.locator('.slot-text').evaluate_all('(els) => els.map((el) => el.textContent)')
+                self.assertIn(self.OLD_HEADLINE, shown)
+                self.assertIn(self.OLD_METADATA, shown)
+                self.assertEqual(errors, [])
+
+
 class FullscreenTests(LiveCase):
     def test_fullscreen_does_not_connect_to_the_typed_url(self):
         for engine in ENGINES:
