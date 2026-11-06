@@ -3908,3 +3908,44 @@ class StudioIdleRoleControlTests(StudioLegacyCase):
                 page.evaluate('(id) => document.getElementById(id).dispatchEvent(new MouseEvent("click", { bubbles: true }))', button_id)
                 self.quiet(page)
                 self.assertEqual(self.surface(page, frame), before)
+
+
+# The Studio page records the receipts the bridge sends it, so a test can read the page version Studio last heard.
+RECEIPTS = """window.__receipts = [];
+addEventListener('message', e => { const d = e.data; if (d && d.type === 'design:roles-applied' && e.origin === 'http://target.test') __receipts.push(JSON.parse(JSON.stringify(d))); });"""
+
+
+class StudioStaleClearTests(StudioRoleCase):
+    @per_engine
+    def test_clear_after_the_author_text_changed_removes_the_preview_and_says_so(self, engine):
+        """Given the real bridge with a 24px preview applied and acknowledged, when the page's text changes so its version
+        passes the one Studio holds and Clear preview is pressed before Studio hears of it, then Studio sends that older
+        version, the bridge's owned stylesheet is present before the press and gone after, Studio shows "Preview cleared."
+        and the Body paragraph is back to its original 16px."""
+        page, frame, errors = self.open(engine, init=RECEIPTS)
+        self.assertTrue(self.detect(page).startswith('Detected'))
+        row = page.locator('#roleRows > li[data-role-id]', has=page.locator('strong', has_text='Body')).first
+        role = row.get_attribute('data-role-id')
+        self.control(page, 'Preview this role', role).check()
+        self.type_value(self.control(page, 'Size (px)', role), '24')
+        self.button(page, APPLY).click()
+        self.wait_status(page, 'Preview applied to 1 role')
+        author = frame.locator('[data-design-role="Body"]')
+        owned = "document.querySelectorAll('style[data-fontkit-role-styles]').length"
+        seen = page.evaluate('__receipts[__receipts.length - 1].pageVersion')
+        self.assertEqual(author.evaluate('el => getComputedStyle(el).fontSize'), '24px')
+        # Hold back the bridge's page notice (no animation frame in the target, none heard by Studio), then change the text.
+        page.evaluate("addEventListener('message', e => { if (e.data && e.data.type === 'design:roles-page') e.stopImmediatePropagation(); }, true)")
+        frame.evaluate('window.requestAnimationFrame = () => 0')
+        frame.evaluate("document.querySelector('main').append(document.createElement('hr'))")
+        frame.wait_for_function('(seen) => window.__fontkitBridge.pageVersion !== seen', arg=seen, polling=50)   # polling by timer: the target has no animation frames now
+        self.assertEqual(frame.evaluate(owned), 1)
+        frame.evaluate("window.__sent = []; addEventListener('message', e => { if (e.data && e.data.type === 'design:roles-clear') __sent.push(e.data); }, true)")
+        self.button(page, CLEAR).click()
+        frame.wait_for_function('window.__sent.length === 1', polling=50)
+        self.wait_status(page, 'Preview cleared.')
+        self.assertEqual(frame.evaluate('__sent[0].pageVersion'), seen)
+        self.assertGreater(page.evaluate('__receipts[__receipts.length - 1].currentPageVersion'), seen)
+        self.assertEqual(frame.evaluate(owned), 0)
+        self.assertEqual(author.evaluate('el => getComputedStyle(el).fontSize'), '16px')
+        self.assertEqual(errors, [])

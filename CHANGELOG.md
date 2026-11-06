@@ -53,6 +53,8 @@ Two things have their own version numbers:
   edits stop being re-applied.
 - Sync to Live App now tells you when it wrote font tokens and no element on the
   page changed, which happens when the page reads other token names.
+- Clear preview now always removes the preview, even when the page changed since
+  the last Detect; Apply and Detect still report the change.
 
 ## [0.4.0] - 2026-10-19
 

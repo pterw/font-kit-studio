@@ -1558,7 +1558,9 @@
       }
       if (!this.checkRevision(data)) return;
       this.refreshRolePage();
-      if (data.documentId !== this.documentId || data.pageVersion !== this.pageVersion) { this.reject(data.requestId, 'page-changed'); return; }
+      // A Clear removes only the bridge-owned preview, which is safe whatever the page did since (D080), so
+      // it checks the document but not the page version; Apply keeps both.
+      if (data.documentId !== this.documentId || operation === 'apply' && data.pageVersion !== this.pageVersion) { this.reject(data.requestId, 'page-changed'); return; }
       let roles = [], css = '', node = null, blocks = [];
       if (operation === 'apply') {
         if (this.rolePageURL() === null) { this.reject(data.requestId, 'unsupported-value', 'Unsupported page URL'); return; }
