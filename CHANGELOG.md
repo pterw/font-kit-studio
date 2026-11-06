@@ -37,6 +37,7 @@ Two things have their own version numbers:
 - The synced display font now follows the first text slot when a Row or Image
   sits first.
 - The no-bridge hint now says an error page gets no bridge.
+- The Adobe kit status now says the kit loads in Studio only.
 
 ## [0.4.0] - 2026-10-19
 

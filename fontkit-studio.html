@@ -1798,7 +1798,7 @@ function loadAdobeKit() {
   link.rel = "stylesheet";
   link.href = `https://use.typekit.net/${id}.css`;
   link.onload = async () => {
-    kitStatus.textContent = `Loaded https://use.typekit.net/${id}.css`;
+    kitStatus.textContent = "Loaded in Studio only. The Live App does not get this kit; add it to the app itself.";
     try { await document.fonts.ready; } catch (_) {}
   };
   link.onerror = () => {
@@ -2388,7 +2388,9 @@ if (remembered) kitId.value = remembered;
       link.dataset.composerKit = "true";
       link.onload = () => {
         loaded += 1;
-        composerStatus.textContent = `Loaded ${loaded}/${ids.length} Adobe kit stylesheet${ids.length === 1 ? "" : "s"}.`;
+        composerStatus.textContent = loaded === ids.length
+          ? "Loaded in Studio only. The Live App does not get this kit; add it to the app itself."
+          : `Loaded ${loaded}/${ids.length} Adobe kit stylesheet${ids.length === 1 ? "" : "s"}.`;
       };
       link.onerror = () => { composerStatus.textContent = `Could not load kit ${id}. Check the ID / project settings.`; };
       document.head.appendChild(link);
