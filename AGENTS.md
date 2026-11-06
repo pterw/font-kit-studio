@@ -143,6 +143,12 @@ heavy parallel load) is re-run once on the same tree before anyone acts. A pass 
 intermittent test defect: record it as a finding with both outputs, and fix it as its own
 task, never inside the change that met it.
 
+A dev server started for a test runs under a process limit, a memory limit and
+kill-on-close, so a runaway stays contained, orphaned workers included. A dev server
+is never left unattended, and nothing sends it deliberate 404 probes. Read free memory
+before a browser wave. On 2026-11-06 an unguarded `next dev` grew to thousands of
+`node` processes and took the machine down.
+
 Landing a change runs every test module that exercises the files it touches, not only the
 task's own focused tests: a change to `fontkit-studio.html` once broke a test in a Studio
 module the task's focused list did not name.
@@ -163,7 +169,10 @@ claim graph verification you did not get.
 
 - **Owner:** sets vision and scope, approves designs, requests external reviews
   (Codex, Copilot) and merges. Agents never merge or call external reviews
-  themselves. On a pull request, Copilot and Codex findings are verified, then fixed
+  themselves. External reviews are for material code changes; a docs-only pull
+  request skips them. The owner may merge conditionally ("if the reviews are
+  clean"), and the full merge bar still applies. On a pull request, Copilot and
+  Codex findings are verified, then fixed
   or answered on their thread. Graphify: act on its main comment, not on its
   complexity comments. Codacy findings are unconfirmed until reproduced; many have
   been false positives.
@@ -205,6 +214,10 @@ Rules of engagement:
   Never poll a status file with `sleep` loops.
 - User steering mid-run becomes a dated plan addendum plus a ledger event,
   before dispatching the work it changes.
+- An audit runs in layers: read-only slices first, then an independent check of
+  every serious row against source or a live run, before anything is routed to a
+  writer. A row is a claim until checked. Reports from outside reviewers are
+  checked the same way.
 
 ---
 
@@ -319,6 +332,8 @@ Forbidden:
 - A mutant that was never run. Before a mutant's failure counts, show that the
   mutated code is what the test loaded; a served copy can silently fall back to
   the original, and the test then passes against unmutated code.
+- A claim that a stack is supported with no test or fixture behind it. Real-app
+  checks count as evidence only for the versions and pages they ran on.
 
 Good patterns:
 
@@ -345,6 +360,11 @@ Good patterns:
 3. **Refactor needs coverage.** Do not restructure code whose behaviour is not
    under test; add characterization tests first.
 4. **Comments explain why.** Match the surrounding code's style and density.
+5. **Bounded releases.** Each release states what it will not do, and new ideas go
+   to a later release or to `docs/roadmap/`. Detailed plans are written when a
+   release starts, because earlier work changes them. A patch release repairs what
+   exists; where a repair would be new capability, it may ship an honest message
+   instead.
 
 ---
 
