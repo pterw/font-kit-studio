@@ -844,6 +844,83 @@ class TargetedUpdateTests(BridgeCase):
                 self.assertEqual(reply['revision'], 5)
 
 
+class ResetAfterAppRewriteTests(BridgeCase):
+    """B09-b: Reset keeps what the app now shows when it rewrote an edited leaf paragraph."""
+
+    APP_TEXT = 'App wrote this'
+
+    def edit(self, page, target_id, text):
+        self.applied(page, target_id, {'text': text})
+
+    def rewrite(self, frame, target_id, how):
+        """The page's own update, in the frame: `how` is a JS function of el."""
+        self.element(frame, target_id, how)
+
+    def test_reset_keeps_the_text_the_app_wrote_after_the_edit(self):
+        """Given TITLE edited and then rewritten by the page, When Reset, Then the page's string stays."""
+        rewrites = {
+            'node value': f"(el) => {{ el.firstChild.nodeValue = '{self.APP_TEXT}'; }}",
+            'text content': f"(el) => {{ el.textContent = '{self.APP_TEXT}'; }}",
+        }
+        for engine in ENGINES:
+            for name, how in rewrites.items():
+                with self.subTest(engine=engine, rewrite=name):
+                    page, frame = self.open(engine)
+                    self.hello(page)
+                    self.edit(page, TITLE, 'Edited title')
+                    self.rewrite(frame, TITLE, how)
+                    reply = self.request(page, {'type': 'design:reset', 'targetId': TITLE})
+                    self.assertEqual(reply['type'], 'design:applied', reply)
+                    self.assertEqual(self.text(frame, TITLE), self.APP_TEXT)
+                    entry = self.entry(reply['changes'], TITLE)
+                    self.assertTrue(entry is None or entry['text'] is None, entry)
+
+    def test_a_later_edit_after_keeping_the_app_text_resets_to_that_text(self):
+        """Given a kept app string, When the user edits and resets again, Then the page shows that string."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                self.edit(page, TITLE, 'Edited title')
+                self.rewrite(frame, TITLE, f"(el) => {{ el.firstChild.nodeValue = '{self.APP_TEXT}'; }}")
+                self.request(page, {'type': 'design:reset', 'targetId': TITLE})
+                self.edit(page, TITLE, 'Second edit')
+                self.assertEqual(self.text(frame, TITLE), 'Second edit')
+                self.request(page, {'type': 'design:reset', 'targetId': TITLE})
+                self.assertEqual(self.text(frame, TITLE), self.APP_TEXT)
+
+    def test_reset_all_follows_the_app_for_rewritten_text_and_restores_the_rest(self):
+        """Given TITLE rewritten and CTA edited untouched, When Reset all, Then TITLE follows the page, CTA is original."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                self.edit(page, TITLE, 'Edited title')
+                self.edit(page, CTA, 'Edited cta')
+                self.rewrite(frame, TITLE, f"(el) => {{ el.firstChild.nodeValue = '{self.APP_TEXT}'; }}")
+                reply = self.request(page, {'type': 'design:reset'})
+                self.assertEqual(reply['type'], 'design:applied', reply)
+                self.assertEqual(self.text(frame, TITLE), self.APP_TEXT)
+                self.assertEqual(self.text(frame, CTA), 'Get started')
+
+    def test_reset_after_a_cleared_placeholder_emoji_restores_it_without_error(self):
+        """Given an emoji placeholder cleared by an inside image, When Reset, Then the emoji is back and nothing threw."""
+        url = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.element(frame, SLOT, "(el) => { el.textContent = '\U0001F3A8'; }")
+                self.hello(page)
+                self.request(page, {'type': 'design:update', 'patch': {'slots': [
+                    {'id': 'img-slot', 'targetId': SLOT, 'type': 'image', 'assetDataUrl': url,
+                     'imageWidth': 30, 'opacity': 1}]}})
+                self.assertEqual(self.element(frame, SLOT, '(el) => el.querySelectorAll("img").length'), 1)
+                reply = self.request(page, {'type': 'design:reset', 'targetId': SLOT})
+                self.assertEqual(reply['type'], 'design:applied', reply)
+                self.assertEqual(self.text(frame, SLOT), '\U0001F3A8')
+                self.assertEqual(self.errors(frame), [])
+
+
 class SelectionTests(BridgeCase):
     def test_select_mode_reports_hover_changes_and_click_selects(self):
         for engine in ENGINES:

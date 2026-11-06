@@ -711,7 +711,7 @@
       // Original state, captured once per element before the bridge first touches it.
       this.styleState = new WeakMap(); // element -> {snapshot, raw, cssText, props}
       this.styledElements = new Set();
-      this.textState = new WeakMap(); // element -> {leaf, nodes|node, originalData, original}
+      this.textState = new WeakMap(); // element -> {leaf, nodes|node, wrote, originalData, original}
       this.textElements = new Set();
       this.tokenOverrides = new Map(); // '--name' -> value (ledger tokens)
       this.attrState = new WeakMap(); // element -> Map(attribute -> original value or null)
@@ -3029,6 +3029,7 @@
       if (!state) return false;
       if (state.leaf) {
         el.textContent = text;
+        state.wrote = { node: el.firstChild, value: text }; // what the bridge left; null node when cleared
       } else {
         // Keep the surrounding whitespace so inline siblings stay spaced.
         const lead = state.originalData.match(/^\s*/)[0];
@@ -3042,13 +3043,22 @@
     restoreText(el) {
       const state = this.textState.get(el);
       if (!state || !this.textElements.has(el)) return;
-      if (state.leaf) {
+      if (state.leaf && !this.leftAsWritten(el, state)) {
+        // The app replaced or rewrote the text after the edit: keep what it shows now and recapture on the next edit.
+        this.textState.delete(el);
+      } else if (state.leaf) {
         while (el.firstChild) el.removeChild(el.firstChild);
         state.nodes.forEach((node) => el.appendChild(node));
       } else {
         state.node.data = state.originalData;
       }
       this.textElements.delete(el);
+    }
+
+    leftAsWritten(el, state) {
+      const { node, value } = state.wrote;
+      if (!node) return el.childNodes.length === 0;
+      return el.childNodes.length === 1 && el.firstChild === node && node.data === value;
     }
 
     resetElement(el) {

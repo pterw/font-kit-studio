@@ -30,6 +30,8 @@ Plans: `docs/plans/2026-09-30-v0.1.1-responsive-rows.md` (complete), `docs/plans
 
 - **Task 3 landed (2026-11-06).** PUB: the publication record names 8 commits, 4 files and 565 insertions over stated paths, re-measured with git. Docs only. Landing gates on the integrated wave: 787 Chromium tests in 19 modules, plus static checks, bridge syntax, product ruff and whitespace, all pass. Firefox not run.
 
+- **Task 4 landed (2026-11-06).** B09-b: Reset keeps what the app rewrote. RED/GREEN: four new tests failed at the base and pass, and an edit after the keep starts from the page's text. Known limit: `design:restore-text` on an element with an `inside` image keeps the image and skips an emoji restore. Landing gates on the integrated wave: 787 Chromium tests in 19 modules, plus static checks, bridge syntax, product ruff and whitespace, all pass. Firefox not run.
+
 ## R2 engine planning
 
 - **R2 draft prepared (2026-10-08).** Expanded [work order](../plans/2026-10-03-r2-engine.md) on `docs/r2-engine-plan` from `1348268`, after the separate 0.3.1 publication closeout `dc1da53`. D058 resolves the two draft thresholds. Detection, preview and visited-page work have separate PRs, explicit owned files, reviewed atomic landings and focused browser gates; Library/Composer audit evidence remains required before final approval. Current source and two read-only research reports inform the contract; neither constitutes implementation. Plan review and documentation landing checks are pending. RED/GREEN: not applicable to this planning-only delta; 0 new tests, no browser engine verified. Next: independent plan review, then controller commit/push; obtain audit-brief approval before dispatching it.

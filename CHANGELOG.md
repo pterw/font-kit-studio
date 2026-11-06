@@ -25,6 +25,8 @@ Two things have their own version numbers:
   completes instead of reporting an incomplete detection.
 - `serve.py` now refuses `--studio-port 0` and `--target-port 0` by name instead
   of reporting two ports as equal.
+- Reset this element now shows the app's current text when the app rewrote an
+  edited paragraph, instead of the text captured when the edit began.
 
 ## [0.4.0] - 2026-10-19
 
