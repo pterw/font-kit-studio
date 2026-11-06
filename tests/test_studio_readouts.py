@@ -110,5 +110,31 @@ class ColourAlphaTests(SeededReadoutCase):
                 self.assertEqual(errors, [])
 
 
+class LineHeightNormalTests(SeededReadoutCase):
+    def test_a_normal_line_height_shows_an_empty_field_and_queues_nothing(self):
+        """Given computed line height normal, When the target is selected, Then the field is empty with placeholder
+        normal and nothing is exported; When 1.4 is typed, Then the export holds 1.4."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors, frame = self.seed(engine, lineHeight='normal')
+                field = page.locator('#liveLineHeight')
+                self.assertEqual(field.input_value(), '')
+                self.assertEqual(field.get_attribute('placeholder'), 'normal')
+                self.assertEqual(self.export(page).get('live', {}).get('overrides', {}), {})
+                field.fill('1.4')
+                self.wait_live(page)
+                self.assertEqual(self.override(page, 'lineHeight'), 1.4)
+                self.assertEqual(field.input_value(), '1.4')
+                self.assertEqual(errors, [])
+
+    def test_a_set_line_height_still_shows_its_number(self):
+        """Given a line height of 24px at 16px, When the target is selected, Then the field shows 1.5."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors, frame = self.seed(engine, fontSize='16px', lineHeight='24px')
+                self.assertEqual(page.locator('#liveLineHeight').input_value(), '1.5')
+                self.assertEqual(errors, [])
+
+
 if __name__ == '__main__':
     unittest.main()

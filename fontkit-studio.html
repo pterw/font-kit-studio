@@ -5924,7 +5924,7 @@ if (remembered) kitId.value = remembered;
       fontFamily: typeof c.fontFamily === "string" ? c.fontFamily : "",
       fontSize: roundTo(size, 2),
       fontWeight: weight,
-      lineHeight: !Number.isFinite(lineNum) ? 1.2 : lineRaw.endsWith("px") ? roundTo(lineNum / size, 3) : roundTo(lineNum, 3),
+      lineHeight: !Number.isFinite(lineNum) ? "" : lineRaw.endsWith("px") ? roundTo(lineNum / size, 3) : roundTo(lineNum, 3),
       letterSpacing: !Number.isFinite(spacingNum) ? 0 : spacingRaw.endsWith("px") ? roundTo(spacingNum / size, 4) : roundTo(spacingNum, 4),
       color: cssColorToHex(c.color) || String(c.color || ""),
       textAlign: typeof c.textAlign === "string" && c.textAlign ? c.textAlign : "start",
@@ -6047,7 +6047,7 @@ if (remembered) kitId.value = remembered;
         <div class="inspector-field"><label for="liveFontSize">Size (px)</label><input id="liveFontSize" type="number" min="4" max="400" step="1" inputmode="decimal"></div>
         <div class="inspector-field"><label for="liveFontWeight">Weight</label><input id="liveFontWeight" type="number" min="1" max="1000" step="${weights.length ? 100 : 1}" inputmode="numeric"></div>
         ${weights.length ? `<p id="liveWeightNote" class="inspector-note inspector-field full">Allowed weights: ${weights.map(Number).join(" · ")} — the Live App snaps to the nearest.</p>` : ""}
-        <div class="inspector-field"><label for="liveLineHeight">Line height</label><input id="liveLineHeight" type="number" min="0.5" max="5" step="0.05" inputmode="decimal"></div>
+        <div class="inspector-field"><label for="liveLineHeight">Line height</label><input id="liveLineHeight" type="number" min="0.5" max="5" step="0.05" inputmode="decimal" placeholder="normal"></div>
         <div class="inspector-field"><label for="liveLetterSpacing">Tracking (em)</label><input id="liveLetterSpacing" type="number" min="-0.5" max="2" step="0.005" inputmode="decimal"></div>
         <div class="inspector-field full"><label for="liveTextTransform">Transform</label><select id="liveTextTransform">${optionsHtml(LIVE_TRANSFORM, values.textTransform)}</select></div>`;
     }

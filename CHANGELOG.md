@@ -32,6 +32,8 @@ Two things have their own version numbers:
 - Reset this element stays available after a reload when the element has a saved
   move.
 - Moving the colour swatch keeps the alpha of a translucent colour.
+- An element whose line height is normal shows an empty line-height field
+  instead of 1.2.
 
 ## [0.4.0] - 2026-10-19
 
