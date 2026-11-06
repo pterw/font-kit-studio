@@ -23,6 +23,7 @@ HELPER = support.REPO / 'packages' / 'fontkitstudio' / 'test' / 'helpers' / 'ser
 
 NPX_BRIDGE_HINT = ('npx fontkitstudio adds the bridge to the page itself. If Font Kit Studio does not '
                    'connect, the terminal where the command runs says why.')
+ERROR_PAGE = 'If this is an error page (404 or 400), the proxy adds no bridge to it; go back to a normal page.'
 NPX_SYNC = 'Sync to file is not available under npx fontkitstudio. Use Copy or Download in the CSS tab.'
 OLD_SYNC = ('No Font Kit dev server answered /__fontkit/status. '
             'Run python scripts/serve.py to enable Sync to file.')
@@ -113,7 +114,7 @@ class UnderThePackageTest(HintsCase):
                 self.wait_sync_checked(page)
                 hint = page.locator('#bridgeHint')
                 self.assertTrue(hint.is_visible())
-                self.assertEqual(' '.join(hint.inner_text().split()), NPX_BRIDGE_HINT)
+                self.assertEqual(' '.join(hint.inner_text().split()), f'{NPX_BRIDGE_HINT} {ERROR_PAGE}')
                 self.assertEqual(self.sync_title(page), NPX_SYNC)
                 self.assertTrue(page.locator('#liveCodeSync').is_disabled())
                 self.assertEqual(page.locator('#liveCodeSyncHint').text_content(), NPX_SYNC)

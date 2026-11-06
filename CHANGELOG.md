@@ -36,6 +36,7 @@ Two things have their own version numbers:
   instead of 1.2.
 - The synced display font now follows the first text slot when a Row or Image
   sits first.
+- The no-bridge hint now says an error page gets no bridge.
 
 ## [0.4.0] - 2026-10-19
 

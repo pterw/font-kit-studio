@@ -1119,7 +1119,7 @@ body.dark .live-overlay-label { color: #111; }
         <p id="bridgeWarning" class="bridge-warning" role="status" hidden><span id="bridgeWarningText"></span> <button id="bridgeWarningDismiss" class="btn" type="button">Dismiss</button></p>
         <p id="targetUrlProblem" class="bridge-hint" role="alert" hidden></p>
         <p id="targetUrlHint" class="bridge-hint">Enter your app's URL</p>
-        <p id="bridgeHint" class="bridge-hint" hidden>Either nothing is running there, or the page does not load fontkit-bridge.js. Add <code>&lt;script src="fontkit-bridge.js"&gt;&lt;/script&gt;</code> after the page's own scripts, reload it, then press Connect Live App. <span id="bridgeHintServe" hidden>Start the dev server: <code>python scripts/serve.py</code></span></p>
+        <p id="bridgeHint" class="bridge-hint" hidden>Either nothing is running there, or the page does not load fontkit-bridge.js. Add <code>&lt;script src="fontkit-bridge.js"&gt;&lt;/script&gt;</code> after the page's own scripts, reload it, then press Connect Live App. <span id="bridgeHintServe" hidden>Start the dev server: <code>python scripts/serve.py</code>.</span> If this is an error page (404 or 400), the proxy adds no bridge to it; go back to a normal page.</p>
       </div>
 
       <div class="c-field span-3">
@@ -4816,7 +4816,7 @@ if (remembered) kitId.value = remembered;
   // npx fontkitstudio serves Studio from its own loopback server with a per-run ?token=. That is the only signal, read once.
   // That server has no sync endpoint and Studio is on loopback there, so BLOCKED_LOOPBACK_TEXT cannot show under it.
   const SERVED_BY_PACKAGE = Boolean(new URLSearchParams(location.search).get("token"));
-  const NPX_BRIDGE_HINT = "npx fontkitstudio adds the bridge to the page itself. If Font Kit Studio does not connect, the terminal where the command runs says why.";
+  const NPX_BRIDGE_HINT = "npx fontkitstudio adds the bridge to the page itself. If Font Kit Studio does not connect, the terminal where the command runs says why. If this is an error page (404 or 400), the proxy adds no bridge to it; go back to a normal page.";
   const NPX_BRIDGE_TITLE = "npx fontkitstudio adds the bridge to the page itself.";
   const NPX_EMPTY_INSPECTOR = "Enter the URL of a localhost app, then press Connect Live App. npx fontkitstudio adds the bridge to the page itself.";
   const NPX_SYNC_TEXT = "Sync to file is not available under npx fontkitstudio. Use Copy or Download in the CSS tab.";
