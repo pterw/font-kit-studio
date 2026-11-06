@@ -2178,6 +2178,7 @@ if (remembered) kitId.value = remembered;
     "gotham": "work-sans", "sentinel": "source-serif-4", "ltr-ncnd-variable": "jetbrains-mono",
     "ballinger-mono": "jetbrains-mono"
   };
+  const namesFamily = family => fonts.some(f => f.family === family) || Object.hasOwn(LEGACY_FAMILIES, family);
   const byFamily = family => fonts.find(f => f.family === family)
     || (typeof family === "string" && Object.hasOwn(LEGACY_FAMILIES, family) ? fonts.find(f => f.family === LEGACY_FAMILIES[family]) : null)
     || fonts[0];
@@ -2419,7 +2420,7 @@ if (remembered) kitId.value = remembered;
 
   function freshId() { return crypto.randomUUID ? crypto.randomUUID() : `slot-${Date.now()}-${Math.random()}`; }
 
-  function hydrateSlot(raw, depth=0) {
+  function hydrateSlot(raw, depth=0, missing=null) {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
       throw new Error("Each slot must be an object; check composition.slots and row children.");
     }
@@ -2430,11 +2431,14 @@ if (remembered) kitId.value = remembered;
         throw new Error("Row slot children must be an array.");
       }
       const rawChildren = Array.isArray(raw.children) ? raw.children.slice(0, 4) : [];
-      const children = rawChildren.map(child => hydrateSlot(child, 1)).filter(child => child.type !== "row");
+      const hydrated = rawChildren.map(child => hydrateSlot(child, 1, missing));
+      const children = hydrated.filter(child => child.type !== "row");
       while (children.length < 2) children.push(makeTextSlot("Custom", DEFAULT_FAMILY));
       const count = rowNumber(raw.childCount, children.length, 2, 4, true);
       while (children.length < count) children.push(makeTextSlot("Custom", DEFAULT_FAMILY));
       children.length = count;
+      // Only slots that survive the filter and the truncation count as named by the file.
+      hydrated.forEach(child => children.includes(child) || (missing && missing.delete(child)));
       const row = makeRowSlot({ ...raw, children, childCount:count });
       row.id = freshId();
       row.children = row.children.map(child => ({ ...child, id:freshId(), assetDataUrl:child.type === "image" ? "" : child.assetDataUrl }));
@@ -2452,6 +2456,7 @@ if (remembered) kitId.value = remembered;
     });
     if (type === "text") {
       slot.role = role;
+      if (missing && slot.family && !namesFamily(slot.family)) missing.set(slot, slot.family);
       slot.family = byFamily(slot.family).family;
       slot.element = ELEMENTS.includes(slot.element) ? slot.element : base.element;
       slot.transform = TRANSFORMS.includes(slot.transform) ? slot.transform : base.transform;
@@ -3295,7 +3300,8 @@ if (remembered) kitId.value = remembered;
         background.saved = currentColorName(background.saved);
         if (!["custom", "tailwind", "saved"].includes(background.source)) background.source = defaults.source;
         if (!CSS.supports("color", background.hex)) background.hex = defaults.hex;
-        const slots = incoming.slots.slice(0,8).map(raw => hydrateSlot(raw, 0));
+        const unknownFamilies = new Map();
+        const slots = incoming.slots.slice(0,8).map(raw => hydrateSlot(raw, 0, unknownFamilies));
         if (!slots.length) slots.push(makeTextSlot("Custom", DEFAULT_FAMILY));
         const width = String(incoming.canvasWidth || "960");
         const kitIds = Array.isArray(data.kitIds) ? normalizeKitIds(data.kitIds.filter(id => typeof id === "string").join(", ")) : [];
@@ -3330,7 +3336,8 @@ if (remembered) kitId.value = remembered;
         composerStatus.textContent = (wasLinked
           ? "Imported; the link to the page is off. Press Sync to Live App to send this composition."
           : "Composition imported. Image assets must be reselected.")
-          + (droppedEdits ? ` ${droppedEdits} queued edit${droppedEdits === 1 ? " that had" : "s that had"} not reached the page ${droppedEdits === 1 ? "was" : "were"} dropped.` : "");
+          + (droppedEdits ? ` ${droppedEdits} queued edit${droppedEdits === 1 ? " that had" : "s that had"} not reached the page ${droppedEdits === 1 ? "was" : "were"} dropped.` : "")
+          + [...new Set(unknownFamilies.values())].map(family => ` ${family} is not in the library, so the first library font is used.`).join("");
       } catch (err) {
         composerStatus.textContent = `Import failed: ${err.message}`;
       }

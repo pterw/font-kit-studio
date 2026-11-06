@@ -39,6 +39,8 @@ Two things have their own version numbers:
 - The no-bridge hint now says an error page gets no bridge.
 - The Adobe kit status now says the kit loads in Studio only.
 - A note beside Sync to Live App says it also restyles elements by role inline.
+- Importing a composition that names a font the library lacks now says which
+  font was replaced.
 
 ## [0.4.0] - 2026-10-19
 
