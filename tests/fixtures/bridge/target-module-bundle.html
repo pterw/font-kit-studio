@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bridge test target (module bundle)</title>
+<!--
+  A hashed type="module" bundle: the import creates no script element, so
+  document.currentScript is null and no script[src*="fontkit-bridge"] exists.
+  The first script records console.warn calls in window.__warns. With #options
+  the page also sets window.FONTKIT_BRIDGE_OPTIONS. Used by tests/test_bridge_runtime.py.
+-->
+<script>
+  window.__warns = [];
+  const warn = console.warn;
+  console.warn = (...args) => { window.__warns.push(args.join(' ')); warn.apply(console, args); };
+  if (location.hash === '#options') window.FONTKIT_BRIDGE_OPTIONS = { allowedOrigins: 'http://studio.test' };
+</script>
+</head>
+<body>
+<main>
+  <h1 data-design-id="module.title">Module bundle target</h1>
+</main>
+<script type="module" data-allowed-origins="http://studio.test">import '/fontkit-bridge.js';</script>
+</body>
+</html>

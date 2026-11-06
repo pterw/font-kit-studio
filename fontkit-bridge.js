@@ -564,13 +564,22 @@
     return unique.length ? unique : null;
   }
 
+  // Set once the unreadable-list warning has been given, so a page load warns once.
+  let warnedUnreadOrigins = false;
+
   // allowedOrigins: option (array or space/comma separated string) or the
   // script tag's data-allowed-origins. null means "any origin, pinned on hello".
+  // A tag with the attribute that could not be read (a module bundle has no currentScript) warns once.
   function resolveAllowedOrigins(option) {
     let list = option;
     if (list == null && typeof document !== 'undefined') {
       const script = currentScript || document.querySelector('script[src*="fontkit-bridge"][data-allowed-origins]');
       if (script && script.hasAttribute('data-allowed-origins')) list = script.getAttribute('data-allowed-origins');
+      else if (!warnedUnreadOrigins && document.querySelector('script[data-allowed-origins]')) {
+        warnedUnreadOrigins = true;
+        console.warn('[FontKitBridge] data-allowed-origins could not be read from this script, so any origin is accepted. '
+          + 'Pass allowedOrigins in window.FONTKIT_BRIDGE_OPTIONS.');
+      }
     }
     if (list == null) return null;
     list = parseOriginList(list);

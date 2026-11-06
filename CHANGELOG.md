@@ -27,6 +27,8 @@ Two things have their own version numbers:
   of reporting two ports as equal.
 - Reset this element now shows the app's current text when the app rewrote an
   edited paragraph, instead of the text captured when the edit began.
+- The bridge now warns when a page sets `data-allowed-origins` on a script it
+  could not read, such as a hashed module bundle.
 
 ## [0.4.0] - 2026-10-19
 

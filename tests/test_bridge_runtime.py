@@ -23,6 +23,8 @@ MANUAL_PAGE = f'{TARGET}/tests/fixtures/bridge/target-manual.html'
 OPTIONS_PAGE = f'{TARGET}/tests/fixtures/bridge/target-options.html'
 CONSTRUCTED_PAGE = f'{TARGET}/tests/fixtures/bridge/target-constructed.html'
 ARRANGE_PAGE = f'{TARGET}/tests/fixtures/bridge/target-arrange.html'
+MODULE_BUNDLE_PAGE = f'{TARGET}/tests/fixtures/bridge/target-module-bundle.html'
+CLASSIC_CAPTURE_PAGE = f'{TARGET}/tests/fixtures/bridge/target-classic-capture.html'
 STAT_NAMES_PAGE = f'{TARGET}/tests/fixtures/bridge/target-stat-names.html'
 SPA_PAGE = f'{TARGET}/tests/fixtures/bridge/target-spa.html'
 TWICE_PAGE = f'{TARGET}/tests/fixtures/bridge/target-twice.html'
@@ -592,6 +594,46 @@ class OriginListTests(BridgeCase):
                 self.assertEqual(len(result['seen']), 1)
                 self.assertEqual(self.update(page, 'options.title', {'fontSize': 70})['type'], 'timeout')
                 self.assertEqual(self.errors(frame), [])
+
+NEW_STRING_4 = ('[FontKitBridge] data-allowed-origins could not be read from this script, so any origin is accepted. '
+                'Pass allowedOrigins in window.FONTKIT_BRIDGE_OPTIONS.')
+
+
+class UnreadOriginListTests(BridgeCase):
+    def warns(self, frame):
+        return frame.evaluate('window.__warns')
+
+    def test_a_module_bundle_that_carries_the_origin_list_warns_once_and_accepts_any_origin(self):
+        """Given a module bundle with an unreadable list, when it boots, then it warns once and accepts any origin."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, host=EVIL, target=MODULE_BUNDLE_PAGE)
+                self.assertEqual(self.warns(frame), [NEW_STRING_4])
+                # A second construction must not repeat the line (the once-per-page flag).
+                frame.evaluate('() => new FontKitBridge()')
+                self.assertEqual(self.warns(frame), [NEW_STRING_4])
+                self.assertEqual(self.hello(page)['type'], 'design:ready')
+
+    def test_a_classic_script_tag_keeps_its_list_and_warns_nothing(self):
+        """Given a read list, a global option or a * tag, when the bridge boots, then nothing is warned."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine, case='classic list'):
+                page, frame = self.open(engine, host=EVIL, target=CLASSIC_CAPTURE_PAGE)
+                self.assertEqual(page.evaluate('() => hello("s1")')['type'], 'timeout')
+                self.assertEqual(self.warns(frame), [])
+            with self.subTest(engine=engine, case='global option'):
+                page, frame = self.open(engine, host=EVIL, target=MODULE_BUNDLE_PAGE + '%23options')
+                self.assertEqual(page.evaluate('() => hello("s1")')['type'], 'timeout')
+                self.assertEqual(self.warns(frame), [])
+            with self.subTest(engine=engine, case='star tag'):
+                page, frame = self.open(engine, host=EVIL, target=CLASSIC_CAPTURE_PAGE + '%23star')
+                self.assertEqual(self.hello(page)['type'], 'design:ready')
+                self.assertEqual(self.warns(frame), [])
+            with self.subTest(engine=engine, case='no origin tag'):
+                page, frame = self.open(engine, host=EVIL, target=CLASSIC_CAPTURE_PAGE + '%23none')
+                self.assertEqual(frame.evaluate("() => document.querySelectorAll('script[data-allowed-origins]').length"), 0)
+                self.assertEqual(self.hello(page)['type'], 'design:ready')
+                self.assertEqual(self.warns(frame), [])
 
 
 class SessionLifecycleTests(BridgeCase):
