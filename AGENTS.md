@@ -193,7 +193,7 @@ Rules of engagement:
   before dispatch. Most defects that later cost fix rounds (a test the fixture
   would pass anyway, a mutant that cannot fail) are cheapest to catch there.
 - Every implementation task gets an independent review before commit. A fix
-  round goes back to the same writer, then to a scoped re-review. Cap: five
+  round goes to a new writer given the brief and the review, then to a scoped re-review. Cap: five
   rounds. Before any sixth, find the root cause of the open findings
   (systematic debugging), then escalate to the owner.
 - Check branch, HEAD and status before mutating anything. Never revert
