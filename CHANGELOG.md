@@ -38,6 +38,7 @@ Two things have their own version numbers:
   sits first.
 - The no-bridge hint now says an error page gets no bridge.
 - The Adobe kit status now says the kit loads in Studio only.
+- A note beside Sync to Live App says it also restyles elements by role inline.
 
 ## [0.4.0] - 2026-10-19
 

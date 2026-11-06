@@ -11,6 +11,7 @@ ERROR_PAGE = 'If this is an error page (404 or 400), the proxy adds no bridge to
 NPX_TEXT = ('npx fontkitstudio adds the bridge to the page itself. If Font Kit Studio does not '
             'connect, the terminal where the command runs says why.')
 KIT_STUDIO_ONLY = 'Loaded in Studio only. The Live App does not get this kit; add it to the app itself.'
+SYNC_ROLE_NOTE = 'Sync also restyles elements by role inline. Changes, Copy and JSON list the tokens only.'
 NO_BRIDGE_BADGE = r'^No bridge answered at http://target\.test within 4 s\.$'
 
 
@@ -112,6 +113,23 @@ class AdobeKitStudioOnlyTests(LiveCase):
                 self.wait_text(page, '#composerStatus', 'Loaded 1/2 Adobe kit stylesheets.')
                 self.release(self.held[1])
                 self.wait_text(page, '#composerStatus', KIT_STUDIO_ONLY)
+                self.assertEqual(errors, [])
+
+
+class SyncRoleNoteTests(LiveCase):
+    def test_the_sync_button_has_a_visible_note_about_inline_role_restyling(self):
+        """Given a freshly opened Studio with no page connected, When it is idle,
+        Then the note beside Sync to Live App is visible and says Sync restyles by role inline."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors = self.open(engine, target=None)
+                page.locator('#modeComposer').click()  # the Sync button lives in the Composer toolbar
+                note = page.locator('#syncRoleNote')
+                self.assertTrue(note.is_visible())
+                self.assertEqual(one_line(note.inner_text()), SYNC_ROLE_NOTE)
+                self.assertTrue(page.locator('#btnSyncToApp').is_visible())
+                shared = page.evaluate('() => syncRoleNote.parentElement === syncToAppHint.parentElement')
+                self.assertTrue(shared)
                 self.assertEqual(errors, [])
 
 
