@@ -20,6 +20,8 @@ Plans: `docs/plans/2026-09-30-v0.1.1-responsive-rows.md` (complete), `docs/plans
 
 - **0.4.1 plan written (2026-11-06).** [Plan](../plans/2026-11-06-v0.4.1-repairs.md): 19 tasks from the 24 audit rows homed to 0.4.1, bounded by its Non-goals. Clear is never refused for a stale page version, three additive warning kinds carry outcomes the page cannot show, and the hydration mismatch under `next dev` is documented as a limit. RED/GREEN: not applicable, 0 tests. Next: new strings, then the first wave.
 
+- **Roadmap and specs updated from the audit (2026-11-06).** The [roadmap](../plans/2026-10-03-roadmap.md) gains 0.4.1 (planned, active) and 0.4.2 (later, no plan yet) between R2 and R3, a Boundaries section and a log line; R3 and R4 and the two specs carry short audit notes. R5 is unchanged: no finding bears on it. RED/GREEN: not applicable, docs only, 0 tests.
+
 ## R2 engine planning
 
 - **R2 draft prepared (2026-10-08).** Expanded [work order](../plans/2026-10-03-r2-engine.md) on `docs/r2-engine-plan` from `1348268`, after the separate 0.3.1 publication closeout `dc1da53`. D058 resolves the two draft thresholds. Detection, preview and visited-page work have separate PRs, explicit owned files, reviewed atomic landings and focused browser gates; Library/Composer audit evidence remains required before final approval. Current source and two read-only research reports inform the contract; neither constitutes implementation. Plan review and documentation landing checks are pending. RED/GREEN: not applicable to this planning-only delta; 0 new tests, no browser engine verified. Next: independent plan review, then controller commit/push; obtain audit-brief approval before dispatching it.

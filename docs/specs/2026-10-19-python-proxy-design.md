@@ -132,3 +132,8 @@ New (approved by the owner with this spec, 2026-10-19):
 - The WebSocket tunnel writes with blocking sends: if both peers stop reading while both buffers are full, it stalls.
 - An HTML page is buffered up to the Node proxy's size limit and tagged; a larger one streams through untagged, as
   the Node proxy does.
+
+## Note (2026-11-06)
+
+The pip wrapper named in the Non-goals is planned for 0.4.2, after the 0.4.1 repairs ([roadmap](../plans/2026-10-03-roadmap.md)). It
+needs `serve.py --version` (audit row E-15). This design is unchanged.
