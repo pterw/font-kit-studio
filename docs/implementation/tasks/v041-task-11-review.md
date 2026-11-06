@@ -9,7 +9,7 @@
 - PASS: Report states the accepted limit (fix 6), the Task 4 adjacency (fix 5) and the test 4 deviation (fix 3).
 
 ### Checks run
-- Patch applies on task 10 r1 -> temp index in C:/fks, `read-tree 5443ff6`, `apply --cached` r1, `apply --check --cached` task 11 -> OK. I removed the temp index file afterwards.
+- Patch applies on task 10 r1 -> temp index in a scratch folder, `read-tree 5443ff6`, `apply --cached` r1, `apply --check --cached` task 11 -> OK. I removed the temp index file afterwards.
 - Focused module (brief's command, minus test_support) -> TokenNotAppliedTests + LegacyCompositionTests + TokenRemovalTests on chromium -> 11 tests OK.
 - Regressions -> `test_studio_roles` 115 OK, `test_role_routes` 52 OK, `test_r2_integration` 29 OK. These are one module at a time on chromium. I did not run `test_bridge_runtime` in full, or other engines; those are for the wave gate.
 - Sync must not stop (your named risk) -> scratch probe `scratch/t11-rev/probe.py`, run against the task's worktree -> on the terminal page, syncs of `{}`, `{'slots': []}`, `{'tokens': {}}` and `{'tokens': {'--editorial-size': '20px'}}` all reply `design:applied`, with no warning and no page errors (`window.__errors` empty). A four-name Sync: the `design:warning` index is before the final `design:applied`, with no page errors. A null removal (`--font-sans: None`) after a warned Sync still replies `design:applied` and adds no warning.

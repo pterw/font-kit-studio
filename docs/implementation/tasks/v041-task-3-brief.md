@@ -51,7 +51,7 @@ Everything else is read-only: no CHANGELOG line (no user notices a record fix), 
 
 None. Docs only, no test is added or changed. The change is checked by: (a) the report quoting the two commands and their
 output verbatim; (b) `git diff --stat` showing one file, lines 5-6 region only; (c) `pre-commit run --files
-docs/implementation/verification-r2.md` clean. No dev server, no gate-runner beyond what the code-phase rules require, no suite.
+docs/implementation/verification-r2.md` clean. No dev server, no gate run beyond what the code-phase rules require, no suite.
 
 ## Focused command
 

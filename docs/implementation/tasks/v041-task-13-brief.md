@@ -12,7 +12,7 @@ holds at BASE: `computeSelector` (3220-3266) calls `selectorStep` for every node
 tries the last 4 steps and extends up to the whole chain. `nth-of-type` in every step already keeps the full chain unique, so no
 new fallback code is needed; the loop is the fallback.
 
-The audited ScrobbleScope templates (read-only, `C:/Users/peter/Python Projects/ScrobbleScope/templates` and `static`) use
+The audited ScrobbleScope templates (read-only, `the app's templates` and `static`) use
 `is-active` (11 hits), `tab-active` (11), `btn-active` (5) and `heatmap-stage-active` (4), and `has-durations` once. So the `-active`
 suffix rule applies.
 

@@ -72,7 +72,7 @@ From `the task's worktree`, with a timeout of 300000 ms, one module only, no sha
 
 `PYTHONPATH=tests FKS_ENGINES=chromium python -m unittest test_bridge_runtime test_support -v`
 
-The landing also runs `test_studio_roles`, `test_role_routes` and `test_r2_integration`; the gate-runner does that, not
+The landing also runs `test_studio_roles`, `test_role_routes` and `test_r2_integration`; the gate run does that, not
 you (code phase runs only the files you change or that import the changed module).
 
 ## Patches

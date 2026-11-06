@@ -23,7 +23,7 @@ Renamed the local; function at the old line 2536 untouched, no page error. No ne
 ## Tests (chromium, one module at a time)
 test_studio_sync_reads 1 OK; test_support 34 OK; test_studio_roles 114 OK; test_role_routes 52 OK; test_r2_integration 29 OK;
 test_studio_controls 34 OK; test_studio_live classes StudioArrangeTests, StudioFreeFontTests, StudioProtocolTests (the ones using liveFontFamily) 44 OK.
-No full suite, no mutate.py, no gate-runner, no commit or stage (only `git add -N` of the new test file, as the rules allow).
+No full suite, no mutate.py, no gate run, no commit or stage (only `git add -N` of the new test file, as the rules allow).
 
 ## Outside the regions
 None. CHANGELOG.md untouched. A temporary tests/zz_t7_dump.py was used for the dump and deleted.

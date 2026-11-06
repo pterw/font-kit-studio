@@ -22,7 +22,7 @@ Import path: `hydrateSlot` (`fontkit-studio.html:2444`, `{ ...base, ...leaf }`) 
   test_studio_roles 114 OK; test_role_routes 52 OK; test_r2_integration 29 OK.
 - `git grep -n -E "night sky|sky remembers|OTTAWA|MOMENTS" -- fontkit-studio.html` prints nothing.
 
-No test outside the brief broke. No nested gate-runner, no mutate.py, no pre-commit (per dispatch). Nothing outside the owned regions.
+No test outside the brief broke. No gate run, no mutate.py, no pre-commit (per dispatch). Nothing outside the owned regions.
 The test file shows a CRLF warning from git for the working copy; the diff is 52 added lines only.
 
 ## Handoff
