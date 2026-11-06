@@ -23,6 +23,7 @@ MANUAL_PAGE = f'{TARGET}/tests/fixtures/bridge/target-manual.html'
 OPTIONS_PAGE = f'{TARGET}/tests/fixtures/bridge/target-options.html'
 CONSTRUCTED_PAGE = f'{TARGET}/tests/fixtures/bridge/target-constructed.html'
 ARRANGE_PAGE = f'{TARGET}/tests/fixtures/bridge/target-arrange.html'
+STAT_NAMES_PAGE = f'{TARGET}/tests/fixtures/bridge/target-stat-names.html'
 SPA_PAGE = f'{TARGET}/tests/fixtures/bridge/target-spa.html'
 TWICE_PAGE = f'{TARGET}/tests/fixtures/bridge/target-twice.html'
 DEFERRED_PAGE = f'{TARGET}/tests/fixtures/bridge/target-deferred.html'
@@ -3403,6 +3404,24 @@ class AutoSelectorTests(BridgeCase):
                 for target in refreshed['targets']:
                     found = frame.evaluate('(sel) => document.querySelectorAll(sel).length', target['selector'])
                     self.assertEqual(found, 1, target['selector'])
+
+class AutoSelectorWholeNameTests(BridgeCase):
+    def test_only_the_whole_class_stat_is_discovered(self):
+        """Given static, status and stat classes, when the bridge discovers targets, then only stat is one."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, target=STAT_NAMES_PAGE)
+                ready = self.hello(page)
+                self.assertEqual(len(ready['targets']), 1, ready['targets'])
+                marked = frame.evaluate("""() => [...document.querySelectorAll('main div')].map((el) => ({
+                    cls: el.className,
+                    attrs: el.getAttributeNames().filter((n) => n.startsWith('data-design'))
+                }))""")
+                self.assertEqual(marked[0], {'cls': 'static', 'attrs': []})
+                self.assertEqual(marked[1], {'cls': 'status', 'attrs': []})
+                self.assertEqual(marked[2]['cls'], 'stat')
+                self.assertTrue(marked[2]['attrs'])
+
 
 
 class LegacyLayoutStructureTests(BridgeCase):

@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bridge test target (stat class names)</title>
+<!--
+  Three classes that contain the letters "stat", each in its own wrapper so the
+  sibling pass cannot register one through another. Only `stat` is a whole name.
+  Used by tests/test_bridge_runtime.py.
+-->
+</head>
+<body>
+<main>
+  <section><div class="static">Static text</div></section>
+  <section><div class="status">Status text</div></section>
+  <section><div class="stat">Stat text</div></section>
+</main>
+<script src="/fontkit-bridge.js"></script>
+</body>
+</html>

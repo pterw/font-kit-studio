@@ -117,7 +117,7 @@
     'header p', 'main p', 'article p', 'section p',
     'header a', 'nav a', 'button', '.btn',
     'img', 'svg', 'picture',
-    '[class*="title"]', '[class*="heading"]', '[class*="brand"]', '[class*="wordmark"]', '[class*="badge"]', '[class*="stat"]'
+    '[class*="title"]', '[class*="heading"]', '[class*="brand"]', '[class*="wordmark"]', '[class*="badge"]', '.stat'
   ];
 
   // Root custom properties always reported when set (in addition to any
