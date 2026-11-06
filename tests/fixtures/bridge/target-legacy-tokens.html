@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en" data-theme="x">
+<head>
+<meta charset="utf-8">
+<title>Bridge test target with token names set where the root reader misses them</title>
+<!--
+  Fixture for LegacyTokenNameTests in tests/test_bridge_runtime.py: tokens set
+  only under html[data-theme='x'] are skipped by the root reader, so the bridge
+  must not report them through a built-in list of names no app reads.
+-->
+<style>
+  :root { --accent-emerald: #00aa66; }
+  html[data-theme='x'] {
+    --accent-cyan: #00cccc;
+    --accent-purple: #8844cc;
+    --editorial-size: 3rem;
+    --mono-spacing: 0.1em;
+    --font-display: Georgia, serif;
+  }
+</style>
+</head>
+<body>
+<h1 data-design-id="legacy.title">Title</h1>
+<script src="/fontkit-bridge.js"></script>
+</body>
+</html>

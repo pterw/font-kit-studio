@@ -31,6 +31,7 @@ TWICE_PAGE = f'{TARGET}/tests/fixtures/bridge/target-twice.html'
 DEFERRED_PAGE = f'{TARGET}/tests/fixtures/bridge/target-deferred.html'
 DEEP_PAGE = f'{TARGET}/tests/fixtures/bridge/target-deep.html'
 ROOT_STYLE_PAGE = f'{TARGET}/tests/fixtures/bridge/target-root-style.html'
+LEGACY_TOKENS_PAGE = f'{TARGET}/tests/fixtures/bridge/target-legacy-tokens.html'
 
 TITLE = 'landing.hero.title'
 LEAD = 'landing.hero.lead'
@@ -340,6 +341,23 @@ class HandshakeTests(BridgeCase):
                 self.assertEqual(frame.evaluate('window.__discoveries'), 1)
                 self.hello(page, 's2')
                 self.assertEqual(frame.evaluate('window.__discoveries'), 2)
+
+
+class LegacyTokenNameTests(BridgeCase):
+    def test_names_set_only_where_the_root_reader_misses_them_are_not_reported(self):
+        """Given a page that sets --accent-cyan, --accent-purple, --editorial-size, --mono-spacing and
+        --font-display only under html[data-theme='x'] and --accent-emerald in :root, When the bridge answers
+        hello, Then --font-display and --accent-emerald are reported with their values and the four other
+        names are absent."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, _ = self.open(engine, target=LEGACY_TOKENS_PAGE)
+                css = self.hello(page)['tokens']['css']
+                self.assertEqual(css['--font-display'], 'Georgia, serif')
+                self.assertEqual(css['--accent-emerald'], '#00aa66')
+                for name in ('--accent-cyan', '--accent-purple', '--editorial-size', '--mono-spacing'):
+                    with self.subTest(engine=engine, name=name):
+                        self.assertNotIn(name, css)
 
 
 class InitOptionTests(BridgeCase):

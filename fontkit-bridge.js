@@ -124,8 +124,7 @@
   // declared on :root/html in same-origin stylesheets).
   const LEGACY_TOKEN_KEYS = [
     '--font-sans', '--font-serif', '--font-mono', '--font-display',
-    '--editorial-size', '--mono-spacing', '--brand-canvas',
-    '--accent-cyan', '--accent-emerald', '--accent-purple'
+    '--brand-canvas'
   ];
 
   const HEX_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
