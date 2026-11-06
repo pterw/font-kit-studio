@@ -23,6 +23,8 @@ Two things have their own version numbers:
 
 - The first Detect on a page with a closed disclosure (`<details>`) now
   completes instead of reporting an incomplete detection.
+- `serve.py` now refuses `--studio-port 0` and `--target-port 0` by name instead
+  of reporting two ports as equal.
 
 ## [0.4.0] - 2026-10-19
 
