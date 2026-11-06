@@ -1142,7 +1142,6 @@ body.dark .live-overlay-label { color: #111; }
         <select id="compositionPreset">
           <option value="rowdemo" selected>Editorial — Image + Body Row</option>
           <option value="blank">Blank — Editorial 5</option>
-          <option value="asteria">Asteria — Sculptural</option>
         </select>
       </div>
       <div class="c-field composition-only span-1">
@@ -2115,18 +2114,34 @@ if (remembered) kitId.value = remembered;
 };
 
   const CUSTOM_COLORS = {
-    "Asteria Void": "#030409",
-    "Asteria Abyss": "#060a17",
-    "Asteria Haze": "#0b1022",
-    "Asteria Starlight": "#eef2ff",
-    "Asteria Mist": "#98a3c5",
-    "Asteria Gold": "#e6c88d",
-    "Asteria Tender": "#dca8b7",
-    "Asteria Serene": "#9dbdd6",
-    "Asteria Electric": "#b8a2da",
-    "Asteria Verdant": "#a2c6ab",
-    "Asteria Vesper": "#909dd0"
+    "Ink Black": "#030409",
+    "Deep Navy": "#060a17",
+    "Midnight": "#0b1022",
+    "Ice White": "#eef2ff",
+    "Slate Mist": "#98a3c5",
+    "Soft Gold": "#e6c88d",
+    "Dusty Rose": "#dca8b7",
+    "Powder Blue": "#9dbdd6",
+    "Lavender": "#b8a2da",
+    "Sage": "#a2c6ab",
+    "Periwinkle": "#909dd0"
   };
+
+  // Compositions saved by 0.4.0 carry the colours' earlier names; imports map them to the current ones.
+  const LEGACY_COLOR_NAMES = new Map([
+    ["Asteria Void", "Ink Black"],
+    ["Asteria Abyss", "Deep Navy"],
+    ["Asteria Haze", "Midnight"],
+    ["Asteria Starlight", "Ice White"],
+    ["Asteria Mist", "Slate Mist"],
+    ["Asteria Gold", "Soft Gold"],
+    ["Asteria Tender", "Dusty Rose"],
+    ["Asteria Serene", "Powder Blue"],
+    ["Asteria Electric", "Lavender"],
+    ["Asteria Verdant", "Sage"],
+    ["Asteria Vesper", "Periwinkle"]
+  ]);
+  const currentColorName = name => LEGACY_COLOR_NAMES.get(name) ?? name;
 
   const ROLE_DEFAULTS = {
     Wordmark: { element:"div", text:"BRAND", size:24, lineHeight:1, tracking:.32, align:"center", transform:"uppercase" },
@@ -2194,7 +2209,7 @@ if (remembered) kitId.value = remembered;
       colorHex: "#eef2ff",
       colorFamily: "slate",
       colorShade: "100",
-      savedColor: "Asteria Starlight",
+      savedColor: "Ice White",
       variables: vars,
       ...overrides
     };
@@ -2209,7 +2224,7 @@ if (remembered) kitId.value = remembered;
     colorHex: "#e6c88d",
     colorFamily: "amber",
     colorShade: "200",
-    savedColor: "Asteria Gold",
+    savedColor: "Soft Gold",
     imageName: "",
     assetDataUrl: "",
     imageWidth: 180,
@@ -2255,21 +2270,9 @@ if (remembered) kitId.value = remembered;
   };
 
   const COMPOSITION_PRESETS = {
-    asteria: {
-      name: "Asteria — Sculptural",
-      background: { source:"custom", hex:"#030409", family:"slate", shade:"950", saved:"Asteria Void" },
-      width: "960",
-      slots: [
-        makeTextSlot("Wordmark", "fraunces", { weight:500, variables:{wght:500, opsz:24}, colorHex:"#e6c88d" }),
-        makeTextSlot("H1", "instrument-serif", { size:64, colorHex:"#eef2ff" }),
-        makeTextSlot("Accent", "playfair-display", { styleIndex:1, weight:400, fontStyle:"italic", size:30, colorHex:"#b8a2da" }),
-        makeTextSlot("Body", "inter", { size:16, colorHex:"#98a3c5" }),
-        makeTextSlot("Metadata", "jetbrains-mono", { weight:700, variables:{wght:700}, size:11, colorHex:"#e6c88d" })
-      ]
-    },
     blank: {
       name: "Blank — Editorial 5",
-      background: { source:"custom", hex:"#f5f1e8", family:"stone", shade:"100", saved:"Asteria Starlight" },
+      background: { source:"custom", hex:"#f5f1e8", family:"stone", shade:"100", saved:"Ice White" },
       width: "960",
       slots: [
         makeTextSlot("Wordmark", "inter", { colorHex:"#181714" }),
@@ -2281,7 +2284,7 @@ if (remembered) kitId.value = remembered;
     },
     rowdemo: {
       name: "Editorial — Image + Body Row",
-      background: { source:"custom", hex:"#f5f1e8", family:"stone", shade:"100", saved:"Asteria Starlight" },
+      background: { source:"custom", hex:"#f5f1e8", family:"stone", shade:"100", saved:"Ice White" },
       width: "960",
       slots: [
         makeTextSlot("Wordmark", "fraunces", { weight:500, variables:{wght:500, opsz:24}, colorHex:"#181714" }),
@@ -2301,7 +2304,7 @@ if (remembered) kitId.value = remembered;
   const state = {
     selectedId: null,
     canvasWidth: "960",
-    background: { source:"custom", hex:"#f5f1e8", family:"stone", shade:"100", saved:"Asteria Starlight" },
+    background: { source:"custom", hex:"#f5f1e8", family:"stone", shade:"100", saved:"Ice White" },
     slots: []
   };
 
@@ -2461,6 +2464,7 @@ if (remembered) kitId.value = remembered;
         /^[a-zA-Z0-9]{4}$/.test(axis) && typeof value === "number" && Number.isFinite(value)));
     }
     slot.align = ALIGNMENTS.includes(slot.align) ? slot.align : base.align;
+    slot.savedColor = currentColorName(slot.savedColor);
     slot.colorSource = ["custom", "tailwind", "saved"].includes(slot.colorSource) ? slot.colorSource : base.colorSource;
     slot.colorHex = CSS.supports("color", slot.colorHex) ? slot.colorHex : base.colorHex;
     if (type !== "text") {
@@ -3286,6 +3290,7 @@ if (remembered) kitId.value = remembered;
         const background = { ...COMPOSITION_PRESETS.blank.background, ...stripSessionAssets(incoming.background || {}) };
         const defaults = COMPOSITION_PRESETS.blank.background;
         Object.keys(defaults).forEach(key => { if (typeof background[key] !== "string") background[key] = defaults[key]; });
+        background.saved = currentColorName(background.saved);
         if (!["custom", "tailwind", "saved"].includes(background.source)) background.source = defaults.source;
         if (!CSS.supports("color", background.hex)) background.hex = defaults.hex;
         const slots = incoming.slots.slice(0,8).map(raw => hydrateSlot(raw, 0));

@@ -2404,11 +2404,13 @@ class StudioFreeFontTests(LiveCase):
             with self.subTest(engine=engine):
                 page, errors, _ = self.open_fonts(engine)
                 page.locator('#modeComposer').click()
-                for preset in ('rowdemo', 'blank', 'asteria'):
+                self.assertEqual(page.locator('#compositionPreset option').evaluate_all('els => els.map(el => el.value)'),
+                                 ['rowdemo', 'blank'])
+                for preset in ('rowdemo', 'blank'):
                     page.locator('#compositionPreset').select_option(preset)
                     page.locator('#applyPreset').click()
                     page.wait_for_function('(name) => document.querySelector("#composerStatus").textContent.startsWith(name)',
-                                           arg={'rowdemo': 'Editorial', 'blank': 'Blank', 'asteria': 'Asteria'}[preset])
+                                           arg={'rowdemo': 'Editorial', 'blank': 'Blank'}[preset])
                     families = set()
                     def walk(slots):
                         for slot in slots:
