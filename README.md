@@ -336,6 +336,7 @@ Studio ignores reply fields it does not know and stores none, so a bridge that a
 - **History code that ran first.** App code that saved the browser's own `history.pushState` or `replaceState` before the bridge connected bypasses the bridge's wrapper. The next Detect, Apply or Clear, `popstate`, `hashchange` or a render still notices the change.
 - **Silent style changes.** CSS added with `insertRule` and no visible DOM change is not announced; press **Detect text styles** again. A page frozen without a `pageshow` event is also seen only by the next Detect.
 - **Studio's own resizing.** Fullscreen and the device-width buttons resize the page, which counts as a page change. Studio shows the page-changed sentence and asks for a fresh Detect. The role rows and the applied preview stay.
+- **A page that never stops changing.** A page that rewrites its text on a timer, such as a blinking cursor, counts as changing each time. Detect and Apply can end with `page-changed` and need pressing again, while Clear still removes the preview, because a changed page is no reason to refuse it.
 - **Strict policies.** A page that forbids inline styles blocks the preview stylesheet (see Preview, Apply and Clear).
 
 ### Arrange
@@ -519,6 +520,8 @@ npx fontkitstudio http://localhost:3000
 
 Open the `Open:` address the command prints. The proxy passes Next's hot reload through.
 
+Under `next dev`, React may log a hydration mismatch for an element the bridge marked, because the `data-design-id`, `data-design-role` and `data-design-name` attributes reach the page before hydration. It was seen once under `next dev` and not in three production loads. The attributes are how Studio identifies the element, so the bridge keeps them.
+
 The alternative is the script tag, in the root layout, only in development:
 
 ```tsx
@@ -592,11 +595,11 @@ export default defineNuxtConfig({
 Font Kit Studio does not read or rewrite utility classes, and it does not patch class strings. It sets inline styles while you edit (a role preview uses one stylesheet the bridge owns instead; see [Detected roles](#detected-roles)), and writes CSS rules that target `[data-design-id="…"]` or an auto-discovered selector. To bring the result into a Tailwind project:
 
 - Put the Copy or Sync output in any stylesheet. Every generated declaration is `!important`, so it wins over utility classes whatever the load order. Or
-- Better, route your fonts through **semantic tokens** (a `--font-display` custom property or a theme font family) and change the token's value. The bridge reports custom properties such as `--font-display` and `--font-sans`.
+- Sync writes the fixed names `--font-display`, `--font-sans`, `--font-serif` and `--font-mono`, and the page may read other names. If Sync wrote those tokens and no element on the page changed, the bridge warns and Studio shows `Sync wrote {names}, but no element on the page changed. This page may read other token names.` The warning can also appear when the token is read only in a pseudo-element, a shadow root or script, or when the written value equals the page's own. So route fonts through semantic tokens only where the app reads those four names; otherwise use the Copy or Sync CSS rule.
 
 ### Marking up elements (optional)
 
-Without any markup, Font Kit Studio discovers headings, paragraphs inside sections, nav links, buttons, images and badges. Add attributes where you want stable names:
+Without any markup, Font Kit Studio discovers headings, paragraphs inside sections, nav links, buttons, images and badges. Auto-discovery matches the class `stat` by whole name. A class that only contains those letters, such as `stat-value` or `stat-desc`, is not found by that rule (the heading, paragraph, link and button rules may still find it), so mark such elements with `data-design-id`. Add attributes where you want stable names:
 
 | Attribute | Meaning |
 |---|---|
@@ -659,6 +662,7 @@ Two cautions. The script URL uses port 8000, the default `--studio-port`. If you
 - **The address is not local.** Proxy mode accepts only an `http:` address on `localhost`, `127.0.0.1` or `[::1]`. The plugin refuses a Vite server opened to the network and says to remove `--host` or `server.host`.
 - **No Vite project here.** Run the command in your Vite project, or give your dev server's address.
 - **Another Vite major.** Vite mode works with Vite 7 and 8, and refuses other versions with a message.
+- **A 404 or 400 page.** In proxy mode the bridge is added only to an HTML page the app answers with status 200, so an error page has none. Go back to a normal page.
 
 ### Known limits of the npm package
 
@@ -698,7 +702,7 @@ Bridge                                   Studio
 | `design:restore-text` | `requestId?, baseRevision?` | Restores the original text of every target and keeps styles. |
 | `design:detect` | `requestId, documentId, knownRoles` | Reads the page's text styles and checks the known role selectors. Changes nothing. Replies `design:detected`. |
 | `design:roles-apply` | `requestId, baseRevision, documentId, pageVersion, roles` | Replaces the whole role set in one step, or rejects it. An empty list clears. Replies `design:roles-applied`. |
-| `design:roles-clear` | `requestId, baseRevision, documentId, pageVersion` | Removes the role stylesheet. Repeating it succeeds. Replies `design:roles-applied` with `operation: "clear"`. |
+| `design:roles-clear` | `requestId, baseRevision, documentId, pageVersion` | Removes the role stylesheet. Repeating it succeeds. A stale `pageVersion` is not a reason to refuse it. Replies `design:roles-applied` with `operation: "clear"`. |
 | `design:highlight`, `fontkit:change` | legacy | `highlight` acts like `select`. `fontkit:change` sets font tokens and replies `fontkit:ack`. |
 
 ### Bridge to Studio
@@ -716,7 +720,7 @@ Bridge                                   Studio
 | `design:selected` | A click or `design:select` picked a target (or none). Includes the full manifest. |
 | `design:bounds` | Where the selected target is now, after scroll, resize or layout changes. |
 | `design:targets` | New targets appeared (for example after a re-render), or an auto-discovered target gained a `data-design-id`. A target whose id changed carries `previousId` in its manifest, the id it had before: an auto-discovered target that gained a `data-design-id`, or one whose author `data-design-id` was removed (it moves to an auto id). |
-| `design:warning` | An error was thrown within one second of a change (`kind: "runtime-error"`). |
+| `design:warning` | A note about a change. `kind` is `runtime-error` (an error was thrown within one second of a change), `token-not-applied` (Sync wrote font tokens and no element changed), `edit-not-reapplied` (the page replaced an auto-id element whose edit could not be re-applied) or `edit-reapply-stopped` (the page keeps re-creating an element, so its edits stop being re-applied). The kinds are additive, `protocolVersion` stays 1, and a Studio that does not know a kind ignores it. |
 | `fontkit:ack` | Reply to the legacy `fontkit:change`. |
 
 The change ledger in `design:ready` and `design:applied` lists each container whose children were moved in `structure[]`, with `order` (the children's names) and `orderIds` (the same children by target id; names can repeat, ids cannot). Studio saves and replays DOM moves from `orderIds`.
@@ -878,11 +882,16 @@ A Google Fonts request on first load is a `FAIL`: Studio is silent until the use
 
 **CI.** `.github/workflows/quality-gate.yml` runs on pushes to `main`, on pull requests and on manual dispatch, with read-only permissions and no secrets. Cheapest first: `scripts/verify.py --static-only`, `node --check fontkit-bridge.js` (Node 22), `ruff check .` (pyflakes rules only), the commit-message check, the pre-commit hooks over the whole tree (`pre-commit run --all-files`) and a whitespace check on the lines the change adds, then it installs Chromium and Firefox and runs the frontend gate on both engines (only Chromium at desktop can fail it), the Chromium test suite (`FKS_ENGINES=chromium`, blocking) and, after installing its required Vite fixture and bundling the package, a short Firefox canary (`tests/firefox_canary.py`, in a separate step marked `continue-on-error`, so it is visible but never fails the build). It uploads gate screenshots when there are any. It checks out full history and tags, because provenance compares against the `supplied-v0.1.1` tag.
 
+**Tested on.** Version 0.4.0 was exercised against a Flask app with Jinja, Tailwind 4 and DaisyUI and a Next.js 16 app with shadcn, in Chromium only. See [the audit record](docs/implementation/audit-2026-11-06-real-apps.md).
+
 **Firefox status.** The full test suite runs on Chromium only. Firefox runs a canary: the bridge's trust boundary (hostile frames, forged sessions, handshake, origin list, session lifecycle, targeted updates), real Studio editing a real page through the bridge (edit, code panel, sync, reload), Studio's own rendering, localhost cookies in Vite/proxy modes and role smoke tests (hostile role selectors, a real Studio apply and clear, same-document route freshness), listed in `tests/firefox_canary.py`, plus the frontend gate's Firefox runs. Both are advisory and do not block merging. Features outside the canary (arrange, pop-out, the Composer link, import) are not checked on Firefox.
 
 Known gaps:
 
 - Reapply cannot replay a DOM move made with **Move anyway**, and cannot place an element in a container the page no longer holds (or one that holds none of the saved elements). It stops and says why.
+- A DOM move saved by 0.4.0 under a container whose selector held a state class (such as `is-active`) cannot be placed again. Reapply stops as a whole and sends nothing; redo the move.
+- Sync does not learn the token names the page reads, and an edit on a replaced auto-id element is only warned about, not re-applied.
+- When the app overwrites a heading's single string child, the Studio text edit is overwritten. A paragraph's Reset is fixed.
 - Edits made while the page is reloading are dropped.
 - At 390 px wide, the "No bridge answered" badge can push the page sideways.
 - Rows hold 2 to 4 leaf slots. Nested rows and JPEG assets are out of scope.

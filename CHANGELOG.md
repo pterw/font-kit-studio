@@ -53,6 +53,14 @@ Two things have their own version numbers:
   edits stop being re-applied.
 - Sync to Live App now tells you when it wrote font tokens and no element on the
   page changed, which happens when the page reads other token names.
+- Moving a list item, preformatted block, definition list, fieldset, caption,
+  rule, main or definition term into a paragraph, heading, link, button, label
+  or summary is now refused, since the browser would repair the markup
+  differently.
+- Auto-discovery now matches the class `stat` by whole name, so `static` and
+  `status` no longer get design attributes.
+- Studio now shows three more kinds of warning from the bridge as notes; the
+  protocol stays at version 1.
 - Clear preview now always removes the preview, even when the page changed since
   the last Detect; Apply and Detect still report the change.
 
