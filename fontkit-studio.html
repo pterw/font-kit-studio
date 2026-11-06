@@ -6098,10 +6098,13 @@ if (remembered) kitId.value = remembered;
     // Text that is not a colour is never sent: the colour that is applied stays, and the message says so.
     const colourMessage = text => { const el = q("liveColorMessage"); if (el) { el.textContent = text; el.hidden = !text; } };
     q("liveColor")?.addEventListener("input", event => {
+      // The picker only knows #rrggbb: a swatch move keeps the alpha of the seeded or acknowledged colour.
+      const alpha = String(cssColorToHex(liveValues(target.id).color)).match(/^#[0-9a-f]{6}([0-9a-f]{2})$/)?.[1] || "";
+      const sent = event.target.value + alpha;
       const hex = q("liveColorHex");
-      if (hex) hex.value = event.target.value;
+      if (hex) hex.value = sent;
       colourMessage("");
-      queueLivePatch(target.id, "color", event.target.value);
+      queueLivePatch(target.id, "color", sent);
     });
     q("liveColorHex")?.addEventListener("input", () => colourMessage(""));
     q("liveColorHex")?.addEventListener("change", event => {

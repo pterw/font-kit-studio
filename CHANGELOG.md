@@ -31,6 +31,7 @@ Two things have their own version numbers:
   could not read, such as a hashed module bundle.
 - Reset this element stays available after a reload when the element has a saved
   move.
+- Moving the colour swatch keeps the alpha of a translucent colour.
 
 ## [0.4.0] - 2026-10-19
 

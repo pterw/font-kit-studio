@@ -53,5 +53,62 @@ class ResetAfterReloadTests(base.ArrangeCase):
                 self.assertEqual(errors, [])
 
 
+class SeededReadoutCase(base.LiveCase):
+    def seed(self, engine, **style):
+        """Opens the fake target with inline styles on hero.lead and selects it."""
+        page, errors = self.open(engine)
+        self.wait_connected(page)
+        frame = self.frame(page)
+        frame.evaluate("""(style) => { const el = document.querySelector('[data-design-id="hero.lead"]');
+            Object.assign(el.style, style); }""", style)
+        self.select(page, frame, 'hero.lead')
+        return page, errors, frame
+
+    def override(self, page, key='color'):
+        return self.export(page)['live']['overrides'].get('hero.lead', {}).get(key)
+
+
+class ColourAlphaTests(SeededReadoutCase):
+    TRANSLUCENT = 'rgba(108, 102, 118, 0.6)'
+
+    def test_the_swatch_keeps_the_alpha_of_a_translucent_colour(self):
+        """Given a colour with alpha 0.6 shown as #6c667699, When the swatch is set to #112233,
+        Then the export holds #11223399 and the text box mirrors it."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors, frame = self.seed(engine, color=self.TRANSLUCENT)
+                self.assertEqual(page.locator('#liveColorHex').input_value(), '#6c667699')
+                page.locator('#liveColor').fill('#112233')
+                self.wait_live(page)
+                self.assertEqual(self.override(page), '#11223399')
+                self.assertEqual(page.locator('#liveColorHex').input_value(), '#11223399')
+                self.assertEqual(errors, [])
+
+    def test_typing_a_colour_in_the_text_box_is_sent_as_typed(self):
+        """Given a translucent colour, When #112233 is typed in the text box,
+        Then the export holds the opaque #112233."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors, frame = self.seed(engine, color=self.TRANSLUCENT)
+                self.assertEqual(page.locator('#liveColorHex').input_value(), '#6c667699')
+                box = page.locator('#liveColorHex')
+                box.fill('#112233')
+                box.press('Tab')
+                self.wait_live(page)
+                self.assertEqual(self.override(page), '#112233')
+                self.assertEqual(errors, [])
+
+    def test_the_swatch_writes_an_opaque_colour_when_the_colour_has_no_alpha(self):
+        """Given an opaque colour, When the swatch is set to #112233, Then the export holds #112233."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors, frame = self.seed(engine, color='rgb(108, 102, 118)')
+                self.assertEqual(page.locator('#liveColorHex').input_value(), '#6c6676')
+                page.locator('#liveColor').fill('#112233')
+                self.wait_live(page)
+                self.assertEqual(self.override(page), '#112233')
+                self.assertEqual(errors, [])
+
+
 if __name__ == '__main__':
     unittest.main()
