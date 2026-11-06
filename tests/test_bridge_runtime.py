@@ -1332,6 +1332,84 @@ class LegacyCompositionTests(BridgeCase):
                                                             '--font-serif': 'Georgia'})
 
 
+class TokenNotAppliedTests(BridgeCase):
+    TERMINAL_PAGE = f'{TARGET}/tests/fixtures/bridge/target-terminal.html'
+    FOUR = {'--font-display': 'Courier New, monospace', '--font-sans': 'Georgia, serif',
+            '--font-serif': 'Arial, sans-serif', '--font-mono': 'Verdana, sans-serif'}
+    MESSAGE = ('Sync wrote {names}, but no element on the page changed. '
+               'This page may read other token names.')
+
+    def sync(self, page, patch):
+        return self.request(page, {'type': 'design:update', 'patch': patch})
+
+    def warnings(self, page):
+        return [w for w in self.messages(page, 'design:warning') if w.get('kind') == 'token-not-applied']
+
+    def test_a_sync_to_a_page_that_reads_other_names_warns_and_names_the_tokens(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, target=self.TERMINAL_PAGE)
+                self.hello(page)
+                before = self.computed(frame, TITLE, 'fontFamily')
+                reply = self.sync(page, {'tokens': self.FOUR})
+                self.assertEqual(reply.get('type'), 'design:applied', reply)
+                self.assertEqual(self.computed(frame, TITLE, 'fontFamily'), before)
+                warned = self.warnings(page)
+                self.assertEqual(len(warned), 1, warned)
+                self.assertEqual(warned[0]['targetId'], 'global')
+                self.assertEqual(warned[0]['requestId'], reply['requestId'])
+                self.assertEqual(warned[0]['sessionId'], 's1')
+                self.assertEqual(warned[0]['message'], self.MESSAGE.format(
+                    names='--font-display, --font-sans, --font-serif, --font-mono'))
+
+    def test_a_role_slot_that_restyles_an_element_does_not_hide_the_warning(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, target=self.TERMINAL_PAGE)
+                self.hello(page)
+                slot = {'id': 's', 'targetId': TITLE, 'type': 'text',
+                        'fontFamily': 'Courier New, monospace', 'size': 30}
+                self.sync(page, {'tokens': self.FOUR, 'slots': [slot]})
+                self.assertIn('Courier New', self.computed(frame, TITLE, 'fontFamily'))
+                self.assertEqual(len(self.warnings(page)), 1)
+
+    def test_a_sync_to_a_page_that_reads_a_synced_name_posts_no_warning(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                before = self.computed(frame, TITLE, 'fontFamily')
+                self.sync(page, {'tokens': self.FOUR})
+                self.assertNotEqual(self.computed(frame, TITLE, 'fontFamily'), before)
+                self.assertEqual(self.messages(page, 'design:warning'), [])
+
+    def test_a_repeat_sync_warns_again_only_for_the_token_that_changed(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, _frame = self.open(engine, target=self.TERMINAL_PAGE)
+                self.hello(page)
+                self.sync(page, {'tokens': self.FOUR})
+                self.sync(page, {'tokens': self.FOUR})
+                self.assertEqual(len(self.warnings(page)), 1)
+                self.sync(page, {'tokens': {**self.FOUR, '--font-mono': 'Tahoma, sans-serif'}})
+                warned = self.warnings(page)
+                self.assertEqual(len(warned), 2, warned)
+                self.assertEqual(warned[1]['message'], self.MESSAGE.format(names='--font-mono'))
+
+    def test_only_the_four_font_names_count_and_only_when_one_was_written(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, _frame = self.open(engine, target=self.TERMINAL_PAGE)
+                self.hello(page)
+                self.sync(page, {'tokens': {'--editorial-size': '20px', '--font-size-base': '20px'}})
+                self.sync(page, {'slots': []})
+                self.assertEqual(self.warnings(page), [])
+                self.sync(page, {'sans': 'Verdana, sans-serif'})
+                warned = self.warnings(page)
+                self.assertEqual(len(warned), 1, warned)
+                self.assertEqual(warned[0]['message'], self.MESSAGE.format(names='--font-sans'))
+
+
 class TokenRemovalTests(BridgeCase):
     """Addendum 6: a null composition token removes Studio's override and restores the original value."""
     AUTHOR_STYLE = '--font-sans:  Georgia ;  color: navy'

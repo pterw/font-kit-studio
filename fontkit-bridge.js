@@ -2388,7 +2388,16 @@
         canonicalPatch.fontStylesheets = sheets;
       }
 
-      // 1. Global CSS tokens
+      // 1. Global CSS tokens. The page is measured around the token writes only, never the movement or slots.
+      const before = this.computedFontFamilies();
+      const written = [];
+      const writeToken = (name, value) => {
+        const held = this.tokenOverrides.get(name);
+        const canonical = this.setToken(name, value);
+        const synced = ['--font-display', '--font-sans', '--font-serif', '--font-mono'].includes(name);
+        if (canonical !== undefined && canonical !== held && synced && !written.includes(name)) written.push(name);
+        return canonical;
+      };
       if (isPlainObject(patch.tokens)) {
         canonicalPatch.tokens = {};
         for (const [key, value] of Object.entries(patch.tokens)) {
@@ -2397,7 +2406,7 @@
             if (this.removeToken(key)) canonicalPatch.tokens[key] = null;
             continue;
           }
-          const canonical = this.setToken(key, value);
+          const canonical = writeToken(key, value);
           if (canonical !== undefined) canonicalPatch.tokens[key] = canonical;
         }
       }
@@ -2405,9 +2414,17 @@
       // Direct token shortcuts
       ['sans', 'serif', 'mono', 'display'].forEach((role) => {
         const varName = `--font-${role}`;
-        const canonical = patch[role] ? this.setToken(varName, patch[role]) : undefined;
+        const canonical = patch[role] ? writeToken(varName, patch[role]) : undefined;
         if (canonical !== undefined) canonicalPatch[varName] = canonical;
       });
+      if (written.length) {
+        const after = this.computedFontFamilies();
+        if (before.every((family, i) => family === after[i])) {
+          this.postWarning('token-not-applied', 'global',
+            `Sync wrote ${written.join(', ')}, but no element on the page changed. This page may read other token names.`,
+            data.requestId);
+        }
+      }
 
       // 2. Live Movement in Wireframe Setup Up and Down (Reordering)
       const slots = Array.isArray(patch.slots) ? patch.slots.filter(isPlainObject) : null;
@@ -3023,6 +3040,11 @@
       this.clearStyle(document.documentElement, name);
       this.tokenOverrides.delete(name);
       return true;
+    }
+
+    // Every element's computed font-family, in document order, for before/after comparison.
+    computedFontFamilies() {
+      return Array.from(document.querySelectorAll('*'), (el) => getComputedStyle(el).fontFamily);
     }
 
     // Text slot: a leaf element's whole content, else its first non-empty text node.

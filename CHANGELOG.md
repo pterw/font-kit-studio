@@ -51,6 +51,8 @@ Two things have their own version numbers:
   be re-applied; the edit stays in the export.
 - Live edit now tells you when the app keeps re-creating an element and its
   edits stop being re-applied.
+- Sync to Live App now tells you when it wrote font tokens and no element on the
+  page changed, which happens when the page reads other token names.
 
 ## [0.4.0] - 2026-10-19
 
