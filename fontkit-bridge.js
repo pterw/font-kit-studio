@@ -92,7 +92,8 @@
   const CONTAINER_NAME_MAX = 40;
   // Content-model guard: block-level elements may not be placed in these parents.
   const BLOCK_ELEMENTS = new Set(['div', 'p', 'section', 'article', 'aside', 'header', 'footer', 'nav', 'ul', 'ol',
-    'table', 'form', 'figure', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'details']);
+    'table', 'form', 'figure', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'details',
+    'li', 'pre', 'dl', 'fieldset', 'figcaption', 'hr', 'main', 'dt']);
   const PHRASING_PARENTS = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'span', 'a', 'button', 'label', 'summary']);
   // Mutation-triggered rediscovery backs off when it runs more than this often.
   const STORM_RUNS = 10;

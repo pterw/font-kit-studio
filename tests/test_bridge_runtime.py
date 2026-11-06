@@ -3562,6 +3562,56 @@ class ContentModelGuardTests(ArrangeCase):
                 self.assertEqual(self.request(page, {'type': 'design:update', 'targetId': 'arr.btn.a',
                                                      'patch': {'fontSize': 14}})['revision'], 1)
 
+    NESTING_TAGS = ('li', 'pre', 'dl', 'fieldset', 'figcaption', 'hr', 'main', 'dt')
+
+    def test_these_block_elements_cannot_go_into_a_paragraph_and_the_parser_would_re_nest_them(self):
+        """Given one node of each tag, when each is moved into a p, then it is refused and the real parser agrees."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, target=ARRANGE_PAGE)
+                frame.evaluate("""(tags) => {
+                    for (const tag of tags) {
+                        const node = document.createElement(tag);
+                        node.setAttribute('data-design-id', 'blk.' + tag);
+                        node.textContent = tag;
+                        document.querySelector('main').append(node);
+                    }
+                }""", list(self.NESTING_TAGS))
+                self.hello(page)
+                snapshot = frame.evaluate("document.querySelector('main').innerHTML")
+                parser_page = page.context.new_page()
+                for tag in self.NESTING_TAGS:
+                    with self.subTest(engine=engine, tag=tag):
+                        detail = self.guard(self.move(page, f'blk.{tag}', {'container': 'arr.para'}))
+                        self.assertEqual((detail['guard'], detail['overridable']), ('content-model', False))
+                        self.assertEqual(frame.evaluate("document.querySelector('main').innerHTML"), snapshot)
+                        # The oracle: Chromium's parser does not keep the tag inside the p.
+                        parser_page.set_content(f'<body><p id="para"><{tag}>x</{tag}></p></body>')
+                        nested = parser_page.evaluate(
+                            "(tag) => document.querySelector(tag).parentElement.id === 'para'", tag)
+                        self.assertFalse(nested, tag)
+                parser_page.close()
+
+    def test_a_div_can_still_go_into_em_code_and_strong(self):
+        """Given em, code and strong in main, when a div is moved into each, then it is applied without errors."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, target=ARRANGE_PAGE)
+                frame.evaluate("""() => {
+                    const main = document.querySelector('main');
+                    for (const tag of ['div', 'em', 'code', 'strong']) {
+                        const node = document.createElement(tag);
+                        node.setAttribute('data-design-id', 'inl.' + tag);
+                        node.textContent = tag;
+                        main.append(node);
+                    }
+                }""")
+                self.hello(page)
+                for tag in ('em', 'code', 'strong'):
+                    self.moved(page, 'inl.div', {'container': f'inl.{tag}'})
+                self.assertEqual(self.errors(frame), [])
+
+
     def test_inline_into_inline_and_block_into_block_and_in_place_moves_are_allowed(self):
         for engine in ENGINES:
             with self.subTest(engine=engine):
