@@ -41,6 +41,8 @@ Two things have their own version numbers:
 - A note beside Sync to Live App says it also restyles elements by role inline.
 - Importing a composition that names a font the library lacks now says which
   font was replaced.
+- Studio asks before a reload or close drops edits that were not synced, copied
+  or downloaded.
 
 ## [0.4.0] - 2026-10-19
 

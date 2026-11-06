@@ -40,6 +40,8 @@ Plans: `docs/plans/2026-09-30-v0.1.1-responsive-rows.md` (complete), `docs/plans
 
 - **Task 8 landed (2026-11-06).** A1-3b and A2-3b, G2-7, D2-5 and C2-3c, one commit each, tests in `tests/test_studio_wording.py`. RED/GREEN: each new test failed under its break. Landing gates on the integrated wave: 787 Chromium tests in 19 modules, plus static checks, bridge syntax, product ruff and whitespace, all pass. Firefox not run.
 
+- **Task 9 landed (2026-11-06).** S08, C2-5c, one commit each, tests in `tests/test_studio_guards.py`. RED/GREEN: no-prompt checks wait for the page's close event or use a cancelable probe, and a failed write still asks. Known limit: one key covers every carrier, so a style edit followed by Download of the HTML tab closes silently. Landing gates on the integrated wave: 787 Chromium tests in 19 modules, plus static checks, bridge syntax, product ruff and whitespace, all pass. Firefox not run.
+
 ## R2 engine planning
 
 - **R2 draft prepared (2026-10-08).** Expanded [work order](../plans/2026-10-03-r2-engine.md) on `docs/r2-engine-plan` from `1348268`, after the separate 0.3.1 publication closeout `dc1da53`. D058 resolves the two draft thresholds. Detection, preview and visited-page work have separate PRs, explicit owned files, reviewed atomic landings and focused browser gates; Library/Composer audit evidence remains required before final approval. Current source and two read-only research reports inform the contract; neither constitutes implementation. Plan review and documentation landing checks are pending. RED/GREEN: not applicable to this planning-only delta; 0 new tests, no browser engine verified. Next: independent plan review, then controller commit/push; obtain audit-brief approval before dispatching it.
