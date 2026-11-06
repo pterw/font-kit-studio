@@ -1797,6 +1797,75 @@ class StableSelectorEscapeTests(BridgeCase):
                         self.request(page, {'type': 'design:reset', 'targetId': design_id})
 
 
+class StateClassSelectorTests(BridgeCase):
+    """A selector the bridge exports must not hold a class the page toggles at runtime."""
+    CARD_TWO = 'Card two'
+
+    def test_selector_built_under_state_classes_survives_the_flip(self):
+        """
+        Given a page whose main, section, article and heading each hold a state class
+        When Card two's heading is selected and a change is applied
+        Then the selector holds none of them, and after the page flips the classes onto
+        a second section (inserted after the first, so the nth-of-type indexes hold)
+        the selector still matches exactly Card two's heading
+        """
+        states = ['has-x', 'is-open', 'tab-active', 'open']
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                frame.evaluate("""() => {
+                    document.querySelector('main').classList.add('has-x');
+                    document.querySelector('section.cards').classList.add('is-open');
+                    document.querySelectorAll('article.card')[1].classList.add('tab-active');
+                    document.querySelectorAll('article.card h3')[1].classList.add('open');
+                }""")
+                ready = self.hello(page)
+                card = self.target_by_text(ready, self.CARD_TWO)
+                reply = self.applied(page, card['id'], {'fontSize': 21})
+                selector = self.entry(reply['changes'], card['id'])['selector']
+                for selected in (card['selector'], selector):
+                    for state in states:
+                        self.assertNotIn(state, selected)
+                frame.evaluate("""() => {
+                    document.querySelector('main').classList.remove('has-x');
+                    document.querySelector('section.cards').classList.remove('is-open');
+                    document.querySelectorAll('article.card')[1].classList.remove('tab-active');
+                    document.querySelectorAll('article.card h3')[1].classList.remove('open');
+                    const next = document.createElement('section');
+                    next.className = 'cards is-open';
+                    document.querySelector('section.cards').after(next);
+                }""")
+                self.assertEqual(frame.evaluate(
+                    '(s) => { const found = [...document.querySelectorAll(s)];'
+                    ' return [found.length, found[0] && found[0].textContent]; }', selector),
+                    [1, self.CARD_TWO], selector)
+
+    def test_pages_without_state_classes_keep_their_selectors(self):
+        """
+        Given the stock page with disabled on Card one's article and a hidden wrapper after the cards
+        When the ready list is read
+        Then the plain-page literals still hold and disabled and hidden still appear in selectors
+        """
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                frame.evaluate("""() => {
+                    document.querySelector('article.card').classList.add('disabled');
+                    const wrap = document.createElement('div');
+                    wrap.className = 'hidden';
+                    wrap.innerHTML = '<h4>Under hidden</h4>';
+                    document.querySelector('section.cards').after(wrap);
+                }""")
+                ready = self.hello(page)
+                self.assertEqual(
+                    self.target_by_text(ready, self.CARD_TWO)['selector'],
+                    'main:nth-of-type(1) > section.cards:nth-of-type(1) > article.card:nth-of-type(2) > h3:nth-of-type(1)')
+                self.assertEqual(self.target_by_text(ready, 'Features')['selector'],
+                                 '#top > nav:nth-of-type(1) > a.nav-link:nth-of-type(1)')
+                self.assertIn('article.card.disabled', self.target_by_text(ready, 'Card one')['selector'])
+                self.assertIn('div.hidden', self.target_by_text(ready, 'Under hidden')['selector'])
+
+
 class AssetPlacementTests(BridgeCase):
     """Legacy image slots: assets render only as <img>, never as live SVG markup."""
 

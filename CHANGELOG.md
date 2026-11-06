@@ -43,6 +43,8 @@ Two things have their own version numbers:
   font was replaced.
 - Studio asks before a reload or close drops edits that were not synced, copied
   or downloaded.
+- Exported selectors no longer carry state classes such as `is-active`, so a
+  pasted rule still matches after the page toggles them.
 
 ## [0.4.0] - 2026-10-19
 

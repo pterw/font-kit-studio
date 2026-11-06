@@ -3306,9 +3306,15 @@
       return candidate;
     }
 
+    // A class a page toggles at runtime (a tab, a menu) must not anchor an exported rule.
+    isStateClass(cls) {
+      return /^(is|has)-|-active$/.test(cls) || ['active', 'selected', 'current', 'open', 'show'].includes(cls);
+    }
+
     selectorStep(node) {
       const tag = node.localName;
-      const classes = Array.from(node.classList || []).map((cls) => `.${cssEscape(cls)}`).join('');
+      const classes = Array.from(node.classList || []).filter((cls) => !this.isStateClass(cls))
+        .map((cls) => `.${cssEscape(cls)}`).join('');
       let index = 1;
       for (let sibling = node.previousElementSibling; sibling; sibling = sibling.previousElementSibling) {
         if (sibling.localName === tag) index += 1;
