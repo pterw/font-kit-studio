@@ -6852,7 +6852,8 @@ if (remembered) kitId.value = remembered;
       else if (r.includes("editorial") || r.includes("quote") || r.includes("narrative") || r.includes("serif")) tokens["--font-serif"] = stack;
       else if (r.includes("mono") || r.includes("data") || r.includes("caption") || r.includes("code")) tokens["--font-mono"] = stack;
     });
-    if (!tokens["--font-display"] && state.slots[0]) tokens["--font-display"] = cssStack(byFamily(state.slots[0].family));
+    const firstText = state.slots.find(slot => slot.type === "text");
+    if (!tokens["--font-display"] && firstText) tokens["--font-display"] = cssStack(byFamily(firstText.family));
     // Sans, serif and mono each fall back to the first text slot set in a family of that kind (the library marks a
     // family's category in font.tags). A slot's position says nothing: the preset's second, third or fourth slot is
     // often a Row, which has no family. With no such slot the token is not sent.

@@ -34,6 +34,8 @@ Two things have their own version numbers:
 - Moving the colour swatch keeps the alpha of a translucent colour.
 - An element whose line height is normal shows an empty line-height field
   instead of 1.2.
+- The synced display font now follows the first text slot when a Row or Image
+  sits first.
 
 ## [0.4.0] - 2026-10-19
 
