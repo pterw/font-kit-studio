@@ -1503,8 +1503,7 @@ const kitStatus = document.getElementById("kitStatus");
 let activeFilter = "all";
 
 function cssStack(f) {
-  const names = [f.css || f.family, ...(f.aliases || [])].map(name => `"${name}"`);
-  return `${names.join(", ")}, ${f.fallback}`;
+  return `"${f.css || f.family}", ${f.fallback}`;
 }
 
 function renderCard(font, index) {
