@@ -12,6 +12,13 @@ Two things have their own version numbers:
 
 ## [Unreleased]
 
+### Changed
+
+- The Sculptural composition preset is removed and the saved colours have new
+  neutral names (Ink Black, Deep Navy, Midnight, Ice White, Slate Mist, Soft
+  Gold, Dusty Rose, Powder Blue, Lavender, Sage, Periwinkle); compositions saved
+  with the old names still open with the same colours.
+
 ## [0.4.0] - 2026-10-19
 
 ### Added

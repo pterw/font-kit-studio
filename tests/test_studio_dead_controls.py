@@ -18,7 +18,6 @@ from support import ENGINES, canvas_snapshot
 from test_live_integration import LiveIntegrationCase
 from test_studio_live import APP, LiveCase
 
-ASTERIA_BACKGROUND = 'rgb(3, 4, 9)'      # asteria preset: #030409
 EDITORIAL_BACKGROUND = 'rgb(245, 241, 232)'   # rowdemo and blank presets: #f5f1e8
 SIGNUP_SUBMIT = '.signup button[type="submit"]'
 TITLE_SELECTOR = '[data-design-id="landing.hero.title"]'
@@ -74,12 +73,17 @@ class PresetSelectTests(StudioOnlyCase):
             with self.subTest(engine=engine):
                 page, errors = self.studio(engine)
                 self.assertEqual(self.canvas_background(page), EDITORIAL_BACKGROUND)
-                page.locator('#compositionPreset').select_option('asteria')
-                page.wait_for_function('() => /^Asteria/.test(document.querySelector("#composerStatus").textContent)')
-                self.assertEqual(self.canvas_background(page, ASTERIA_BACKGROUND), ASTERIA_BACKGROUND)
-                self.assertEqual(page.locator('#compositionPreset').input_value(), 'asteria')
+                self.assertEqual(page.locator('#slotCount').input_value(), '4')
+                self.assertEqual(page.locator('#composerCanvas > .flow-slot').count(), 4)
+                page.locator('#compositionPreset').select_option('blank')
+                page.wait_for_function('() => /^Blank/.test(document.querySelector("#composerStatus").textContent)')
+                self.assertEqual(page.locator('#slotCount').input_value(), '5')
+                self.assertEqual(page.locator('#composerCanvas > .flow-slot').count(), 5)
+                self.assertEqual(page.locator('#compositionPreset').input_value(), 'blank')
                 page.locator('#compositionPreset').select_option('rowdemo')
                 page.wait_for_function('() => /^Editorial/.test(document.querySelector("#composerStatus").textContent)')
+                self.assertEqual(page.locator('#slotCount').input_value(), '4')
+                self.assertEqual(page.locator('#composerCanvas > .flow-slot').count(), 4)
                 self.assertEqual(self.canvas_background(page, EDITORIAL_BACKGROUND), EDITORIAL_BACKGROUND)
                 self.assertEqual(page.dialogs, [], 'an untouched composition is replaced without a question')
                 self.assertEqual(errors, [])
@@ -90,7 +94,7 @@ class PresetSelectTests(StudioOnlyCase):
                 page, errors = self.studio(engine)
                 self.answer_dialogs(page, accept=False)
                 self.edit_first_slot(page, 'My own wordmark')
-                page.locator('#compositionPreset').select_option('asteria')
+                page.locator('#compositionPreset').select_option('blank')
                 self.assertEqual(len(page.dialogs), 1)
                 self.assertEqual(page.dialogs[0]['type'], 'confirm')
                 self.assertIn('replace', page.dialogs[0]['message'].lower())
@@ -107,11 +111,12 @@ class PresetSelectTests(StudioOnlyCase):
                 page, errors = self.studio(engine)
                 self.answer_dialogs(page, accept=True)
                 self.edit_first_slot(page, 'My own wordmark')
-                page.locator('#compositionPreset').select_option('asteria')
-                page.wait_for_function('() => /^Asteria/.test(document.querySelector("#composerStatus").textContent)')
+                page.locator('#compositionPreset').select_option('blank')
+                page.wait_for_function('() => /^Blank/.test(document.querySelector("#composerStatus").textContent)')
                 self.assertEqual(len(page.dialogs), 1)
-                self.assertEqual(self.canvas_background(page, ASTERIA_BACKGROUND), ASTERIA_BACKGROUND)
-                self.assertEqual(page.locator('#compositionPreset').input_value(), 'asteria')
+                self.assertEqual(page.locator('#slotCount').input_value(), '5')
+                self.assertEqual(page.locator('#composerCanvas > .flow-slot').count(), 5)
+                self.assertEqual(page.locator('#compositionPreset').input_value(), 'blank')
                 self.assertNotIn('My own wordmark', page.locator('#composerCanvas').inner_text())
                 self.assertEqual(errors, [])
 
@@ -165,7 +170,7 @@ class PresetEditsCountTests(StudioOnlyCase):
 
     def dismissed_switch(self, page):
         page.once('dialog', lambda dialog: (page.dialogs.append({'message': dialog.message}), dialog.dismiss()))
-        page.locator('#compositionPreset').select_option('asteria')
+        page.locator('#compositionPreset').select_option('blank')
         self.assertEqual(len(page.dialogs), 1)
         self.assertEqual(page.locator('#compositionPreset').input_value(), 'rowdemo')
 
@@ -231,7 +236,7 @@ class LinkedPresetTests(StudioOnlyCase):
             with self.subTest(engine=engine):
                 page, frame, errors = self.linked(engine)
                 self.sent(page, frame, 1)
-                page.locator('#compositionPreset').select_option('asteria')       # untouched: applied, +1
+                page.locator('#compositionPreset').select_option('blank')         # untouched: applied, +1
                 self.sent(page, frame, 2)
                 page.locator('#applyPreset').click()                              # untouched: nothing to reset, +0
                 self.assertRegex(self.preset_title(page), r'already applied')
@@ -239,13 +244,177 @@ class LinkedPresetTests(StudioOnlyCase):
                 self.edit_first_slot(page, 'My own wordmark')                     # the edit streams
                 streamed = self.settled(page, frame, 3)
                 page.once('dialog', lambda dialog: (page.dialogs.append(dialog.message), dialog.dismiss()))
-                page.locator('#compositionPreset').select_option('blank')         # Cancel: +0
+                page.locator('#compositionPreset').select_option('rowdemo')       # Cancel: +0
                 self.assertEqual(len(page.dialogs), 1)
                 self.sent(page, frame, streamed)
                 page.once('dialog', lambda dialog: (page.dialogs.append(dialog.message), dialog.accept()))
-                page.locator('#compositionPreset').select_option('blank')         # Accept: +1
+                page.locator('#compositionPreset').select_option('rowdemo')       # Accept: +1
                 self.assertEqual(len(page.dialogs), 2)
                 self.sent(page, frame, streamed + 1)
+                self.assertEqual(errors, [])
+
+
+TEXT = '#composerCanvas .slot-text'
+ROW_TEXT = '#composerCanvas [data-row-child] .slot-text'
+RULE = '#composerCanvas .rule-line'
+IMAGE = '#composerCanvas .asset-placeholder'
+CANVAS = '#composerCanvas'
+
+# (case, old name in the file, new name, rendered colour, raw slots, background, probe, property, child to click)
+SAVED_NAME_CASES = (
+    ('a top-level text slot', 'Asteria Gold', 'Soft Gold', 'rgb(230, 200, 141)',
+     [{'type': 'text', 'role': 'Body', 'text': 'Probe', 'colorSource': 'saved', 'savedColor': 'Asteria Gold'}],
+     None, TEXT, 'color', False),
+    ('a text slot nested in a row', 'Asteria Verdant', 'Sage', 'rgb(162, 198, 171)',
+     [{'type': 'row', 'children': [
+         {'type': 'text', 'role': 'Body', 'text': 'Probe', 'colorSource': 'saved', 'savedColor': 'Asteria Verdant'},
+         {'type': 'text', 'role': 'Body', 'text': 'Other'}]}],
+     None, ROW_TEXT, 'color', True),
+    ('the background saved by Void', 'Asteria Void', 'Ink Black', 'rgb(3, 4, 9)',
+     [{'type': 'text', 'role': 'Body', 'text': 'Probe'}],
+     {'source': 'saved', 'saved': 'Asteria Void'}, CANVAS, 'background-color', False),
+    ('the background saved by Starlight', 'Asteria Starlight', 'Ice White', 'rgb(238, 242, 255)',
+     [{'type': 'text', 'role': 'Body', 'text': 'Probe'}],
+     {'source': 'saved', 'saved': 'Asteria Starlight'}, CANVAS, 'background-color', False),
+    ('the background of a file whose colour source is custom', 'Asteria Starlight', 'Ice White', 'rgb(245, 241, 232)',
+     [{'type': 'text', 'role': 'Body', 'text': 'Probe'}],
+     {'source': 'custom', 'saved': 'Asteria Starlight'}, CANVAS, 'background-color', False),
+    ('a rule slot', 'Asteria Tender', 'Dusty Rose', 'rgb(220, 168, 183)',
+     [{'type': 'rule', 'colorSource': 'saved', 'savedColor': 'Asteria Tender'}],
+     None, RULE, 'background-color', False),
+    ('an image slot', 'Asteria Serene', 'Powder Blue', 'rgb(157, 189, 214)',
+     [{'type': 'image', 'colorSource': 'saved', 'savedColor': 'Asteria Serene'}],
+     None, IMAGE, 'color', False),
+)
+
+PALETTE = (
+    ('Ink Black', 'rgb(3, 4, 9)'), ('Deep Navy', 'rgb(6, 10, 23)'), ('Midnight', 'rgb(11, 16, 34)'),
+    ('Ice White', 'rgb(238, 242, 255)'), ('Slate Mist', 'rgb(152, 163, 197)'), ('Soft Gold', 'rgb(230, 200, 141)'),
+    ('Dusty Rose', 'rgb(220, 168, 183)'), ('Powder Blue', 'rgb(157, 189, 214)'), ('Lavender', 'rgb(184, 162, 218)'),
+    ('Sage', 'rgb(162, 198, 171)'), ('Periwinkle', 'rgb(144, 157, 208)'),
+)
+
+
+OLD_TO_NEW = (
+    ('Asteria Void', 'Ink Black', 'rgb(3, 4, 9)'), ('Asteria Abyss', 'Deep Navy', 'rgb(6, 10, 23)'),
+    ('Asteria Haze', 'Midnight', 'rgb(11, 16, 34)'), ('Asteria Starlight', 'Ice White', 'rgb(238, 242, 255)'),
+    ('Asteria Mist', 'Slate Mist', 'rgb(152, 163, 197)'), ('Asteria Gold', 'Soft Gold', 'rgb(230, 200, 141)'),
+    ('Asteria Tender', 'Dusty Rose', 'rgb(220, 168, 183)'), ('Asteria Serene', 'Powder Blue', 'rgb(157, 189, 214)'),
+    ('Asteria Electric', 'Lavender', 'rgb(184, 162, 218)'), ('Asteria Verdant', 'Sage', 'rgb(162, 198, 171)'),
+    ('Asteria Vesper', 'Periwinkle', 'rgb(144, 157, 208)'),
+)
+
+
+class SavedColourNameTests(StudioOnlyCase):
+    def document(self, slots, background=None):
+        composition = {'canvasWidth': '960', 'slots': slots}
+        if background:
+            composition['background'] = background
+        return {'composition': composition}
+
+    def computed(self, page, selector, prop):
+        return page.locator(selector).first.evaluate('(el, prop) => getComputedStyle(el)[prop]', prop)
+
+    def wait_computed(self, page, selector, prop, expected):
+        """The canvas fades in, so wait for the colour the test expects before asserting it."""
+        page.wait_for_function('([selector, prop, want]) => getComputedStyle(document.querySelector(selector))[prop] === want',
+                               arg=[selector, prop, expected], timeout=5000)
+        return self.computed(page, selector, prop)
+
+    def inspected_name(self, page, background):
+        selector = '#canvasSavedColor' if background else '#slotInspector [data-bind="savedColor"]'
+        return page.locator(selector).input_value()
+
+    def test_the_palette_has_the_new_names_in_order_with_the_same_colours_and_defaults_use_them(self):
+        """Given the default composition, when its Saved list and each of its colours are used, then the names are
+        the eleven new ones in order, each paints its own hex, and the defaults name Ice White and Soft Gold."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors = self.studio(engine)
+                composition = self.export(page)['composition']
+                self.assertEqual(composition['background']['saved'], 'Ice White')
+                self.assertEqual(composition['slots'][0]['savedColor'], 'Ice White')
+                self.assertEqual(composition['slots'][2]['children'][0]['savedColor'], 'Soft Gold')
+                self.assertEqual(page.locator('#canvasSavedColor option').evaluate_all('els => els.map(el => el.value)'),
+                                 [name for name, _ in PALETTE])
+                page.locator('#canvasBgSource').select_option('saved')
+                for name, rgb in PALETTE:
+                    page.locator('#canvasSavedColor').select_option(name)
+                    self.assertEqual(self.wait_computed(page, CANVAS, 'background-color', rgb), rgb, name)
+                self.assertEqual(errors, [])
+
+    def test_a_file_saved_with_an_old_colour_name_opens_with_the_same_colour_and_exports_the_new_name(self):
+        """Given a 0.4.0 file naming an old saved colour on a slot or the background, when it is imported, then the
+        colour renders as the old one did, the Saved list shows the new name, and the export holds the new name only."""
+        for engine in ENGINES:
+            for case, old, new, rgb, slots, background, probe, prop, child in SAVED_NAME_CASES:
+                with self.subTest(engine=engine, case=case):
+                    page, errors = self.studio(engine)
+                    self.import_document(page, self.document(slots, background))
+                    if child:
+                        page.locator('#composerCanvas [data-row-child]').first.click(position={'x': 3, 'y': 3})
+                    self.assertEqual(self.wait_computed(page, probe, prop, rgb), rgb)
+                    self.assertEqual(self.inspected_name(page, probe == CANVAS), new)
+                    exported = self.export(page)
+                    self.assertNotIn('Asteria', str(exported))
+                    self.assertIn(new, str(exported['composition']['background'] if probe == CANVAS else exported['composition']['slots']))
+                    self.assertNotIn(old, str(exported))
+                    self.assertEqual(errors, [])
+
+    def test_each_of_the_eleven_old_names_maps_to_its_new_name_and_colour(self):
+        """Given 0.4.0 files with one saved-colour text slot per old name (six, then five), when each is imported, then
+        slot n paints the colour of the matching new name in the brief's table and the export lists those new names."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors = self.studio(engine)
+                for chunk in (OLD_TO_NEW[:6], OLD_TO_NEW[6:]):
+                    slots = [{'type': 'text', 'role': 'Body', 'text': f'S{n}', 'colorSource': 'saved', 'savedColor': old}
+                             for n, (old, _, _) in enumerate(chunk)]
+                    self.import_document(page, self.document(slots))
+                    self.wait_computed(page, TEXT, 'color', chunk[0][2])
+                    painted = page.locator(TEXT).evaluate_all('els => els.map(el => getComputedStyle(el).color)')
+                    self.assertEqual(painted, [rgb for _, _, rgb in chunk])
+                    exported = self.export(page)['composition']['slots']
+                    self.assertEqual([slot['savedColor'] for slot in exported], [new for _, new, _ in chunk])
+                self.assertEqual(errors, [])
+
+    def test_an_old_name_kept_on_a_custom_slot_shows_as_the_new_name_when_the_colour_source_is_switched_to_saved(self):
+        """Given a 0.4.0 slot with a custom colour source that still holds an old saved name, when the colour source
+        is switched to Saved, then the text first paints the custom hex, then paints Lavender's colour, the Saved list
+        shows Lavender, and the export holds colorSource saved, savedColor Lavender and no Asteria."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors = self.studio(engine)
+                slot = {'type': 'text', 'role': 'Body', 'text': 'Probe', 'colorSource': 'custom', 'colorHex': '#112233',
+                        'savedColor': 'Asteria Electric'}
+                self.import_document(page, self.document([slot]))
+                self.assertEqual(self.wait_computed(page, TEXT, 'color', 'rgb(17, 34, 51)'), 'rgb(17, 34, 51)')
+                page.locator('#slotInspector [data-bind="colorSource"]').select_option('saved')
+                self.assertEqual(self.wait_computed(page, TEXT, 'color', 'rgb(184, 162, 218)'), 'rgb(184, 162, 218)')
+                self.assertEqual(self.inspected_name(page, False), 'Lavender')
+                exported = self.export(page)['composition']['slots'][0]
+                self.assertEqual((exported['colorSource'], exported['savedColor']), ('saved', 'Lavender'))
+                self.assertNotIn('Asteria', str(exported))
+                self.assertEqual(errors, [])
+
+    def test_other_unknown_saved_names_are_exported_unchanged_and_render_as_before(self):
+        """Given a file whose saved names are not in the old list, including the object key constructor, when it is
+        imported, then the canvas and the Nonesuch slot paint black, the constructor slot keeps the colour it inherits,
+        and the export holds Nonesuch, constructor and Nonesuch unchanged."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors = self.studio(engine)
+                slots = [{'type': 'text', 'role': 'Body', 'text': 'Nonesuch', 'colorSource': 'saved', 'savedColor': 'Nonesuch'},
+                         {'type': 'text', 'role': 'Body', 'text': 'Ctor', 'colorSource': 'saved', 'savedColor': 'constructor'}]
+                self.import_document(page, self.document(slots, {'source': 'saved', 'saved': 'Nonesuch'}))
+                self.assertEqual(self.wait_computed(page, CANVAS, 'background-color', 'rgb(0, 0, 0)'), 'rgb(0, 0, 0)')
+                self.assertEqual(self.wait_computed(page, TEXT, 'color', 'rgb(0, 0, 0)'), 'rgb(0, 0, 0)')
+                self.assertEqual(page.locator(TEXT).nth(1).evaluate(
+                    'el => getComputedStyle(el).color === getComputedStyle(el.parentElement).color'), True,
+                    'constructor is no colour: the slot keeps the colour it inherits')
+                exported = self.export(page)['composition']
+                self.assertEqual([slot['savedColor'] for slot in exported['slots']], ['Nonesuch', 'constructor'])
+                self.assertEqual(exported['background']['saved'], 'Nonesuch')
                 self.assertEqual(errors, [])
 
 

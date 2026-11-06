@@ -30,7 +30,7 @@ class ImportLinkCase(LiveCase):
         return [update for update in self.updates(frame) if 'targetId' not in update]
 
     def wait_composition_updates(self, frame, count):
-        frame.wait_for_function(f'{COMPOSITION_UPDATES}.length === {count}')
+        frame.wait_for_function(f'{COMPOSITION_UPDATES}.length === {count}', polling=50)
 
     def sync(self, page):
         page.locator('#btnSyncToApp').click()
@@ -47,9 +47,10 @@ class ImportLinkCase(LiveCase):
 
     def blank_document(self, engine):
         """A composition export from a separate, never-linked Studio, with no `live` field. Its display token is
-        Inter (the default composition and Asteria use Fraunces) and its mono token IBM Plex Mono (Asteria uses
-        JetBrains Mono). Both come from roles (Wordmark falls back to the first slot; Metadata matches "data"),
-        so they do not depend on the rule that picks the serif token."""
+        Inter (the default composition uses Fraunces) and its mono token IBM Plex Mono (the default composition's
+        Metadata slot is IBM Plex Mono too, so a test that needs a different mono token changes that slot).
+        Both come from roles (Wordmark falls back to the first slot; Metadata matches "data"), so they do not
+        depend on the rule that picks the serif token."""
         page, _ = self.open(engine, query=False)
         page.locator('#modeComposer').click()
         page.locator('#compositionPreset').select_option('blank')
@@ -79,10 +80,13 @@ class ImportWhileLinkedTests(ImportLinkCase):
         if with_live_field:
             document = self.with_live_tokens(document)
         # A linked edit is still in flight (its acknowledgement is held) when the user imports.
+        page.bring_to_front()     # building the document opened a second page; the linked one must be in front
         frame.evaluate('window.fake.hold = true')
-        page.locator('#compositionPreset').select_option('asteria')
-        page.locator('#applyPreset').click()
+        page.locator('#viewSpecimenCanvas').click()
+        page.locator('#composerCanvas > .flow-slot').last.click(position={'x': 3, 'y': 3})
+        page.locator('#slotInspector [data-bind="family"]').select_option('jetbrains-mono')
         self.wait_composition_updates(frame, 2)
+        frame.wait_for_function('window.fake.ledger().tokens["--font-mono"].includes("JetBrains Mono")', polling=50)
         before_import = self.page_tokens(frame)
         self.assertIn('"Fraunces"', before_import['--font-display'])
         self.assertIn('"JetBrains Mono"', before_import['--font-mono'])
@@ -98,6 +102,7 @@ class ImportWhileLinkedTests(ImportLinkCase):
         self.assertEqual(len(self.composition_updates(frame)), 2, 'the import sent nothing to the page')
 
         # The late acknowledgement carried the page's tokens; the imported ones are still the saved state.
+        page.locator('#viewTargetApp').click()
         css = self.code(page, 'Css')
         self.assertIn('--font-display: "Inter"', css)
         self.assertIn('--font-mono: "IBM Plex Mono"', css)
@@ -201,7 +206,7 @@ class ImportWhileLinkedTests(ImportLinkCase):
                 # Linked again: the next composition edit streams. The imported composition counts as edits, so
                 # replacing it with a preset asks first (v0.2.1 Task 7); the answer here is yes.
                 page.once('dialog', lambda dialog: dialog.accept())
-                page.locator('#compositionPreset').select_option('asteria')
+                page.locator('#compositionPreset').select_option('rowdemo')
                 page.locator('#applyPreset').click()
                 self.wait_composition_updates(frame, 3)
                 self.assertEqual(errors, [])
@@ -224,6 +229,12 @@ class ImportWhileLinkedTests(ImportLinkCase):
                 self.assertEqual(errors, [])
 
 
+    def edit_first_slot_family(self, page, family):
+        """A's composition edit, made through the UI: the first slot's family sets the display token."""
+        page.locator('#viewSpecimenCanvas').click()
+        page.locator('#composerCanvas > .flow-slot').first.click(position={'x': 3, 'y': 3})
+        page.locator('#slotInspector [data-bind="family"]').select_option(family)
+
     def import_b(self, page, document, status=STATUS, names=('--font-display',)):
         """A second import, with its own saved tokens (Georgia for the named tokens)."""
         document = self.with_live_tokens(document)
@@ -232,11 +243,14 @@ class ImportWhileLinkedTests(ImportLinkCase):
 
     def assert_b_is_saved(self, page, frame, count, names=('--font-display',)):
         """Whatever the page acknowledged after the import, B's tokens are the saved state and the banner is up."""
+        page.locator('#viewTargetApp').click()      # the code panel sits in the Live App view
         css = self.code(page, 'Css')
         self.assertIn('--font-display: Georgia, serif', css)
         self.assertNotIn('Inter', css)
         self.assertNotIn('Fraunces', css)
         self.assertNotIn('JetBrains', css)
+        self.assertNotIn('Space Grotesk', css, "A's display font leaked into the saved state")
+        self.assertNotIn('DM Sans', css, "A's second display font leaked into the saved state")
         self.assertEqual(self.export(page)['live']['tokens'], {name: 'Georgia, serif' for name in names})
         self.assertEqual(len(self.composition_updates(frame)), count, 'nothing was sent after the import')
         self.assertTrue(page.locator('#liveReconnectBanner').is_visible())
@@ -291,8 +305,7 @@ class ImportWhileLinkedTests(ImportLinkCase):
             with self.subTest(engine=engine):
                 page, frame, errors = self.linked_page(engine)
                 frame.evaluate('window.fake.hold = true')
-                page.locator('#compositionPreset').select_option('asteria')
-                page.locator('#applyPreset').click()
+                self.edit_first_slot_family(page, 'space-grotesk')
                 self.wait_composition_updates(frame, 2)
                 self.wait_badge(page, r'^No response from the Live App$', timeout=15000)    # the request timed out
                 self.import_b(page, self.blank_document(engine))
@@ -305,11 +318,9 @@ class ImportWhileLinkedTests(ImportLinkCase):
             with self.subTest(engine=engine):
                 page, frame, errors = self.linked_page(engine)
                 frame.evaluate('window.fake.hold = true')
-                page.locator('#compositionPreset').select_option('asteria')
-                page.locator('#applyPreset').click()
+                self.edit_first_slot_family(page, 'space-grotesk')
                 self.wait_composition_updates(frame, 2)
-                page.locator('#compositionPreset').select_option('rowdemo')
-                page.locator('#applyPreset').click()          # queued behind the held request
+                page.locator('#slotInspector [data-bind="family"]').select_option('dm-sans')    # queued behind the held request
                 page.wait_for_timeout(200)
                 self.assertEqual(len(self.composition_updates(frame)), 2)
                 self.import_b(page, self.blank_document(engine))
@@ -404,7 +415,7 @@ class SupersededRejectionTests(ImportLinkCase):
                 page, frame, errors = self.linked_page(engine)
                 before = self.page_tokens(frame)
                 self.hold_a_rejection(frame)
-                page.locator('#compositionPreset').select_option('asteria')
+                page.locator('#compositionPreset').select_option('blank')
                 page.locator('#applyPreset').click()
                 self.after_the_request_was_rejected(frame, 2)
                 self.import_b(page, self.blank_document(engine))
@@ -418,7 +429,7 @@ class SupersededRejectionTests(ImportLinkCase):
                 page, frame, errors = self.linked_page(engine)
                 before = self.page_tokens(frame)
                 self.hold_a_rejection(frame)
-                page.locator('#compositionPreset').select_option('asteria')
+                page.locator('#compositionPreset').select_option('blank')
                 page.locator('#applyPreset').click()
                 self.after_the_request_was_rejected(frame, 2)
                 self.wait_badge(page, r'^No response from the Live App$', timeout=15000)    # the request timed out
@@ -432,13 +443,15 @@ class SupersededRejectionTests(ImportLinkCase):
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, frame, errors = self.linked_page(engine)
+                before = self.page_tokens(frame)
+                self.assertIn('"Fraunces"', before['--font-display'])
                 self.hold_a_rejection(frame)
-                page.locator('#compositionPreset').select_option('asteria')
+                page.locator('#compositionPreset').select_option('blank')
                 page.locator('#applyPreset').click()
                 self.after_the_request_was_rejected(frame, 2)
                 self.release_held(page, frame)
                 self.wait_composition_updates(frame, 3)
-                self.assertIn('"Fraunces"', self.page_tokens(frame)['--font-display'], 'the retry was applied')
+                self.assertIn('"Inter"', self.page_tokens(frame)['--font-display'], 'the retry was applied')
                 self.assertEqual(errors, [])
 
 
@@ -518,7 +531,7 @@ class ImportWhileNotLinkedTests(ImportLinkCase):
                 self.assertFalse(page.locator('#liveReconnectBanner').is_visible())
                 self.assertNotIn('link to the page', page.locator('#composerStatus').inner_text())
                 # It stays unlinked: the next composition edit sends nothing until the user syncs.
-                page.locator('#compositionPreset').select_option('asteria')
+                page.locator('#compositionPreset').select_option('blank')
                 page.locator('#applyPreset').click()
                 page.wait_for_timeout(300)
                 self.assertEqual(self.composition_updates(frame), [])
@@ -530,7 +543,7 @@ class ImportWhileNotLinkedTests(ImportLinkCase):
                 page, frame, errors = self.linked_page(engine)
                 status = self.import_document(page, {'composition': {'slots': 'nope'}})
                 self.assertRegex(status, r'^Import failed')
-                page.locator('#compositionPreset').select_option('asteria')
+                page.locator('#compositionPreset').select_option('blank')
                 page.locator('#applyPreset').click()
                 self.wait_composition_updates(frame, 2)     # still linked: the edit streams
                 self.assertEqual(errors, [])
