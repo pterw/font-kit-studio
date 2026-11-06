@@ -6035,14 +6035,14 @@ if (remembered) kitId.value = remembered;
     const editable = isPlainObject(target.editable) ? target.editable : {};
     const values = liveValues(target.id);
     const weights = Array.isArray(target.constraints?.fontWeights) ? target.constraints.fontWeights.filter(Number.isFinite) : [];
-    const familyOptions = fonts.map(f => `<option value="${escapeAttr(cssStack(f))}">${escapeAttr(f.name)}</option>`).join("");
+    const familyChoices = fonts.map(f => `<option value="${escapeAttr(cssStack(f))}">${escapeAttr(f.name)}</option>`).join("");
     let body = `
       <div class="inspector-title-row"><h2 id="liveTargetName" data-target-id="${escapeAttr(target.id)}">${escapeAttr(target.name || target.id)}</h2><span class="inspector-index">${escapeAttr([target.role, target.tag].filter(Boolean).join(" · ").toUpperCase())}</span></div>
       <p class="inspector-note live-target-id"><code>${escapeAttr(target.id)}</code>${target.stable === false ? " · auto-discovered — add data-design-id for a stable selector" : ""}</p>
       <div class="inspector-grid">`;
     if (editable.typography) {
       body += `
-        <div class="inspector-field full"><label for="liveFontFamily">Family</label><select id="liveFontFamily">${familyOptions}</select>${freeFontsAllowed ? "" : '<p class="inspector-note" data-load-note>Choosing a library family loads it from Google Fonts.</p>'}</div>
+        <div class="inspector-field full"><label for="liveFontFamily">Family</label><select id="liveFontFamily">${familyChoices}</select>${freeFontsAllowed ? "" : '<p class="inspector-note" data-load-note>Choosing a library family loads it from Google Fonts.</p>'}</div>
         <div class="inspector-field"><label for="liveFontSize">Size (px)</label><input id="liveFontSize" type="number" min="4" max="400" step="1" inputmode="decimal"></div>
         <div class="inspector-field"><label for="liveFontWeight">Weight</label><input id="liveFontWeight" type="number" min="1" max="1000" step="${weights.length ? 100 : 1}" inputmode="numeric"></div>
         ${weights.length ? `<p id="liveWeightNote" class="inspector-note inspector-field full">Allowed weights: ${weights.map(Number).join(" · ")} — the Live App snaps to the nearest.</p>` : ""}
