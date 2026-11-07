@@ -1,4 +1,4 @@
-# Task S1 code report (mode code, WORKTREE C:/fks/tstrip, BASE 5bd655e)
+# Task S1 code report (mode code, WORKTREE a scratch folder, BASE 5bd655e)
 
 Status: DONE_WITH_CONCERNS. Patch: WORKSPACE/task-S1-code.patch (`git apply --check -R` OK). 7 files staged by name:
 CHANGELOG.md, fontkit-studio.html, tests/fixtures/bridge/target.html, tests/test_studio_dead_controls.py,

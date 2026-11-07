@@ -58,7 +58,7 @@ Two things have their own version numbers:
   or summary is now refused, since the browser would repair the markup
   differently.
 - Auto-discovery now matches the class `stat` by whole name, so `static` and
-  `status` no longer get design attributes.
+  `status` no longer match that rule.
 - Studio now shows three more kinds of warning from the bridge as notes; the
   protocol stays at version 1.
 - Clear preview now always removes the preview, even when the page changed since
