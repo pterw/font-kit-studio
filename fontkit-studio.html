@@ -2361,6 +2361,8 @@ if (remembered) kitId.value = remembered;
 
   let exportFilename = "font-kit-studio-export.txt";
   let exportMime = "text/plain";
+  let exportCarry = null;
+  let exportBuilt = "";
 
   function switchMode(mode) {
     const composer = mode === "composer";
@@ -3169,9 +3171,12 @@ if (remembered) kitId.value = remembered;
     return doc;
   }
 
-  function showExport(title, text, filename, mime) {
+  // `carry` marks the composition file carried; only a save of the text as built calls it (the textarea is editable).
+  function showExport(title, text, filename, mime, carry = null) {
     exportDialogTitle.textContent = title;
     exportDialogText.value = text;
+    exportCarry = carry;
+    exportBuilt = text;
     exportFilename = filename;
     exportMime = mime;
     if (typeof exportDialog.showModal === "function") exportDialog.showModal();
@@ -3179,7 +3184,8 @@ if (remembered) kitId.value = remembered;
   }
 
   function exportCompositionJson() {
-    showExport("Composition JSON", JSON.stringify(serializableState(), null, 2), "font-kit-studio-composition.json", "application/json");
+    const carry = carryTab("composition");
+    showExport("Composition JSON", JSON.stringify(serializableState(), null, 2), "font-kit-studio-composition.json", "application/json", carry);
   }
 
   function cssTokenName(slot, index) {
@@ -3353,16 +3359,29 @@ if (remembered) kitId.value = remembered;
   q("importJson").addEventListener("click", () => importJsonFile.click());
   importJsonFile.addEventListener("change", () => { const file = importJsonFile.files?.[0]; if (file) importCompositionJson(file); importJsonFile.value = ""; });
   closeExportDialog.addEventListener("click", () => exportDialog.close());
+  const markExportCarried = text => { if (exportCarry && text === exportBuilt) exportCarry(); };
   copyExport.addEventListener("click", async () => {
-    try { await navigator.clipboard.writeText(exportDialogText.value); copyExport.textContent = "Copied"; setTimeout(() => copyExport.textContent = "Copy", 900); }
-    catch { exportDialogText.select(); document.execCommand("copy"); }
+    const text = exportDialogText.value;
+    try {
+      await navigator.clipboard.writeText(text);
+      markExportCarried(text);
+      copyExport.textContent = "Copied"; setTimeout(() => copyExport.textContent = "Copy", 900);
+    }
+    catch {
+      exportDialogText.select();
+      let copied = false;
+      try { copied = document.execCommand("copy"); } catch { copied = false; }
+      if (copied) markExportCarried(text);
+    }
   });
   downloadExport.addEventListener("click", () => {
-    const blob = new Blob([exportDialogText.value], { type:exportMime });
+    const text = exportDialogText.value;
+    const blob = new Blob([text], { type:exportMime });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url; a.download = exportFilename; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 0);
+    markExportCarried(text);
   });
 
   
@@ -6730,7 +6749,8 @@ if (remembered) kitId.value = remembered;
   const SAVE_HOLDS = {
     css: () => ["style"],
     html: parts => [structureHeld(live.structure, live.changes.structure) && "moves", ledgerHoldsText(parts) && "text"],
-    json: () => ["text", "moves", Object.keys(live.savedTokens).length ? null : "style"]
+    json: () => ["text", "moves", Object.keys(live.savedTokens).length ? null : "style"],
+    composition: () => ["style", "text", "moves"]
   };
 
   // Takes the keys now and returns the function that marks as carried what this tab's output holds.

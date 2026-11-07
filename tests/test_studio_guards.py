@@ -485,6 +485,142 @@ class LeavePromptCoverageTests(ControlsMixin, ArrangeCase):
                     self.assertEqual(self.prompts(page), outcome == 'false')
                     self.assertEqual(errors, [])
 
+    # -- the Composer's composition JSON ---------------------------------------
+    def open_export(self, page, button='exportJson'):
+        page.locator(f'#{button}').click()
+        page.locator('#exportDialog').wait_for(state='visible')
+
+    def close_export(self, page):
+        page.locator('#exportDialog').evaluate('(dialog) => dialog.close()')
+
+    def save_export(self, page):
+        """Downloads the dialog's text. The download event fires inside the click handler, after which the ask can be read."""
+        with page.expect_download():
+            page.locator('#downloadExport').click()
+
+    def test_a_downloaded_composition_file_stops_the_ask_for_a_style_edit_a_text_edit_and_a_move(self):
+        """Given one saved edit, when Export JSON is downloaded from its dialog, then the page stops asking."""
+        edits = (('style', lambda case, page, frame: case.edit_size(page, frame)),
+                 ('text', lambda case, page, frame: case.edit_text(page, frame)),
+                 ('move', lambda case, page, frame: case.move(page, frame)))
+        for engine in ENGINES:
+            for name, edit in edits:
+                with self.subTest(engine=engine, edit=name):
+                    page, errors, frame = self.arranged(engine)
+                    edit(self, page, frame)
+                    self.assertTrue(self.prompts(page))
+                    self.open_export(page)
+                    self.save_export(page)
+                    self.assertFalse(self.prompts(page))
+                    self.assertEqual(errors, [])
+
+    def test_a_downloaded_composition_file_holds_saved_tokens_too(self):
+        """Given saved tokens and a style edit, when Export JSON is downloaded, then the page stops asking."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors, frame = self.arranged(engine)
+                page.locator('#btnSyncToApp').click()
+                self.wait_badge(page, r'^Live · rev 1$')
+                self.edit_size(page, frame)
+                self.assertIn('--font-display', self.export(page)['live']['tokens'])
+                self.assertTrue(self.prompts(page))
+                self.open_export(page)
+                self.save_export(page)
+                self.assertFalse(self.prompts(page))
+                self.assertEqual(errors, [])
+
+    def test_copying_the_composition_file_stops_the_ask_only_when_the_copy_worked(self):
+        """Given a style edit, when the dialog's Copy works the page stops asking; with no clipboard and a false execCommand it asks."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine, clipboard='works'):
+                page, errors, frame = self.arranged(engine)
+                self.edit_size(page, frame)
+                page.evaluate("""() => { window.__copied = null; Object.defineProperty(navigator, 'clipboard', {configurable: true,
+                    value: {writeText: async (text) => { window.__copied = text; }}}); }""")
+                self.open_export(page)
+                self.assertTrue(self.prompts(page))
+                page.locator('#copyExport').click()
+                page.wait_for_function('() => document.querySelector("#copyExport").textContent === "Copied"')
+                self.assertFalse(self.prompts(page))
+                self.assertEqual(errors, [])
+            with self.subTest(engine=engine, clipboard='gone', execCommand='false'):
+                page, errors, frame = self.arranged(engine)
+                self.edit_size(page, frame)
+                page.evaluate("""() => { window.__tried = false; Object.defineProperty(navigator, 'clipboard', {configurable: true, value: undefined});
+                    document.execCommand = () => { window.__tried = true; return false; }; }""")
+                self.open_export(page)
+                page.locator('#copyExport').click()
+                page.wait_for_function('() => window.__tried')
+                self.assertTrue(self.prompts(page))
+                self.assertEqual(errors, [])
+
+    def test_export_css_carries_nothing_even_straight_after_an_unsaved_composition_export(self):
+        """Given a style edit, when Export CSS is downloaded (also after a JSON export was shown and closed), then the page still asks."""
+        for engine in ENGINES:
+            for first in (False, True):
+                with self.subTest(engine=engine, json_shown_first=first):
+                    page, errors, frame = self.arranged(engine)
+                    self.edit_size(page, frame)
+                    if first:
+                        self.open_export(page)
+                        self.close_export(page)
+                    self.open_export(page, 'exportCss')
+                    self.save_export(page)
+                    self.assertTrue(self.prompts(page))
+                    self.assertEqual(errors, [])
+
+    def test_opening_the_composition_export_and_closing_it_unsaved_still_asks(self):
+        """Given a style edit, when Export JSON is opened and closed without saving, then the page still asks."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors, frame = self.arranged(engine)
+                self.edit_size(page, frame)
+                self.open_export(page)
+                self.close_export(page)
+                self.assertTrue(self.prompts(page))
+                self.assertEqual(errors, [])
+
+    def test_an_edit_after_saving_the_composition_file_asks_again(self):
+        """Given a saved composition file, when another edit is made, then the page asks again."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors, frame = self.arranged(engine)
+                self.edit_size(page, frame)
+                self.open_export(page)
+                self.save_export(page)
+                self.close_export(page)
+                self.assertFalse(self.prompts(page))
+                self.edit_size(page, frame, 60)
+                self.assertTrue(self.prompts(page))
+                self.assertEqual(errors, [])
+
+    def test_a_hand_edited_composition_text_is_never_counted_as_saved(self):
+        """Given the export text edited by hand, when it is downloaded, then the page still asks."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors, frame = self.arranged(engine)
+                self.edit_size(page, frame)
+                self.open_export(page)
+                page.locator('#exportDialogText').fill('{}')
+                self.save_export(page)
+                self.assertTrue(self.prompts(page))
+                self.assertEqual(errors, [])
+
+    def test_an_edit_acknowledged_while_the_export_is_open_still_asks_after_its_download(self):
+        """Given the export open, when an edit is acknowledged and the old text is downloaded, then the page still asks."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors, frame = self.arranged(engine)
+                self.edit_size(page, frame)
+                self.open_export(page)
+                self.select(page, frame, 'hero.title')
+                page.evaluate("""() => { const field = document.querySelector('#liveText'); field.value = 'Typed while open';
+                    field.dispatchEvent(new Event('input', {bubbles: true})); field.dispatchEvent(new Event('change', {bubbles: true})); }""")
+                self.wait_badge(page, r'^Live · rev 2$')
+                self.save_export(page)
+                self.assertTrue(self.prompts(page))
+                self.assertEqual(errors, [])
+
 
 if __name__ == '__main__':
     unittest.main()
