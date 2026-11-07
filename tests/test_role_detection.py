@@ -684,17 +684,29 @@ class ClosedDetailsDetectionTests(RoleBridgeCase):
         """Given a closed details and a scan in flight, when an animation restyles a counted element, then the reply is incomplete as page-changed and a fresh scan completes."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
-                page, frame = self.open(engine, target=TARGET + '/fixtures/large-page/index.html')
+                page, frame = self.open(engine)
                 frame.evaluate("() => document.body.insertAdjacentHTML('beforeend', "
                                "'<details><summary>Question</summary><p>Hidden answer</p></details>')")
                 self.hello(page)
-                frame.evaluate("""() => addEventListener('message', function change(event) {
-                    if (event.data.type !== 'design:detect') return;
-                    removeEventListener('message', change);
-                    setTimeout(() => {
-                        window.probeAnimation = document.querySelector('.g00').animate({ fontSize: ['16px', '31px'] }, { duration: 1e6, fill: 'forwards' });
-                    }, 0);
-                })""")
+                # Animate the first paragraph inside the scan, on the first style read of the second: after the first
+                # paragraph's first-pass read and before the check pass, whatever the machine's speed.
+                frame.evaluate("""() => {
+                    const [a, b] = document.querySelectorAll('main p'), real = window.getComputedStyle;
+                    let armed = false, done = false;
+                    addEventListener('message', function arm(event) {
+                        if (event.data.type !== 'design:detect') return;
+                        removeEventListener('message', arm);
+                        armed = true;
+                    });
+                    window.getComputedStyle = function (el, ...rest) {
+                        if (armed && !done && el === b) {
+                            done = true;
+                            window.probeAnimation = a.animate({ fontSize: ['16px', '31px'] }, { duration: 1e6, fill: 'forwards' });
+                            window.probeAnimation.finish();
+                        }
+                        return real.call(this, el, ...rest);
+                    };
+                }""")
                 reply = self.detect(page)
                 self.assertEqual((reply['complete'], reply['reason']), (False, 'page-changed'), reply)
                 self.assertEqual(reply['pageVersion'], reply['currentPageVersion'], reply)

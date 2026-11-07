@@ -3914,6 +3914,15 @@ class StudioIdleRoleControlTests(StudioLegacyCase):
 RECEIPTS = """window.__receipts = [];
 addEventListener('message', e => { const d = e.data; if (d && d.type === 'design:roles-applied' && e.origin === 'http://target.test') __receipts.push(JSON.parse(JSON.stringify(d))); });"""
 
+# Registered by the init script, so it runs before Studio's own listener on the window; held notices are kept in __held
+# once the test sets __holdPageNotice. A listener added after load would run after Studio's and hold nothing back.
+HOLD_PAGE_NOTICE = """
+window.__held = [];
+addEventListener('message', e => {
+  const d = e.data;
+  if (window.__holdPageNotice && d && d.type === 'design:roles-page' && e.origin === 'http://target.test') { __held.push(d.pageVersion); e.stopImmediatePropagation(); }
+}, true);"""
+
 
 class StudioStaleClearTests(StudioRoleCase):
     @per_engine
@@ -3922,7 +3931,7 @@ class StudioStaleClearTests(StudioRoleCase):
         passes the one Studio holds and Clear preview is pressed before Studio hears of it, then Studio sends that older
         version, the bridge's owned stylesheet is present before the press and gone after, Studio shows "Preview cleared."
         and the Body paragraph is back to its original 16px."""
-        page, frame, errors = self.open(engine, init=RECEIPTS)
+        page, frame, errors = self.open(engine, init=RECEIPTS + HOLD_PAGE_NOTICE)
         self.assertTrue(self.detect(page).startswith('Detected'))
         row = page.locator('#roleRows > li[data-role-id]', has=page.locator('strong', has_text='Body')).first
         role = row.get_attribute('data-role-id')
@@ -3935,10 +3944,13 @@ class StudioStaleClearTests(StudioRoleCase):
         seen = page.evaluate('__receipts[__receipts.length - 1].pageVersion')
         self.assertEqual(author.evaluate('el => getComputedStyle(el).fontSize'), '24px')
         # Hold back the bridge's page notice (no animation frame in the target, none heard by Studio), then change the text.
-        page.evaluate("addEventListener('message', e => { if (e.data && e.data.type === 'design:roles-page') e.stopImmediatePropagation(); }, true)")
+        page.evaluate('window.__holdPageNotice = true')
         frame.evaluate('window.requestAnimationFrame = () => 0')
         frame.evaluate("document.querySelector('main').append(document.createElement('hr'))")
         frame.wait_for_function('(seen) => window.__fontkitBridge.pageVersion !== seen', arg=seen, polling=50)   # polling by timer: the target has no animation frames now
+        # The bridge has announced the new version, and Studio's window swallowed that notice before Studio's own listener.
+        frame.wait_for_function('() => __fontkitBridge.announcedVersion === __fontkitBridge.pageVersion', polling=50)
+        page.wait_for_function('() => __held.length >= 1', polling=50)
         self.assertEqual(frame.evaluate(owned), 1)
         frame.evaluate("window.__sent = []; addEventListener('message', e => { if (e.data && e.data.type === 'design:roles-clear') __sent.push(e.data); }, true)")
         self.button(page, CLEAR).click()
