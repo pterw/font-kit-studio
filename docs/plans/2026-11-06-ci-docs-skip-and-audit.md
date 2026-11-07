@@ -115,7 +115,7 @@ task branch, not `main`, so other tasks' files stay out of their diffs; the cont
 
 **Acceptance.** The reviewer shows each way the skip must not fire, and shows the one way it must.
 
-- [ ] The offline table of Task 2a passes at the commit that lands 2b, and its helper is the one the three places call.
+- [x] The offline table of Task 2a passes at the commit that lands 2b, and its helper is the one the three places call.
 - [ ] On a throwaway pull request with a Markdown-only change, the three places skip their browser steps, all 12 jobs end green, and the
   fast checks ran.
 - [ ] On a throwaway pull request that edits the root `README.md`, and on one that edits a `.py` file, the full run happens.
@@ -124,10 +124,10 @@ task branch, not `main`, so other tasks' files stay out of their diffs; the cont
   the output unset, the browser steps run in all three places and the jobs pass. The deliberate failure is not committed to the branch.
 - [ ] On a throwaway pull request with a Markdown-only change, the `fixtures` and `next-fixture` checkouts at `fetch-depth: 2` yield a
   skip, which shows the first parent was present.
-- [ ] Reading `quality-gate.yml` shows every skipped step's condition is "decision output equals `true`", combined with any existing
+- [x] Reading `quality-gate.yml` shows every skipped step's condition is "decision output equals `true`", combined with any existing
   `!cancelled()`; the decision step has step-level `continue-on-error` and no job has it. The tag path is proven by that reading and the
   offline table (the helper prints nothing for any event but `pull_request`), since a tag run cannot be staged before a release.
-- [ ] Commit: `ci: skip browser jobs on a pull request that changes only Markdown`.
+- [x] Commit: `ci: skip browser jobs on a pull request that changes only Markdown`.
 
 ### Task 3: a non-blocking dependency audit
 
