@@ -50,7 +50,7 @@ style; the lockfile changes only what the bump needs.
 - [x] The linked-package entry in `fixtures/vite-ts/package-lock.json` is kept: `test_vite_types.LinkedPackageLockTests` requires its
   version to equal `packages/fontkitstudio/package.json`'s. When merging later 0.4.1 commits that touch it, take the 0.4.1 version of that
   entry.
-- [x] Commit: `chore(fixtures): update next and vite to versions without known advisories`.
+- [x] Commit: `chore: bump fixture Next and Vite past their advisories`.
 
 ### Task 2a: the decision helper
 
@@ -157,9 +157,9 @@ task branch, not `main`, so other tasks' files stay out of their diffs; the cont
 - [ ] On a throwaway pull request that pins a package version with a known advisory in one fixture's lockfile, that leg shows as failed in
   the pull request's checks list, the other legs show their own result, and the pull request's merge box does not block (the check is not
   required). The reviewer records what the checks list showed.
-- [ ] Reading the file shows no job-level `continue-on-error`, every `uses:` is a 40-character SHA, and the `pip-audit` version is exact.
-- [ ] `release.yml` and `quality-gate.yml` have no diff from this task's commit.
-- [ ] Commit: `ci: audit dependencies weekly and on dependency changes, without blocking`.
+- [x] Reading the file shows no job-level `continue-on-error`, every `uses:` is a 40-character SHA, and the `pip-audit` version is exact.
+- [x] `release.yml` and `quality-gate.yml` have no diff from this task's commit.
+- [x] Commit: `ci: audit dependencies weekly and on dependency changes, without blocking`.
 
 ## Non-goals
 
