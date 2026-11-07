@@ -86,6 +86,8 @@ Plans: `docs/plans/2026-09-30-v0.1.1-responsive-rows.md` (complete), `docs/plans
 
 - **0.4.1 release point (2026-11-07).** Labels set, CHANGELOG dated, [verification record](verification-0.4.1.md) written. The export format stays `0.1.1` and the protocol version 1. Final tree: 1,433 Chromium tests, of which 27 fixture tests need installs and one large-page test failed under load and passed 3 of 3 alone; Node 270 of 272 with 2 skipped. Firefox not run locally. Next: hosted CI, merge, tag, publication checks.
 
+- **Held write awaited in the leave-prompt test (2026-11-07).** Test-only: it awaits the PUT instead of polling with a deadline. RED/GREEN: it still fails with the key taken after the await; 5 of 5 at CPU rate 40. `test_studio_guards` 35 and `test_support` 34 pass.
+
 ## R2 engine planning
 
 - **R2 draft prepared (2026-10-08).** Expanded [work order](../plans/2026-10-03-r2-engine.md) on `docs/r2-engine-plan` from `1348268`, after the separate 0.3.1 publication closeout `dc1da53`. D058 resolves the two draft thresholds. Detection, preview and visited-page work have separate PRs, explicit owned files, reviewed atomic landings and focused browser gates; Library/Composer audit evidence remains required before final approval. Current source and two read-only research reports inform the contract; neither constitutes implementation. Plan review and documentation landing checks are pending. RED/GREEN: not applicable to this planning-only delta; 0 new tests, no browser engine verified. Next: independent plan review, then controller commit/push; obtain audit-brief approval before dispatching it.

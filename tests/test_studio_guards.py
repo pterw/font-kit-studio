@@ -268,14 +268,11 @@ class LeavePromptTests(ControlsMixin, LiveCase):
                 page, errors, dialogs = self.edited(engine)
                 held = []
                 page.route('**/__fontkit/overrides.css', lambda route: held.append(route))
-                page.locator('#liveCodeSync').click()
+                with page.expect_request(lambda request: request.method == 'PUT' and request.url.endswith('/__fontkit/overrides.css')):
+                    page.locator('#liveCodeSync').click()
                 page.wait_for_function('() => /Saving/.test(document.querySelector("#liveCodeStatus").textContent)')
-                for _ in range(250):
-                    if held:
-                        break
-                    page.wait_for_timeout(20)
-                self.assertTrue(held, 'the write never reached the route')
                 self.edit_size(page, self.frame(page), size=60)
+                self.assertTrue(held, 'the write never reached the route')
                 held[0].fulfill(status=200, content_type='application/json', body='{"ok": true, "bytes": 1, "path": "x.css"}')
                 page.wait_for_function('() => /Saved/.test(document.querySelector("#liveCodeStatus").textContent)')
                 self.assertTrue(self.prompts(page))

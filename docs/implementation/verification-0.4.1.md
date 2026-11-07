@@ -28,6 +28,8 @@ Of the 28 failures:
 - **27 did not run.** Each is a fixture test that stopped on `fixtures/<name>/node_modules is missing`, because that worktree has no installs and the setting turns a skip into a failure. They are not reported as passing here. Hosted CI installs the fixtures and runs them.
 - **1 is an intermittent failure under load.** `test_detect_never_drops_the_preview_between_frames_on_the_5000_parent_corpus` ended as `time-budget` at 2,014 ms against the 2 s scan budget, with five other shards running. Alone on the same tree it passed 3 of 3. The bridge differs from the previous green run only in its version comment. This is the older large-page weakness carried to 0.4.2 in [plan Addendum 4](../plans/2026-11-06-v0.4.1-repairs.md#carried-to-042).
 
+One test changed after these gates: `test_an_edit_made_while_the_write_is_in_flight_still_asks` now awaits the held request instead of polling for it. No product code changed. `test_studio_guards` (35 tests) and `test_support` (34) pass with it, and the test passes 5 of 5 at CPU rate 40.
+
 Other local checks on the same tree:
 
 | Check | Command | Result |
