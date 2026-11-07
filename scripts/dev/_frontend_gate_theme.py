@@ -242,8 +242,8 @@ def judge_samples(label: str, samples: list[dict]) -> tuple[list[str], list[str]
 def set_theme(ctx: GateContext, theme: str, back_to_composer: bool) -> None:
     """Switch to the requested theme with Studio's own toggle.
 
-    The toggle lives in the Library view, so from Composer the helper goes
-    there and returns. Using the real control (not setting a class) means a
+    The toggle sits in the mode bar, shown in both views, so the helper no
+    longer needs the detour, but the detour is harmless and kept. Using the real control (not setting a class) means a
     broken toggle is a finding of this check.
     """
     page = ctx.page
