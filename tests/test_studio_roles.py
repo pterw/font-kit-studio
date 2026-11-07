@@ -715,6 +715,11 @@ class StudioRoleBoundaryTests(StudioRoleCase):
 class StudioPostedWarningTests(StudioRoleCase):
     KINDS = ('token-not-applied', 'edit-not-reapplied', 'edit-reapply-stopped')
     HOSTILE = '<img src=x onerror="window.__xss=1">boom'
+    # Runs in Studio's page before its own scripts: records the length of each design:warning message as it arrives,
+    # so the test proves Studio was handed the whole text and its own cap, not the sender's, did the cutting.
+    RECORD_LENGTHS = '''(() => { window.__warningLengths = [];
+      window.addEventListener('message', e => { if (e.data && e.data.type === 'design:warning' && typeof e.data.message === 'string')
+        window.__warningLengths.push(e.data.message.length); }, true); })()'''
 
     def post(self, frame, kind, message):
         frame.evaluate('([k, m]) => window.__fontkitBridge.postWarning(k, "global", m)', [kind, message])
@@ -726,7 +731,7 @@ class StudioPostedWarningTests(StudioRoleCase):
         prototype names and a wrong session id show nothing."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
-                page, frame, errors = self.open(engine)
+                page, frame, errors = self.open(engine, init=self.RECORD_LENGTHS)
                 for kind in self.KINDS:
                     self.post(frame, kind, self.HOSTILE)
                     page.wait_for_function('() => document.querySelectorAll("#liveCodeWarnings li").length === 1')
@@ -735,8 +740,10 @@ class StudioPostedWarningTests(StudioRoleCase):
                     self.assertEqual(page.locator('#bridgeWarning img, #liveCodeWarnings img').count(), 0)
                     self.assertIsNone(page.evaluate('window.__xss'))
                     page.locator('#bridgeWarningDismiss').click()
-                self.post(frame, 'edit-not-reapplied', 'x' * 900)
+                frame.evaluate('''() => window.__fontkitBridge.post({type: "design:warning", targetId: "global",
+                    kind: "edit-not-reapplied", message: "x".repeat(900)})''')
                 page.wait_for_function('() => document.querySelectorAll("#liveCodeWarnings li").length === 1')
+                self.assertIn(900, page.evaluate('window.__warningLengths'), 'Studio must receive all 900 characters')
                 self.assertEqual(page.evaluate('() => document.querySelector("#liveCodeWarnings li").textContent.length'), 300)
                 page.locator('#bridgeWarningDismiss').click()
                 for kind in ('made-up', 'constructor', '__proto__'):

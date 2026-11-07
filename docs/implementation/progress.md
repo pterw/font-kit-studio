@@ -80,6 +80,8 @@ Plans: `docs/plans/2026-09-30-v0.1.1-responsive-rows.md` (complete), `docs/plans
 
 - **A saved composition counts for the leave prompt (2026-11-06).** RED/GREEN: each named break fails its test, including marking on open, ignoring a failed Copy, and leaving the mark set for the CSS dialog. Landing gates on the final tree: 1,433 Chromium tests across all shards, of which 27 fixture tests need installs and ran in CI, plus static checks, bridge syntax, product ruff and whitespace. Firefox not run locally.
 
+- **Warning cap and Sync outcome proved (2026-11-06).** Test-only. RED/GREEN: removing Studio's cap fails at 900 against 300, and holding the last reply fails at the `rev 4` wait. Landing gates on the final tree: 1,433 Chromium tests across all shards, of which 27 fixture tests need installs and ran in CI, plus static checks, bridge syntax, product ruff and whitespace. Firefox not run locally.
+
 ## R2 engine planning
 
 - **R2 draft prepared (2026-10-08).** Expanded [work order](../plans/2026-10-03-r2-engine.md) on `docs/r2-engine-plan` from `1348268`, after the separate 0.3.1 publication closeout `dc1da53`. D058 resolves the two draft thresholds. Detection, preview and visited-page work have separate PRs, explicit owned files, reviewed atomic landings and focused browser gates; Library/Composer audit evidence remains required before final approval. Current source and two read-only research reports inform the contract; neither constitutes implementation. Plan review and documentation landing checks are pending. RED/GREEN: not applicable to this planning-only delta; 0 new tests, no browser engine verified. Next: independent plan review, then controller commit/push; obtain audit-brief approval before dispatching it.
