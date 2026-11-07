@@ -42,7 +42,7 @@ Two things have their own version numbers:
 - Importing a composition that names a font the library lacks now says which
   font was replaced.
 - Studio asks before a reload or close drops edits that were not synced, copied
-  or downloaded.
+  or downloaded, or an edit the Live App has not acknowledged yet.
 - Exported selectors no longer carry state classes such as `is-active`, so a
   pasted rule still matches after the page toggles them.
 - Studio's default specimen text is now neutral; saved compositions keep their

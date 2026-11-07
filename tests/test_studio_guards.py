@@ -8,12 +8,13 @@ Run one module by name with PYTHONPATH=tests:  python -m unittest test_studio_gu
 """
 
 import unittest
+from urllib.parse import quote
 
 from support import ENGINES
 
 from test_studio_controls import ControlsMixin
 from test_studio_import_link import STATUS, ImportLinkCase
-from test_studio_live import ARRANGE, ArrangeCase, LiveCase
+from test_studio_live import APP, ARRANGE, FAKE, ArrangeCase, LiveCase
 
 PLAIN = 'Composition imported. Image assets must be reselected.'
 GHOST = 'ghost-face is not in the library, so the first library font is used.'
@@ -92,6 +93,13 @@ def synced(case, page):
     a task later than the response that sync_file waits for, so a probe taken at once can still see the old state."""
     case.sync_file(page)
     page.wait_for_function(SAVED)
+
+
+# Runs in every frame before the page's own scripts, so its capture listener comes first at the window: while
+# `window.__withhold` names a message type it stops that message reaching the bridge, so the Live App never replies.
+WITHHOLD = '''(() => { window.__withhold = null;
+  window.addEventListener('message', e => { if (window.__withhold && e.data && e.data.type === window.__withhold) e.stopImmediatePropagation(); }, true); })()'''
+NO_RESPONSE = '''() => /No response from the Live App/.test(document.querySelector("#bridgeStatusBadge").textContent)'''
 
 
 CLIPBOARD = '''() => Object.defineProperty(navigator, 'clipboard', {configurable: true, value: {writeText: async () => {}}})'''
@@ -175,6 +183,83 @@ class LeavePromptTests(ControlsMixin, LiveCase):
                 page.locator('#liveCodeSync').click()
                 page.wait_for_function('() => /Sync failed/.test(document.querySelector("#liveCodeStatus").textContent)')
                 self.assertTrue(self.prompts(page))
+
+    def held_back(self, engine, kind):
+        """A connected, synced Studio whose Live App will not answer a `kind` message."""
+        context = self.context(engine, sync=True)
+        context.add_init_script(WITHHOLD)
+        page = context.new_page()
+        errors = []
+        page.on('pageerror', lambda error: errors.append(str(error)))
+        page.goto(f'{APP}?target={quote(FAKE, safe="")}')
+        self.wait_connected(page)
+        frame = self.frame(page)
+        frame.evaluate('(kind) => { window.__withhold = kind; }', kind)
+        return page, frame, errors
+
+    def reset_pressed_after_a_save(self, engine):
+        """An edit the page has acknowledged and a save has taken, then Reset this element sent and left unanswered."""
+        page, frame, errors = self.held_back(engine, 'design:reset')
+        self.edit_size(page, frame)
+        synced(self, page)
+        self.assertFalse(self.prompts(page))
+        page.locator('#liveResetTarget').click()
+        return page, frame, errors
+
+    def test_an_edit_in_flight_still_asks(self):
+        """Given an edit the Live App has not answered, when the tab closes, then the page asks and holds nothing."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame, errors = self.held_back(engine, 'design:update')
+                self.select(page, frame)
+                self.set_value(page, '#liveFontSize', 50)
+                self.assertEqual(page.locator('#liveChangeCount').inner_text(), '0')
+                self.assertTrue(self.prompts(page))
+                self.assertEqual(errors, [])
+
+    def test_an_edit_that_timed_out_still_asks(self):
+        """Given an edit the Live App never answered, when the page reports no response, then it still asks."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame, errors = self.held_back(engine, 'design:update')
+                self.select(page, frame)
+                self.set_value(page, '#liveFontSize', 50)
+                page.wait_for_function(NO_RESPONSE, timeout=15000)
+                self.assertEqual(page.locator('#liveChangeCount').inner_text(), '0')
+                self.assertTrue(self.prompts(page))
+                self.assertEqual(errors, [])
+
+    def test_an_edit_waiting_in_the_queue_asks(self):
+        """Given a Reset left unanswered, when an edit waits behind it, then the page asks though nothing is in flight for it."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame, errors = self.reset_pressed_after_a_save(engine)
+                self.set_value(page, '#liveFontSize', 60)
+                self.assertEqual(len(self.updates(frame)), 1)               # the second edit was never sent
+                self.assertTrue(self.prompts(page))
+                self.assertEqual(errors, [])
+
+    def test_a_reset_awaiting_its_reply_does_not_ask(self):
+        """Given a saved edit and a Reset left unanswered with nothing behind it, then the page does not ask."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame, errors = self.reset_pressed_after_a_save(engine)
+                self.assertFalse(self.prompts(page))
+                self.assertEqual(errors, [])
+
+    def test_an_edit_an_import_replaced_does_not_ask(self):
+        """Given an edit that timed out, when an import carrying live state replaces it, then the page does not ask."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame, errors = self.held_back(engine, 'design:update')
+                self.select(page, frame)
+                self.set_value(page, '#liveFontSize', 50)
+                page.wait_for_function(NO_RESPONSE, timeout=15000)
+                self.assertTrue(self.prompts(page))
+                live = {'target': FAKE, 'revision': 0, 'overrides': {}}
+                self.assertIn('Composition imported.', self.import_document(page, {**self.export(page), 'live': live}))
+                self.assertFalse(self.prompts(page))
+                self.assertEqual(errors, [])
 
     def test_an_edit_made_while_the_write_is_in_flight_still_asks(self):
         """Given a write held open, when a further edit lands before it answers, then the page asks after the write succeeds."""

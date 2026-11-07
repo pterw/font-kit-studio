@@ -6718,7 +6718,11 @@ if (remembered) kitId.value = remembered;
     text:Object.entries(live.overrides).filter(([, patch]) => patch.text !== undefined).map(([id, patch]) => [id, patch.text]),
     moves:live.structure
   });
-  const hasUnsyncedEdits = () => Object.entries(heldParts()).some(([name, part]) => part.length > 0 && JSON.stringify(part) !== carried[name]);
+  // A user edit the Live App has not acknowledged sits in the queue, in flight or timed out, outside every store above.
+  // A save cannot carry it, so it keeps the page asking. Reapply ops and an op an import replaced are not the user's edit.
+  const hasPendingEdit = () => [...live.queue, live.inFlight, ...live.timedOut.values()]
+    .some(op => op && (op.kind === "update" || op.kind === "move") && !op.reapply && !op.importSuperseded);
+  const hasUnsyncedEdits = () => hasPendingEdit() || Object.entries(heldParts()).some(([name, part]) => part.length > 0 && JSON.stringify(part) !== carried[name]);
   const ledgerHoldsText = parts => parts.text.every(([id, text]) => live.changes.targets.some(entry => entry.targetId === id && entry.text === text));
   const SAVE_HOLDS = {
     css: () => ["style"],
