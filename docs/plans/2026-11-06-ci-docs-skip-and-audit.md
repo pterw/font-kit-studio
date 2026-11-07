@@ -42,15 +42,15 @@ the audit in Task 3 does not open on known advisories.
 The advisories are measured with `npm audit --package-lock-only` and all are in direct dependencies. Each `package.json` keeps its exact pin
 style; the lockfile changes only what the bump needs.
 
-- [ ] Each fixture's `package.json` and lockfile carry the version in the table; `npm audit --package-lock-only` reports no vulnerability in
+- [x] Each fixture's `package.json` and lockfile carry the version in the table; `npm audit --package-lock-only` reports no vulnerability in
   any of the five.
-- [ ] `test_vite_types` passes locally. Fixture dev servers do not run locally for this branch: the Fixtures and Next.js jobs run
+- [x] `test_vite_types` passes locally. Fixture dev servers do not run locally for this branch: the Fixtures and Next.js jobs run
   `test_r2_react` and the Next fixture test (`test_one_command_next` and `test_r2_entrypoints.NextEntrypointTests`) on the pull request,
   with `FKS_REQUIRE_FIXTURES=1`, so none is skipped. Local acceptance is the audit line above plus `test_vite_types`.
-- [ ] The linked-package entry in `fixtures/vite-ts/package-lock.json` is kept: `test_vite_types.LinkedPackageLockTests` requires its
+- [x] The linked-package entry in `fixtures/vite-ts/package-lock.json` is kept: `test_vite_types.LinkedPackageLockTests` requires its
   version to equal `packages/fontkitstudio/package.json`'s. When merging later 0.4.1 commits that touch it, take the 0.4.1 version of that
   entry.
-- [ ] Commit: `chore(fixtures): update next and vite to versions without known advisories`.
+- [x] Commit: `chore(fixtures): update next and vite to versions without known advisories`.
 
 ### Task 2a: the decision helper
 
