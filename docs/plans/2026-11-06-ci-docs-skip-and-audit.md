@@ -63,13 +63,13 @@ against `HEAD`, with `--no-renames`, so a rename lists both its old and its new 
 case it prints nothing: a `HEAD` with no second parent (not a merge commit), a git failure, an empty diff, any other event. It runs on
 Linux, macOS and Windows with the standard library only.
 
-- [ ] A table test in a new test module covers: Markdown only (prints); one `.md` plus one `.py` (nothing); root `README.md` alone (nothing);
+- [x] A table test in a new test module covers: Markdown only (prints); one `.md` plus one `.py` (nothing); root `README.md` alone (nothing);
   `packages/fontkitstudio/README.md` alone (nothing); a rename from a code file to a `.md`, listing both paths (nothing); a deleted file
   (judged by its path like any other); an unknown extension, `.markdown` and `.mdx` (nothing); `docs/guide.md`, `docs/reference/x.md` and
   `AGENTS.md` alone (print); `HEAD` that is not a merge commit (nothing); an event other than `pull_request` with Markdown-only paths
   (nothing); a git failure (nothing); an empty diff (nothing).
-- [ ] The new module is picked up by `test_support`'s guards like any new module, and passes.
-- [ ] Commit: `ci: add the helper that decides a Markdown-only pull request`.
+- [x] The new module is picked up by `test_support`'s guards like any new module, and passes.
+- [x] Commit: `ci: add the helper that decides a Markdown-only pull request`.
 
 ### Task 2b: wire the decision into the browser steps
 
@@ -159,7 +159,7 @@ task branch, not `main`, so other tasks' files stay out of their diffs; the cont
   required). The reviewer records what the checks list showed.
 - [x] Reading the file shows no job-level `continue-on-error`, every `uses:` is a 40-character SHA, and the `pip-audit` version is exact.
 - [x] `release.yml` and `quality-gate.yml` have no diff from this task's commit.
-- [x] Commit: `ci: audit dependencies weekly and on dependency changes, without blocking`.
+- [x] Commit: `ci: audit dependencies weekly, without blocking`.
 
 ## Non-goals
 
