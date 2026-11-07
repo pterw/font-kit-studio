@@ -891,7 +891,7 @@ Known gaps:
 - Reapply cannot replay a DOM move made with **Move anyway**, and cannot place an element in a container the page no longer holds (or one that holds none of the saved elements). It stops and says why.
 - A DOM move saved by 0.4.0 under a container whose selector held a state class (such as `is-active`) cannot be placed again. Reapply stops as a whole and sends nothing; redo the move.
 - Sync does not learn the token names the page reads, and an edit on a replaced auto-id element is only warned about, not re-applied.
-- When the app overwrites a heading's single string child, the Studio text edit is overwritten. A paragraph's Reset is fixed.
+- When the app overwrites a heading's single string child, the Studio text edit is overwritten. Reset then shows the app's text. On a paragraph with a child element, Reset puts back the text captured when the edit began.
 - Edits made while the page is reloading are dropped.
 - At 390 px wide, the "No bridge answered" badge can push the page sideways.
 - Rows hold 2 to 4 leaf slots. Nested rows and JPEG assets are out of scope.
