@@ -37,6 +37,7 @@ def changed_paths() -> list[str] | None:
 
 
 def main() -> None:
+    raise SystemExit(1)
     target = os.environ.get('GITHUB_OUTPUT')
     if os.environ.get('GITHUB_EVENT_NAME') != 'pull_request' or not target:
         return
