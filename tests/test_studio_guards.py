@@ -84,6 +84,16 @@ class UnknownFamilyImportTests(ImportLinkCase):
 
 
 PROBE = '''() => { const e = new Event('beforeunload', {cancelable: true}); window.dispatchEvent(e); return e.defaultPrevented; }'''
+SAVED = '''() => /Saved/.test(document.querySelector("#liveCodeStatus").textContent)'''
+
+
+def synced(case, page):
+    """Presses Sync to file and waits for the page to mark the save carried: it does so after reading the response body,
+    a task later than the response that sync_file waits for, so a probe taken at once can still see the old state."""
+    case.sync_file(page)
+    page.wait_for_function(SAVED)
+
+
 CLIPBOARD = '''() => Object.defineProperty(navigator, 'clipboard', {configurable: true, value: {writeText: async () => {}}})'''
 
 
@@ -149,7 +159,7 @@ class LeavePromptTests(ControlsMixin, LiveCase):
             with self.subTest(engine=engine):
                 page, errors, dialogs = self.edited(engine)
                 self.assertTrue(self.prompts(page))
-                self.sync_file(page)
+                synced(self, page)
                 self.assertFalse(self.prompts(page))
                 self.edit_size(page, self.frame(page), size=60)
                 self.assertTrue(self.prompts(page))
@@ -236,7 +246,7 @@ class LeavePromptCoverageTests(ControlsMixin, ArrangeCase):
                 page, errors, frame = self.arranged(engine)
                 self.move(page, frame)
                 self.assertTrue(self.prompts(page))
-                self.sync_file(page)
+                synced(self, page)
                 self.assertTrue(self.prompts(page))
                 self.assertEqual(errors, [])
 
@@ -249,7 +259,7 @@ class LeavePromptCoverageTests(ControlsMixin, ArrangeCase):
                 self.assertTrue(self.prompts(page))
                 self.download(page, 'Html')
                 self.assertTrue(self.prompts(page))
-                self.sync_file(page)
+                synced(self, page)
                 self.assertFalse(self.prompts(page))
                 self.assertEqual(errors, [])
 
@@ -259,7 +269,7 @@ class LeavePromptCoverageTests(ControlsMixin, ArrangeCase):
             with self.subTest(engine=engine):
                 page, errors, frame = self.arranged(engine)
                 self.edit_size(page, frame)
-                self.sync_file(page)
+                synced(self, page)
                 self.assertFalse(self.prompts(page))
                 frame.evaluate('location.reload()')
                 page.locator('#liveReconnectBanner').wait_for(state='visible')
@@ -284,7 +294,7 @@ class LeavePromptCoverageTests(ControlsMixin, ArrangeCase):
                 page, errors, frame = self.arranged(engine)
                 self.edit_text(page, frame)
                 self.assertTrue(self.prompts(page))
-                self.sync_file(page)
+                synced(self, page)
                 self.assertTrue(self.prompts(page))
                 self.reload_app(page, frame)
                 self.assertTrue(self.prompts(page))
