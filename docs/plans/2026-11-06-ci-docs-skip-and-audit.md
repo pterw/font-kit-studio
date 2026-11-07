@@ -116,13 +116,13 @@ task branch, not `main`, so other tasks' files stay out of their diffs; the cont
 **Acceptance.** The reviewer shows each way the skip must not fire, and shows the one way it must.
 
 - [x] The offline table of Task 2a passes at the commit that lands 2b, and its helper is the one the three places call.
-- [ ] On a throwaway pull request with a Markdown-only change, the three places skip their browser steps, all 12 jobs end green, and the
+- [x] On a throwaway pull request with a Markdown-only change, the three places skip their browser steps, all 12 jobs end green, and the
   fast checks ran.
-- [ ] On a throwaway pull request that edits the root `README.md`, and on one that edits a `.py` file, the full run happens.
-- [ ] On a throwaway pull request that changes code and then pushes a Markdown-only commit, the newest run still runs the browser work.
-- [ ] On a throwaway pull request, a deliberately failing decision (for example a helper made to exit non-zero in the real workflow) leaves
+- [x] On a throwaway pull request that edits the root `README.md`, and on one that edits a `.py` file, the full run happens.
+- [x] On a throwaway pull request that changes code and then pushes a Markdown-only commit, the newest run still runs the browser work.
+- [x] On a throwaway pull request, a deliberately failing decision (for example a helper made to exit non-zero in the real workflow) leaves
   the output unset, the browser steps run in all three places and the jobs pass. The deliberate failure is not committed to the branch.
-- [ ] On a throwaway pull request with a Markdown-only change, the `fixtures` and `next-fixture` checkouts at `fetch-depth: 2` yield a
+- [x] On a throwaway pull request with a Markdown-only change, the `fixtures` and `next-fixture` checkouts at `fetch-depth: 2` yield a
   skip, which shows the first parent was present.
 - [x] Reading `quality-gate.yml` shows every skipped step's condition is "decision output equals `true`", combined with any existing
   `!cancelled()`; the decision step has step-level `continue-on-error` and no job has it. The tag path is proven by that reading and the
@@ -153,8 +153,8 @@ task branch, not `main`, so other tasks' files stay out of their diffs; the cont
 
 **Acceptance.**
 
-- [ ] On the branch after Task 1, the first run of every npm leg passes. The Python leg's first result is recorded, whichever it is.
-- [ ] On a throwaway pull request that pins a package version with a known advisory in one fixture's lockfile, that leg shows as failed in
+- [x] On the branch after Task 1, the first run of every npm leg passes. The Python leg's first result is recorded, whichever it is.
+- [x] On a throwaway pull request that pins a package version with a known advisory in one fixture's lockfile, that leg shows as failed in
   the pull request's checks list, the other legs show their own result, and the pull request's merge box does not block (the check is not
   required). The reviewer records what the checks list showed.
 - [x] Reading the file shows no job-level `continue-on-error`, every `uses:` is a 40-character SHA, and the `pip-audit` version is exact.
@@ -189,3 +189,17 @@ Recorded 2026-11-06.
 ## Open questions
 
 None.
+
+## Proofs on real pull requests (2026-11-07)
+
+Five throwaway draft pull requests against this branch, closed and never merged.
+
+| Pull request | Change | Result |
+|---|---|---|
+| #36 | Markdown only | All 12 jobs green in 32 seconds. Every browser step skipped on Linux, macOS and Windows, including the depth-2 checkouts; the fast checks ran |
+| #37 | Root `README.md` | The browser steps ran |
+| #38 | A `.py` change, then a Markdown-only push | The newest run, on the Markdown commit, still ran the browser steps |
+| #39 | The helper made to exit 1 | The decision step ended `Process completed with exit code 1`, the job carried on, and the browser steps ran |
+| #40 | One fixture back on a version with an advisory | `Audit npm (vite-ts)` failed in the checks list, the other five legs passed, and the pull request stayed mergeable |
+
+The first npm run on this branch passed all five fixtures, and the first `pip-audit` run found nothing.
