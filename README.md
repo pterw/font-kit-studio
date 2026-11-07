@@ -41,7 +41,7 @@ You need Node 22.12 or later. In a Vite project (Vite 7 or 8), run this in the p
 npx fontkitstudio
 ```
 
-It runs your project's own dev server with Studio added, and opens Studio in your browser. It writes nothing to your project. To print the address instead of opening it, add `--no-open`. The command needs `fontkitstudio` 0.3.0 or later. Text-style roles (see [Detected roles](#detected-roles)) need 0.4.0 or later.
+It runs your project's own dev server with Studio added, and opens Studio in your browser. It changes none of your files; Vite keeps its usual cache in `node_modules`. To print the address instead of opening it, add `--no-open`. The command needs `fontkitstudio` 0.3.0 or later. Text-style roles (see [Detected roles](#detected-roles)) need 0.4.0 or later.
 
 For any other local dev server, such as Next.js, start it as usual and give its address:
 
