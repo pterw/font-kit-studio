@@ -913,3 +913,5 @@ The original supplied v0.1.1 file is preserved at the Git tag `supplied-v0.1.1`.
 ## License
 
 MIT. See [LICENSE](LICENSE). The logo outlines derive from SIL Open Font License 1.1 fonts; see [docs/assets/README.md](docs/assets/README.md).
+
+<!-- Temporary line for a CI check. -->
