@@ -72,6 +72,8 @@ Plans: `docs/plans/2026-09-30-v0.1.1-responsive-rows.md` (complete), `docs/plans
 
 - **Changelog corrected for Reset (2026-11-06).** Known limit beside Task 4's: Reset on a paragraph with a child element writes the captured text over the app's, as in 0.4.0. Docs only. Landing gates on the integrated tree: 858 Chromium tests in 12 modules, plus static checks, product ruff and whitespace, all pass. Firefox not run.
 
+- **Last default texts neutral (2026-11-06).** H2, H3, Lead, Body, Accent and Caption. RED/GREEN: each old string fails the first-run test; a saved Caption keeps its text. Landing gates on the final tree: 1,433 Chromium tests across all shards, of which 27 fixture tests need installs and ran in CI, plus static checks, bridge syntax, product ruff and whitespace. Firefox not run locally.
+
 ## R2 engine planning
 
 - **R2 draft prepared (2026-10-08).** Expanded [work order](../plans/2026-10-03-r2-engine.md) on `docs/r2-engine-plan` from `1348268`, after the separate 0.3.1 publication closeout `dc1da53`. D058 resolves the two draft thresholds. Detection, preview and visited-page work have separate PRs, explicit owned files, reviewed atomic landings and focused browser gates; Library/Composer audit evidence remains required before final approval. Current source and two read-only research reports inform the contract; neither constitutes implementation. Plan review and documentation landing checks are pending. RED/GREEN: not applicable to this planning-only delta; 0 new tests, no browser engine verified. Next: independent plan review, then controller commit/push; obtain audit-brief approval before dispatching it.
