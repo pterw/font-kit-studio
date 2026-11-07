@@ -13,7 +13,7 @@ from support import ENGINES
 
 from test_studio_controls import ControlsMixin
 from test_studio_import_link import STATUS, ImportLinkCase
-from test_studio_live import LiveCase
+from test_studio_live import ARRANGE, ArrangeCase, LiveCase
 
 PLAIN = 'Composition imported. Image assets must be reselected.'
 GHOST = 'ghost-face is not in the library, so the first library font is used.'
@@ -204,6 +204,125 @@ class LeavePromptTests(ControlsMixin, LiveCase):
                     self.edit_size(page, self.frame(page), size=60)
                     self.assertTrue(self.prompts(page))
                     self.assertEqual(errors, [])
+
+
+class LeavePromptCoverageTests(ControlsMixin, ArrangeCase):
+    """Each save covers only the parts its output holds: Sync to file and the CSS tab carry styles; the JSON tab carries
+    text and moves (and styles without tokens); the HTML tab carries moves and text only while the page ledger prints them.
+    The page asks while a held part has not been carried."""
+
+    def prompts(self, page):
+        return page.evaluate(PROBE)
+
+    def arranged(self, engine):
+        page, errors = self.open(engine, target=ARRANGE, sync=True)
+        frame = self.wait_ready(page, 11)
+        return page, errors, frame
+
+    def move(self, page, frame):
+        self.select(page, frame, 'card.c')
+        page.locator('#liveMoveFirst').click()
+        self.wait_badge(page, r'^Live · rev 1$')
+
+    def download(self, page, tab):
+        page.locator(f'#codeTab{tab}').click()
+        with page.expect_download():
+            page.locator('#liveCodeDownload').click()
+
+    def test_a_dom_move_still_asks_after_sync_to_file_because_the_file_has_no_moves(self):
+        """Given a saved DOM move, when Sync to file succeeds, then the page still asks."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors, frame = self.arranged(engine)
+                self.move(page, frame)
+                self.assertTrue(self.prompts(page))
+                self.sync_file(page)
+                self.assertTrue(self.prompts(page))
+                self.assertEqual(errors, [])
+
+    def test_a_style_edit_stops_asking_after_sync_to_file_but_not_after_the_html_tab(self):
+        """Given a style edit, Sync to file takes it; the HTML tab holds no styles, so Download there leaves the ask."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors, frame = self.arranged(engine)
+                self.edit_size(page, frame)
+                self.assertTrue(self.prompts(page))
+                self.download(page, 'Html')
+                self.assertTrue(self.prompts(page))
+                self.sync_file(page)
+                self.assertFalse(self.prompts(page))
+                self.assertEqual(errors, [])
+
+    def test_after_sync_to_file_a_live_app_reload_does_not_make_the_page_ask(self):
+        """Given every override written to the file, when the Live App reloads, then closing Studio does not ask."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors, frame = self.arranged(engine)
+                self.edit_size(page, frame)
+                self.sync_file(page)
+                self.assertFalse(self.prompts(page))
+                frame.evaluate('location.reload()')
+                page.locator('#liveReconnectBanner').wait_for(state='visible')
+                self.wait_ready(page, 11)
+                self.assertFalse(self.prompts(page))
+                self.assertEqual(errors, [])
+
+    def edit_text(self, page, frame):
+        self.select(page, frame, 'hero.title')
+        page.locator('#liveText').fill('A new headline')
+        self.wait_badge(page, r'^Live · rev 1$')
+
+    def reload_app(self, page, frame):
+        frame.evaluate('location.reload()')
+        page.locator('#liveReconnectBanner').wait_for(state='visible')
+        self.wait_ready(page, 11)
+
+    def test_a_text_edit_still_asks_after_sync_and_a_live_app_reload_because_the_file_has_no_text(self):
+        """Given a saved text edit, when Sync to file succeeds and the Live App reloads, then the page still asks."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors, frame = self.arranged(engine)
+                self.edit_text(page, frame)
+                self.assertTrue(self.prompts(page))
+                self.sync_file(page)
+                self.assertTrue(self.prompts(page))
+                self.reload_app(page, frame)
+                self.assertTrue(self.prompts(page))
+                self.assertEqual(errors, [])
+
+    def test_a_move_still_asks_after_a_live_app_reload_and_the_html_tab_that_no_longer_prints_it(self):
+        """Given a saved move and a reloaded Live App, when the HTML tab is downloaded, then the page still asks."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors, frame = self.arranged(engine)
+                self.move(page, frame)
+                self.reload_app(page, frame)
+                self.assertTrue(self.prompts(page))
+                self.download(page, 'Html')
+                self.assertTrue(self.prompts(page))
+                self.assertEqual(errors, [])
+
+    def test_the_json_tab_carries_a_text_edit(self):
+        """Given a saved text edit, when the JSON tab is downloaded, then the page stops asking."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors, frame = self.arranged(engine)
+                self.edit_text(page, frame)
+                self.assertTrue(self.prompts(page))
+                self.download(page, 'Json')
+                self.assertFalse(self.prompts(page))
+                self.assertEqual(errors, [])
+
+    def test_the_json_tab_carries_a_dom_move(self):
+        """Given a saved DOM move, when the JSON tab is downloaded, then the page stops asking."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors, frame = self.arranged(engine)
+                self.move(page, frame)
+                self.assertTrue(self.prompts(page))
+                self.download(page, 'Json')
+                self.assertFalse(self.prompts(page))
+                self.assertEqual(errors, [])
 
 
 if __name__ == '__main__':

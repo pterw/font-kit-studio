@@ -6706,21 +6706,42 @@ if (remembered) kitId.value = remembered;
 
   Object.entries(codeTabs).forEach(([key, button]) => button?.addEventListener("click", () => { live.codeTab = key; renderLiveCode(); }));
 
-  // Edits that left the page through Sync, Copy or Download. The key is taken when the output is built, so an edit made
-  // while a write is in flight still counts as unsynced.
-  let carriedKey = null;
-  const carryKey = () => JSON.stringify([live.overrides, live.savedTokens, live.structure, live.changes]);
-  const markCarried = key => { carriedKey = key; };
-  const hasUnsyncedEdits = () => !ledgerEmpty() && carryKey() !== carriedKey;
+  // What each save really holds, in three parts read from durable state and never from the page's ledger: style (overrides
+  // other than text, plus tokens), text (overrides[id].text) and moves (live.structure). Sync to file and the CSS tab
+  // write style only. The JSON tab dumps overrides and moves, so it holds text and moves, and style when there are no
+  // tokens. The HTML tab prints the ledger, so it holds moves and text only while the ledger still has them (a Live App
+  // reload empties it). A key is taken when the output is built, so an edit made while a write is in flight still counts.
+  const carried = { style:null, text:null, moves:null };
+  const heldParts = () => ({
+    style:[...Object.entries(live.overrides).map(([id, { text, ...rest }]) => [id, rest]).filter(([, rest]) => Object.keys(rest).length),
+      ...Object.entries(live.savedTokens)],
+    text:Object.entries(live.overrides).filter(([, patch]) => patch.text !== undefined).map(([id, patch]) => [id, patch.text]),
+    moves:live.structure
+  });
+  const hasUnsyncedEdits = () => Object.entries(heldParts()).some(([name, part]) => part.length > 0 && JSON.stringify(part) !== carried[name]);
+  const ledgerHoldsText = parts => parts.text.every(([id, text]) => live.changes.targets.some(entry => entry.targetId === id && entry.text === text));
+  const SAVE_HOLDS = {
+    css: () => ["style"],
+    html: parts => [structureHeld(live.structure, live.changes.structure) && "moves", ledgerHoldsText(parts) && "text"],
+    json: () => ["text", "moves", Object.keys(live.savedTokens).length ? null : "style"]
+  };
+
+  // Takes the keys now and returns the function that marks as carried what this tab's output holds.
+  function carryTab(tab) {
+    const parts = heldParts();
+    const covers = SAVE_HOLDS[tab](parts);
+    const keys = Object.fromEntries(Object.entries(parts).map(([name, part]) => [name, JSON.stringify(part)]));
+    return () => covers.forEach(name => { if (name) carried[name] = keys[name]; });
+  }
 
   q("liveCodeCopy")?.addEventListener("click", async () => {
-    const key = carryKey();
+    const markCarried = carryTab(live.codeTab);
     const text = liveCodeOutput.textContent;
     const label = CODE_FORMATS[live.codeTab].label;
     try {
       if (!navigator.clipboard?.writeText) throw new Error("Clipboard API unavailable");
       await navigator.clipboard.writeText(text);
-      markCarried(key);
+      markCarried();
       setCodeStatus(`Copied ${label} to the clipboard.`);
     } catch {
       const scratch = document.createElement("textarea");
@@ -6732,20 +6753,20 @@ if (remembered) kitId.value = remembered;
       let copied = false;
       try { copied = document.execCommand("copy"); } catch { copied = false; }
       scratch.remove();
-      if (copied) markCarried(key);
+      if (copied) markCarried();
       setCodeStatus(copied ? `Copied ${label} to the clipboard.` : "Copy failed: select the code and copy it manually.", copied ? "" : "error");
     }
   });
 
   q("liveCodeDownload")?.addEventListener("click", () => {
     const format = CODE_FORMATS[live.codeTab];
-    const key = carryKey();
+    const markCarried = carryTab(live.codeTab);
     const blob = new Blob([liveCodeOutput.textContent], { type:format.mime });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url; a.download = format.file; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 0);
-    markCarried(key);
+    markCarried();
     setCodeStatus(`Downloaded ${format.file}.`);
   });
 
@@ -6808,14 +6829,14 @@ if (remembered) kitId.value = remembered;
         // file or Auto-sync asked.
         if (emptyWriteRefused()) { setCodeStatus(NOTHING_TO_SAVE + " The overrides file was left as it is."); break; }
         const css = liveCss();
-        const key = carryKey();
+        const markCarried = carryTab("css");
         setCodeStatus("Saving…", "saving");
         try {
           const response = await window.fetch(new URL("/__fontkit/overrides.css", location.href), {
             method:"PUT", headers:{ "Content-Type":"text/css" }, body:css, cache:"no-store" });
           const info = await response.json().catch(() => ({}));
           if (!response.ok || info.ok !== true) throw new Error(info.error || `HTTP ${response.status}`);
-          markCarried(key);
+          markCarried();
           if (!live.syncTimer && !live.syncQueued) {
             setCodeStatus(`Saved ${info.bytes ?? css.length} bytes to ${info.path || live.syncPath}.${savedFontsWaiting() ? ` ${FONTS_WAIT_NOTE}` : ""}`, "saved");
           }
