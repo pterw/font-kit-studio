@@ -57,8 +57,7 @@ class BrowserCase(unittest.TestCase):
         return result
 
     def row_geometry(self, page):
-        # Wait for the inherited grid transition to finish before measuring tracks.
-        page.wait_for_timeout(220)
+        # The row has no transition, so its tracks are final as soon as the layout is read.
         return page.locator('.row-layout').evaluate('''layout => {
             const rect = element => {
                 const r = element.getBoundingClientRect();

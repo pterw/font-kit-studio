@@ -66,6 +66,7 @@ Two things have their own version numbers:
   the last Detect; Apply and Detect still report the change.
 - The light and dark mode control now shows in the Composer as well as the
   Library.
+- A Composer row no longer slides each time you click or change something.
 
 ## [0.4.0] - 2026-10-19
 
