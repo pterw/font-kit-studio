@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Font Kit Studio v0.4.0</title>
+<title>Font Kit Studio v0.4.1</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2314213d'/%3E%3Ctext x='16' y='24' font-family='Georgia,serif' font-size='22' font-weight='700' text-anchor='middle' fill='%23ffffff'%3EF%3C/text%3E%3C/svg%3E" />
 
 <!--
@@ -364,6 +364,8 @@ footer {
   gap: 8px;
   min-height: 50px;
 }
+.mode-tabs { display: flex; align-items: center; gap: 8px; }
+.mode-nav-inner #themeToggle { margin-left: auto; flex: none; }
 .mode-tab {
   border: 0;
   border-bottom: 2px solid transparent;
@@ -565,7 +567,6 @@ footer {
   grid-template-columns: 1fr 1fr;
   gap: 24px;
   align-items: center;
-  transition: grid-template-columns .16s ease, gap .16s ease;
 }
 .row-layout.is-collapsed { grid-template-columns: 1fr !important; }
 .row-child {
@@ -693,7 +694,8 @@ footer {
   .canvas-stage { padding: 8px; }
   .composer-canvas { padding: 30px 20px; min-height: 520px; }
   .inspector-grid { grid-template-columns: 1fr; }
-  .mode-nav-inner { overflow-x: auto; }
+  /* The right padding keeps the theme button's focus ring inside the scroll box. */
+  .mode-nav-inner { overflow-x: auto; padding-right: 6px; }
 }
 
 
@@ -1011,7 +1013,7 @@ body.dark .live-overlay-label { color: #111; }
 <body>
 <header>
   <div class="wrap">
-    <p class="eyebrow">Font Kit Studio · v0.4.0</p>
+    <p class="eyebrow">Font Kit Studio · v0.4.1</p>
     <h1>Inspect the faces. Then make them live together.</h1>
     <p class="deck">
       A local-first free-font specimen library and flow-based brand typography composer.
@@ -1020,12 +1022,15 @@ body.dark .live-overlay-label { color: #111; }
     </p>
   </div>
 </header>
-<nav class="mode-nav" aria-label="Studio mode">
+<div class="mode-nav">
   <div class="wrap mode-nav-inner">
-    <button id="modeLibrary" class="mode-tab active" type="button" aria-pressed="true">Library</button>
-    <button id="modeComposer" class="mode-tab" type="button" aria-pressed="false">Composer</button>
+    <nav class="mode-tabs" aria-label="Studio mode">
+      <button id="modeLibrary" class="mode-tab active" type="button" aria-pressed="true">Library</button>
+      <button id="modeComposer" class="mode-tab" type="button" aria-pressed="false">Composer</button>
+    </nav>
+    <button id="themeToggle" class="btn" type="button" aria-pressed="false">Dark mode</button>
   </div>
-</nav>
+</div>
 
 <div id="libraryView" class="mode-view">
 <section class="controls">
@@ -1057,8 +1062,6 @@ body.dark .live-overlay-label { color: #111; }
       <label for="sizeRange">Display size <span id="sizeValue">42px (2.625rem)</span></label>
       <input id="sizeRange" type="range" min="8" max="86" value="42" step="1">
     </div>
-
-    <button id="themeToggle" class="btn" type="button" aria-pressed="false">Dark mode</button>
   </div>
 </section>
 
@@ -2147,12 +2150,12 @@ if (remembered) kitId.value = remembered;
     Wordmark: { element:"div", text:"BRAND", size:24, lineHeight:1, tracking:.32, align:"center", transform:"uppercase" },
     Display: { element:"div", text:"Type something worth reading.", size:72, lineHeight:.95, tracking:-.03, align:"left", transform:"none" },
     H1: { element:"h1", text:"Type something worth reading.", size:64, lineHeight:.98, tracking:-.025, align:"left", transform:"none" },
-    H2: { element:"h2", text:"Things worth remembering", size:38, lineHeight:1.04, tracking:-.015, align:"left", transform:"none" },
-    H3: { element:"h3", text:"September observations", size:26, lineHeight:1.1, tracking:0, align:"left", transform:"none" },
-    Lead: { element:"p", text:"Some moments refuse to disappear quietly.", size:22, lineHeight:1.35, tracking:0, align:"left", transform:"none" },
-    Body: { element:"p", text:"Write down one small moment a night. The ordinary details gather weight in retrospect; a sentence becomes a marker, then a map.", size:16, lineHeight:1.55, tracking:0, align:"left", transform:"none" },
-    Accent: { element:"p", text:"only in retrospect.", size:30, lineHeight:1.15, tracking:0, align:"right", transform:"none" },
-    Caption: { element:"small", text:"Figure 01 — observation field", size:12, lineHeight:1.35, tracking:.02, align:"left", transform:"none" },
+    H2: { element:"h2", text:"A section worth reading", size:38, lineHeight:1.04, tracking:-.015, align:"left", transform:"none" },
+    H3: { element:"h3", text:"A smaller heading", size:26, lineHeight:1.1, tracking:0, align:"left", transform:"none" },
+    Lead: { element:"p", text:"A lead paragraph sets the tone for what follows.", size:22, lineHeight:1.35, tracking:0, align:"left", transform:"none" },
+    Body: { element:"p", text:"Body text carries the reading. Set its size and line height here, then check it at length: a paragraph shows what a single line hides.", size:16, lineHeight:1.55, tracking:0, align:"left", transform:"none" },
+    Accent: { element:"p", text:"a short accent line.", size:30, lineHeight:1.15, tracking:0, align:"right", transform:"none" },
+    Caption: { element:"small", text:"Figure 01 — caption text", size:12, lineHeight:1.35, tracking:.02, align:"left", transform:"none" },
     Metadata: { element:"small", text:"JAN 01 · 24 ITEMS · ANYWHERE", size:11, lineHeight:1.25, tracking:.08, align:"right", transform:"uppercase" },
     Code: { element:"code", text:"font-family: var(--font-display);", size:13, lineHeight:1.45, tracking:0, align:"left", transform:"none" },
     Custom: { element:"div", text:"Custom specimen text", size:24, lineHeight:1.2, tracking:0, align:"left", transform:"none" }
@@ -2358,6 +2361,8 @@ if (remembered) kitId.value = remembered;
 
   let exportFilename = "font-kit-studio-export.txt";
   let exportMime = "text/plain";
+  let exportCarry = null;
+  let exportBuilt = "";
 
   function switchMode(mode) {
     const composer = mode === "composer";
@@ -3166,9 +3171,12 @@ if (remembered) kitId.value = remembered;
     return doc;
   }
 
-  function showExport(title, text, filename, mime) {
+  // `carry` marks the composition file carried; only a save of the text as built calls it (the textarea is editable).
+  function showExport(title, text, filename, mime, carry = null) {
     exportDialogTitle.textContent = title;
     exportDialogText.value = text;
+    exportCarry = carry;
+    exportBuilt = text;
     exportFilename = filename;
     exportMime = mime;
     if (typeof exportDialog.showModal === "function") exportDialog.showModal();
@@ -3176,7 +3184,8 @@ if (remembered) kitId.value = remembered;
   }
 
   function exportCompositionJson() {
-    showExport("Composition JSON", JSON.stringify(serializableState(), null, 2), "font-kit-studio-composition.json", "application/json");
+    const carry = carryTab("composition");
+    showExport("Composition JSON", JSON.stringify(serializableState(), null, 2), "font-kit-studio-composition.json", "application/json", carry);
   }
 
   function cssTokenName(slot, index) {
@@ -3350,16 +3359,29 @@ if (remembered) kitId.value = remembered;
   q("importJson").addEventListener("click", () => importJsonFile.click());
   importJsonFile.addEventListener("change", () => { const file = importJsonFile.files?.[0]; if (file) importCompositionJson(file); importJsonFile.value = ""; });
   closeExportDialog.addEventListener("click", () => exportDialog.close());
+  const markExportCarried = text => { if (exportCarry && text === exportBuilt) exportCarry(); };
   copyExport.addEventListener("click", async () => {
-    try { await navigator.clipboard.writeText(exportDialogText.value); copyExport.textContent = "Copied"; setTimeout(() => copyExport.textContent = "Copy", 900); }
-    catch { exportDialogText.select(); document.execCommand("copy"); }
+    const text = exportDialogText.value;
+    try {
+      await navigator.clipboard.writeText(text);
+      markExportCarried(text);
+      copyExport.textContent = "Copied"; setTimeout(() => copyExport.textContent = "Copy", 900);
+    }
+    catch {
+      exportDialogText.select();
+      let copied = false;
+      try { copied = document.execCommand("copy"); } catch { copied = false; }
+      if (copied) markExportCarried(text);
+    }
   });
   downloadExport.addEventListener("click", () => {
-    const blob = new Blob([exportDialogText.value], { type:exportMime });
+    const text = exportDialogText.value;
+    const blob = new Blob([text], { type:exportMime });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url; a.download = exportFilename; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 0);
+    markExportCarried(text);
   });
 
   
@@ -6727,7 +6749,8 @@ if (remembered) kitId.value = remembered;
   const SAVE_HOLDS = {
     css: () => ["style"],
     html: parts => [structureHeld(live.structure, live.changes.structure) && "moves", ledgerHoldsText(parts) && "text"],
-    json: () => ["text", "moves", Object.keys(live.savedTokens).length ? null : "style"]
+    json: () => ["text", "moves", Object.keys(live.savedTokens).length ? null : "style"],
+    composition: () => ["style", "text", "moves"]
   };
 
   // Takes the keys now and returns the function that marks as carried what this tab's output holds.

@@ -433,6 +433,45 @@ class LiveAppCopyTests(LiveAppCase):
                 self.assertEqual([name for name in visible_names(page) if OLD_NAMES.search(name)], [])
 
 
+class ThemeControlTests(StudioCase):
+    def state(self, page):
+        return page.evaluate("""() => { const b = document.getElementById('themeToggle'); return {
+          shown: b.getClientRects().length > 0, pressed: b.getAttribute('aria-pressed'), label: b.textContent.trim(),
+          background: getComputedStyle(document.body).backgroundColor }; }""")
+
+    def test_theme_control_works_from_both_views(self):
+        """Given Library, when Composer opens and the control is pressed, then the page turns dark in both views; pressing it in Library turns it back."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page = self.studio(engine, mode='library')
+                light = self.state(page)
+                self.assertTrue(light['shown'], 'visible in Library')
+                self.assertEqual((light['pressed'], light['label']), ('false', 'Dark mode'))
+                page.locator('#modeComposer').click()
+                self.assertTrue(self.state(page)['shown'], 'visible in Composer')
+                page.locator('#themeToggle').click()
+                dark = self.state(page)
+                self.assertEqual((dark['pressed'], dark['label']), ('true', 'Light mode'))
+                self.assertNotEqual(dark['background'], light['background'], 'the page background changed')
+                page.locator('#modeLibrary').click()
+                self.assertEqual(self.state(page), dark, 'Library shows the same state')
+                page.locator('#themeToggle').click()
+                self.assertEqual(self.state(page), light, 'pressing it in Library turns it back')
+
+    def test_theme_control_fits_a_phone_in_both_views(self):
+        """Given a 390px viewport, when either view is open, then the control is on screen and the page does not scroll sideways."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page = self.studio(engine, viewport={'width': 390, 'height': 800}, mode='library')
+                for view in ('modeLibrary', 'modeComposer'):
+                    page.locator('#' + view).click()
+                    fit = page.evaluate("""() => { const box = document.getElementById('themeToggle').getBoundingClientRect();
+                      return { left: box.left, right: box.right, width: box.width, wide: document.documentElement.scrollWidth > innerWidth }; }""")
+                    self.assertGreater(fit['width'], 0, view)
+                    self.assertTrue(0 <= fit['left'] and fit['right'] <= 390, f'{view}: {fit}')
+                    self.assertFalse(fit['wide'], f'{view}: the page scrolls sideways')
+
+
 class ModeButtonTests(StudioCase):
     def test_select_and_interact_look_disabled_when_they_are(self):
         for engine in ENGINES:
@@ -467,8 +506,8 @@ class VersionLabelTests(StudioCase):
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page = self.studio(engine, mode='library')
-                self.assertEqual(page.title(), 'Font Kit Studio v0.4.0')
-                self.assertEqual(page.locator('.eyebrow').text_content(), 'Font Kit Studio · v0.4.0')   # CSS upper-cases the display
+                self.assertEqual(page.title(), 'Font Kit Studio v0.4.1')
+                self.assertEqual(page.locator('.eyebrow').text_content(), 'Font Kit Studio · v0.4.1')   # CSS upper-cases the display
 
     def test_limits_are_stated_without_a_version(self):
         for engine in ENGINES:

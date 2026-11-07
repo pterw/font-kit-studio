@@ -12,6 +12,8 @@ Two things have their own version numbers:
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-07
+
 ### Changed
 
 - The Sculptural composition preset is removed and the saved colours have new
@@ -64,6 +66,9 @@ Two things have their own version numbers:
   protocol stays at version 1.
 - Clear preview now always removes the preview, even when the page changed since
   the last Detect; Apply and Detect still report the change.
+- The light and dark mode control now shows in the Composer as well as the
+  Library.
+- A Composer row no longer slides each time you click or change something.
 
 ## [0.4.0] - 2026-10-19
 
@@ -380,7 +385,8 @@ The supplied single-file Studio, preserved at the tag `supplied-v0.1.1`.
 
 - Nested rows and JPEG assets are out of scope.
 
-[Unreleased]: https://github.com/pterw/font-kit-studio/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/pterw/font-kit-studio/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/pterw/font-kit-studio/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/pterw/font-kit-studio/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/pterw/font-kit-studio/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/pterw/font-kit-studio/compare/v0.2.1...v0.3.0

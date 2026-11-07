@@ -42,6 +42,11 @@ class StudioSyncReadsTests(LiveCase):
                 self.assertNotEqual(tokens[0], FRAUNCES, 'the control must differ from the Row-without-family fallback')
                 self.assertEqual(tokens[0], JETBRAINS_MONO, 'the control must carry the chosen family stack')
                 self.assertEqual(tokens[-1], JETBRAINS_MONO)
+                # What was sent is not what took effect: the target applied four updates (rev 1 to 4) and Studio shows
+                # rev 4 only once the last one is acknowledged, so only the exact revision proves the last Sync landed.
+                self.wait_badge(page, r'rev 4$')
+                applied = frame.evaluate('() => document.documentElement.style.getPropertyValue("--font-display")')
+                self.assertEqual(applied.strip(), JETBRAINS_MONO, 'the target must have applied the display token')
                 self.assertEqual(errors, [])
 
 

@@ -234,8 +234,18 @@ class FreshStudioDefaultCopy(LiveCase):
     NEUTRAL_SAMPLE = 'The quick brown fox jumps over the lazy dog.'
     NEUTRAL_HEADLINE = 'Type something worth reading.'
     NEUTRAL_METADATA = 'JAN 01 · 24 ITEMS · ANYWHERE'
+    APPROVED_DEFAULTS = {
+        'H2': 'A section worth reading',
+        'H3': 'A smaller heading',
+        'Lead': 'A lead paragraph sets the tone for what follows.',
+        'Body': 'Body text carries the reading. Set its size and line height here, then check it at length: a paragraph shows what a single line hides.',
+        'Accent': 'a short accent line.',
+        'Caption': 'Figure 01 — caption text',
+    }
+    OLD_WORDS = ('moment', 'remember', 'retrospect', 'observation', 'september')
     OLD_HEADLINE = 'Every life is a night sky.'
     OLD_METADATA = 'SEP 17 · 24 MOMENTS · OTTAWA'
+    OLD_CAPTION = 'Figure 01 — observation field'
 
     def composer(self, engine):
         page, errors = self.open(engine, target=None)
@@ -259,13 +269,17 @@ class FreshStudioDefaultCopy(LiveCase):
                 self.assertEqual(self.role_text(page, 'Display'), self.NEUTRAL_HEADLINE)
                 self.assertEqual(self.role_text(page, 'H1'), self.NEUTRAL_HEADLINE)
                 self.assertEqual(self.role_text(page, 'Metadata'), self.NEUTRAL_METADATA)
-                self.assertEqual(self.role_text(page, 'Body')[:30], 'Write down one small moment a ')
-                self.assertEqual(self.role_text(page, 'Lead'), 'Some moments refuse to disappear quietly.')
-                self.assertEqual(self.role_text(page, 'Caption'), 'Figure 01 — observation field')
+                for role, text in self.APPROVED_DEFAULTS.items():
+                    self.assertEqual(self.role_text(page, role), text)
+                roles = page.locator('#slotInspector [data-bind="role"] option').evaluate_all('(els) => els.map((el) => el.value)')
+                self.assertGreaterEqual(len(roles), 12)
+                for role in roles:
+                    held = [word for word in self.OLD_WORDS if word in self.role_text(page, role).lower()]
+                    self.assertEqual(held, [], role)
                 self.assertEqual(errors, [])
 
     def test_saved_composition_keeps_its_old_text(self):
-        """Given a composition file whose Display and Metadata slots carry the old sentences
+        """Given a composition file whose Display, Metadata and Caption slots carry the old sentences
         When it is imported
         Then the slots show those sentences, not the new defaults."""
         for engine in ENGINES:
@@ -275,10 +289,12 @@ class FreshStudioDefaultCopy(LiveCase):
                 slots = exported['composition']['slots']
                 slots[0].update(role='Display', text=self.OLD_HEADLINE)
                 slots[1].update(role='Metadata', text=self.OLD_METADATA)
+                slots[3].update(role='Caption', text=self.OLD_CAPTION)
                 self.import_document(page, exported)
                 shown = page.locator('.slot-text').evaluate_all('(els) => els.map((el) => el.textContent)')
                 self.assertIn(self.OLD_HEADLINE, shown)
                 self.assertIn(self.OLD_METADATA, shown)
+                self.assertIn(self.OLD_CAPTION, shown)
                 self.assertEqual(errors, [])
 
 
