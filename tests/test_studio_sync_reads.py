@@ -21,6 +21,8 @@ class StudioSyncReadsTests(LiveCase):
         self.assertEqual(len(self.updates(frame)), count)
 
     def test_display_token_ignores_a_row_placed_first(self):
+        """Given the first text slot set to another family, when a Row is moved to the top and Sync runs,
+        then the display token still carries that family's stack, not the Row's fallback."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, errors = self.open(engine)
