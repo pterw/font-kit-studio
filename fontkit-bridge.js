@@ -2419,7 +2419,8 @@
         const canonical = patch[role] ? writeToken(varName, patch[role]) : undefined;
         if (canonical !== undefined) canonicalPatch[varName] = canonical;
       });
-      if (written.length) {
+      // A font override left by an earlier Sync can mask the token, so no change is not proof the page ignores it.
+      if (written.length && !this.hasFontFamilyOverride()) {
         const after = this.computedFontFamilies();
         if (before.every((family, i) => family === after[i])) {
           this.postWarning('token-not-applied', 'global',
@@ -3047,6 +3048,14 @@
     // Every element's computed font-family, in document order, for before/after comparison.
     computedFontFamilies() {
       return Array.from(document.querySelectorAll('*'), (el) => getComputedStyle(el).fontFamily);
+    }
+
+    // True when the bridge itself wrote a font-family override that may be masking a token.
+    hasFontFamilyOverride() {
+      return Array.from(this.styledElements).some((el) => {
+        const state = this.styleState.get(el);
+        return Boolean(state && state.props.has('font-family'));
+      });
     }
 
     // Text slot: a leaf element's whole content, else its first non-empty text node.

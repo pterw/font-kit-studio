@@ -1373,6 +1373,21 @@ class TokenNotAppliedTests(BridgeCase):
                 self.assertIn('Courier New', self.computed(frame, TITLE, 'fontFamily'))
                 self.assertEqual(len(self.warnings(page)), 1)
 
+    def test_a_token_change_masked_by_an_earlier_slot_font_posts_no_warning(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                slot = {'id': 's', 'targetId': TITLE, 'type': 'text',
+                        'fontFamily': 'Courier New, monospace', 'size': 30}
+                self.sync(page, {'tokens': self.FOUR, 'slots': [slot]})
+                value, priority = self.inline(frame, TITLE, 'font-family')
+                self.assertIn('Courier New', value)
+                self.assertEqual(priority, 'important')
+                self.sync(page, {'tokens': {**self.FOUR, '--font-display': 'Tahoma, sans-serif'},
+                                 'slots': [slot]})
+                self.assertEqual(self.messages(page, 'design:warning'), [])
+
     def test_a_sync_to_a_page_that_reads_a_synced_name_posts_no_warning(self):
         for engine in ENGINES:
             with self.subTest(engine=engine):
