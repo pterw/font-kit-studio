@@ -712,6 +712,52 @@ class StudioRoleBoundaryTests(StudioRoleCase):
                 self.assertEqual(errors, [])
 
 
+class StudioPostedWarningTests(StudioRoleCase):
+    KINDS = ('token-not-applied', 'edit-not-reapplied', 'edit-reapply-stopped')
+    HOSTILE = '<img src=x onerror="window.__xss=1">boom'
+    # Runs in Studio's page before its own scripts: records the length of each design:warning message as it arrives,
+    # so the test proves Studio was handed the whole text and its own cap, not the sender's, did the cutting.
+    RECORD_LENGTHS = '''(() => { window.__warningLengths = [];
+      window.addEventListener('message', e => { if (e.data && e.data.type === 'design:warning' && typeof e.data.message === 'string')
+        window.__warningLengths.push(e.data.message.length); }, true); })()'''
+
+    def post(self, frame, kind, message):
+        frame.evaluate('([k, m]) => window.__fontkitBridge.postWarning(k, "global", m)', [kind, message])
+
+    def test_every_new_kind_reaches_studio_as_capped_text_and_nothing_else_does(self):
+        """Given the Live App inside Studio, when it posts each new note kind
+        with hostile markup, then Studio shows it as plain text and runs
+        nothing; long messages are cut to 300 characters, and unknown kinds,
+        prototype names and a wrong session id show nothing."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame, errors = self.open(engine, init=self.RECORD_LENGTHS)
+                for kind in self.KINDS:
+                    self.post(frame, kind, self.HOSTILE)
+                    page.wait_for_function('() => document.querySelectorAll("#liveCodeWarnings li").length === 1')
+                    self.assertIn(self.HOSTILE, page.locator('#bridgeWarningText').inner_text())
+                    self.assertIn(self.HOSTILE, page.locator('#liveCodeWarnings').text_content())
+                    self.assertEqual(page.locator('#bridgeWarning img, #liveCodeWarnings img').count(), 0)
+                    self.assertIsNone(page.evaluate('window.__xss'))
+                    page.locator('#bridgeWarningDismiss').click()
+                frame.evaluate('''() => window.__fontkitBridge.post({type: "design:warning", targetId: "global",
+                    kind: "edit-not-reapplied", message: "x".repeat(900)})''')
+                page.wait_for_function('() => document.querySelectorAll("#liveCodeWarnings li").length === 1')
+                self.assertIn(900, page.evaluate('window.__warningLengths'), 'Studio must receive all 900 characters')
+                self.assertEqual(page.evaluate('() => document.querySelector("#liveCodeWarnings li").textContent.length'), 300)
+                page.locator('#bridgeWarningDismiss').click()
+                for kind in ('made-up', 'constructor', '__proto__'):
+                    self.post(frame, kind, 'should not show')
+                    frame.evaluate('(k) => window.__fontkitBridge.post({type: "design:warning", targetId: "global", kind: k, message: "forced"})', kind)
+                frame.evaluate("""parent.postMessage({type: "design:warning", protocolVersion: 1, sessionId: "fks-wrong",
+                    kind: "edit-not-reapplied", message: "forged note"}, "*")""")
+                self.settle(page, frame)
+                page.wait_for_timeout(250)
+                self.assertFalse(page.locator('#bridgeWarning').is_visible())
+                self.assertEqual(page.locator('#liveCodeWarnings li').count(), 0)
+                self.assertEqual(errors, [])
+
+
 class FnvVectorTests(unittest.TestCase):
     def test_the_digest_helper_matches_the_published_fnv1a_vectors(self):
         """Given the standard FNV-1a 32-bit test vectors, when the test helper hashes them, then it matches, so the
@@ -3869,3 +3915,56 @@ class StudioIdleRoleControlTests(StudioLegacyCase):
                 page.evaluate('(id) => document.getElementById(id).dispatchEvent(new MouseEvent("click", { bubbles: true }))', button_id)
                 self.quiet(page)
                 self.assertEqual(self.surface(page, frame), before)
+
+
+# The Studio page records the receipts the bridge sends it, so a test can read the page version Studio last heard.
+RECEIPTS = """window.__receipts = [];
+addEventListener('message', e => { const d = e.data; if (d && d.type === 'design:roles-applied' && e.origin === 'http://target.test') __receipts.push(JSON.parse(JSON.stringify(d))); });"""
+
+# Registered by the init script, so it runs before Studio's own listener on the window; held notices are kept in __held
+# once the test sets __holdPageNotice. A listener added after load would run after Studio's and hold nothing back.
+HOLD_PAGE_NOTICE = """
+window.__held = [];
+addEventListener('message', e => {
+  const d = e.data;
+  if (window.__holdPageNotice && d && d.type === 'design:roles-page' && e.origin === 'http://target.test') { __held.push(d.pageVersion); e.stopImmediatePropagation(); }
+}, true);"""
+
+
+class StudioStaleClearTests(StudioRoleCase):
+    @per_engine
+    def test_clear_after_the_author_text_changed_removes_the_preview_and_says_so(self, engine):
+        """Given the real bridge with a 24px preview applied and acknowledged, when the page's text changes so its version
+        passes the one Studio holds and Clear preview is pressed before Studio hears of it, then Studio sends that older
+        version, the bridge's owned stylesheet is present before the press and gone after, Studio shows "Preview cleared."
+        and the Body paragraph is back to its original 16px."""
+        page, frame, errors = self.open(engine, init=RECEIPTS + HOLD_PAGE_NOTICE)
+        self.assertTrue(self.detect(page).startswith('Detected'))
+        row = page.locator('#roleRows > li[data-role-id]', has=page.locator('strong', has_text='Body')).first
+        role = row.get_attribute('data-role-id')
+        self.control(page, 'Preview this role', role).check()
+        self.type_value(self.control(page, 'Size (px)', role), '24')
+        self.button(page, APPLY).click()
+        self.wait_status(page, 'Preview applied to 1 role')
+        author = frame.locator('[data-design-role="Body"]')
+        owned = "document.querySelectorAll('style[data-fontkit-role-styles]').length"
+        seen = page.evaluate('__receipts[__receipts.length - 1].pageVersion')
+        self.assertEqual(author.evaluate('el => getComputedStyle(el).fontSize'), '24px')
+        # Hold back the bridge's page notice (no animation frame in the target, none heard by Studio), then change the text.
+        page.evaluate('window.__holdPageNotice = true')
+        frame.evaluate('window.requestAnimationFrame = () => 0')
+        frame.evaluate("document.querySelector('main').append(document.createElement('hr'))")
+        frame.wait_for_function('(seen) => window.__fontkitBridge.pageVersion !== seen', arg=seen, polling=50)   # polling by timer: the target has no animation frames now
+        # The bridge has announced the new version, and Studio's window swallowed that notice before Studio's own listener.
+        frame.wait_for_function('() => __fontkitBridge.announcedVersion === __fontkitBridge.pageVersion', polling=50)
+        page.wait_for_function('() => __held.length >= 1', polling=50)
+        self.assertEqual(frame.evaluate(owned), 1)
+        frame.evaluate("window.__sent = []; addEventListener('message', e => { if (e.data && e.data.type === 'design:roles-clear') __sent.push(e.data); }, true)")
+        self.button(page, CLEAR).click()
+        frame.wait_for_function('window.__sent.length === 1', polling=50)
+        self.wait_status(page, 'Preview cleared.')
+        self.assertEqual(frame.evaluate('__sent[0].pageVersion'), seen)
+        self.assertGreater(page.evaluate('__receipts[__receipts.length - 1].currentPageVersion'), seen)
+        self.assertEqual(frame.evaluate(owned), 0)
+        self.assertEqual(author.evaluate('el => getComputedStyle(el).fontSize'), '16px')
+        self.assertEqual(errors, [])

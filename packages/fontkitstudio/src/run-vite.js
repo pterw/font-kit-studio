@@ -1,5 +1,5 @@
 // What `fontkitstudio` runs in a Vite project: the project's own Vite, with the plugin added
-// in memory (nothing is written to the project), and Studio beside it.
+// in memory (none of the project's files change), and Studio beside it.
 import { openBrowser } from './open-browser.js';
 import { loadVite } from './project.js';
 import { startStudio } from './run-proxy.js';

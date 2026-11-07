@@ -628,6 +628,51 @@ class TargetTests(unittest.TestCase):
                 self.assertEqual(serve.insert_tag(case['input'].encode('latin-1'), tag), expected)
 
 
+class ArgumentTests(unittest.TestCase):
+    def run_main(self, studio, proxy):
+        """Run serve.main with a bind recorder; return (code, binds, stdout, stderr)."""
+        serve, binds = load_serve(), []
+
+        def refuse_to_bind(address, handler):
+            binds.append(address)
+            raise OSError(errno.EACCES, 'recorded, not bound')
+
+        serve.server_class = lambda: refuse_to_bind
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            try:
+                code = serve.main(['http://127.0.0.1:5000', '--quiet', '--studio-port', str(studio),
+                                   '--target-port', str(proxy)])
+            except SystemExit as exit_:
+                code = exit_.code
+        return code, binds, out.getvalue(), err.getvalue()
+
+    def test_a_zero_port_is_refused_by_flag_name(self):
+        """Given one flag set to 0 and the other free, when main runs, then it returns 2 and
+        stderr is exactly the refusal line for that flag, with nothing bound or printed."""
+        free = free_ports()[0]
+        for flag, studio, proxy in (('--studio-port', 0, free), ('--target-port', free, 0)):
+            with self.subTest(flag=flag):
+                code, binds, out, err = self.run_main(studio, proxy)
+                self.assertEqual((code, binds, out), (2, [], ''))
+                self.assertEqual(err, f'serve.py: {flag} 0 is not accepted; pick a port with {flag} <port>\n')
+
+    def test_two_zero_ports_are_not_called_equal(self):
+        """Given both ports 0, when main runs, then stderr is the --studio-port line and
+        does not say the ports must differ."""
+        code, binds, out, err = self.run_main(0, 0)
+        self.assertEqual((code, binds, out), (2, [], ''))
+        self.assertEqual(err, 'serve.py: --studio-port 0 is not accepted; pick a port with --studio-port <port>\n')
+        self.assertNotIn('must differ', err)
+
+    def test_equal_ports_keep_the_old_message(self):
+        """Given both ports 8123, when main runs, then the parser exits 2 with the existing
+        must-differ message and nothing is bound."""
+        code, binds, out, err = self.run_main(8123, 8123)
+        self.assertEqual((code, binds, out), (2, [], ''))
+        self.assertIn('--studio-port and --target-port must differ', err)
+
+
 class ReleaseLayoutTests(unittest.TestCase):
     def setUp(self):
         self.folder = Path(tempfile.mkdtemp(prefix='serve-release-px2-'))

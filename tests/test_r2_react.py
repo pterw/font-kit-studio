@@ -538,12 +538,11 @@ class ReactCorpusTest(unittest.TestCase):
                 self.assertEqual(frame.locator('main').evaluate('el => el.outerHTML'), before)
                 self.assertEqual(self.rendered(frame), plain)
 
-    def test_replaced_react_nodes_keep_the_preview_and_clear_needs_a_fresh_detect(self):
+    def test_replaced_react_nodes_keep_the_preview_and_a_stale_clear_still_removes_it(self):
         """Given three roles applied, when Enter then Space re-render the section, then the old nodes detach,
         the new nodes show the role values and literal rows with the fixture's attributes and no style
-        attribute, the same single owned node keeps its text, a Clear with the receipt's version is rejected
-        page-changed and writes nothing, a fresh Detect reports a greater version, and Clear then removes the
-        node and shows literal rows."""
+        attribute, the same single owned node keeps its text, and a Clear with the receipt's version is
+        accepted (D080) with a greater current version, removing the node and showing literal rows."""
         for engine in ENGINES:
             with self.subTest(engine=engine), self.role_app(engine) as (page, frame, _, detected):
                 receipt = self.send(page, 'design:roles-apply', detected, roles=self.preview_roles(detected))
@@ -581,22 +580,19 @@ class ReactCorpusTest(unittest.TestCase):
                         for handle in old:
                             handle.dispose()
                 owned.dispose()
-                stale = self.send(page, 'design:roles-clear', receipt)
-                self.assert_rejected(stale, 'page-changed')
-                self.assert_untouched(page, frame, 1, [receipt['canonicalCss']], self.previewed())
-                fresh = self.detect(page)
-                self.assertGreater(fresh['pageVersion'], receipt['pageVersion'])
-                cleared = self.send(page, 'design:roles-clear', fresh)
-                self.assertEqual((cleared['type'], cleared['operation']), ('design:roles-applied', 'clear'), cleared)
+                cleared = self.send(page, 'design:roles-clear', receipt)
+                self.assertEqual((cleared['type'], cleared['operation'], cleared['revision']),
+                                 ('design:roles-applied', 'clear', 2), cleared)
+                self.assertGreater(cleared['currentPageVersion'], cleared['pageVersion'])
                 self.assertEqual(frame.evaluate(OWNED), [])
                 self.assertEqual(self.rendered(frame), self.literal())
 
     def test_hot_update_after_apply_keeps_the_role_and_shows_the_new_author_size(self):
         """Given a display role applied after one section replacement, when the title's 40px becomes 44px
         once, then the document, React text and title node survive, the title shows the role's family and
-        weight at 44px, Clear and Apply carrying the receipt's version are rejected page-changed and change
-        nothing, a fresh Detect reports a greater version and the serif 44px 600 baseline, Clear removes the
-        node and shows it, and once the CSS is restored the title shows the literal 40px row."""
+        weight at 44px, Apply carrying the receipt's version is rejected page-changed and changes nothing, Clear
+        carrying it is accepted and removes the node, a fresh Detect reports a greater version and the serif
+        44px 600 baseline, and once the CSS is restored the title shows the literal 40px row."""
         for engine in ENGINES:
             with self.subTest(engine=engine), self.role_app(engine) as (page, frame, project, _):
                 frame.get_by_role('button', name='Replace text', exact=True).press('Enter')
@@ -620,23 +616,22 @@ class ReactCorpusTest(unittest.TestCase):
                     self.assertTrue(node.evaluate('node => node.isConnected'))
                     self.assertEqual(title.text_content(), 'Module title 1')
                     self.assertEqual(title.evaluate(SIGNATURE), shown)
-                    for kind, extra in (('design:roles-clear', {}), ('design:roles-apply', {'roles': roles})):
-                        stale = self.send(page, kind, receipt, **extra)
-                        self.assert_rejected(stale, 'page-changed')
-                        self.assertEqual(page.evaluate('revision'), 1)
-                        self.assertEqual(frame.evaluate(OWNED), [DISPLAY_CSS])
-                        self.assertEqual(title.evaluate(SIGNATURE), shown)
-                    fresh = self.detect(page)
-                    self.assertGreater(fresh['pageVersion'], receipt['pageVersion'])
-                    baseline = {**self.literal()['title'], 'fontSize': 44}
-                    self.assertEqual(self.group(fresh, {'kind': 'author-role', 'name': 'display'})['signatures'],
-                                     [{'style': baseline, 'count': 1}])
-                    cleared = self.send(page, 'design:roles-clear', fresh)
+                    stale = self.send(page, 'design:roles-apply', receipt, roles=roles)
+                    self.assert_rejected(stale, 'page-changed')
+                    self.assertEqual(page.evaluate('revision'), 1)
+                    self.assertEqual(frame.evaluate(OWNED), [DISPLAY_CSS])
+                    self.assertEqual(title.evaluate(SIGNATURE), shown)
+                    cleared = self.send(page, 'design:roles-clear', receipt)
                     self.assertEqual((cleared['type'], cleared['operation'], cleared['revision']),
                                      ('design:roles-applied', 'clear', 2), cleared)
                     self.assertEqual((cleared['roles'], cleared['canonicalCss'], cleared['cssHash'],
                                       cleared['outcomesComplete'], cleared['outcomes']), ([], '', EMPTY_HASH, True, []))
                     self.assertEqual(frame.evaluate(OWNED), [])
+                    fresh = self.detect(page)
+                    self.assertGreater(fresh['pageVersion'], receipt['pageVersion'])
+                    baseline = {**self.literal()['title'], 'fontSize': 44}
+                    self.assertEqual(self.group(fresh, {'kind': 'author-role', 'name': 'display'})['signatures'],
+                                     [{'style': baseline, 'count': 1}])
                     self.assertEqual(title.evaluate(SIGNATURE), baseline)
                 finally:
                     try:
@@ -649,8 +644,8 @@ class ReactCorpusTest(unittest.TestCase):
         """Given a display role applied while the frame callbacks are withheld, so the bridge measures from its
         250 ms timer, when a hot update lands after the commit and before that timer, then one receipt
         carries the committed role, css and digest with a newer current version, incomplete page-changed
-        and no outcomes; Apply and Clear carrying the Detect's version are rejected page-changed
-        and change nothing, and after a fresh Detect the same Clear is accepted."""
+        and no outcomes; Apply carrying the Detect's version is rejected page-changed and changes nothing,
+        and Clear carrying it is accepted and removes the node."""
         for engine in ENGINES:
             with self.subTest(engine=engine), self.role_app(engine) as (page, frame, project, detected):
                 display = self.group(detected, {'kind': 'author-role', 'name': 'display'})
@@ -683,15 +678,17 @@ class ReactCorpusTest(unittest.TestCase):
                         "(id) => messages('design:roles-applied').filter(m => m.requestId === id).length",
                         receipt['requestId']), 1)
                     shown = {**self.literal()['title'], **DISPLAY, 'fontSize': 44}
-                    for kind, extra in (('design:roles-apply', {'roles': roles}), ('design:roles-clear', {})):
-                        stale = self.send(page, kind, receipt, **extra)
-                        self.assert_rejected(stale, 'page-changed')
-                        self.assertEqual(page.evaluate('revision'), 1)
-                        self.assertEqual(frame.evaluate(OWNED), [DISPLAY_CSS])
-                        self.assertEqual(title.evaluate(SIGNATURE), shown)
-                    fresh = self.detect(page)
-                    cleared = self.send(page, 'design:roles-clear', fresh)
-                    self.assertEqual((cleared['type'], cleared['operation']), ('design:roles-applied', 'clear'), cleared)
+                    stale = self.send(page, 'design:roles-apply', receipt, roles=roles)
+                    self.assert_rejected(stale, 'page-changed')
+                    self.assertEqual(page.evaluate('revision'), 1)
+                    self.assertEqual(frame.evaluate(OWNED), [DISPLAY_CSS])
+                    self.assertEqual(title.evaluate(SIGNATURE), shown)
+                    cleared = self.send(page, 'design:roles-clear', receipt)
+                    self.assertEqual((cleared['type'], cleared['operation'], cleared['revision']),
+                                     ('design:roles-applied', 'clear', 2), cleared)
+                    self.assertEqual((cleared['roles'], cleared['canonicalCss'], cleared['outcomesComplete'],
+                                      cleared['outcomes']), ([], '', True, []))
+                    self.assertEqual(frame.evaluate(OWNED), [])
                 finally:
                     self.restore_css(frame, css, original)
 

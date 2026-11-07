@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Font Kit Studio v0.4.0</title>
+<title>Font Kit Studio v0.4.1</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2314213d'/%3E%3Ctext x='16' y='24' font-family='Georgia,serif' font-size='22' font-weight='700' text-anchor='middle' fill='%23ffffff'%3EF%3C/text%3E%3C/svg%3E" />
 
 <!--
@@ -364,6 +364,8 @@ footer {
   gap: 8px;
   min-height: 50px;
 }
+.mode-tabs { display: flex; align-items: center; gap: 8px; }
+.mode-nav-inner #themeToggle { margin-left: auto; flex: none; }
 .mode-tab {
   border: 0;
   border-bottom: 2px solid transparent;
@@ -565,7 +567,6 @@ footer {
   grid-template-columns: 1fr 1fr;
   gap: 24px;
   align-items: center;
-  transition: grid-template-columns .16s ease, gap .16s ease;
 }
 .row-layout.is-collapsed { grid-template-columns: 1fr !important; }
 .row-child {
@@ -693,7 +694,8 @@ footer {
   .canvas-stage { padding: 8px; }
   .composer-canvas { padding: 30px 20px; min-height: 520px; }
   .inspector-grid { grid-template-columns: 1fr; }
-  .mode-nav-inner { overflow-x: auto; }
+  /* The right padding keeps the theme button's focus ring inside the scroll box. */
+  .mode-nav-inner { overflow-x: auto; padding-right: 6px; }
 }
 
 
@@ -1011,7 +1013,7 @@ body.dark .live-overlay-label { color: #111; }
 <body>
 <header>
   <div class="wrap">
-    <p class="eyebrow">Font Kit Studio · v0.4.0</p>
+    <p class="eyebrow">Font Kit Studio · v0.4.1</p>
     <h1>Inspect the faces. Then make them live together.</h1>
     <p class="deck">
       A local-first free-font specimen library and flow-based brand typography composer.
@@ -1020,12 +1022,15 @@ body.dark .live-overlay-label { color: #111; }
     </p>
   </div>
 </header>
-<nav class="mode-nav" aria-label="Studio mode">
+<div class="mode-nav">
   <div class="wrap mode-nav-inner">
-    <button id="modeLibrary" class="mode-tab active" type="button" aria-pressed="true">Library</button>
-    <button id="modeComposer" class="mode-tab" type="button" aria-pressed="false">Composer</button>
+    <nav class="mode-tabs" aria-label="Studio mode">
+      <button id="modeLibrary" class="mode-tab active" type="button" aria-pressed="true">Library</button>
+      <button id="modeComposer" class="mode-tab" type="button" aria-pressed="false">Composer</button>
+    </nav>
+    <button id="themeToggle" class="btn" type="button" aria-pressed="false">Dark mode</button>
   </div>
-</nav>
+</div>
 
 <div id="libraryView" class="mode-view">
 <section class="controls">
@@ -1050,15 +1055,13 @@ body.dark .live-overlay-label { color: #111; }
 
     <div class="field">
       <label for="sampleText">Large specimen text</label>
-      <input id="sampleText" type="text" value="The sky remembers what we forget.">
+      <input id="sampleText" type="text" value="The quick brown fox jumps over the lazy dog.">
     </div>
 
     <div class="field">
       <label for="sizeRange">Display size <span id="sizeValue">42px (2.625rem)</span></label>
       <input id="sizeRange" type="range" min="8" max="86" value="42" step="1">
     </div>
-
-    <button id="themeToggle" class="btn" type="button" aria-pressed="false">Dark mode</button>
   </div>
 </section>
 
@@ -1119,7 +1122,7 @@ body.dark .live-overlay-label { color: #111; }
         <p id="bridgeWarning" class="bridge-warning" role="status" hidden><span id="bridgeWarningText"></span> <button id="bridgeWarningDismiss" class="btn" type="button">Dismiss</button></p>
         <p id="targetUrlProblem" class="bridge-hint" role="alert" hidden></p>
         <p id="targetUrlHint" class="bridge-hint">Enter your app's URL</p>
-        <p id="bridgeHint" class="bridge-hint" hidden>Either nothing is running there, or the page does not load fontkit-bridge.js. Add <code>&lt;script src="fontkit-bridge.js"&gt;&lt;/script&gt;</code> after the page's own scripts, reload it, then press Connect Live App. <span id="bridgeHintServe" hidden>Start the dev server: <code>python scripts/serve.py</code></span></p>
+        <p id="bridgeHint" class="bridge-hint" hidden>Either nothing is running there, or the page does not load fontkit-bridge.js. Add <code>&lt;script src="fontkit-bridge.js"&gt;&lt;/script&gt;</code> after the page's own scripts, reload it, then press Connect Live App. <span id="bridgeHintServe" hidden>Start the dev server: <code>python scripts/serve.py</code>.</span> If this is an error page (404 or 400), the proxy adds no bridge to it; go back to a normal page.</p>
       </div>
 
       <div class="c-field span-3">
@@ -1192,6 +1195,7 @@ body.dark .live-overlay-label { color: #111; }
         <input id="importJsonFile" type="file" accept="application/json,.json" hidden>
       </div>
       <div id="syncToAppHint" class="composer-status" data-hint-for="btnSyncToApp" hidden></div>
+      <div id="syncRoleNote" class="composer-status">Sync also restyles elements by role inline. Changes, Copy and JSON list the tokens only.</div>
       <div id="composerStatus" class="composer-status">Editorial — Image + Body Row preset ready. Specimens show fallback fonts until you load the free fonts.</div>
       <div id="composerFontHint" class="composer-status">Loading free fonts contacts Google Fonts and sends your IP address and the font names.</div>
     </section>
@@ -1503,8 +1507,7 @@ const kitStatus = document.getElementById("kitStatus");
 let activeFilter = "all";
 
 function cssStack(f) {
-  const names = [f.css || f.family, ...(f.aliases || [])].map(name => `"${name}"`);
-  return `${names.join(", ")}, ${f.fallback}`;
+  return `"${f.css || f.family}", ${f.fallback}`;
 }
 
 function renderCard(font, index) {
@@ -1799,7 +1802,7 @@ function loadAdobeKit() {
   link.rel = "stylesheet";
   link.href = `https://use.typekit.net/${id}.css`;
   link.onload = async () => {
-    kitStatus.textContent = `Loaded https://use.typekit.net/${id}.css`;
+    kitStatus.textContent = "Loaded in Studio only. The Live App does not get this kit; add it to the app itself.";
     try { await document.fonts.ready; } catch (_) {}
   };
   link.onerror = () => {
@@ -2145,15 +2148,15 @@ if (remembered) kitId.value = remembered;
 
   const ROLE_DEFAULTS = {
     Wordmark: { element:"div", text:"BRAND", size:24, lineHeight:1, tracking:.32, align:"center", transform:"uppercase" },
-    Display: { element:"div", text:"Every life is a night sky.", size:72, lineHeight:.95, tracking:-.03, align:"left", transform:"none" },
-    H1: { element:"h1", text:"Every life is a night sky.", size:64, lineHeight:.98, tracking:-.025, align:"left", transform:"none" },
-    H2: { element:"h2", text:"Things worth remembering", size:38, lineHeight:1.04, tracking:-.015, align:"left", transform:"none" },
-    H3: { element:"h3", text:"September observations", size:26, lineHeight:1.1, tracking:0, align:"left", transform:"none" },
-    Lead: { element:"p", text:"Some moments refuse to disappear quietly.", size:22, lineHeight:1.35, tracking:0, align:"left", transform:"none" },
-    Body: { element:"p", text:"Write down one small moment a night. The ordinary details gather weight in retrospect; a sentence becomes a marker, then a map.", size:16, lineHeight:1.55, tracking:0, align:"left", transform:"none" },
-    Accent: { element:"p", text:"only in retrospect.", size:30, lineHeight:1.15, tracking:0, align:"right", transform:"none" },
-    Caption: { element:"small", text:"Figure 01 — observation field", size:12, lineHeight:1.35, tracking:.02, align:"left", transform:"none" },
-    Metadata: { element:"small", text:"SEP 17 · 24 MOMENTS · OTTAWA", size:11, lineHeight:1.25, tracking:.08, align:"right", transform:"uppercase" },
+    Display: { element:"div", text:"Type something worth reading.", size:72, lineHeight:.95, tracking:-.03, align:"left", transform:"none" },
+    H1: { element:"h1", text:"Type something worth reading.", size:64, lineHeight:.98, tracking:-.025, align:"left", transform:"none" },
+    H2: { element:"h2", text:"A section worth reading", size:38, lineHeight:1.04, tracking:-.015, align:"left", transform:"none" },
+    H3: { element:"h3", text:"A smaller heading", size:26, lineHeight:1.1, tracking:0, align:"left", transform:"none" },
+    Lead: { element:"p", text:"A lead paragraph sets the tone for what follows.", size:22, lineHeight:1.35, tracking:0, align:"left", transform:"none" },
+    Body: { element:"p", text:"Body text carries the reading. Set its size and line height here, then check it at length: a paragraph shows what a single line hides.", size:16, lineHeight:1.55, tracking:0, align:"left", transform:"none" },
+    Accent: { element:"p", text:"a short accent line.", size:30, lineHeight:1.15, tracking:0, align:"right", transform:"none" },
+    Caption: { element:"small", text:"Figure 01 — caption text", size:12, lineHeight:1.35, tracking:.02, align:"left", transform:"none" },
+    Metadata: { element:"small", text:"JAN 01 · 24 ITEMS · ANYWHERE", size:11, lineHeight:1.25, tracking:.08, align:"right", transform:"uppercase" },
     Code: { element:"code", text:"font-family: var(--font-display);", size:13, lineHeight:1.45, tracking:0, align:"left", transform:"none" },
     Custom: { element:"div", text:"Custom specimen text", size:24, lineHeight:1.2, tracking:0, align:"left", transform:"none" }
   };
@@ -2178,6 +2181,7 @@ if (remembered) kitId.value = remembered;
     "gotham": "work-sans", "sentinel": "source-serif-4", "ltr-ncnd-variable": "jetbrains-mono",
     "ballinger-mono": "jetbrains-mono"
   };
+  const namesFamily = family => fonts.some(f => f.family === family) || Object.hasOwn(LEGACY_FAMILIES, family);
   const byFamily = family => fonts.find(f => f.family === family)
     || (typeof family === "string" && Object.hasOwn(LEGACY_FAMILIES, family) ? fonts.find(f => f.family === LEGACY_FAMILIES[family]) : null)
     || fonts[0];
@@ -2357,6 +2361,8 @@ if (remembered) kitId.value = remembered;
 
   let exportFilename = "font-kit-studio-export.txt";
   let exportMime = "text/plain";
+  let exportCarry = null;
+  let exportBuilt = "";
 
   function switchMode(mode) {
     const composer = mode === "composer";
@@ -2389,7 +2395,9 @@ if (remembered) kitId.value = remembered;
       link.dataset.composerKit = "true";
       link.onload = () => {
         loaded += 1;
-        composerStatus.textContent = `Loaded ${loaded}/${ids.length} Adobe kit stylesheet${ids.length === 1 ? "" : "s"}.`;
+        composerStatus.textContent = loaded === ids.length
+          ? "Loaded in Studio only. The Live App does not get this kit; add it to the app itself."
+          : `Loaded ${loaded}/${ids.length} Adobe kit stylesheet${ids.length === 1 ? "" : "s"}.`;
       };
       link.onerror = () => { composerStatus.textContent = `Could not load kit ${id}. Check the ID / project settings.`; };
       document.head.appendChild(link);
@@ -2417,7 +2425,7 @@ if (remembered) kitId.value = remembered;
 
   function freshId() { return crypto.randomUUID ? crypto.randomUUID() : `slot-${Date.now()}-${Math.random()}`; }
 
-  function hydrateSlot(raw, depth=0) {
+  function hydrateSlot(raw, depth=0, missing=null) {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
       throw new Error("Each slot must be an object; check composition.slots and row children.");
     }
@@ -2428,11 +2436,14 @@ if (remembered) kitId.value = remembered;
         throw new Error("Row slot children must be an array.");
       }
       const rawChildren = Array.isArray(raw.children) ? raw.children.slice(0, 4) : [];
-      const children = rawChildren.map(child => hydrateSlot(child, 1)).filter(child => child.type !== "row");
+      const hydrated = rawChildren.map(child => hydrateSlot(child, 1, missing));
+      const children = hydrated.filter(child => child.type !== "row");
       while (children.length < 2) children.push(makeTextSlot("Custom", DEFAULT_FAMILY));
       const count = rowNumber(raw.childCount, children.length, 2, 4, true);
       while (children.length < count) children.push(makeTextSlot("Custom", DEFAULT_FAMILY));
       children.length = count;
+      // Only slots that survive the filter and the truncation count as named by the file.
+      hydrated.forEach(child => children.includes(child) || (missing && missing.delete(child)));
       const row = makeRowSlot({ ...raw, children, childCount:count });
       row.id = freshId();
       row.children = row.children.map(child => ({ ...child, id:freshId(), assetDataUrl:child.type === "image" ? "" : child.assetDataUrl }));
@@ -2450,6 +2461,7 @@ if (remembered) kitId.value = remembered;
     });
     if (type === "text") {
       slot.role = role;
+      if (missing && slot.family && !namesFamily(slot.family)) missing.set(slot, slot.family);
       slot.family = byFamily(slot.family).family;
       slot.element = ELEMENTS.includes(slot.element) ? slot.element : base.element;
       slot.transform = TRANSFORMS.includes(slot.transform) ? slot.transform : base.transform;
@@ -3159,9 +3171,12 @@ if (remembered) kitId.value = remembered;
     return doc;
   }
 
-  function showExport(title, text, filename, mime) {
+  // `carry` marks the composition file carried; only a save of the text as built calls it (the textarea is editable).
+  function showExport(title, text, filename, mime, carry = null) {
     exportDialogTitle.textContent = title;
     exportDialogText.value = text;
+    exportCarry = carry;
+    exportBuilt = text;
     exportFilename = filename;
     exportMime = mime;
     if (typeof exportDialog.showModal === "function") exportDialog.showModal();
@@ -3169,7 +3184,8 @@ if (remembered) kitId.value = remembered;
   }
 
   function exportCompositionJson() {
-    showExport("Composition JSON", JSON.stringify(serializableState(), null, 2), "font-kit-studio-composition.json", "application/json");
+    const carry = carryTab("composition");
+    showExport("Composition JSON", JSON.stringify(serializableState(), null, 2), "font-kit-studio-composition.json", "application/json", carry);
   }
 
   function cssTokenName(slot, index) {
@@ -3293,7 +3309,8 @@ if (remembered) kitId.value = remembered;
         background.saved = currentColorName(background.saved);
         if (!["custom", "tailwind", "saved"].includes(background.source)) background.source = defaults.source;
         if (!CSS.supports("color", background.hex)) background.hex = defaults.hex;
-        const slots = incoming.slots.slice(0,8).map(raw => hydrateSlot(raw, 0));
+        const unknownFamilies = new Map();
+        const slots = incoming.slots.slice(0,8).map(raw => hydrateSlot(raw, 0, unknownFamilies));
         if (!slots.length) slots.push(makeTextSlot("Custom", DEFAULT_FAMILY));
         const width = String(incoming.canvasWidth || "960");
         const kitIds = Array.isArray(data.kitIds) ? normalizeKitIds(data.kitIds.filter(id => typeof id === "string").join(", ")) : [];
@@ -3328,7 +3345,8 @@ if (remembered) kitId.value = remembered;
         composerStatus.textContent = (wasLinked
           ? "Imported; the link to the page is off. Press Sync to Live App to send this composition."
           : "Composition imported. Image assets must be reselected.")
-          + (droppedEdits ? ` ${droppedEdits} queued edit${droppedEdits === 1 ? " that had" : "s that had"} not reached the page ${droppedEdits === 1 ? "was" : "were"} dropped.` : "");
+          + (droppedEdits ? ` ${droppedEdits} queued edit${droppedEdits === 1 ? " that had" : "s that had"} not reached the page ${droppedEdits === 1 ? "was" : "were"} dropped.` : "")
+          + [...new Set(unknownFamilies.values())].map(family => ` ${family} is not in the library, so the first library font is used.`).join("");
       } catch (err) {
         composerStatus.textContent = `Import failed: ${err.message}`;
       }
@@ -3341,16 +3359,29 @@ if (remembered) kitId.value = remembered;
   q("importJson").addEventListener("click", () => importJsonFile.click());
   importJsonFile.addEventListener("change", () => { const file = importJsonFile.files?.[0]; if (file) importCompositionJson(file); importJsonFile.value = ""; });
   closeExportDialog.addEventListener("click", () => exportDialog.close());
+  const markExportCarried = text => { if (exportCarry && text === exportBuilt) exportCarry(); };
   copyExport.addEventListener("click", async () => {
-    try { await navigator.clipboard.writeText(exportDialogText.value); copyExport.textContent = "Copied"; setTimeout(() => copyExport.textContent = "Copy", 900); }
-    catch { exportDialogText.select(); document.execCommand("copy"); }
+    const text = exportDialogText.value;
+    try {
+      await navigator.clipboard.writeText(text);
+      markExportCarried(text);
+      copyExport.textContent = "Copied"; setTimeout(() => copyExport.textContent = "Copy", 900);
+    }
+    catch {
+      exportDialogText.select();
+      let copied = false;
+      try { copied = document.execCommand("copy"); } catch { copied = false; }
+      if (copied) markExportCarried(text);
+    }
   });
   downloadExport.addEventListener("click", () => {
-    const blob = new Blob([exportDialogText.value], { type:exportMime });
+    const text = exportDialogText.value;
+    const blob = new Blob([text], { type:exportMime });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url; a.download = exportFilename; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 0);
+    markExportCarried(text);
   });
 
   
@@ -4817,7 +4848,7 @@ if (remembered) kitId.value = remembered;
   // npx fontkitstudio serves Studio from its own loopback server with a per-run ?token=. That is the only signal, read once.
   // That server has no sync endpoint and Studio is on loopback there, so BLOCKED_LOOPBACK_TEXT cannot show under it.
   const SERVED_BY_PACKAGE = Boolean(new URLSearchParams(location.search).get("token"));
-  const NPX_BRIDGE_HINT = "npx fontkitstudio adds the bridge to the page itself. If Font Kit Studio does not connect, the terminal where the command runs says why.";
+  const NPX_BRIDGE_HINT = "npx fontkitstudio adds the bridge to the page itself. If Font Kit Studio does not connect, the terminal where the command runs says why. If this is an error page (404 or 400), the proxy adds no bridge to it; go back to a normal page.";
   const NPX_BRIDGE_TITLE = "npx fontkitstudio adds the bridge to the page itself.";
   const NPX_EMPTY_INSPECTOR = "Enter the URL of a localhost app, then press Connect Live App. npx fontkitstudio adds the bridge to the page itself.";
   const NPX_SYNC_TEXT = "Sync to file is not available under npx fontkitstudio. Use Copy or Download in the CSS tab.";
@@ -5924,7 +5955,7 @@ if (remembered) kitId.value = remembered;
       fontFamily: typeof c.fontFamily === "string" ? c.fontFamily : "",
       fontSize: roundTo(size, 2),
       fontWeight: weight,
-      lineHeight: !Number.isFinite(lineNum) ? 1.2 : lineRaw.endsWith("px") ? roundTo(lineNum / size, 3) : roundTo(lineNum, 3),
+      lineHeight: !Number.isFinite(lineNum) ? "" : lineRaw.endsWith("px") ? roundTo(lineNum / size, 3) : roundTo(lineNum, 3),
       letterSpacing: !Number.isFinite(spacingNum) ? 0 : spacingRaw.endsWith("px") ? roundTo(spacingNum / size, 4) : roundTo(spacingNum, 4),
       color: cssColorToHex(c.color) || String(c.color || ""),
       textAlign: typeof c.textAlign === "string" && c.textAlign ? c.textAlign : "start",
@@ -6036,18 +6067,18 @@ if (remembered) kitId.value = remembered;
     const editable = isPlainObject(target.editable) ? target.editable : {};
     const values = liveValues(target.id);
     const weights = Array.isArray(target.constraints?.fontWeights) ? target.constraints.fontWeights.filter(Number.isFinite) : [];
-    const familyOptions = fonts.map(f => `<option value="${escapeAttr(cssStack(f))}">${escapeAttr(f.name)}</option>`).join("");
+    const familyChoices = fonts.map(f => `<option value="${escapeAttr(cssStack(f))}">${escapeAttr(f.name)}</option>`).join("");
     let body = `
       <div class="inspector-title-row"><h2 id="liveTargetName" data-target-id="${escapeAttr(target.id)}">${escapeAttr(target.name || target.id)}</h2><span class="inspector-index">${escapeAttr([target.role, target.tag].filter(Boolean).join(" · ").toUpperCase())}</span></div>
       <p class="inspector-note live-target-id"><code>${escapeAttr(target.id)}</code>${target.stable === false ? " · auto-discovered — add data-design-id for a stable selector" : ""}</p>
       <div class="inspector-grid">`;
     if (editable.typography) {
       body += `
-        <div class="inspector-field full"><label for="liveFontFamily">Family</label><select id="liveFontFamily">${familyOptions}</select>${freeFontsAllowed ? "" : '<p class="inspector-note" data-load-note>Choosing a library family loads it from Google Fonts.</p>'}</div>
+        <div class="inspector-field full"><label for="liveFontFamily">Family</label><select id="liveFontFamily">${familyChoices}</select>${freeFontsAllowed ? "" : '<p class="inspector-note" data-load-note>Choosing a library family loads it from Google Fonts.</p>'}</div>
         <div class="inspector-field"><label for="liveFontSize">Size (px)</label><input id="liveFontSize" type="number" min="4" max="400" step="1" inputmode="decimal"></div>
         <div class="inspector-field"><label for="liveFontWeight">Weight</label><input id="liveFontWeight" type="number" min="1" max="1000" step="${weights.length ? 100 : 1}" inputmode="numeric"></div>
         ${weights.length ? `<p id="liveWeightNote" class="inspector-note inspector-field full">Allowed weights: ${weights.map(Number).join(" · ")} — the Live App snaps to the nearest.</p>` : ""}
-        <div class="inspector-field"><label for="liveLineHeight">Line height</label><input id="liveLineHeight" type="number" min="0.5" max="5" step="0.05" inputmode="decimal"></div>
+        <div class="inspector-field"><label for="liveLineHeight">Line height</label><input id="liveLineHeight" type="number" min="0.5" max="5" step="0.05" inputmode="decimal" placeholder="normal"></div>
         <div class="inspector-field"><label for="liveLetterSpacing">Tracking (em)</label><input id="liveLetterSpacing" type="number" min="-0.5" max="2" step="0.005" inputmode="decimal"></div>
         <div class="inspector-field full"><label for="liveTextTransform">Transform</label><select id="liveTextTransform">${optionsHtml(LIVE_TRANSFORM, values.textTransform)}</select></div>`;
     }
@@ -6098,10 +6129,13 @@ if (remembered) kitId.value = remembered;
     // Text that is not a colour is never sent: the colour that is applied stays, and the message says so.
     const colourMessage = text => { const el = q("liveColorMessage"); if (el) { el.textContent = text; el.hidden = !text; } };
     q("liveColor")?.addEventListener("input", event => {
+      // The picker only knows #rrggbb: a swatch move keeps the alpha of the seeded or acknowledged colour.
+      const alpha = String(cssColorToHex(liveValues(target.id).color)).match(/^#[0-9a-f]{6}([0-9a-f]{2})$/)?.[1] || "";
+      const sent = event.target.value + alpha;
       const hex = q("liveColorHex");
-      if (hex) hex.value = event.target.value;
+      if (hex) hex.value = sent;
       colourMessage("");
-      queueLivePatch(target.id, "color", event.target.value);
+      queueLivePatch(target.id, "color", sent);
     });
     q("liveColorHex")?.addEventListener("input", () => colourMessage(""));
     q("liveColorHex")?.addEventListener("change", event => {
@@ -6399,16 +6433,17 @@ if (remembered) kitId.value = remembered;
   });
 
   // ---- runtime warnings from the target (design:warning) --------------------------------------------
+  const WARNING_KINDS = ["runtime-error", "token-not-applied", "edit-not-reapplied", "edit-reapply-stopped"];
   function noteWarning(data) {
     const message = typeof data.message === "string" ? data.message.trim().slice(0, 300) : "";
-    if (data.kind !== "runtime-error" || !message) return;
-    live.warnings.push({ message, targetId: typeof data.targetId === "string" ? data.targetId.slice(0, 300) : "" });
+    if (!WARNING_KINDS.includes(data.kind) || !message) return;
+    live.warnings.push({ kind: data.kind, message, targetId: typeof data.targetId === "string" ? data.targetId.slice(0, 300) : "" });
     if (live.warnings.length > MAX_WARNINGS) live.warnings.shift();
     renderWarnings();
   }
 
   function warningLabel(warning) {
-    return warning.targetId && warning.targetId !== "global" ? (live.targetMeta[warning.targetId]?.name || warning.targetId) : "";
+    return warning.targetId && warning.targetId !== "global" ? ((Object.hasOwn(live.targetMeta, warning.targetId) && live.targetMeta[warning.targetId]?.name) || warning.targetId) : "";
   }
 
   // textContent only: the message comes from the (untrusted) page under edit.
@@ -6418,8 +6453,12 @@ if (remembered) kitId.value = remembered;
     bridgeWarning.hidden = !latest;
     if (latest) {
       const label = warningLabel(latest);
-      bridgeWarningText.textContent = `Runtime error in the Live App${label ? ` after changing ${label}` : ""}: ${latest.message}`;
+      bridgeWarningText.textContent = latest.kind === "runtime-error"
+        ? `Runtime error in the Live App${label ? ` after changing ${label}` : ""}: ${latest.message}`
+        : `Note from the Live App${label ? ` about ${label}` : ""}: ${latest.message}`;
     }
+    liveCodeWarnings.setAttribute("aria-label", live.warnings.length && live.warnings.every(warning => warning.kind !== "runtime-error")
+      ? "Notes from the Live App" : "Runtime warnings from the Live App");
     liveCodeWarnings.hidden = !live.warnings.length;
     liveCodeWarnings.replaceChildren(...live.warnings.map(warning => {
       const item = document.createElement("li");
@@ -6689,12 +6728,47 @@ if (remembered) kitId.value = remembered;
 
   Object.entries(codeTabs).forEach(([key, button]) => button?.addEventListener("click", () => { live.codeTab = key; renderLiveCode(); }));
 
+  // What each save really holds, in three parts read from durable state and never from the page's ledger: style (overrides
+  // other than text, plus tokens), text (overrides[id].text) and moves (live.structure). Sync to file and the CSS tab
+  // write style only. The JSON tab dumps overrides and moves, so it holds text and moves, and style when there are no
+  // tokens. The HTML tab prints the ledger, so it holds moves and text only while the ledger still has them (a Live App
+  // reload empties it). A key is taken when the output is built, so an edit made while a write is in flight still counts.
+  const carried = { style:null, text:null, moves:null };
+  const heldParts = () => ({
+    style:[...Object.entries(live.overrides).map(([id, { text, ...rest }]) => [id, rest]).filter(([, rest]) => Object.keys(rest).length),
+      ...Object.entries(live.savedTokens)],
+    text:Object.entries(live.overrides).filter(([, patch]) => patch.text !== undefined).map(([id, patch]) => [id, patch.text]),
+    moves:live.structure
+  });
+  // A user edit the Live App has not acknowledged sits in the queue, in flight or timed out, outside every store above.
+  // A save cannot carry it, so it keeps the page asking. Reapply ops and an op an import replaced are not the user's edit.
+  const hasPendingEdit = () => [...live.queue, live.inFlight, ...live.timedOut.values()]
+    .some(op => op && (op.kind === "update" || op.kind === "move") && !op.reapply && !op.importSuperseded);
+  const hasUnsyncedEdits = () => hasPendingEdit() || Object.entries(heldParts()).some(([name, part]) => part.length > 0 && JSON.stringify(part) !== carried[name]);
+  const ledgerHoldsText = parts => parts.text.every(([id, text]) => live.changes.targets.some(entry => entry.targetId === id && entry.text === text));
+  const SAVE_HOLDS = {
+    css: () => ["style"],
+    html: parts => [structureHeld(live.structure, live.changes.structure) && "moves", ledgerHoldsText(parts) && "text"],
+    json: () => ["text", "moves", Object.keys(live.savedTokens).length ? null : "style"],
+    composition: () => ["style", "text", "moves"]
+  };
+
+  // Takes the keys now and returns the function that marks as carried what this tab's output holds.
+  function carryTab(tab) {
+    const parts = heldParts();
+    const covers = SAVE_HOLDS[tab](parts);
+    const keys = Object.fromEntries(Object.entries(parts).map(([name, part]) => [name, JSON.stringify(part)]));
+    return () => covers.forEach(name => { if (name) carried[name] = keys[name]; });
+  }
+
   q("liveCodeCopy")?.addEventListener("click", async () => {
+    const markCarried = carryTab(live.codeTab);
     const text = liveCodeOutput.textContent;
     const label = CODE_FORMATS[live.codeTab].label;
     try {
       if (!navigator.clipboard?.writeText) throw new Error("Clipboard API unavailable");
       await navigator.clipboard.writeText(text);
+      markCarried();
       setCodeStatus(`Copied ${label} to the clipboard.`);
     } catch {
       const scratch = document.createElement("textarea");
@@ -6706,18 +6780,28 @@ if (remembered) kitId.value = remembered;
       let copied = false;
       try { copied = document.execCommand("copy"); } catch { copied = false; }
       scratch.remove();
+      if (copied) markCarried();
       setCodeStatus(copied ? `Copied ${label} to the clipboard.` : "Copy failed: select the code and copy it manually.", copied ? "" : "error");
     }
   });
 
   q("liveCodeDownload")?.addEventListener("click", () => {
     const format = CODE_FORMATS[live.codeTab];
+    const markCarried = carryTab(live.codeTab);
     const blob = new Blob([liveCodeOutput.textContent], { type:format.mime });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url; a.download = format.file; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 0);
+    markCarried();
     setCodeStatus(`Downloaded ${format.file}.`);
+  });
+
+  // Studio supplies no text: the browser shows its own prompt, and only when edits would be lost.
+  window.addEventListener("beforeunload", event => {
+    if (!hasUnsyncedEdits()) return;
+    event.preventDefault();
+    event.returnValue = "";
   });
 
   // ---- dev-server sync ------------------------------------------------------
@@ -6772,12 +6856,14 @@ if (remembered) kitId.value = remembered;
         // file or Auto-sync asked.
         if (emptyWriteRefused()) { setCodeStatus(NOTHING_TO_SAVE + " The overrides file was left as it is."); break; }
         const css = liveCss();
+        const markCarried = carryTab("css");
         setCodeStatus("Saving…", "saving");
         try {
           const response = await window.fetch(new URL("/__fontkit/overrides.css", location.href), {
             method:"PUT", headers:{ "Content-Type":"text/css" }, body:css, cache:"no-store" });
           const info = await response.json().catch(() => ({}));
           if (!response.ok || info.ok !== true) throw new Error(info.error || `HTTP ${response.status}`);
+          markCarried();
           if (!live.syncTimer && !live.syncQueued) {
             setCodeStatus(`Saved ${info.bytes ?? css.length} bytes to ${info.path || live.syncPath}.${savedFontsWaiting() ? ` ${FONTS_WAIT_NOTE}` : ""}`, "saved");
           }
@@ -6849,7 +6935,8 @@ if (remembered) kitId.value = remembered;
       else if (r.includes("editorial") || r.includes("quote") || r.includes("narrative") || r.includes("serif")) tokens["--font-serif"] = stack;
       else if (r.includes("mono") || r.includes("data") || r.includes("caption") || r.includes("code")) tokens["--font-mono"] = stack;
     });
-    if (!tokens["--font-display"] && state.slots[0]) tokens["--font-display"] = cssStack(byFamily(state.slots[0].family));
+    const firstText = state.slots.find(slot => slot.type === "text");
+    if (!tokens["--font-display"] && firstText) tokens["--font-display"] = cssStack(byFamily(firstText.family));
     // Sans, serif and mono each fall back to the first text slot set in a family of that kind (the library marks a
     // family's category in font.tags). A slot's position says nothing: the preset's second, third or fourth slot is
     // often a Row, which has no family. With no such slot the token is not sent.
@@ -7202,7 +7289,8 @@ if (remembered) kitId.value = remembered;
   function elementHasChanges(id) {
     return Object.keys(live.overrides[id] || {}).length > 0
       || live.changes.targets.some(entry => entry.targetId === id && (Object.keys(entry.declarations).length || entry.text !== null))
-      || live.changes.structure.some(entry => entry.orderIds.includes(id));
+      || live.changes.structure.some(entry => entry.orderIds.includes(id))
+      || live.structure.some(entry => entry.ids.includes(id));
   }
 
   function applyColourSource(source, fields) {

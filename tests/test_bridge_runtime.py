@@ -23,11 +23,15 @@ MANUAL_PAGE = f'{TARGET}/tests/fixtures/bridge/target-manual.html'
 OPTIONS_PAGE = f'{TARGET}/tests/fixtures/bridge/target-options.html'
 CONSTRUCTED_PAGE = f'{TARGET}/tests/fixtures/bridge/target-constructed.html'
 ARRANGE_PAGE = f'{TARGET}/tests/fixtures/bridge/target-arrange.html'
+MODULE_BUNDLE_PAGE = f'{TARGET}/tests/fixtures/bridge/target-module-bundle.html'
+CLASSIC_CAPTURE_PAGE = f'{TARGET}/tests/fixtures/bridge/target-classic-capture.html'
+STAT_NAMES_PAGE = f'{TARGET}/tests/fixtures/bridge/target-stat-names.html'
 SPA_PAGE = f'{TARGET}/tests/fixtures/bridge/target-spa.html'
 TWICE_PAGE = f'{TARGET}/tests/fixtures/bridge/target-twice.html'
 DEFERRED_PAGE = f'{TARGET}/tests/fixtures/bridge/target-deferred.html'
 DEEP_PAGE = f'{TARGET}/tests/fixtures/bridge/target-deep.html'
 ROOT_STYLE_PAGE = f'{TARGET}/tests/fixtures/bridge/target-root-style.html'
+LEGACY_TOKENS_PAGE = f'{TARGET}/tests/fixtures/bridge/target-legacy-tokens.html'
 
 TITLE = 'landing.hero.title'
 LEAD = 'landing.hero.lead'
@@ -339,6 +343,23 @@ class HandshakeTests(BridgeCase):
                 self.assertEqual(frame.evaluate('window.__discoveries'), 2)
 
 
+class LegacyTokenNameTests(BridgeCase):
+    def test_names_set_only_where_the_root_reader_misses_them_are_not_reported(self):
+        """Given a page that sets --accent-cyan, --accent-purple, --editorial-size, --mono-spacing and
+        --font-display only under html[data-theme='x'] and --accent-emerald in :root, When the bridge answers
+        hello, Then --font-display and --accent-emerald are reported with their values and the four other
+        names are absent."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, _ = self.open(engine, target=LEGACY_TOKENS_PAGE)
+                css = self.hello(page)['tokens']['css']
+                self.assertEqual(css['--font-display'], 'Georgia, serif')
+                self.assertEqual(css['--accent-emerald'], '#00aa66')
+                for name in ('--accent-cyan', '--accent-purple', '--editorial-size', '--mono-spacing'):
+                    with self.subTest(engine=engine, name=name):
+                        self.assertNotIn(name, css)
+
+
 class InitOptionTests(BridgeCase):
     """allowedOrigins must hold however the page configures the bridge."""
 
@@ -592,6 +613,46 @@ class OriginListTests(BridgeCase):
                 self.assertEqual(self.update(page, 'options.title', {'fontSize': 70})['type'], 'timeout')
                 self.assertEqual(self.errors(frame), [])
 
+NEW_STRING_4 = ('[FontKitBridge] data-allowed-origins could not be read from this script, so any origin is accepted. '
+                'Pass allowedOrigins in window.FONTKIT_BRIDGE_OPTIONS.')
+
+
+class UnreadOriginListTests(BridgeCase):
+    def warns(self, frame):
+        return frame.evaluate('window.__warns')
+
+    def test_a_module_bundle_that_carries_the_origin_list_warns_once_and_accepts_any_origin(self):
+        """Given a module bundle with an unreadable list, when it boots, then it warns once and accepts any origin."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, host=EVIL, target=MODULE_BUNDLE_PAGE)
+                self.assertEqual(self.warns(frame), [NEW_STRING_4])
+                # A second construction must not repeat the line (the once-per-page flag).
+                frame.evaluate('() => new FontKitBridge()')
+                self.assertEqual(self.warns(frame), [NEW_STRING_4])
+                self.assertEqual(self.hello(page)['type'], 'design:ready')
+
+    def test_a_classic_script_tag_keeps_its_list_and_warns_nothing(self):
+        """Given a read list, a global option or a * tag, when the bridge boots, then nothing is warned."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine, case='classic list'):
+                page, frame = self.open(engine, host=EVIL, target=CLASSIC_CAPTURE_PAGE)
+                self.assertEqual(page.evaluate('() => hello("s1")')['type'], 'timeout')
+                self.assertEqual(self.warns(frame), [])
+            with self.subTest(engine=engine, case='global option'):
+                page, frame = self.open(engine, host=EVIL, target=MODULE_BUNDLE_PAGE + '%23options')
+                self.assertEqual(page.evaluate('() => hello("s1")')['type'], 'timeout')
+                self.assertEqual(self.warns(frame), [])
+            with self.subTest(engine=engine, case='star tag'):
+                page, frame = self.open(engine, host=EVIL, target=CLASSIC_CAPTURE_PAGE + '%23star')
+                self.assertEqual(self.hello(page)['type'], 'design:ready')
+                self.assertEqual(self.warns(frame), [])
+            with self.subTest(engine=engine, case='no origin tag'):
+                page, frame = self.open(engine, host=EVIL, target=CLASSIC_CAPTURE_PAGE + '%23none')
+                self.assertEqual(frame.evaluate("() => document.querySelectorAll('script[data-allowed-origins]').length"), 0)
+                self.assertEqual(self.hello(page)['type'], 'design:ready')
+                self.assertEqual(self.warns(frame), [])
+
 
 class SessionLifecycleTests(BridgeCase):
     def test_closed_opener_studio_stops_click_interception(self):
@@ -842,6 +903,83 @@ class TargetedUpdateTests(BridgeCase):
                 reply = self.request(page, {'type': 'design:reset', 'targetId': 'nope'})
                 self.assertEqual((reply['type'], reply['reason']), ('design:rejected', 'unknown-target'))
                 self.assertEqual(reply['revision'], 5)
+
+
+class ResetAfterAppRewriteTests(BridgeCase):
+    """B09-b: Reset keeps what the app now shows when it rewrote an edited leaf paragraph."""
+
+    APP_TEXT = 'App wrote this'
+
+    def edit(self, page, target_id, text):
+        self.applied(page, target_id, {'text': text})
+
+    def rewrite(self, frame, target_id, how):
+        """The page's own update, in the frame: `how` is a JS function of el."""
+        self.element(frame, target_id, how)
+
+    def test_reset_keeps_the_text_the_app_wrote_after_the_edit(self):
+        """Given TITLE edited and then rewritten by the page, When Reset, Then the page's string stays."""
+        rewrites = {
+            'node value': f"(el) => {{ el.firstChild.nodeValue = '{self.APP_TEXT}'; }}",
+            'text content': f"(el) => {{ el.textContent = '{self.APP_TEXT}'; }}",
+        }
+        for engine in ENGINES:
+            for name, how in rewrites.items():
+                with self.subTest(engine=engine, rewrite=name):
+                    page, frame = self.open(engine)
+                    self.hello(page)
+                    self.edit(page, TITLE, 'Edited title')
+                    self.rewrite(frame, TITLE, how)
+                    reply = self.request(page, {'type': 'design:reset', 'targetId': TITLE})
+                    self.assertEqual(reply['type'], 'design:applied', reply)
+                    self.assertEqual(self.text(frame, TITLE), self.APP_TEXT)
+                    entry = self.entry(reply['changes'], TITLE)
+                    self.assertTrue(entry is None or entry['text'] is None, entry)
+
+    def test_a_later_edit_after_keeping_the_app_text_resets_to_that_text(self):
+        """Given a kept app string, When the user edits and resets again, Then the page shows that string."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                self.edit(page, TITLE, 'Edited title')
+                self.rewrite(frame, TITLE, f"(el) => {{ el.firstChild.nodeValue = '{self.APP_TEXT}'; }}")
+                self.request(page, {'type': 'design:reset', 'targetId': TITLE})
+                self.edit(page, TITLE, 'Second edit')
+                self.assertEqual(self.text(frame, TITLE), 'Second edit')
+                self.request(page, {'type': 'design:reset', 'targetId': TITLE})
+                self.assertEqual(self.text(frame, TITLE), self.APP_TEXT)
+
+    def test_reset_all_follows_the_app_for_rewritten_text_and_restores_the_rest(self):
+        """Given TITLE rewritten and CTA edited untouched, When Reset all, Then TITLE follows the page, CTA is original."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                self.edit(page, TITLE, 'Edited title')
+                self.edit(page, CTA, 'Edited cta')
+                self.rewrite(frame, TITLE, f"(el) => {{ el.firstChild.nodeValue = '{self.APP_TEXT}'; }}")
+                reply = self.request(page, {'type': 'design:reset'})
+                self.assertEqual(reply['type'], 'design:applied', reply)
+                self.assertEqual(self.text(frame, TITLE), self.APP_TEXT)
+                self.assertEqual(self.text(frame, CTA), 'Get started')
+
+    def test_reset_after_a_cleared_placeholder_emoji_restores_it_without_error(self):
+        """Given an emoji placeholder cleared by an inside image, When Reset, Then the emoji is back and nothing threw."""
+        url = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.element(frame, SLOT, "(el) => { el.textContent = '\U0001F3A8'; }")
+                self.hello(page)
+                self.request(page, {'type': 'design:update', 'patch': {'slots': [
+                    {'id': 'img-slot', 'targetId': SLOT, 'type': 'image', 'assetDataUrl': url,
+                     'imageWidth': 30, 'opacity': 1}]}})
+                self.assertEqual(self.element(frame, SLOT, '(el) => el.querySelectorAll("img").length'), 1)
+                reply = self.request(page, {'type': 'design:reset', 'targetId': SLOT})
+                self.assertEqual(reply['type'], 'design:applied', reply)
+                self.assertEqual(self.text(frame, SLOT), '\U0001F3A8')
+                self.assertEqual(self.errors(frame), [])
 
 
 class SelectionTests(BridgeCase):
@@ -1192,6 +1330,99 @@ class LegacyCompositionTests(BridgeCase):
                 ack = self.wait_message(page, 'fontkit:ack', start)
                 self.assertEqual(ack['changes']['tokens'], {'--ok-font': 'Georgia, serif', longest: '1px',
                                                             '--font-serif': 'Georgia'})
+
+
+class TokenNotAppliedTests(BridgeCase):
+    TERMINAL_PAGE = f'{TARGET}/tests/fixtures/bridge/target-terminal.html'
+    FOUR = {'--font-display': 'Courier New, monospace', '--font-sans': 'Georgia, serif',
+            '--font-serif': 'Arial, sans-serif', '--font-mono': 'Verdana, sans-serif'}
+    MESSAGE = ('Sync wrote {names}, but no element on the page changed. '
+               'This page may read other token names.')
+
+    def sync(self, page, patch):
+        return self.request(page, {'type': 'design:update', 'patch': patch})
+
+    def warnings(self, page):
+        return [w for w in self.messages(page, 'design:warning') if w.get('kind') == 'token-not-applied']
+
+    def test_a_sync_to_a_page_that_reads_other_names_warns_and_names_the_tokens(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, target=self.TERMINAL_PAGE)
+                self.hello(page)
+                before = self.computed(frame, TITLE, 'fontFamily')
+                reply = self.sync(page, {'tokens': self.FOUR})
+                self.assertEqual(reply.get('type'), 'design:applied', reply)
+                self.assertEqual(self.computed(frame, TITLE, 'fontFamily'), before)
+                warned = self.warnings(page)
+                self.assertEqual(len(warned), 1, warned)
+                self.assertEqual(warned[0]['targetId'], 'global')
+                self.assertEqual(warned[0]['requestId'], reply['requestId'])
+                self.assertEqual(warned[0]['sessionId'], 's1')
+                self.assertEqual(warned[0]['message'], self.MESSAGE.format(
+                    names='--font-display, --font-sans, --font-serif, --font-mono'))
+
+    def test_a_role_slot_that_restyles_an_element_does_not_hide_the_warning(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, target=self.TERMINAL_PAGE)
+                self.hello(page)
+                slot = {'id': 's', 'targetId': TITLE, 'type': 'text',
+                        'fontFamily': 'Courier New, monospace', 'size': 30}
+                self.sync(page, {'tokens': self.FOUR, 'slots': [slot]})
+                self.assertIn('Courier New', self.computed(frame, TITLE, 'fontFamily'))
+                self.assertEqual(len(self.warnings(page)), 1)
+
+    def test_a_token_change_masked_by_an_earlier_slot_font_posts_no_warning(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                slot = {'id': 's', 'targetId': TITLE, 'type': 'text',
+                        'fontFamily': 'Courier New, monospace', 'size': 30}
+                self.sync(page, {'tokens': self.FOUR, 'slots': [slot]})
+                value, priority = self.inline(frame, TITLE, 'font-family')
+                self.assertIn('Courier New', value)
+                self.assertEqual(priority, 'important')
+                self.sync(page, {'tokens': {**self.FOUR, '--font-display': 'Tahoma, sans-serif'},
+                                 'slots': [slot]})
+                self.assertEqual(self.messages(page, 'design:warning'), [])
+
+    def test_a_sync_to_a_page_that_reads_a_synced_name_posts_no_warning(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                before = self.computed(frame, TITLE, 'fontFamily')
+                self.sync(page, {'tokens': self.FOUR})
+                self.assertNotEqual(self.computed(frame, TITLE, 'fontFamily'), before)
+                self.assertEqual(self.messages(page, 'design:warning'), [])
+
+    def test_a_repeat_sync_warns_again_only_for_the_token_that_changed(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, _frame = self.open(engine, target=self.TERMINAL_PAGE)
+                self.hello(page)
+                self.sync(page, {'tokens': self.FOUR})
+                self.sync(page, {'tokens': self.FOUR})
+                self.assertEqual(len(self.warnings(page)), 1)
+                self.sync(page, {'tokens': {**self.FOUR, '--font-mono': 'Tahoma, sans-serif'}})
+                warned = self.warnings(page)
+                self.assertEqual(len(warned), 2, warned)
+                self.assertEqual(warned[1]['message'], self.MESSAGE.format(names='--font-mono'))
+
+    def test_only_the_four_font_names_count_and_only_when_one_was_written(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, _frame = self.open(engine, target=self.TERMINAL_PAGE)
+                self.hello(page)
+                self.sync(page, {'tokens': {'--editorial-size': '20px', '--font-size-base': '20px'}})
+                self.sync(page, {'slots': []})
+                self.assertEqual(self.warnings(page), [])
+                self.sync(page, {'sans': 'Verdana, sans-serif'})
+                warned = self.warnings(page)
+                self.assertEqual(len(warned), 1, warned)
+                self.assertEqual(warned[0]['message'], self.MESSAGE.format(names='--font-sans'))
 
 
 class TokenRemovalTests(BridgeCase):
@@ -1675,6 +1906,75 @@ class StableSelectorEscapeTests(BridgeCase):
                         reply = self.applied(page, design_id, {'fontSize': 21})
                         self.assertEqual(self.entry(reply['changes'], design_id)['selector'], selector)
                         self.request(page, {'type': 'design:reset', 'targetId': design_id})
+
+
+class StateClassSelectorTests(BridgeCase):
+    """A selector the bridge exports must not hold a class the page toggles at runtime."""
+    CARD_TWO = 'Card two'
+
+    def test_selector_built_under_state_classes_survives_the_flip(self):
+        """
+        Given a page whose main, section, article and heading each hold a state class
+        When Card two's heading is selected and a change is applied
+        Then the selector holds none of them, and after the page flips the classes onto
+        a second section (inserted after the first, so the nth-of-type indexes hold)
+        the selector still matches exactly Card two's heading
+        """
+        states = ['has-x', 'is-open', 'tab-active', 'open']
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                frame.evaluate("""() => {
+                    document.querySelector('main').classList.add('has-x');
+                    document.querySelector('section.cards').classList.add('is-open');
+                    document.querySelectorAll('article.card')[1].classList.add('tab-active');
+                    document.querySelectorAll('article.card h3')[1].classList.add('open');
+                }""")
+                ready = self.hello(page)
+                card = self.target_by_text(ready, self.CARD_TWO)
+                reply = self.applied(page, card['id'], {'fontSize': 21})
+                selector = self.entry(reply['changes'], card['id'])['selector']
+                for selected in (card['selector'], selector):
+                    for state in states:
+                        self.assertNotIn(state, selected)
+                frame.evaluate("""() => {
+                    document.querySelector('main').classList.remove('has-x');
+                    document.querySelector('section.cards').classList.remove('is-open');
+                    document.querySelectorAll('article.card')[1].classList.remove('tab-active');
+                    document.querySelectorAll('article.card h3')[1].classList.remove('open');
+                    const next = document.createElement('section');
+                    next.className = 'cards is-open';
+                    document.querySelector('section.cards').after(next);
+                }""")
+                self.assertEqual(frame.evaluate(
+                    '(s) => { const found = [...document.querySelectorAll(s)];'
+                    ' return [found.length, found[0] && found[0].textContent]; }', selector),
+                    [1, self.CARD_TWO], selector)
+
+    def test_pages_without_state_classes_keep_their_selectors(self):
+        """
+        Given the stock page with disabled on Card one's article and a hidden wrapper after the cards
+        When the ready list is read
+        Then the plain-page literals still hold and disabled and hidden still appear in selectors
+        """
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                frame.evaluate("""() => {
+                    document.querySelector('article.card').classList.add('disabled');
+                    const wrap = document.createElement('div');
+                    wrap.className = 'hidden';
+                    wrap.innerHTML = '<h4>Under hidden</h4>';
+                    document.querySelector('section.cards').after(wrap);
+                }""")
+                ready = self.hello(page)
+                self.assertEqual(
+                    self.target_by_text(ready, self.CARD_TWO)['selector'],
+                    'main:nth-of-type(1) > section.cards:nth-of-type(1) > article.card:nth-of-type(2) > h3:nth-of-type(1)')
+                self.assertEqual(self.target_by_text(ready, 'Features')['selector'],
+                                 '#top > nav:nth-of-type(1) > a.nav-link:nth-of-type(1)')
+                self.assertIn('article.card.disabled', self.target_by_text(ready, 'Card one')['selector'])
+                self.assertIn('div.hidden', self.target_by_text(ready, 'Under hidden')['selector'])
 
 
 class AssetPlacementTests(BridgeCase):
@@ -2511,6 +2811,66 @@ class RuntimeWarningTests(ArrangeCase):
                 self.assertEqual(self.messages(page, 'design:warning', start), [])
 
 
+class PostedWarningTests(ArrangeCase):
+    KINDS = ('token-not-applied', 'edit-not-reapplied', 'edit-reapply-stopped')
+
+    def post_warning(self, page, frame, *args):
+        start = self.mark(page)
+        frame.evaluate('(args) => window.__fontkitBridge.postWarning(...args)', list(args))
+        return start
+
+    def test_a_posted_warning_carries_the_kind_message_and_cap(self):
+        """Given a Studio-connected page, when the bridge posts each of the three
+        note kinds with a long message, then Studio receives that kind, target,
+        request id and session id, with the message cut to 300 characters."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame, _ = self.start(engine)
+                for kind in self.KINDS:
+                    start = self.post_warning(page, frame, kind, 'arr.btn.a', 'x' * 900, 'r7')
+                    warning = self.wait_message(page, 'design:warning', start)
+                    self.assertEqual((warning['kind'], warning['targetId'], warning['requestId'], warning['sessionId']),
+                                     (kind, 'arr.btn.a', 'r7', 's1'))
+                    self.assertEqual(warning['message'], 'x' * 300)
+
+    def test_a_missing_target_or_request_id_is_global_and_null(self):
+        """Given a Studio-connected page, when a warning is posted with an empty,
+        missing or non-string target or request id, then the target arrives as
+        'global' and the request id as null."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame, _ = self.start(engine)
+                for target in (None, '', 7):
+                    start = self.post_warning(page, frame, 'token-not-applied', target, 'no element changed')
+                    warning = self.wait_message(page, 'design:warning', start)
+                    self.assertEqual((warning['targetId'], warning['requestId']), ('global', None))
+                for request_id in (None, 7):
+                    start = self.post_warning(page, frame, 'token-not-applied', 'arr.btn.a', 'x', request_id)
+                    self.assertIsNone(self.wait_message(page, 'design:warning', start)['requestId'])
+                start = self.mark(page)
+                frame.evaluate('window.__fontkitBridge.postWarning("token-not-applied", "arr.btn.a", "x")')
+                self.assertIsNone(self.wait_message(page, 'design:warning', start)['requestId'])
+
+    def test_nothing_is_posted_for_an_unknown_kind_or_without_a_studio(self):
+        """Given a Studio-connected page, when a warning has a kind outside the
+        three, an empty or non-string message, or the page has no Studio, then
+        no design:warning message is posted."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame, _ = self.start(engine)
+                start = self.mark(page)
+                for kind in ('runtime-error', 'made-up'):
+                    frame.evaluate('(k) => window.__fontkitBridge.postWarning(k, "arr.btn.a", "boom", "r1")', kind)
+                for message in ('', None, 5):
+                    frame.evaluate('(m) => window.__fontkitBridge.postWarning("edit-not-reapplied", "arr.btn.a", m)', message)
+                page.wait_for_timeout(300)
+                self.assertEqual(self.messages(page, 'design:warning', start), [])
+                frame.evaluate('window.__fontkitBridge.studioSource = null')
+                start = self.post_warning(page, frame, 'edit-not-reapplied', 'arr.btn.a', 'boom')
+                page.wait_for_timeout(300)
+                self.assertEqual(self.messages(page, 'design:warning', start), [])
+
+
 class PopOutOverlayTests(BridgeCase):
     OVERLAY_NODES = "document.querySelectorAll('#fontkit-bridge-overlay, #fontkit-bridge-hover').length"
 
@@ -3071,6 +3431,67 @@ class SpaRobustnessTests(BridgeCase):
                 self.assertEqual(self.errors(frame), [])
 
 
+class LostEditWarningTests(BridgeCase):
+    MESSAGE = ('The page replaced this element, so its edit could not be re-applied. '
+               'The edit is still in the export.')
+
+    def test_an_edit_lost_to_a_replaced_auto_id_element_is_reported(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, target=SPA_PAGE)
+                heading = self.target_by_text(self.hello(page), 'Auto heading')['id']
+                self.applied(page, heading, {'fontSize': 40})
+                start = self.mark(page)
+                frame.evaluate('render()')
+                self.wait_message(page, 'design:warning', start)
+                page.wait_for_timeout(300)
+                warnings = self.messages(page, 'design:warning', start)
+                self.assertEqual(len(warnings), 1, warnings)
+                self.assertEqual(
+                    (warnings[0]['kind'], warnings[0]['targetId'], warnings[0]['requestId'], warnings[0]['message']),
+                    ('edit-not-reapplied', heading, None, self.MESSAGE))
+
+    def test_a_replaced_author_element_or_an_unedited_auto_element_posts_no_warning(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, target=SPA_PAGE)
+                self.hello(page)
+                self.applied(page, 'spa.title', {'fontSize': 50})
+                start = self.mark(page)
+                frame.evaluate('render()')
+                page.wait_for_timeout(500)
+                # The current spa.title is the replacement node: its 50px is what makes the empty list meaningful.
+                self.assertEqual(self.inline(frame, 'spa.title', 'font-size'), ['50px', 'important'])
+                self.assertEqual(self.messages(page, 'design:warning', start), [])
+
+
+class ReapplyStoppedWarningTests(BridgeCase):
+    MESSAGE = ('The page keeps re-creating this element, so its edits are no longer re-applied. '
+               'They stay in the export.')
+
+    def test_the_loop_guard_stopping_an_edit_is_reported_once(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, target=SPA_PAGE)
+                self.hello(page)
+                self.applied(page, 'spa.title', {'fontSize': 50})
+                start = self.mark(page)
+                frame.evaluate('window.pingPong = true; render();')
+                first = self.wait_message(page, 'design:warning', start, "d.kind === 'edit-reapply-stopped'")
+                self.assertEqual(
+                    (first['kind'], first['targetId'], first['requestId'], first['message']),
+                    ('edit-reapply-stopped', 'spa.title', None, self.MESSAGE))
+                frame.evaluate('window.pingPong = false')
+                page.wait_for_timeout(500)
+                # A quiet page and a new edit: the guard is still tripped, so no second warning.
+                self.applied(page, 'spa.title', {'fontSize': 44})
+                frame.evaluate('render()')
+                page.wait_for_timeout(800)
+                stopped = [w for w in self.messages(page, 'design:warning', start)
+                           if w['kind'] == 'edit-reapply-stopped']
+                self.assertEqual(len(stopped), 1, stopped)
+
+
 class RepeatedConstructionTests(BridgeCase):
     """`new FontKitBridge(...)` again on a page that already has a bridge (HMR): what applies and what is ignored."""
     CALL = """(options) => {
@@ -3327,6 +3748,24 @@ class AutoSelectorTests(BridgeCase):
                     found = frame.evaluate('(sel) => document.querySelectorAll(sel).length', target['selector'])
                     self.assertEqual(found, 1, target['selector'])
 
+class AutoSelectorWholeNameTests(BridgeCase):
+    def test_only_the_whole_class_stat_is_discovered(self):
+        """Given static, status and stat classes, when the bridge discovers targets, then only stat is one."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, target=STAT_NAMES_PAGE)
+                ready = self.hello(page)
+                self.assertEqual(len(ready['targets']), 1, ready['targets'])
+                marked = frame.evaluate("""() => [...document.querySelectorAll('main div')].map((el) => ({
+                    cls: el.className,
+                    attrs: el.getAttributeNames().filter((n) => n.startsWith('data-design'))
+                }))""")
+                self.assertEqual(marked[0], {'cls': 'static', 'attrs': []})
+                self.assertEqual(marked[1], {'cls': 'status', 'attrs': []})
+                self.assertEqual(marked[2]['cls'], 'stat')
+                self.assertTrue(marked[2]['attrs'])
+
+
 
 class LegacyLayoutStructureTests(BridgeCase):
     def test_legacy_layout_reorder_is_recorded_in_structure_and_undone_by_reset_all(self):
@@ -3484,6 +3923,56 @@ class ContentModelGuardTests(ArrangeCase):
                 self.assertEqual(frame.evaluate("document.querySelector('main').innerHTML"), snapshot)
                 self.assertEqual(self.request(page, {'type': 'design:update', 'targetId': 'arr.btn.a',
                                                      'patch': {'fontSize': 14}})['revision'], 1)
+
+    NESTING_TAGS = ('li', 'pre', 'dl', 'fieldset', 'figcaption', 'hr', 'main', 'dt')
+
+    def test_these_block_elements_cannot_go_into_a_paragraph_and_the_parser_would_re_nest_them(self):
+        """Given one node of each tag, when each is moved into a p, then it is refused and the real parser agrees."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, target=ARRANGE_PAGE)
+                frame.evaluate("""(tags) => {
+                    for (const tag of tags) {
+                        const node = document.createElement(tag);
+                        node.setAttribute('data-design-id', 'blk.' + tag);
+                        node.textContent = tag;
+                        document.querySelector('main').append(node);
+                    }
+                }""", list(self.NESTING_TAGS))
+                self.hello(page)
+                snapshot = frame.evaluate("document.querySelector('main').innerHTML")
+                parser_page = page.context.new_page()
+                for tag in self.NESTING_TAGS:
+                    with self.subTest(engine=engine, tag=tag):
+                        detail = self.guard(self.move(page, f'blk.{tag}', {'container': 'arr.para'}))
+                        self.assertEqual((detail['guard'], detail['overridable']), ('content-model', False))
+                        self.assertEqual(frame.evaluate("document.querySelector('main').innerHTML"), snapshot)
+                        # The oracle: Chromium's parser does not keep the tag inside the p.
+                        parser_page.set_content(f'<body><p id="para"><{tag}>x</{tag}></p></body>')
+                        nested = parser_page.evaluate(
+                            "(tag) => document.querySelector(tag).parentElement.id === 'para'", tag)
+                        self.assertFalse(nested, tag)
+                parser_page.close()
+
+    def test_a_div_can_still_go_into_em_code_and_strong(self):
+        """Given em, code and strong in main, when a div is moved into each, then it is applied without errors."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine, target=ARRANGE_PAGE)
+                frame.evaluate("""() => {
+                    const main = document.querySelector('main');
+                    for (const tag of ['div', 'em', 'code', 'strong']) {
+                        const node = document.createElement(tag);
+                        node.setAttribute('data-design-id', 'inl.' + tag);
+                        node.textContent = tag;
+                        main.append(node);
+                    }
+                }""")
+                self.hello(page)
+                for tag in ('em', 'code', 'strong'):
+                    self.moved(page, 'inl.div', {'container': f'inl.{tag}'})
+                self.assertEqual(self.errors(frame), [])
+
 
     def test_inline_into_inline_and_block_into_block_and_in_place_moves_are_allowed(self):
         for engine in ENGINES:

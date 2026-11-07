@@ -386,6 +386,55 @@ class ColourSourceTests(ControlsMixin, LiveCase):
                 self.assertEqual(errors, [])
 
 
+class RowRenderTests(ControlsMixin, LiveCase):
+    FRAMES = 8
+
+    def watch_row(self, page):
+        page.evaluate('''() => {
+            window.rowRuns = [];
+            document.addEventListener('transitionrun', event => {
+                if (event.target.closest('.row-layout')) window.rowRuns.push(event.propertyName);
+            }, true);
+        }''')
+
+    def row_columns_over_frames(self, page):
+        """The row's computed columns on each of the next frames, in pixels."""
+        return page.evaluate('''async frames => {
+            const seen = [];
+            for (let i = 0; i < frames; i++) {
+                await new Promise(resolve => requestAnimationFrame(resolve));
+                const row = document.querySelector('.row-layout');
+                seen.push(row ? getComputedStyle(row).gridTemplateColumns : null);
+            }
+            return seen;
+        }''', self.FRAMES)
+
+    def assert_row_stays_put(self, page, action):
+        columns = self.row_columns_over_frames(page)
+        self.assertEqual(len(set(columns)), 1, f'the row moved after {action}: {columns}')
+        widths = [float(width.removesuffix('px')) for width in columns[0].split()]
+        self.assertEqual(len(widths), 2, f'the row has no two columns after {action}: {columns[0]}')
+        self.assertAlmostEqual(widths[1], 2 * widths[0], delta=1, msg=f'columns are not the row 1 to 2 after {action}')
+        self.assertEqual(page.evaluate('window.rowRuns'), [], f'the row animated after {action}')
+
+    def test_row_does_not_animate_when_the_canvas_renders_again(self):
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors = self.composer(engine)
+                page.locator('#composerCanvas > .flow-slot').first.wait_for()
+                self.assertEqual(page.locator('.row-layout').count(), 1)
+                self.watch_row(page)
+                page.locator('#composerCanvas > .flow-slot').first.click(position={'x': 3, 'y': 3})
+                self.assert_row_stays_put(page, 'the first slot was clicked')
+                page.locator('#composerCanvas > .flow-slot').nth(1).click(position={'x': 3, 'y': 3})
+                self.assert_row_stays_put(page, 'a second slot was clicked')
+                role = page.locator('#slotInspector [data-bind="role"]')
+                values = role.locator('option').evaluate_all('els => els.map(el => el.value)')
+                role.select_option([value for value in values if value != role.input_value()][0])
+                self.assert_row_stays_put(page, 'a role changed')
+                self.assertEqual(errors, [])
+
+
 class SlotInspectorTests(ControlsMixin, LiveCase):
     def test_style_cut_is_disabled_for_a_family_with_one_cut(self):
         cut = '#slotInspector [data-bind="styleIndex"]'

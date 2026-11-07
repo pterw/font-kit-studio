@@ -723,6 +723,10 @@ def main(argv=None):
             overrides = resolve_overrides(args.overrides)
         except ValueError as error:
             parser.error(str(error))
+    for flag, port in (("--studio-port", args.studio_port), ("--target-port", args.target_port)):
+        if port == 0:
+            print(f"serve.py: {flag} 0 is not accepted; pick a port with {flag} <port>", file=sys.stderr)
+            return 2
     if args.studio_port == args.target_port:
         parser.error("--studio-port and --target-port must differ")
 

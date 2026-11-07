@@ -417,19 +417,52 @@ class AtomicRejectionTests(RoleSheetCase):
 
     def test_unknown_field_on_clear_and_stale_clear_are_rejected_without_removing_the_preview(self):
         """Given an applied preview, when clear carries an extra field, a stale revision or
-        another document, then each is rejected and the preview keeps rendering."""
+        another document, then each is rejected and the preview keeps rendering. The stale-version
+        case moved to the new test below; a version ahead of the bridge is accepted too (D080) and
+        is not a Studio flow."""
         for engine in ENGINES:
             with self.subTest(engine=engine):
                 page, frame = self.open(engine)
                 self.hello(page)
                 self.apply(page, [role(fontSize=24)])
                 for fields, reason in (({'surprise': 1}, 'invalid-message'), ({'baseRevision': 5}, 'revision-conflict'),
-                                       ({'documentId': 'elsewhere'}, 'page-changed'), ({'pageVersion': 77}, 'page-changed'),
+                                       ({'documentId': 'elsewhere'}, 'page-changed'),
                                        ({'requestId': ''}, 'invalid-message')):
                     with self.subTest(fields=str(fields)):
                         reply = self.clear(page, **fields)
                         self.assertEqual((reply['type'], reply.get('reason')), ('design:rejected', reason), reply)
                         self.assertEqual((self.size(frame), self.owned(frame), page.evaluate('revision')), ('24px', [PLAIN_24], 1))
+
+    def test_clear_removes_the_preview_after_the_author_text_changed(self):
+        """Given an applied 24px preview and an author text change that a Detect proves advanced the
+        version, when Clear carries the version Studio last observed, then it is accepted with revision 2
+        and a greater current version, the owned node is gone and the page renders 16px again."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                self.apply(page, [role(fontSize=24)])
+                frame.evaluate("document.querySelector('main p').textContent = 'Changed by the author'")
+                self.assertGreater(self.detect(page)['currentPageVersion'], page.evaluate('roleState.pageVersion'))
+                reply = self.clear(page)
+                self.assertEqual((reply['type'], reply.get('operation'), reply.get('revision')),
+                                 ('design:roles-applied', 'clear', 2), reply)
+                self.assertGreater(reply['currentPageVersion'], reply['pageVersion'])
+                self.assertEqual((self.owned(frame), self.size(frame)), ([], '16px'))
+
+    def test_apply_after_the_author_text_changed_is_still_refused(self):
+        """Given a hello and an author text change that a Detect proves advanced the version, when Apply
+        carries the old version, then it is rejected page-changed, no owned node exists, the revision is 0
+        and the page renders 16px."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, frame = self.open(engine)
+                self.hello(page)
+                frame.evaluate("document.querySelector('main p').textContent = 'Changed by the author'")
+                self.assertGreater(self.detect(page)['currentPageVersion'], page.evaluate('roleState.pageVersion'))
+                reply = self.apply(page, [role(fontSize=24)])
+                self.assertEqual((reply['type'], reply.get('reason')), ('design:rejected', 'page-changed'), reply)
+                self.assertEqual((self.owned(frame), page.evaluate('revision'), self.size(frame)), ([], 0, '16px'))
 
     def test_canonical_css_boundary_is_exactly_128_kib(self):
         """Given three roles of long distinct selectors, when canonical CSS is exactly 128 KiB

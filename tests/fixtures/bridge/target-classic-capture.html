@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bridge test target (classic tag, warnings captured)</title>
+<!--
+  The restricted target plus a console.warn wrapper that records into window.__warns.
+  With #star the script tag carries data-allowed-origins="*" instead of the list;
+  with #none it carries no data-allowed-origins at all.
+  Used by tests/test_bridge_runtime.py.
+-->
+<script>
+  window.__warns = [];
+  const warn = console.warn;
+  console.warn = (...args) => { window.__warns.push(args.join(' ')); warn.apply(console, args); };
+</script>
+</head>
+<body>
+<main>
+  <h1 data-design-id="restricted.title">Restricted target</h1>
+</main>
+<script>
+  const origins = location.hash === '#star' ? '*' : 'http://studio.test http://localhost:4173';
+  const attribute = location.hash === '#none' ? '' : ' data-allowed-origins="' + origins + '"';
+  document.write('<script src="/fontkit-bridge.js"' + attribute + '><\/script>');
+</script>
+</body>
+</html>

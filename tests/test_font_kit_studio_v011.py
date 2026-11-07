@@ -57,8 +57,7 @@ class BrowserCase(unittest.TestCase):
         return result
 
     def row_geometry(self, page):
-        # Wait for the inherited grid transition to finish before measuring tracks.
-        page.wait_for_timeout(220)
+        # The row has no transition, so its tracks are final as soon as the layout is read.
         return page.locator('.row-layout').evaluate('''layout => {
             const rect = element => {
                 const r = element.getBoundingClientRect();
@@ -531,12 +530,12 @@ class BrowserCase(unittest.TestCase):
 class StructureTests(unittest.TestCase):
     def test_version_and_existing_model(self):
         source = HTML.read_text(encoding='utf-8')
-        self.assertTrue('<title>Font Kit Studio v0.4.0</title>' in source, 'Document title names the release it ships in (D039)')
+        self.assertTrue('<title>Font Kit Studio v0.4.1</title>' in source, 'Document title names the release it ships in (D039)')
         bridge = (REPO / 'fontkit-bridge.js').read_text(encoding='utf-8')
-        self.assertIn('fontkit-bridge.js version 0.4.0', '\n'.join(bridge.splitlines()[:10]))
+        self.assertIn('fontkit-bridge.js version 0.4.1', '\n'.join(bridge.splitlines()[:10]))
         self.assertIn('const PROTOCOL_VERSION = 1;', bridge)
         package = json.loads((REPO / 'packages' / 'fontkitstudio' / 'package.json').read_text(encoding='utf-8'))
-        self.assertEqual(package['version'], '0.4.0')
+        self.assertEqual(package['version'], '0.4.1')
         for symbol in ('makeRowSlot', 'findSlotById', 'selectedLocation', 'LEAF_SLOT_TYPES'):
             self.assertIn(symbol, source)
 

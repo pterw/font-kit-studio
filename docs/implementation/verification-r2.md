@@ -2,9 +2,11 @@
 
 Date: 2026-10-18. Branch: `feat/r2-visited-pages` (PR #24); base `fdb48d0` (PR B2 merged).
 Status: published as 0.4.0 on 2026-10-19 (see Publication checks).
-This evidence covers the settled PR C tree: the code at `d49158b` (the last product-code commit; only the
-screenshot script changed after it) plus the release-point docs committed after it, and the whole-branch review round
-below, whose final gates ran on `5e8af0f`. Earlier R2 evidence: [PR A](verification-r2-pr-a.md); PR B and PR B2 are recorded in the ledger.
+This evidence covers the settled PR C tree: the code at `d49158b`, plus the later product and package-test changes
+(8 commits touching 4 files, 565 insertions, among them the Python proxy in `scripts/serve.py`; counted over
+`fontkit-bridge.js`, `fontkit-studio.html`, `scripts/serve.py` and `packages` from `d49158b` to `v0.4.0`), the
+release-point docs committed after it, and the whole-branch review round below, whose final gates ran on `5e8af0f`.
+Earlier R2 evidence: [PR A](verification-r2-pr-a.md); PR B and PR B2 are recorded in the ledger.
 
 ## Environment and preparation
 

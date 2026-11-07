@@ -10,13 +10,13 @@ In a Vite project (Vite 7 or 8), from the project folder:
 npx fontkitstudio
 ```
 
-In front of any other local dev server, such as Next.js:
+In front of any other local dev server, such as Next.js, or a framework that serves its own HTML, such as SvelteKit:
 
 ```bash
 npx fontkitstudio http://localhost:3000
 ```
 
-For a permanent setup, add the plugin to `vite.config`:
+For a permanent setup, install the package with `npm install --save-dev fontkitstudio`, then add the plugin to `vite.config`:
 
 ```js
 import { fontkitStudio } from 'fontkitstudio/vite'
@@ -24,12 +24,12 @@ import { fontkitStudio } from 'fontkitstudio/vite'
 export default { plugins: [fontkitStudio()] }
 ```
 
-The command opens Studio in your browser and prints its address on a line that starts with `Open:`. Nothing is written to your project.
+The command opens Studio in your browser and prints its address on a line that starts with `Open:`. Studio changes none of your files. In Vite mode, Vite keeps its usual cache in `node_modules`, as it does for `npm run dev`.
 
 | Flag | What it does |
 |---|---|
-| `--no-open` | Print the address instead of opening the browser. |
-| `--studio-port <n>` | Keep Studio on one port, so its settings stay. |
+| `--no-open` | Do not open the browser. The address is printed either way. |
+| `--studio-port <n>` | Keep Studio on one port (1 to 65535), so its settings stay. A busy port falls back to a free one, and the terminal says so. |
 
 From 0.4.0 the bridge in the package also supports text-style roles. In Studio's Live App view you can detect the text styles on your page, preview new values for a role and clear the preview. It changes nothing in your project. See [Detected roles](https://github.com/pterw/font-kit-studio#detected-roles) in the repository README.
 
@@ -42,6 +42,8 @@ From 0.4.0 the bridge in the package also supports text-style roles. In Studio's
 ## If Studio does not connect
 
 The terminal where the command runs says what it found: a page that loads its own `fontkit-bridge.js`, a Content-Security-Policy that blocks the bridge, or an address that is not local. The [repository README](https://github.com/pterw/font-kit-studio#if-studio-does-not-connect) lists each one.
+
+In proxy mode the bridge is added only to an HTML page the app answers with status 200, so a 404 or 400 page has none. Go back to a normal page.
 
 ## Cookies and storage
 

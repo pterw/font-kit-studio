@@ -1,6 +1,6 @@
 /**
  * Font Kit Studio — Design Bridge Protocol v1 Target SDK
- * fontkit-bridge.js version 0.4.0
+ * fontkit-bridge.js version 0.4.1
  * =======================================================
  * Standalone, zero-dependency bridge runtime for code-owned web applications.
  * Drop it into any web project with a <script> tag (or require it via CommonJS).
@@ -92,7 +92,8 @@
   const CONTAINER_NAME_MAX = 40;
   // Content-model guard: block-level elements may not be placed in these parents.
   const BLOCK_ELEMENTS = new Set(['div', 'p', 'section', 'article', 'aside', 'header', 'footer', 'nav', 'ul', 'ol',
-    'table', 'form', 'figure', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'details']);
+    'table', 'form', 'figure', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'details',
+    'li', 'pre', 'dl', 'fieldset', 'figcaption', 'hr', 'main', 'dt']);
   const PHRASING_PARENTS = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'span', 'a', 'button', 'label', 'summary']);
   // Mutation-triggered rediscovery backs off when it runs more than this often.
   const STORM_RUNS = 10;
@@ -116,15 +117,14 @@
     'header p', 'main p', 'article p', 'section p',
     'header a', 'nav a', 'button', '.btn',
     'img', 'svg', 'picture',
-    '[class*="title"]', '[class*="heading"]', '[class*="brand"]', '[class*="wordmark"]', '[class*="badge"]', '[class*="stat"]'
+    '[class*="title"]', '[class*="heading"]', '[class*="brand"]', '[class*="wordmark"]', '[class*="badge"]', '.stat'
   ];
 
   // Root custom properties always reported when set (in addition to any
   // declared on :root/html in same-origin stylesheets).
   const LEGACY_TOKEN_KEYS = [
     '--font-sans', '--font-serif', '--font-mono', '--font-display',
-    '--editorial-size', '--mono-spacing', '--brand-canvas',
-    '--accent-cyan', '--accent-emerald', '--accent-purple'
+    '--brand-canvas'
   ];
 
   const HEX_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
@@ -563,13 +563,22 @@
     return unique.length ? unique : null;
   }
 
+  // Set once the unreadable-list warning has been given, so a page load warns once.
+  let warnedUnreadOrigins = false;
+
   // allowedOrigins: option (array or space/comma separated string) or the
   // script tag's data-allowed-origins. null means "any origin, pinned on hello".
+  // A tag with the attribute that could not be read (a module bundle has no currentScript) warns once.
   function resolveAllowedOrigins(option) {
     let list = option;
     if (list == null && typeof document !== 'undefined') {
       const script = currentScript || document.querySelector('script[src*="fontkit-bridge"][data-allowed-origins]');
       if (script && script.hasAttribute('data-allowed-origins')) list = script.getAttribute('data-allowed-origins');
+      else if (!warnedUnreadOrigins && document.querySelector('script[data-allowed-origins]')) {
+        warnedUnreadOrigins = true;
+        console.warn('[FontKitBridge] data-allowed-origins could not be read from this script, so any origin is accepted. '
+          + 'Pass allowedOrigins in window.FONTKIT_BRIDGE_OPTIONS.');
+      }
     }
     if (list == null) return null;
     list = parseOriginList(list);
@@ -711,7 +720,7 @@
       // Original state, captured once per element before the bridge first touches it.
       this.styleState = new WeakMap(); // element -> {snapshot, raw, cssText, props}
       this.styledElements = new Set();
-      this.textState = new WeakMap(); // element -> {leaf, nodes|node, originalData, original}
+      this.textState = new WeakMap(); // element -> {leaf, nodes|node, wrote, originalData, original}
       this.textElements = new Set();
       this.tokenOverrides = new Map(); // '--name' -> value (ledger tokens)
       this.attrState = new WeakMap(); // element -> Map(attribute -> original value or null)
@@ -1438,6 +1447,13 @@
       const alpha = /\/\s*([^\s)]+)\s*\)$/.exec(css.color);
       if (!visible(el) || ['hidden', 'collapse'].includes(css.visibility)
         || /rgba\([^)]*,\s*0\)$/.test(css.color) || alpha && parseFloat(alpha[1]) === 0) return false;
+      // A closed <details> body has no rects until it is laid out, and reading them is what lays it out, so the first and
+      // later reads disagree. Its text counts as rendered everywhere, by this rule, never by a rect read.
+      for (let d = el.closest('details'); d; d = d.parentElement && d.parentElement.closest('details')) {
+        if (d.open) continue;
+        const summary = el.closest('summary');
+        if (!(summary && summary.parentElement === d)) return true;
+      }
       // display:contents has no element box; the direct text range still renders.
       const range = document.createRange(); range.selectNodeContents(text);
       return Array.from(range.getClientRects()).some(rect => {
@@ -1542,7 +1558,9 @@
       }
       if (!this.checkRevision(data)) return;
       this.refreshRolePage();
-      if (data.documentId !== this.documentId || data.pageVersion !== this.pageVersion) { this.reject(data.requestId, 'page-changed'); return; }
+      // A Clear removes only the bridge-owned preview, which is safe whatever the page did since (D080), so
+      // it checks the document but not the page version; Apply keeps both.
+      if (data.documentId !== this.documentId || operation === 'apply' && data.pageVersion !== this.pageVersion) { this.reject(data.requestId, 'page-changed'); return; }
       let roles = [], css = '', node = null, blocks = [];
       if (operation === 'apply') {
         if (this.rolePageURL() === null) { this.reject(data.requestId, 'unsupported-value', 'Unsupported page URL'); return; }
@@ -2256,6 +2274,20 @@
       });
     }
 
+    // A note for the user about an outcome the page cannot show. Not a runtime error: Studio words it differently.
+    postWarning(kind, targetId, message, requestId = null) {
+      const kinds = ['token-not-applied', 'edit-not-reapplied', 'edit-reapply-stopped'];
+      if (!this.studioSource || !kinds.includes(kind)) return;
+      if (typeof message !== 'string' || !message) return;
+      this.post({
+        type: 'design:warning',
+        requestId: typeof requestId === 'string' ? requestId : null,
+        targetId: typeof targetId === 'string' && targetId ? targetId : 'global',
+        kind,
+        message: message.slice(0, WARNING_MAX_LENGTH)
+      });
+    }
+
     // ---------------------------------------------------------------------
     // design:update — targeted (validated, atomic) and legacy composition
     // ---------------------------------------------------------------------
@@ -2358,7 +2390,16 @@
         canonicalPatch.fontStylesheets = sheets;
       }
 
-      // 1. Global CSS tokens
+      // 1. Global CSS tokens. The page is measured around the token writes only, never the movement or slots.
+      const before = this.computedFontFamilies();
+      const written = [];
+      const writeToken = (name, value) => {
+        const held = this.tokenOverrides.get(name);
+        const canonical = this.setToken(name, value);
+        const synced = ['--font-display', '--font-sans', '--font-serif', '--font-mono'].includes(name);
+        if (canonical !== undefined && canonical !== held && synced && !written.includes(name)) written.push(name);
+        return canonical;
+      };
       if (isPlainObject(patch.tokens)) {
         canonicalPatch.tokens = {};
         for (const [key, value] of Object.entries(patch.tokens)) {
@@ -2367,7 +2408,7 @@
             if (this.removeToken(key)) canonicalPatch.tokens[key] = null;
             continue;
           }
-          const canonical = this.setToken(key, value);
+          const canonical = writeToken(key, value);
           if (canonical !== undefined) canonicalPatch.tokens[key] = canonical;
         }
       }
@@ -2375,9 +2416,18 @@
       // Direct token shortcuts
       ['sans', 'serif', 'mono', 'display'].forEach((role) => {
         const varName = `--font-${role}`;
-        const canonical = patch[role] ? this.setToken(varName, patch[role]) : undefined;
+        const canonical = patch[role] ? writeToken(varName, patch[role]) : undefined;
         if (canonical !== undefined) canonicalPatch[varName] = canonical;
       });
+      // A font override left by an earlier Sync can mask the token, so no change is not proof the page ignores it.
+      if (written.length && !this.hasFontFamilyOverride()) {
+        const after = this.computedFontFamilies();
+        if (before.every((family, i) => family === after[i])) {
+          this.postWarning('token-not-applied', 'global',
+            `Sync wrote ${written.join(', ')}, but no element on the page changed. This page may read other token names.`,
+            data.requestId);
+        }
+      }
 
       // 2. Live Movement in Wireframe Setup Up and Down (Reordering)
       const slots = Array.isArray(patch.slots) ? patch.slots.filter(isPlainObject) : null;
@@ -2995,6 +3045,19 @@
       return true;
     }
 
+    // Every element's computed font-family, in document order, for before/after comparison.
+    computedFontFamilies() {
+      return Array.from(document.querySelectorAll('*'), (el) => getComputedStyle(el).fontFamily);
+    }
+
+    // True when the bridge itself wrote a font-family override that may be masking a token.
+    hasFontFamilyOverride() {
+      return Array.from(this.styledElements).some((el) => {
+        const state = this.styleState.get(el);
+        return Boolean(state && state.props.has('font-family'));
+      });
+    }
+
     // Text slot: a leaf element's whole content, else its first non-empty text node.
     textEditable(el) {
       const state = this.textState.get(el);
@@ -3022,6 +3085,7 @@
       if (!state) return false;
       if (state.leaf) {
         el.textContent = text;
+        state.wrote = { node: el.firstChild, value: text }; // what the bridge left; null node when cleared
       } else {
         // Keep the surrounding whitespace so inline siblings stay spaced.
         const lead = state.originalData.match(/^\s*/)[0];
@@ -3035,13 +3099,22 @@
     restoreText(el) {
       const state = this.textState.get(el);
       if (!state || !this.textElements.has(el)) return;
-      if (state.leaf) {
+      if (state.leaf && !this.leftAsWritten(el, state)) {
+        // The app replaced or rewrote the text after the edit: keep what it shows now and recapture on the next edit.
+        this.textState.delete(el);
+      } else if (state.leaf) {
         while (el.firstChild) el.removeChild(el.firstChild);
         state.nodes.forEach((node) => el.appendChild(node));
       } else {
         state.node.data = state.originalData;
       }
       this.textElements.delete(el);
+    }
+
+    leftAsWritten(el, state) {
+      const { node, value } = state.wrote;
+      if (!node) return el.childNodes.length === 0;
+      return el.childNodes.length === 1 && el.firstChild === node && node.data === value;
     }
 
     resetElement(el) {
@@ -3265,9 +3338,15 @@
       return candidate;
     }
 
+    // A class a page toggles at runtime (a tab, a menu) must not anchor an exported rule.
+    isStateClass(cls) {
+      return /^(is|has)-|-active$/.test(cls) || ['active', 'selected', 'current', 'open', 'show'].includes(cls);
+    }
+
     selectorStep(node) {
       const tag = node.localName;
-      const classes = Array.from(node.classList || []).map((cls) => `.${cssEscape(cls)}`).join('');
+      const classes = Array.from(node.classList || []).filter((cls) => !this.isStateClass(cls))
+        .map((cls) => `.${cssEscape(cls)}`).join('');
       let index = 1;
       for (let sibling = node.previousElementSibling; sibling; sibling = sibling.previousElementSibling) {
         if (sibling.localName === tag) index += 1;
@@ -3392,7 +3471,12 @@
     // A re-render removed an author target that had overrides: remember its
     // element so the replacement (same data-design-id) can get them back.
     stashLost(record) {
-      if (!record.stable || record.element.isConnected || !this.isDirty(record)) return;
+      if (record.element.isConnected || !this.isDirty(record)) return;
+      if (!record.stable) {
+        this.postWarning('edit-not-reapplied', record.id,
+          'The page replaced this element, so its edit could not be re-applied. The edit is still in the export.');
+        return;
+      }
       this.lost.set(record.id, { element: record.element, at: Date.now() });
       if (this.lost.size > LOST_MAX) this.lost.delete(this.lost.keys().next().value);
     }
@@ -3408,6 +3492,8 @@
         if (!this.warnedLoops.has(record.id)) {
           this.warnedLoops.add(record.id);
           console.warn(`[FontKitBridge] "${record.id}" keeps being re-rendered; not re-applying its overrides again.`);
+          this.postWarning('edit-reapply-stopped', record.id,
+            'The page keeps re-creating this element, so its edits are no longer re-applied. They stay in the export.');
         }
         return;
       }

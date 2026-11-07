@@ -1,4 +1,4 @@
-# Task S1 review (BASE 5bd655e, tree C:/fks/tstrip, patch staged; labels stay 0.4.0)
+# Task S1 review (BASE 5bd655e, tree a scratch folder, patch staged; labels stay 0.4.0)
 
 Verdict: APPROVED WITH FIXES (two small test-only edits; no product-code change). In the template's words: Task quality = Needs fixes.
 
@@ -75,7 +75,7 @@ STATUS: COMPLETE
 
 ## Re-review
 
-Scope: the r2 fix round only, comparing `task-S1-code.patch` with `task-S1-code-r2.patch` (BASE 5bd655e, tree `C:/fks/tstrip`).
+Scope: the r2 fix round only, comparing `task-S1-code.patch` with `task-S1-code-r2.patch` (BASE 5bd655e, tree `a scratch folder`).
 
 **Verdict: Approved**
 

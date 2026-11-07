@@ -12,12 +12,63 @@ Two things have their own version numbers:
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-07
+
 ### Changed
 
 - The Sculptural composition preset is removed and the saved colours have new
   neutral names (Ink Black, Deep Navy, Midnight, Ice White, Slate Mist, Soft
   Gold, Dusty Rose, Powder Blue, Lavender, Sage, Periwinkle); compositions saved
   with the old names still open with the same colours.
+
+### Fixed
+
+- The first Detect on a page with a closed disclosure (`<details>`) now
+  completes instead of reporting an incomplete detection.
+- `serve.py` now refuses `--studio-port 0` and `--target-port 0` by name instead
+  of reporting two ports as equal.
+- Reset this element now shows the app's current text when the app rewrote an
+  edited paragraph with no child elements, instead of the text captured when the
+  edit began. A paragraph with a child element still gets the captured text.
+- The bridge now warns when a page sets `data-allowed-origins` on a script it
+  could not read, such as a hashed module bundle.
+- Reset this element stays available after a reload when the element has a saved
+  move.
+- Moving the colour swatch keeps the alpha of a translucent colour.
+- An element whose line height is normal shows an empty line-height field
+  instead of 1.2.
+- The synced display font now follows the first text slot when a Row or Image
+  sits first.
+- The no-bridge hint now says an error page gets no bridge.
+- The Adobe kit status now says the kit loads in Studio only.
+- A note beside Sync to Live App says it also restyles elements by role inline.
+- Importing a composition that names a font the library lacks now says which
+  font was replaced.
+- Studio asks before a reload or close drops edits that were not synced, copied
+  or downloaded, or an edit the Live App has not acknowledged yet.
+- Exported selectors no longer carry state classes such as `is-active`, so a
+  pasted rule still matches after the page toggles them.
+- Studio's default specimen text is now neutral; saved compositions keep their
+  text.
+- Live edit now tells you when the app replaces an element whose edit could not
+  be re-applied; the edit stays in the export.
+- Live edit now tells you when the app keeps re-creating an element and its
+  edits stop being re-applied.
+- Sync to Live App now tells you when it wrote font tokens and no element on the
+  page changed, which happens when the page reads other token names.
+- Moving a list item, preformatted block, definition list, fieldset, caption,
+  rule, main or definition term into a paragraph, heading, link, button, label
+  or summary is now refused, since the browser would repair the markup
+  differently.
+- Auto-discovery now matches the class `stat` by whole name, so `static` and
+  `status` no longer match that rule.
+- Studio now shows three more kinds of warning from the bridge as notes; the
+  protocol stays at version 1.
+- Clear preview now always removes the preview, even when the page changed since
+  the last Detect; Apply and Detect still report the change.
+- The light and dark mode control now shows in the Composer as well as the
+  Library.
+- A Composer row no longer slides each time you click or change something.
 
 ## [0.4.0] - 2026-10-19
 
@@ -334,7 +385,8 @@ The supplied single-file Studio, preserved at the tag `supplied-v0.1.1`.
 
 - Nested rows and JPEG assets are out of scope.
 
-[Unreleased]: https://github.com/pterw/font-kit-studio/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/pterw/font-kit-studio/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/pterw/font-kit-studio/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/pterw/font-kit-studio/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/pterw/font-kit-studio/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/pterw/font-kit-studio/compare/v0.2.1...v0.3.0
