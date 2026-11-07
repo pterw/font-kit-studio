@@ -79,3 +79,5 @@ want to edit, and the extension would load the bridge into that tab for you.
 
 A handful of people who want to try fontkit on a site they cannot add a script tag to, and
 an answer to the transport question that does not weaken the bridge's origin checks.
+
+<!-- Temporary line for a CI check. -->
