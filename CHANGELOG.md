@@ -26,7 +26,8 @@ Two things have their own version numbers:
 - `serve.py` now refuses `--studio-port 0` and `--target-port 0` by name instead
   of reporting two ports as equal.
 - Reset this element now shows the app's current text when the app rewrote an
-  edited paragraph, instead of the text captured when the edit began.
+  edited paragraph with no child elements, instead of the text captured when the
+  edit began. A paragraph with a child element still gets the captured text.
 - The bridge now warns when a page sets `data-allowed-origins` on a script it
   could not read, such as a hashed module bundle.
 - Reset this element stays available after a reload when the element has a saved
