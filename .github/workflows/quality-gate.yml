@@ -44,6 +44,15 @@ jobs:
           cache: 'pip'
           cache-dependency-path: requirements-dev.txt
 
+      # A pull request that changes only Markdown skips the browser steps below
+      # (the fast checks still run). The helper writes docs_only=true only then;
+      # on any doubt, or if it errors, the output stays unset and everything
+      # runs, which is why a failure here must not fail the job.
+      - name: Decide whether this pull request changes only Markdown
+        id: docs
+        continue-on-error: true
+        run: python scripts/dev/docs_only.py
+
       # For `node --check fontkit-bridge.js` and the React fixtures' npm installs
       # below. Studio and the bridge have no runtime dependencies and no build
       # step.
@@ -127,12 +136,15 @@ jobs:
       # are installed: Chromium blocks, Firefox runs
       # an advisory canary (see README "Firefox status", D037).
       - name: Bound browser dependency acquisition
+        if: ${{ steps.docs.outputs.docs_only != 'true' }}
         uses: ./.github/actions/configure-browser-apt
 
       - name: Install Playwright system dependencies
+        if: ${{ steps.docs.outputs.docs_only != 'true' }}
         run: python -m playwright install-deps chromium firefox
 
       - name: Download Playwright browsers
+        if: ${{ steps.docs.outputs.docs_only != 'true' }}
         run: python -m playwright install chromium firefox
 
       # Font Kit Studio is desktop-first (README "Frontend gate"): only
@@ -145,12 +157,13 @@ jobs:
       # multi-minute suite. It needs no secrets and starts its own server on
       # loopback ports.
       - name: Run frontend gate (Chromium desktop blocks; the rest is advisory)
+        if: ${{ steps.docs.outputs.docs_only != 'true' }}
         run: python scripts/dev/frontend_gate.py --engines chromium,firefox
 
       # Blocking: the full suite on Chromium. Runs even when the gate failed,
       # so one run reports both. The slowest step comes last (several minutes).
       - name: Run tests (Chromium, blocking)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.docs.outputs.docs_only != 'true' }}
         env:
           FKS_ENGINES: chromium
           FKS_REQUIRE_PRECOMMIT: '1'
@@ -162,11 +175,11 @@ jobs:
       # cases block instead of skipping. After the suite, so its cases run
       # only once.
       - name: Install the React CSS-module fixture
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.docs.outputs.docs_only != 'true' }}
         run: npm ci --prefix fixtures/vite-react-css-modules
 
       - name: React CSS-module fixture tests (blocking, never skipped here)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.docs.outputs.docs_only != 'true' }}
         env:
           FKS_ENGINES: chromium
           FKS_REQUIRE_FIXTURES: '1'
@@ -176,7 +189,7 @@ jobs:
       # The cookie canary runs the real Vite command. Install its fixture and
       # bundle the package so missing dependencies cannot silently skip it.
       - name: Prepare the localhost cookie fixture
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.docs.outputs.docs_only != 'true' }}
         run: |
           npm ci --prefix fixtures/vite-react
           npm --prefix packages/fontkitstudio run prepack
@@ -189,7 +202,7 @@ jobs:
       # continue-on-error keeps a Firefox-only failure from failing the job,
       # and the step's own failure mark and log stay visible so it can be read.
       - name: Run Firefox canary (advisory - never fails the build)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.docs.outputs.docs_only != 'true' }}
         continue-on-error: true
         # A hung Gecko run stops here, as an advisory failure, instead of
         # running into the job timeout, which would fail the blocking check.
@@ -203,7 +216,7 @@ jobs:
       # The gate saves a screenshot of every failing or advisory run here
       # (work/ is git-ignored scratch). Nothing is uploaded when there are none.
       - name: Upload gate screenshots
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.docs.outputs.docs_only != 'true' }}
         uses: actions/upload-artifact@v7
         with:
           name: frontend-gate-screenshots
@@ -253,8 +266,12 @@ jobs:
           - { os: macos-latest, node: '24' }
           - { os: windows-latest, node: '24' }
     steps:
+      # Depth 2 so the merge commit's first parent is present for the decision
+      # step below; a depth-1 checkout would have no base and run everything.
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
       - name: Set up Node
         uses: actions/setup-node@v7
         with:
@@ -265,23 +282,35 @@ jobs:
         uses: actions/setup-python@v7
         with:
           python-version: '3.11'
+      # Same decision as in the quality-gate job: unset on any doubt or error.
+      - name: Decide whether this pull request changes only Markdown
+        id: docs
+        continue-on-error: true
+        run: python scripts/dev/docs_only.py
       - name: Install the fixtures
+        if: ${{ steps.docs.outputs.docs_only != 'true' }}
         run: |
           npm ci --prefix fixtures/vite-react
           npm ci --prefix fixtures/vite7-react
           npm ci --prefix fixtures/vite-ts
           npm ci --prefix fixtures/vite-react-css-modules
       - name: Bundle Studio and the bridge
+        if: ${{ steps.docs.outputs.docs_only != 'true' }}
         run: npm --prefix packages/fontkitstudio run prepack
       - name: Bound browser dependency acquisition
+        if: ${{ steps.docs.outputs.docs_only != 'true' }}
         uses: ./.github/actions/configure-browser-apt
       - name: Install the test tools
+        if: ${{ steps.docs.outputs.docs_only != 'true' }}
         run: python -m pip install -r requirements-dev.txt
       - name: Install Chromium system dependencies
+        if: ${{ steps.docs.outputs.docs_only != 'true' }}
         run: python -m playwright install-deps chromium
       - name: Download Chromium
+        if: ${{ steps.docs.outputs.docs_only != 'true' }}
         run: python -m playwright install chromium
       - name: Fixture tests (never skipped here)
+        if: ${{ steps.docs.outputs.docs_only != 'true' }}
         env:
           FKS_ENGINES: chromium
           FKS_REQUIRE_FIXTURES: '1'
@@ -295,8 +324,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      # Depth 2 so the merge commit's first parent is present for the decision
+      # step below; a depth-1 checkout would have no base and run everything.
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
       - name: Set up Node
         uses: actions/setup-node@v7
         with:
@@ -307,19 +340,31 @@ jobs:
         uses: actions/setup-python@v7
         with:
           python-version: '3.11'
+      # Same decision as in the quality-gate job: unset on any doubt or error.
+      - name: Decide whether this pull request changes only Markdown
+        id: docs
+        continue-on-error: true
+        run: python scripts/dev/docs_only.py
       - name: Install the fixture
+        if: ${{ steps.docs.outputs.docs_only != 'true' }}
         run: npm ci --prefix fixtures/next-app
       - name: Bundle Studio and the bridge
+        if: ${{ steps.docs.outputs.docs_only != 'true' }}
         run: npm --prefix packages/fontkitstudio run prepack
       - name: Bound browser dependency acquisition
+        if: ${{ steps.docs.outputs.docs_only != 'true' }}
         uses: ./.github/actions/configure-browser-apt
       - name: Install the test tools
+        if: ${{ steps.docs.outputs.docs_only != 'true' }}
         run: python -m pip install -r requirements-dev.txt
       - name: Install Chromium system dependencies
+        if: ${{ steps.docs.outputs.docs_only != 'true' }}
         run: python -m playwright install-deps chromium
       - name: Download Chromium
+        if: ${{ steps.docs.outputs.docs_only != 'true' }}
         run: python -m playwright install chromium
       - name: Next.js fixture test (never skipped here)
+        if: ${{ steps.docs.outputs.docs_only != 'true' }}
         env:
           FKS_ENGINES: chromium
           FKS_REQUIRE_FIXTURES: '1'

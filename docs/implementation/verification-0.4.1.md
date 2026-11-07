@@ -1,7 +1,7 @@
 # 0.4.1 release verification
 
 Date: 2026-11-07. Branch: `fix/v0.4.1-repairs`, pull request #30.
-Status: release point prepared. Publication checks follow the tag and are added here afterwards.
+Status: released (2026-11-07). Publication evidence is in [Publication checks](#publication-checks-2026-11-07).
 
 This record covers the final source tree, gated before its commits landed. The commits apply that tree, and each code file's blob was compared with it. The release commit adds this record and bookkeeping only.
 
@@ -46,7 +46,7 @@ Not run locally: Firefox, the frontend gate on the final tree (it ran for the th
 
 ## Hosted CI
 
-Last full run before the final commits: `1b86000`, run 42331337578: 12 of 12 jobs, 1,422 tests with 27 skipped in the main job, frontend gate 30 of 30 runs, Firefox canary passing as an advisory. The 27 fixture tests run in the Fixtures and Next.js jobs. The final head's run is recorded on the pull request and with the publication checks.
+Last full run before the final commits: `1b86000`, run 42331337578: 12 of 12 jobs, 1,422 tests with 27 skipped in the main job, frontend gate 30 of 30 runs, Firefox canary passing as an advisory. The 27 fixture tests run in the Fixtures and Next.js jobs. The final head's run is under Publication checks.
 
 ## Slow-runner checks
 
@@ -69,3 +69,25 @@ The export format stays at `0.1.1` and the bridge protocol at version 1. Asserte
 ## Known limits
 
 The limits this release accepts, and the items carried to 0.4.2, are in [plan Addendum 4](../plans/2026-11-06-v0.4.1-repairs.md#carried-to-042).
+
+## Publication checks (2026-11-07)
+
+Pull request #30 merged at `eb1fe6a`, whose tree is identical to the checked head `f872881`. Annotated tag `v0.4.1` targets that merge.
+
+**Final hosted runs.** Pull request head `f872881`, run 42338655241: 12 of 12 jobs, 1,433 tests with 27 skipped in the main job, frontend gate 30 of 30 runs, Firefox canary passing as an advisory. The fixture tests the local run could not reach ran in the Fixtures and Next.js jobs. Merge on `main`, run 42340346772: success. Release run 42340358812: all gates, then `publish`, success.
+
+**npm.**
+
+- `npm view fontkitstudio@0.4.1` serves the version, and `latest` is `0.4.1`. The registry lagged the publish by under a minute.
+- Integrity `sha512-5iWFaQ/e4LTcRm+ovJrpCB/f+48/19B1gxie6qnjFEoLp/Z4DyBBYA/uYcOBoaDtSoBRuXF5oGdONpvFfAxY3g==`.
+- Provenance: an SLSA v1 attestation on the registry entry, and the publish log records the statement in the transparency log.
+- `npx -y fontkitstudio@0.4.1 --version` from an empty folder prints `0.4.1`, exits 0 and leaves the folder empty.
+- Runtime dependencies: none.
+
+**Release assets.** The GitHub release `v0.4.1` is published and not a prerelease. Each asset was compared with `git -c core.autocrlf=false archive v0.4.1`, and the Studio and bridge inside the npm package with the same files.
+
+| File | SHA-256 | Release asset | npm package |
+|---|---|---|---|
+| `fontkit-studio.html` | `32012029c7a4f66e085e67b2ef3f63898c323329be4adc172f112e146ced2e1a` | match | match |
+| `fontkit-bridge.js` | `79be2fee3911defb3b85257150bab447869433bc8e05e83b46c9d32395f05acb` | match | match |
+| `serve.py` | `b62ca6a5c1b5bba26a031eb3942c19245e5f0634ec55d4694b76aa155489797a` | match | not in the package |

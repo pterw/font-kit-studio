@@ -1,0 +1,66 @@
+name: Dependency audit
+
+# Not a required check. A finding fails its own job, so it shows as a failed
+# check on the pull request; a scheduled run has no pull request, so its
+# finding shows in the Actions list only.
+on:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - requirements-dev.txt
+      - fixtures/*/package.json
+      - fixtures/*/package-lock.json
+      - packages/fontkitstudio/package.json
+      - .github/workflows/dependency-audit.yml
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Audit Python (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: '3.12'
+
+      - name: Install pip-audit
+        run: python -m pip install pip-audit==2.10.1
+
+      # Resolves the transitive packages the three pins pull in.
+      - name: Audit requirements-dev.txt
+        run: pip-audit -r requirements-dev.txt
+
+  npm:
+    name: Audit npm (${{ matrix.fixture }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        fixture:
+          - next-app
+          - vite-react
+          - vite-react-css-modules
+          - vite-ts
+          - vite7-react
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '24'
+
+      # Reads the lockfile; default threshold, so every severity fails.
+      - name: Audit the lockfile
+        env:
+          FIXTURE: ${{ matrix.fixture }}
+        run: npm audit --prefix "fixtures/$FIXTURE"
