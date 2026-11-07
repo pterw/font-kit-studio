@@ -664,6 +664,7 @@ class ClosedDetailsDetectionTests(RoleBridgeCase):
             'clipped text outside any details': ('<div style="height:0;overflow:hidden"><p>c</p></div>', 0),
             'body of an open details': ('<details open><summary>S</summary><p>b</p></details>', 2),
             'clipped summary of a closed details': ('<details><summary style="height:0;overflow:hidden">S</summary></details>', 0),
+            'clipped text in an open details': ('<details open><summary>S</summary><div style="height:0;overflow:hidden"><p>c</p></div></details>', 1),
             'open details inside a closed one': ('<details><summary>S</summary><details open><summary>T</summary><p style="height:0;overflow:hidden">b</p></details></details>', 3),
         }
         for engine in ENGINES:

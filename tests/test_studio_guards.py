@@ -323,6 +323,7 @@ class LeavePromptCoverageTests(ControlsMixin, ArrangeCase):
         page.locator(f'#codeTab{tab}').click()
         with page.expect_download():
             page.locator('#liveCodeDownload').click()
+        page.wait_for_function('() => /Downloaded/.test(document.querySelector("#liveCodeStatus").textContent)')
 
     def test_a_dom_move_still_asks_after_sync_to_file_because_the_file_has_no_moves(self):
         """Given a saved DOM move, when Sync to file succeeds, then the page still asks."""
@@ -418,6 +419,71 @@ class LeavePromptCoverageTests(ControlsMixin, ArrangeCase):
                 self.download(page, 'Json')
                 self.assertFalse(self.prompts(page))
                 self.assertEqual(errors, [])
+
+    def shows(self, page, tab, needle):
+        """Opens a code tab and waits until its output prints `needle`: the cell then rests on what the tab shows."""
+        page.locator(f'#codeTab{tab}').click()
+        page.wait_for_function('(s) => document.querySelector("#liveCodeOutput").textContent.includes(s)', arg=needle)
+
+    def test_the_html_tab_carries_a_move_the_page_ledger_prints(self):
+        """Given a saved move the ledger still prints, when the HTML tab is downloaded, then the page stops asking."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors, frame = self.arranged(engine)
+                self.move(page, frame)
+                self.shows(page, 'Html', 'child order: Card C, Card A')
+                self.assertTrue(self.prompts(page))
+                self.download(page, 'Html')
+                self.assertFalse(self.prompts(page))
+                self.assertEqual(errors, [])
+
+    def test_the_html_tab_carries_a_text_edit_the_page_ledger_prints(self):
+        """Given a saved text edit the ledger still prints, when the HTML tab is downloaded, then the page stops asking."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                page, errors, frame = self.arranged(engine)
+                self.edit_text(page, frame)
+                self.shows(page, 'Html', 'A new headline')
+                self.assertTrue(self.prompts(page))
+                self.download(page, 'Html')
+                self.assertFalse(self.prompts(page))
+                self.assertEqual(errors, [])
+
+    def test_the_json_tab_carries_a_style_edit_only_while_no_tokens_are_saved(self):
+        """Given a style edit, when the JSON tab is downloaded, then the page stops asking; with saved tokens it still asks."""
+        for engine in ENGINES:
+            with self.subTest(engine=engine, tokens='none'):
+                page, errors, frame = self.arranged(engine)
+                self.edit_size(page, frame)
+                self.assertTrue(self.prompts(page))
+                self.download(page, 'Json')
+                self.assertFalse(self.prompts(page))
+                self.assertEqual(errors, [])
+            with self.subTest(engine=engine, tokens='saved'):
+                page, errors, frame = self.arranged(engine)
+                page.locator('#btnSyncToApp').click()
+                self.wait_badge(page, r'^Live · rev 1$')
+                self.edit_size(page, frame)
+                self.assertIn('--font-display', self.export(page)['live']['tokens'])
+                self.assertTrue(self.prompts(page))
+                self.download(page, 'Json')
+                self.assertTrue(self.prompts(page))
+                self.assertEqual(errors, [])
+
+    def test_a_failed_copy_still_asks_and_a_copy_by_the_fallback_stops_asking(self):
+        """Given no clipboard API, when the fallback copy fails the page still asks; when it succeeds the page stops asking."""
+        for engine in ENGINES:
+            for outcome, status in (('false', 'Copy failed'), ('true', 'Copied')):
+                with self.subTest(engine=engine, execCommand=outcome):
+                    page, errors, frame = self.arranged(engine)
+                    self.edit_size(page, frame)
+                    page.evaluate(f"""() => {{ Object.defineProperty(navigator, 'clipboard', {{configurable: true, value: undefined}});
+                        document.execCommand = () => {outcome}; }}""")
+                    self.assertTrue(self.prompts(page))
+                    page.locator('#liveCodeCopy').click()
+                    page.wait_for_function('(s) => document.querySelector("#liveCodeStatus").textContent.startsWith(s)', arg=status)
+                    self.assertEqual(self.prompts(page), outcome == 'false')
+                    self.assertEqual(errors, [])
 
 
 if __name__ == '__main__':
